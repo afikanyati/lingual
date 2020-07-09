@@ -1512,14 +1512,8 @@ extension Expression: SFSpeechRecognitionTaskDelegate {
     
     func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didFinishSuccessfully successfully: Bool) {
         print("===== Expression successfully finished listening for new speech ===== ")
-        if self.isListening && !self.useOnDeviceRecognition {
-            print("===== Apple servers ended dictation session, restart listening =====")
-            self.stopListeningForSpeech(pause: true) {[weak self] in
-                self?.startListeningForSpeech(
-                    soundIntensityHandler: self?.soundIntensityHandler,
-                    onStartHandler: self?.onListeningStartHandler
-                )
-            }
+        if !self.isListening && !self.useOnDeviceRecognition {
+            self.onExpressionComplete?()
         } else if !self.isListening && self.useOnDeviceRecognition {
             self.onExpressionComplete?()
         }

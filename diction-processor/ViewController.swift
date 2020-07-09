@@ -314,6 +314,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     }
     
     @objc func resetSession() {
+        print("===== Reset Session =====")
         setAudioButtonsVisibility(visible: false)
         self.transcriptionText.attributedText = NSMutableAttributedString(string: "")
         self.navigationItem.rightBarButtonItem = nil
