@@ -10,7 +10,7 @@ import Foundation
 
 struct SoundIntensityDatum {
     var date: Date
-    var intensity: Float
+    var intensity: Double
 
     var description: String {
         return "SoundIntensityDatum {\n\tdate: \(date)\n\tintensity:\(intensity)\n}"
@@ -20,7 +20,7 @@ struct SoundIntensityDatum {
        date = value
    }
    
-   mutating func setIntensity(value: Float) {
+   mutating func setIntensity(value: Double) {
        intensity = value
    }
 }

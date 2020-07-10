@@ -52,6 +52,10 @@ class Expression: AVMutableComposition {
     public override var duration: CMTime {
         return self.expressionSegments.last!.timeMapping.source.end
     }
+    private(set) var withSpaceSuggestions: Bool
+    private(set) var withPunctuationSuggestions: Bool
+    private(set) var withFormattingSuggestions: Bool
+    private(set) var withTextStrictlyAsWords: Bool
     weak private(set) var vc: ViewController?
     private var onListenUpdate: (() -> Void)?
     private var onExpressionComplete: (() -> Void)?
@@ -111,7 +115,7 @@ class Expression: AVMutableComposition {
     }
     private(set) var skipPunctuation = true
     private(set) var skipSilence = true
-    private var soundIntensityHandler: ((_ intensity: Float?) -> Void)?
+    private var soundIntensityHandler: ((_ intensity: Double?) -> Void)?
     private var onListeningStartHandler: (() -> Void)?
     private var delayDate: Date?
     private var delayDuration = 0
@@ -123,6 +127,10 @@ class Expression: AVMutableComposition {
         speaker: Speaker,
         minDb: Float,
         withDeviceRecognition: Bool,
+        withSpaceSuggestions: Bool = false,
+        withPunctuationSuggestions: Bool = false,
+        withFormattingSuggestions: Bool = false,
+        withTextStrictlyAsWords: Bool = false,
         onListenUpdate: (() -> Void)? = nil,
         onEchoFinish: (() -> Void)? = nil,
         onEchoUpdate: ((_ range: NSRange) -> Void)? = nil,
@@ -136,6 +144,10 @@ class Expression: AVMutableComposition {
         self.onEchoFinish = onEchoFinish
         self.onEchoUpdate = onEchoUpdate
         self.onExpressionComplete = onExpressionComplete
+        self.withSpaceSuggestions = withSpaceSuggestions
+        self.withPunctuationSuggestions = withPunctuationSuggestions
+        self.withFormattingSuggestions = withFormattingSuggestions
+        self.withTextStrictlyAsWords = withTextStrictlyAsWords
 
         super.init()
 
@@ -197,7 +209,7 @@ class Expression: AVMutableComposition {
     
     // MARK: - Speech Listening Methods
     
-    func startListeningForSpeech(soundIntensityHandler: ((_ intensity: Float?) -> Void)? = nil, onStartHandler: (() -> Void)? = nil) {
+    func startListeningForSpeech(soundIntensityHandler: ((_ intensity: Double?) -> Void)? = nil, onStartHandler: (() -> Void)? = nil) {
         print("===== Starting Listening for Speech =====")
         pitchEngine.start()
         
@@ -465,13 +477,13 @@ class Expression: AVMutableComposition {
                     )
                     
                     // Add sound intensities
-                    let middleOfSilenceDuration: Double = lastEnd.seconds + (segment.timeMapping.source.start.seconds - lastEnd.seconds) / 2
+                    let middleOfSilenceDuration: Double = lastEnd.seconds
                     let backgroundNoise = getRecordingSoundIntensity(timestamp: middleOfSilenceDuration)
-                    silentSegment.setSoundIntensity(noise: backgroundNoise.intensity.rounded(toPlaces: SOUND_INTENSITY_SIG_FIG_COUNT))
+                    silentSegment.setSoundIntensity(intensity: backgroundNoise.intensity.rounded(toPlaces: SOUND_INTENSITY_SIG_FIG_COUNT))
                     // print("Silence Sound Intensity: \(backgroundNoise.intensity)")
-                    let middleOfSegmentDuration: Double = segment.timeMapping.source.start.seconds + segment.timeMapping.source.duration.seconds / 2
+                    let middleOfSegmentDuration: Double = segment.timeMapping.source.start.seconds
                     let soundIntensity = getRecordingSoundIntensity(timestamp: middleOfSegmentDuration)
-                    segment.setSoundIntensity(noise: soundIntensity.intensity.rounded(toPlaces: SOUND_INTENSITY_SIG_FIG_COUNT))
+                    segment.setSoundIntensity(intensity: soundIntensity.intensity.rounded(toPlaces: SOUND_INTENSITY_SIG_FIG_COUNT))
                     // print("Segment Sound Intensity: \(soundIntensity.intensity)")
                     // Add pitch
                     let pitch = getRecordingPitch(timestamp: middleOfSegmentDuration)
@@ -505,15 +517,49 @@ class Expression: AVMutableComposition {
                         sentimentScore: segment.getSentiment()
                     )
                     
-                    // Add sound intensities
-                    let middleOfSegmentDuration: Double = lastEnd.seconds + segment.timeMapping.source.duration.seconds / 2
-                    let soundIntensity = getRecordingSoundIntensity(timestamp: middleOfSegmentDuration)
-                    segment.setSoundIntensity(noise: soundIntensity.intensity.rounded(toPlaces: SOUND_INTENSITY_SIG_FIG_COUNT))
-                    // print("Segment Sound Intensity: \(soundIntensity.intensity)")
-                    // Add pitch
-                    let pitch = getRecordingPitch(timestamp: middleOfSegmentDuration)
-                    segment.setPitch(pitch: pitch.pitch)
-                    // print("Segment Pitch: \(pitch.pitch)")
+                    let middleOfSegmentDuration: Double = lastEnd.seconds
+                    
+                    // Sound Intensity
+                    if segment.getSoundIntensity() != Utils.UNKNOWN {
+                        // Import sound intensity
+                        let soundIntensity = segment.getSoundIntensity()
+                        normalizedSegment.setSoundIntensity(intensity: soundIntensity)
+                    } else {
+                        // Add sound intensities
+                        let soundIntensity = getRecordingSoundIntensity(timestamp: middleOfSegmentDuration)
+                        segment.setSoundIntensity(intensity: soundIntensity.intensity.rounded(toPlaces: SOUND_INTENSITY_SIG_FIG_COUNT))
+                    }
+                    
+                    // Background Intensity
+                    if segment.getBackgroundNoise() != Utils.UNKNOWN {
+                        // Import background noise
+                        let backgroundNoise = segment.getBackgroundNoise()
+                        normalizedSegment.setBackgroundNoise(noise: backgroundNoise)
+                    }
+                    
+                    // Pitch
+                    if let pitch = segment.getPitch() {
+                        // Import pitch
+                        normalizedSegment.setPitch(pitch: pitch)
+                    } else {
+                        // Add pitch
+                        let pitch = getRecordingPitch(timestamp: middleOfSegmentDuration)
+                        segment.setPitch(pitch: pitch.pitch)
+                    }
+                    
+                    // Average Pause Duration
+                    if segment.getAvgPauseDuration() != Utils.UNKNOWN {
+                        // Import average pause duration
+                        let avgPauseDuration = segment.getAvgPauseDuration()
+                        normalizedSegment.setAvgPauseDuration(duration: avgPauseDuration)
+                    }
+                    
+                    // Speaking Rate
+                    if segment.getSpeakingRate() != Utils.UNKNOWN {
+                        // Import speaking  rate
+                        let speakingRate = segment.getSpeakingRate()
+                        normalizedSegment.setSpeakingRate(rate: speakingRate)
+                    }
                     
                     // Add to segments array
                     normalizedSegments.append(normalizedSegment)
@@ -523,15 +569,49 @@ class Expression: AVMutableComposition {
                     lastEnd = CMTimeAdd(lastEnd, segment.timeMapping.source.duration)
                 }
             } else {
-                // Add sound intensity
-                let middleOfSegmentDuration: Double = segment.timeMapping.source.start.seconds + segment.timeMapping.source.duration.seconds / 2
-                let soundIntensity = getRecordingSoundIntensity(timestamp: middleOfSegmentDuration)
-                segment.setSoundIntensity(noise: soundIntensity.intensity.rounded(toPlaces: SOUND_INTENSITY_SIG_FIG_COUNT))
-                // print("Segment Sound Intensity: \(soundIntensity.intensity)")
-                // Add pitch
-                let pitch = getRecordingPitch(timestamp: middleOfSegmentDuration)
-                segment.setPitch(pitch: pitch.pitch)
-                // print("Segment Pitch: \(pitch.pitch)")
+                let middleOfSegmentDuration: Double = segment.timeMapping.source.start.seconds
+
+                // Sound Intensity
+                if segment.getSoundIntensity() != Utils.UNKNOWN {
+                    // Import sound intensity
+                    let soundIntensity = segment.getSoundIntensity()
+                    segment.setSoundIntensity(intensity: soundIntensity)
+                } else {
+                    // Add sound intensities
+                    let soundIntensity = getRecordingSoundIntensity(timestamp: middleOfSegmentDuration)
+                    segment.setSoundIntensity(intensity: soundIntensity.intensity.rounded(toPlaces: SOUND_INTENSITY_SIG_FIG_COUNT))
+                }
+                
+                // Background Intensity
+                if segment.getBackgroundNoise() != Utils.UNKNOWN {
+                    // Import background noise
+                    let backgroundNoise = segment.getBackgroundNoise()
+                    segment.setBackgroundNoise(noise: backgroundNoise)
+                }
+                
+                // Pitch
+                if let pitch = segment.getPitch() {
+                    // Import pitch
+                    segment.setPitch(pitch: pitch)
+                } else {
+                    // Add pitch
+                    let pitch = getRecordingPitch(timestamp: middleOfSegmentDuration)
+                    segment.setPitch(pitch: pitch.pitch)
+                }
+                
+                // Average Pause Duration
+                if segment.getAvgPauseDuration() != Utils.UNKNOWN {
+                    // Import average pause duration
+                    let avgPauseDuration = segment.getAvgPauseDuration()
+                    segment.setAvgPauseDuration(duration: avgPauseDuration)
+                }
+                
+                // Speaking Rate
+                if segment.getSpeakingRate() != Utils.UNKNOWN {
+                    // Import speaking  rate
+                    let speakingRate = segment.getSpeakingRate()
+                    segment.setSpeakingRate(rate: speakingRate)
+                }
                 
                 // Add to segments array
                 normalizedSegments.append(segment)
@@ -542,9 +622,9 @@ class Expression: AVMutableComposition {
         }
         
         // Manage Background Noise = average of silences in transcription
-        var backgroundNoise: Float = silenceIndices.reduce(0, { result, i in
+        var backgroundNoise: Double = silenceIndices.reduce(0, { result, i in
             return result + normalizedSegments[i].getSoundIntensity()
-        }) / Float(silenceIndices.count)
+        }) / Double(silenceIndices.count)
         backgroundNoise = backgroundNoise.rounded(toPlaces: SOUND_INTENSITY_SIG_FIG_COUNT)
         
         var avgPauseDuration: Double = silenceIndices.reduce(0, { result, i in
@@ -570,13 +650,21 @@ class Expression: AVMutableComposition {
         var lastUpdatedSegmentIndex = 0
         // make sure silences get sentence number of prior.
         for (index, segment) in normalizedSegments.enumerated() {
-            // Set background noise
-            segment.setBackgroundNoise(noise: backgroundNoise)
-            // Set avgPauseDuration
-            segment.setAvgPauseDuration(duration: avgPauseDuration)
-            // Set speakingRate
-            segment.setSpeakingRate(rate: speakingRate)
+            if segment.getBackgroundNoise() == Double(Utils.UNKNOWN) {
+                // Set background noise
+                segment.setBackgroundNoise(noise: backgroundNoise)
+            }
             
+            if segment.getAvgPauseDuration() == Double(Utils.UNKNOWN) {
+                // Set avgPauseDuration
+                segment.setAvgPauseDuration(duration: avgPauseDuration)
+            }
+            
+            if segment.getSpeakingRate() == Double(Utils.UNKNOWN) {
+                // Set speakingRate
+                segment.setSpeakingRate(rate: speakingRate)
+            }
+
             if index + 1 == normalizedSegments.count {
                 // We've reached the end of the expression. Update sentence data
                 // print("We've reached the end of the expression. Update sentence data")
@@ -806,9 +894,9 @@ class Expression: AVMutableComposition {
     func getRecordingSoundIntensity(timestamp: Double) -> SoundIntensityDatum {
         var soundIntensity: SoundIntensityDatum
         var i = 0
-        var datumTimestamp = soundIntensityStream[i].date - recordStartDate!
+        var datumTimestamp = soundIntensityStream[i].date - recordStartDate! - TRANSCRIPTION_LATENCY_DURATION
         repeat {
-            datumTimestamp = soundIntensityStream[i].date - recordStartDate!
+            datumTimestamp = soundIntensityStream[i].date - recordStartDate! - TRANSCRIPTION_LATENCY_DURATION
             soundIntensity = soundIntensityStream[i]
             i += 1
         } while datumTimestamp < timestamp && i < soundIntensityStream.count
@@ -819,9 +907,9 @@ class Expression: AVMutableComposition {
     func getRecordingPitch(timestamp: Double) -> PitchDatum {
         var pitch: PitchDatum
         var i = 0
-        var datumTimestamp = pitchStream[i].date - recordStartDate!
+        var datumTimestamp = pitchStream[i].date - recordStartDate! - TRANSCRIPTION_LATENCY_DURATION
         repeat {
-            datumTimestamp = pitchStream[i].date - recordStartDate!
+            datumTimestamp = pitchStream[i].date - recordStartDate! - TRANSCRIPTION_LATENCY_DURATION
             pitch = pitchStream[i]
             i += 1
         } while datumTimestamp < timestamp && i < pitchStream.count
@@ -831,21 +919,27 @@ class Expression: AVMutableComposition {
     
     // MARK: - Text Methods
     
-    func getExpressionText(from time: CMTime = CMTime.zero, withSpaceSuggestions: Bool = false, withPunctuationSuggestions: Bool = false, withFormattingSuggestions: Bool = false, strictlyAsWord: Bool = false) -> String {
+    func getExpressionText(from time: CMTime = CMTime.zero) -> String {
         var text = ""
+        var capitalizeNextWord = false
+        var removeSpaceInNextWord = false
 
         for segment in expressionSegments  {
             if segment.timeMapping.source.start >= time {
                 let word = segment.getText(
-                    withSpaceSuggestions: withSpaceSuggestions,
-                    withPunctuationSuggestions: withPunctuationSuggestions,
-                    withFormattingSuggestions: withFormattingSuggestions,
-                    strictlyAsWord: strictlyAsWord
+                    withSpaceSuggestions: self.withSpaceSuggestions,
+                    withPunctuationSuggestions: self.withPunctuationSuggestions,
+                    withFormattingSuggestions: self.withFormattingSuggestions,
+                    strictlyAsWord: self.withTextStrictlyAsWords
                 )
                 if (segment.isPunctuation() || segment.isSilence()) {
                     text += word
+                    capitalizeNextWord = segment.isSentenceTerminator(withPunctuationSuggestions: self.withPunctuationSuggestions)
+                    removeSpaceInNextWord = self.withPunctuationSuggestions ? segment.jumpsToNewParagraph() : false
                 } else {
-                    text += " \(word)"
+                    text += capitalizeNextWord ? "\(removeSpaceInNextWord ? "": " ")\(word.capitalized)" : "\(removeSpaceInNextWord ? "": " ")\(word)"
+                    capitalizeNextWord = false
+                    removeSpaceInNextWord = false
                 }
             }
         }
@@ -855,8 +949,11 @@ class Expression: AVMutableComposition {
         return text
     }
     
-    func getExpressionText(until time: CMTime, segments: [ExpressionSegment]?, withSpaceSuggestions: Bool = false, withPunctuationSuggestions: Bool = false, withFormattingSuggestions: Bool = false, strictlyAsWord: Bool = false) -> String {
+    // We need to deal with segments from different places
+    func getExpressionText(until time: CMTime, segments: [ExpressionSegment]?) -> String {
         var text = ""
+        var capitalizeNextWord = false
+        var removeSpaceInNextWord = false
         
         var expressionSegments = self.expressionSegments
         if let segments = segments {
@@ -866,15 +963,19 @@ class Expression: AVMutableComposition {
         for segment in expressionSegments  {
             if segment.timeMapping.source.start <= time {
                 let word = segment.getText(
-                    withSpaceSuggestions: withSpaceSuggestions,
-                    withPunctuationSuggestions: withPunctuationSuggestions,
-                    withFormattingSuggestions: withFormattingSuggestions,
-                    strictlyAsWord: strictlyAsWord
+                    withSpaceSuggestions: self.withSpaceSuggestions,
+                    withPunctuationSuggestions: self.withPunctuationSuggestions,
+                    withFormattingSuggestions: self.withFormattingSuggestions,
+                    strictlyAsWord: self.withTextStrictlyAsWords
                 )
                 if (segment.isPunctuation() || segment.isSilence()) {
                     text += word
+                    capitalizeNextWord = segment.isSentenceTerminator(withPunctuationSuggestions: self.withPunctuationSuggestions)
+                    removeSpaceInNextWord = self.withPunctuationSuggestions ? segment.jumpsToNewParagraph() : false
                 } else {
-                    text += " \(word)"
+                    text += capitalizeNextWord ? "\(removeSpaceInNextWord ? "": " ")\(word.capitalized)" : "\(removeSpaceInNextWord ? "": " ")\(word)"
+                    capitalizeNextWord = false
+                    removeSpaceInNextWord = false
                 }
             }
         }
@@ -1102,6 +1203,22 @@ class Expression: AVMutableComposition {
         self.skipSilence = skip
     }
     
+    func setWithSpaceSuggestions(to value: Bool) {
+        self.withSpaceSuggestions = value
+    }
+    
+    func setWithPunctuationSuggestions(to value: Bool) {
+        self.withPunctuationSuggestions = value
+    }
+    
+    func setWithFormattingSuggestions(to value: Bool) {
+        self.withFormattingSuggestions = value
+    }
+    
+    func setWithTextStrictlyAsWords(to value: Bool) {
+        self.withTextStrictlyAsWords = value
+    }
+    
     func setSegments(segments: [ExpressionSegment]) {
         do {
             try self.tracks[0].validateSegments(segments)
@@ -1216,15 +1333,22 @@ class Expression: AVMutableComposition {
         return nil
     }
     
+    // We use .lowercased() throughout the method because sometimes word is made uppercase if we have PunctuationSuggestions on which will capitalize on-demand
+    // To elimate this we make everything lowercase
     func getSegmentTextRange(of segment: ExpressionSegment) -> NSRange? {
         var characterRange : NSRange
-        let word = segment.getText()
-        let text = getExpressionText()
+        let word = segment.getText(
+            withSpaceSuggestions: self.withSpaceSuggestions,
+            withPunctuationSuggestions: self.withPunctuationSuggestions,
+            withFormattingSuggestions: self.withFormattingSuggestions,
+            strictlyAsWord: self.withTextStrictlyAsWords
+        ).lowercased()
+        let text = getExpressionText().lowercased()
         if word.count > 0 && segment.timeMapping.source.start.seconds == 0 {
             characterRange = NSRange(location: 0, length: word.count)
         } else if word.count > 0 {
-            let numProcessedChar = text.count - getExpressionText(from: segment.timeMapping.source.start).count
-            let unprocessedTranscription = text.substring(fromIndex: numProcessedChar)
+            let numProcessedChar = text.count - getExpressionText(from: segment.timeMapping.source.start).lowercased().count
+            let unprocessedTranscription = text.substring(fromIndex: numProcessedChar).lowercased()
             let substringRange = unprocessedTranscription.range(of: word)
             let numCharToSubstring = unprocessedTranscription.count - unprocessedTranscription[substringRange!.lowerBound..<unprocessedTranscription.endIndex].count
             characterRange = NSRange(location: numProcessedChar + numCharToSubstring, length: word.count)
@@ -1235,9 +1359,9 @@ class Expression: AVMutableComposition {
         return characterRange
     }
     
-    func getBackgroundNoise(type: ScaleUnitType = .all, sentenceNumber: Int? = nil, segmentTrackTime: CMTime? = nil) -> Float {
-        let numSegments: Float = Float(expressionSegments.count)
-        var backgroundNoiseSum: Float = 0
+    func getBackgroundNoise(type: ScaleUnitType = .all, sentenceNumber: Int? = nil, segmentTrackTime: CMTime? = nil) -> Double {
+        let numSegments: Double = Double(expressionSegments.count)
+        var backgroundNoiseSum: Double = 0
         
         switch type {
         case .all:
@@ -1260,12 +1384,12 @@ class Expression: AVMutableComposition {
             }
         }
         
-        return Float(Utils.UNKNOWN)
+        return Utils.UNKNOWN
     }
     
-    func getSoundIntensity(type: ScaleUnitType = .all, sentenceNumber: Int? = nil, segmentTrackTime: CMTime? = nil) -> Float {
-        let numSegments: Float = Float(self.tracks[0].segments.count)
-        var soundIntensitySum: Float = 0
+    func getSoundIntensity(type: ScaleUnitType = .all, sentenceNumber: Int? = nil, segmentTrackTime: CMTime? = nil) -> Double {
+        let numSegments: Double = Double(self.tracks[0].segments.count)
+        var soundIntensitySum: Double = 0
         
         switch type {
         case .all:
@@ -1290,7 +1414,7 @@ class Expression: AVMutableComposition {
             break
         }
         
-        return Float(Utils.UNKNOWN)
+        return Utils.UNKNOWN
     }
     
     func getSentimentScore(type: ScaleUnitType = .word, sentenceNumber: Int? = nil, forTrackTime: CMTime? = nil) -> Float {
@@ -1547,12 +1671,12 @@ extension Expression: SFSpeechRecognitionTaskDelegate {
                 self.normalizeSegments(transcription: result.bestTranscription)
                 // Update duration
                 self.accumulatedDuration = max(0, Date().timeIntervalSince(self.recordStartDate!) - TRANSCRIPTION_LATENCY_DURATION)
-                print("===== A contiguous clause was completed: \(self.expressionSegments)")
+                // print("===== A contiguous clause was completed: \(self.expressionSegments)")
             } else {
                 // Only the on-server recognition should go here in theory
                 self.performTranscriptionUpdate(result.bestTranscription, final: true)
                 self.normalizeSegments(transcription: result.bestTranscription)
-                print("===== Completed expression: \(self.expressionSegments)")
+                // print("===== Completed expression: \(self.expressionSegments)")
             }
         }
     }
@@ -1596,7 +1720,7 @@ extension Expression: AVSpeechSynthesizerDelegate {
 extension Expression: PitchEngineDelegate {
     func pitchEngine(_ pitchEngine: PitchEngine, didReceivePitch pitch: Pitch) {
         // TODO: Timing
-        print("Pitch { \n\tpitch: \(pitch.note.string) \n\tfrequency: \(pitch.frequency)\n}")
+        // print("Pitch { \n\tpitch: \(pitch.note.string) \n\tfrequency: \(pitch.frequency)\n}")
         let pitchDatum = PitchDatum(date: Date(), pitch: pitch)
         self.pitchStream.append(pitchDatum)
     }

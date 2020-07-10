@@ -13,7 +13,7 @@ import AVFoundation
 class Utils {
     static let UNKNOWN: Double = -1
 
-    public static func computeNormalizedSoundIntensity(buffer: AVAudioPCMBuffer, minDb: Float) -> Float? {
+    public static func computeNormalizedSoundIntensity(buffer: AVAudioPCMBuffer, minDb: Float) -> Double? {
         // gives you an array of pointers to each sample’s data
         guard let channelData = buffer.floatChannelData else { return nil }
 
@@ -25,7 +25,7 @@ class Utils {
                                            by: buffer.stride).map{ channelDataValue[$0] }
         // Compute average power using root mean square
         let rmsNumerator = channelDataValueArray.map{ $0 * $0 }.reduce(0, +)
-        let rms = sqrt(rmsNumerator / Float(buffer.frameLength))
+        let rms = sqrt(Double(rmsNumerator) / Double(buffer.frameLength))
         
         // Convert the RMS to decibels
         // This should be a value between -160 and 0, but if rms is negative, this value would be NaN.
@@ -163,15 +163,15 @@ class Utils {
         return (str.count == 1 && str.contains("I")) || str.contains("I'")
     }
 
-    private static func normalizedPower(power: Float, minDb: Float) -> Float {
+    private static func normalizedPower(power: Double, minDb: Float) -> Double {
         guard power.isFinite else { return 0.0 }
         
-        if power < minDb {
+        if power < Double(minDb) {
             return 0.0
         } else if power >= 1.0 {
             return 1.0
         } else {
-            return (abs(minDb) - abs(power)) / abs(minDb)
+            return (abs(Double(minDb)) - abs(power)) / abs(Double(minDb))
         }
     }
     

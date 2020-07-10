@@ -46,6 +46,10 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             speaker: Speaker(name: "Afika Nyati", avatarURL: URL(string: AVATAR_URL)!, playbackVoice: AVSpeechSynthesisVoice.speechVoices()[0], gender: .male),
             minDb: minDb,
             withDeviceRecognition: useOnDeviceRecognition,
+            withSpaceSuggestions: false,
+            withPunctuationSuggestions: true,
+            withFormattingSuggestions: true,
+            withTextStrictlyAsWords: false,
             onListenUpdate: onExpressionListenUpdate,
             onEchoFinish: onExpressionEchoFinish,
             onEchoUpdate: onExpressionEchoUpdate,
@@ -323,6 +327,10 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             speaker: Speaker(name: "Afika Nyati", avatarURL: URL(string: AVATAR_URL)!, playbackVoice: AVSpeechSynthesisVoice.speechVoices()[0], gender: .male),
             minDb: minDb,
             withDeviceRecognition: useOnDeviceRecognition,
+            withSpaceSuggestions: false,
+            withPunctuationSuggestions: true,
+            withFormattingSuggestions: true,
+            withTextStrictlyAsWords: false,
             onListenUpdate: onExpressionListenUpdate,
             onEchoFinish: onExpressionEchoFinish,
             onEchoUpdate: onExpressionEchoUpdate,
@@ -848,7 +856,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     // MARK: - Pitch Recognition Delegates
     func pitchEngine(_ pitchEngine: PitchEngine, didReceivePitch pitch: Pitch) {
         // TODO: Timing
-        print("Pitch { \n\tpitch: \(pitch.note.string) \n\tfrequency: \(pitch.frequency) \n}")
+        // print("Pitch { \n\tpitch: \(pitch.note.string) \n\tfrequency: \(pitch.frequency) \n}")
 
         if !self.appActivated && pitch.note.octave >= 4 {
             // is female

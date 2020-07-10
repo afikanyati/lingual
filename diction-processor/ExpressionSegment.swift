@@ -11,7 +11,7 @@ import Speech
 import AVFoundation
 import NaturalLanguage
 
-let EMPHASIS_DELTA: Float = 0.3
+let EMPHASIS_DELTA: Double = 0.25
 // https://remotepossibilities.wordpress.com/2013/03/10/when-you-speak-how-often-and-how-long-should-you-pause-the-answer-try-1-2-3/
 let COMMA_PAUSE_DURATION_MULTIPLIER: Double = 1
 let NEW_SENTENCE_PAUSE_DURATION_MULTIPLIER: Double = 2
@@ -34,9 +34,9 @@ class ExpressionSegment: AVCompositionTrackSegment {
     /// A stem form of a word token, if known.
     private var lemma: NLTag?
     /// The average background noise at the time of recording.
-    private var backgroundNoise: Float = Float(Utils.UNKNOWN)
+    private var backgroundNoise: Double = Double(Utils.UNKNOWN)
     /// The sound intensity of utterance at the time of recording.
-    private var soundIntensity: Float = Float(Utils.UNKNOWN)
+    private var soundIntensity: Double = Double(Utils.UNKNOWN)
     /// Specifies information related to the sentence of the expression segment is a member of.
     private var sentence = Sentence(number: -1, timeRange: CMTimeRange.zero)
     /// Scores text as positive, negative, or neutral based on its sentiment polarity.
@@ -48,9 +48,9 @@ class ExpressionSegment: AVCompositionTrackSegment {
     /// The pitch at which segment was uttered
     private var pitch: Pitch?
     /// The average pause duration between words, measured in seconds.
-    private var avgPauseDuration: Double?
+    private var avgPauseDuration: Double = Double(Utils.UNKNOWN)
     /// The number of words spoken per minute.
-    private var speakingRate: Double?
+    private var speakingRate: Double = Double(Utils.UNKNOWN)
     
     /// Initializes the ExpressionSegment class instance
     ///
@@ -113,7 +113,7 @@ class ExpressionSegment: AVCompositionTrackSegment {
     
     // update for new properties
     override var description: String {
-        return "ExpressionSegment{\n\tword: '\(self.word)' \n\tpitch: \(String(describing: self.pitch)) \n\ttimeRange: (start: \(self.timeMapping.source.start), end: \(self.timeMapping.source.end.seconds), \n\tduration: \(self.timeMapping.source.duration.seconds)) \n\tphoneticallySimilarWords: \(String(describing: self.phoneticallySimilarWords)) \n\ttokenType: \(String(describing: self.tokenType)) \n\tlexicalClass: \(String(describing: self.lexicalClass)) \n\tnameType: \(String(describing: self.nameType)) \n\tlemma: \(String(describing: self.lemma)) \n\tbackgroundNoise: \(self.backgroundNoise) \n\tsoundIntensity: \(self.soundIntensity) \n\t sentence: \(self.sentence) \n\tsentimentScore: \(String(describing: self.sentimentScore)) \n\tisSilence: \(self.isSilence()) \n\tisPunctuation:\(self.isPunctuation()) \n\tisEmphasized: \(self.isEmphasized()) \n\tisNumber: \(self.isNumber()) \n\tisHomophone: \(self.isHomophone()) \n\tisSentenceTerminator: \(self.isSentenceTerminator()) \n\tavgPauseDuration: \(String(describing: self.avgPauseDuration)) \n\tspeakingRate: \(String(describing: self.speakingRate))\n}"
+        return "ExpressionSegment{\n\tword: '\(self.word)' \n\tpitch: \(String(describing: self.pitch)) \n\ttimeRange: (start: \(self.timeMapping.source.start), end: \(self.timeMapping.source.end.seconds), \n\tduration: \(self.timeMapping.source.duration.seconds)) \n\tphoneticallySimilarWords: \(String(describing: self.phoneticallySimilarWords)) \n\ttokenType: \(String(describing: self.tokenType)) \n\tlexicalClass: \(String(describing: self.lexicalClass)) \n\tnameType: \(String(describing: self.nameType)) \n\tlemma: \(String(describing: self.lemma)) \n\tbackgroundNoise: \(self.backgroundNoise) \n\tsoundIntensity: \(self.soundIntensity) \n\t sentence: \(self.sentence) \n\tsentimentScore: \(String(describing: self.sentimentScore)) \n\tisSilence: \(self.isSilence()) \n\tisPunctuation:\(self.isPunctuation()) \n\tisEmphasized: \(self.isEmphasized()) \n\tisNumber: \(self.isNumber()) \n\tisHomophone: \(self.isHomophone()) \n\tisSentenceTerminator: \(self.isSentenceTerminator()) \n\tavgPauseDuration: \(self.avgPauseDuration) \n\tspeakingRate: \(self.speakingRate)\n}"
     }
     
     static func ==(_ firstSegment: ExpressionSegment, _ secondSegment: ExpressionSegment) -> Bool {
@@ -152,24 +152,32 @@ class ExpressionSegment: AVCompositionTrackSegment {
     /// - Returns: A new string representation of the segment
     func getText(withSpaceSuggestions: Bool = false, withPunctuationSuggestions: Bool = false, withFormattingSuggestions: Bool = false, strictlyAsWord: Bool = false) -> String {
         var text = ""
-        if withPunctuationSuggestions {
+        if self.isSilence() && withPunctuationSuggestions, avgPauseDuration != Utils.UNKNOWN {
             let duration = self.timeMapping.source.duration.seconds
-            if duration > NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER * self.avgPauseDuration! {
-                text += "\n\n"
-            } else if duration > NEW_SENTENCE_PAUSE_DURATION_MULTIPLIER * self.avgPauseDuration! {
-                text += "."
-            } else if duration > COMMA_PAUSE_DURATION_MULTIPLIER * self.avgPauseDuration! {
-                text += ","
+            let isFirstSegment = self.timeMapping.source.start == CMTime.zero
+            if duration > NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER * max(1, avgPauseDuration) && !isFirstSegment {
+                text += "\(self.word).\n\n"
+            } else if duration > NEW_SENTENCE_PAUSE_DURATION_MULTIPLIER * max(1, avgPauseDuration) && !isFirstSegment {
+                text += "\(self.word)."
+            } else if duration > COMMA_PAUSE_DURATION_MULTIPLIER * max(1, avgPauseDuration) && !isFirstSegment {
+                text += "\(self.word),"
             }
         }
 
-        if self.isSilence() && withSpaceSuggestions {
+        if self.isSilence() && withSpaceSuggestions, avgPauseDuration != Utils.UNKNOWN {
             let duration = self.timeMapping.source.duration.seconds
-            if duration > NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER * self.avgPauseDuration! {
-                text += ""
-            } else if duration > NEW_SENTENCE_PAUSE_DURATION_MULTIPLIER * self.avgPauseDuration! {
+            if duration > NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER * max(1, avgPauseDuration) {
+                // We're going to a new paragraph if we have withPunctuationSuggestions on
+                if withPunctuationSuggestions {
+                    text += ""
+                } else {
+                    text += String(repeating: " ", count: Int(round(4 * duration)))
+                }
+            } else if duration > NEW_SENTENCE_PAUSE_DURATION_MULTIPLIER * max(1, avgPauseDuration) {
                 text += String(repeating: " ", count: Int(round(2 * duration)))
-            } else if duration > COMMA_PAUSE_DURATION_MULTIPLIER * self.avgPauseDuration! {
+            } else if duration > COMMA_PAUSE_DURATION_MULTIPLIER * max(1, avgPauseDuration)
+            {
+                // No need for space here
                 text += ""
             }
         }
@@ -183,6 +191,7 @@ class ExpressionSegment: AVCompositionTrackSegment {
         }
         
         if text.count == 0 && !self.isSilence() {
+            // process word if none of the above have occurred
             text += self.word
         }
 
@@ -218,8 +227,26 @@ class ExpressionSegment: AVCompositionTrackSegment {
         return self.phoneticallySimilarWords.count > 0
     }
     
-    func isSentenceTerminator() -> Bool {
+    func isSentenceTerminator(withPunctuationSuggestions: Bool = false) -> Bool {
+        if withPunctuationSuggestions {
+            let text = self.getText(withPunctuationSuggestions: true)
+            let textHasSentenceTerminator = text.contains(".")
+            return textHasSentenceTerminator || self.lexicalClass == .sentenceTerminator
+        }
+        
         return self.lexicalClass == .sentenceTerminator
+    }
+    
+    func jumpsToNewParagraph() -> Bool {
+        if self.isSilence() && avgPauseDuration != Utils.UNKNOWN {
+            let duration = self.timeMapping.source.duration.seconds
+            let isFirstSegment = self.timeMapping.source.start == CMTime.zero
+            if duration > NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER * max(1, avgPauseDuration) && !isFirstSegment {
+                return true
+            }
+        }
+        
+        return false
     }
     
     func getTokenType() -> NLTag? {
@@ -254,20 +281,20 @@ class ExpressionSegment: AVCompositionTrackSegment {
         return nil
     }
     
-    func getBackgroundNoise() -> Float {
+    func getBackgroundNoise() -> Double {
         return self.backgroundNoise
     }
     
-    func setBackgroundNoise(noise: Float) {
+    func setBackgroundNoise(noise: Double) {
         self.backgroundNoise = noise
     }
 
-    func getSoundIntensity() -> Float {
+    func getSoundIntensity() -> Double {
         return self.soundIntensity
     }
     
-    func setSoundIntensity(noise: Float) {
-        self.soundIntensity = noise
+    func setSoundIntensity(intensity: Double) {
+        self.soundIntensity = intensity
     }
     
     func getSentence() -> Sentence {
@@ -279,7 +306,7 @@ class ExpressionSegment: AVCompositionTrackSegment {
     }
     
     func getAvgPauseDuration() -> Double {
-        return self.avgPauseDuration!
+        return self.avgPauseDuration
     }
     
     func setAvgPauseDuration(duration: Double) {
@@ -287,7 +314,7 @@ class ExpressionSegment: AVCompositionTrackSegment {
     }
     
     func getSpeakingRate() -> Double {
-        return self.speakingRate!
+        return self.speakingRate
     }
     
     func setSpeakingRate(rate: Double) {
