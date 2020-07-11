@@ -33,6 +33,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     var numAppSessions = 0
     let wakePhrase = "rise and shine"
     var UITimer: Timer?
+    var savedMessageTimer: Timer?
     var onExpressionListenUpdate: (() -> Void)?
     var onExpressionEchoFinish: (() -> Void)?
     var onExpressionEchoUpdate: ((_ range: NSRange) -> Void)?
@@ -309,7 +310,8 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 self?.navigationItem.title = "Saved!"
                 self?.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.red]
                 
-                Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { timer in
+                self?
+                    .savedMessageTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { timer in
                     self?.navigationItem.title = ""
                     self?.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
                 }
@@ -487,6 +489,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 let spinner = UIActivityIndicatorView(style: .medium)
                 spinner.startAnimating()
                 navigationItem.leftBarButtonItem = UIBarButtonItem(customView: spinner)
+                self.savedMessageTimer?.invalidate()
                 expression.startListeningForSpeech(soundIntensityHandler: { intensity in
                     if let intensity = intensity {
                         DispatchQueue.main.async {

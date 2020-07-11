@@ -20,5 +20,6 @@ public var PunctuationMap: [String: String] = [
     "-": "minus",
     ":": "colon",
     ";": "semi-colon",
-    "/": "forward slash"
+    "/": "forward slash",
+    "?": "question mark"
 ]
