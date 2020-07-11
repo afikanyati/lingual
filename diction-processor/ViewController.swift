@@ -956,3 +956,12 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 // Instructions: Speak out an expression with at least five seconds of silence between each word
 // Expected result: On playback, the silences should be removed and the focus word on screen should be aligned with the word being uttered.
 //
+// 15) Test Punctuation Suggestion: Ignore Adjective
+// Instructions: Utter the following: "This is a beautiful". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Utter "home".
+// Expected Result: There should not be a new paragraph created between 'beautiful' and 'home'.
+//
+// 16) Test Punctuation Suggestion: End on Adjective
+// Instructions: Utter the following: "This is beautiful". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. "you are the best".
+// Expected Result: There should be a new paragraph created between "This is beautiful" and "you are the best". "You" should be capitalized and there should be no leading space on second sentence
+// Warning: Sometimes the transcript returns back a starting time for "you" that happens well before it is uttered. There is no control of this unfortunately
+//

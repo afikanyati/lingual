@@ -60,6 +60,7 @@
 		8BCA1B0124A43D530068BABB /* Speaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BCA1B0024A43D530068BABB /* Speaker.swift */; };
 		8BCA1B0324A43DB70068BABB /* Gender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BCA1B0224A43DB70068BABB /* Gender.swift */; };
 		8BD595C7249AE45D000B3127 /* Expression.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BD595C6249AE45D000B3127 /* Expression.swift */; };
+		8BE2EB1924BA44BC00E2D519 /* Determiners.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE2EB1824BA44BC00E2D519 /* Determiners.swift */; };
 		8BEC136824906FF30056E767 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEC136724906FF30056E767 /* AppDelegate.swift */; };
 		8BEC136A24906FF30056E767 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEC136924906FF30056E767 /* SceneDelegate.swift */; };
 		8BEC136C24906FF30056E767 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEC136B24906FF30056E767 /* ViewController.swift */; };
@@ -142,6 +143,7 @@
 		8BCA1B0024A43D530068BABB /* Speaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Speaker.swift; sourceTree = "<group>"; };
 		8BCA1B0224A43DB70068BABB /* Gender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gender.swift; sourceTree = "<group>"; };
 		8BD595C6249AE45D000B3127 /* Expression.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Expression.swift; sourceTree = "<group>"; };
+		8BE2EB1824BA44BC00E2D519 /* Determiners.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Determiners.swift; sourceTree = "<group>"; };
 		8BEC136424906FF30056E767 /* diction-processor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "diction-processor.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BEC136724906FF30056E767 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		8BEC136924906FF30056E767 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -269,6 +271,7 @@
 				8BD595C6249AE45D000B3127 /* Expression.swift */,
 				8B669B6824B01AF600D5996B /* Utils.swift */,
 				8B09CDFF24932E4E001EC02D /* ExpressionSegment.swift */,
+				8BE2EB1824BA44BC00E2D519 /* Determiners.swift */,
 				8B766E8D24A812AF00D41A13 /* PunctuationMap.swift */,
 				8B766E8824A7D7D200D41A13 /* Sentence.swift */,
 				8BCA1AFE24A3DA5B0068BABB /* SentencePosition.swift */,
@@ -456,6 +459,7 @@
 				8B669B6B24B2C3DD00D5996B /* PitchDatum.swift in Sources */,
 				8B766F5524AC2AB200D41A13 /* PitchEngine.swift in Sources */,
 				8B766F2524AC2AA300D41A13 /* Note.swift in Sources */,
+				8BE2EB1924BA44BC00E2D519 /* Determiners.swift in Sources */,
 				8BCA1AFB24A3D0750068BABB /* ScaleUnitType.swift in Sources */,
 				8B766F5D24AC2AB200D41A13 /* SimpleTransformer.swift in Sources */,
 				8B766F4524AC2AB200D41A13 /* HPSEstimator.swift in Sources */,

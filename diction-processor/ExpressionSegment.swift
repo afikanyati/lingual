@@ -24,7 +24,7 @@ class ExpressionSegment: AVCompositionTrackSegment {
     /// Index of segment in expression
     private var index: Int = Int(Utils.UNKNOWN)
     /// A textual representation of expression segment.
-    private var word : String
+    internal var word : String
     /// An array of similarly sounding words.
     private var phoneticallySimilarWords : [String]
     /// An array of words with similar meaning
@@ -158,19 +158,63 @@ class ExpressionSegment: AVCompositionTrackSegment {
     func getText(withSpaceSuggestions: Bool = false, withPunctuationSuggestions: Bool = false, withFormattingSuggestions: Bool = false, strictlyAsWord: Bool = false, withSpacePrefix: Bool = false, forEcho: Bool = false) -> String {
         var text = ""
         var capitalizeWord = false
-        var removeSpaceInWord = false
         var exclaimWord = false
+        var removeLeadingSpace = false
         var previousWordIsPunctuation = false
-        var previousWordIsValidLastSentenceWord = false
+        var previousWordLexicalClass: NLTag?
+        var previousWord = ""
+        var i = 1
         if self.index != Int(Utils.UNKNOWN) && self.index > 0 && expression.expressionSegments.count > self.index {
-            let previousSegment = expression.expressionSegments[self.index - 1]
-            let lexicalClass = previousSegment.getLexicalClass()
-            capitalizeWord = previousSegment.isSentenceTerminator(withPunctuationSuggestions: withPunctuationSuggestions)
-            removeSpaceInWord = withPunctuationSuggestions ? previousSegment.suggestsNewParagraph() : false
-            exclaimWord = previousSegment.isEmphasized()
-            previousWordIsPunctuation = previousSegment.isPunctuation()
-            previousWordIsValidLastSentenceWord = lexicalClass != .determiner && lexicalClass != .conjunction && lexicalClass != .preposition
-            // e.g. that is dope. dope = adjective, so we count those
+            while self.index - i >= 0 {
+                let previousSegment = expression.expressionSegments[self.index - i]
+                if previousSegment.isSilence() {
+                    i += 1
+                    capitalizeWord = previousSegment.isSentenceTerminator(withPunctuationSuggestions: withPunctuationSuggestions)
+                    removeLeadingSpace = withPunctuationSuggestions && previousSegment.suggestsNewParagraph()
+                } else {
+                    previousWordIsPunctuation = previousSegment.isPunctuation()
+                    previousWordLexicalClass = previousSegment.getLexicalClass()
+                    previousWord = previousSegment.word
+                    exclaimWord = previousSegment.isEmphasized()
+                    break
+                }
+            }
+        }
+        
+        var previousPreviousWordLexicalClass: NLTag?
+//        var previousPreviousWord: String
+        var j = i + 1
+        if self.index != Int(Utils.UNKNOWN) && self.index > 1 && expression.expressionSegments.count > self.index {
+            while self.index - j >= 0 {
+                let previousPreviousSegment = expression.expressionSegments[self.index - j]
+                if previousPreviousSegment.isSilence() {
+                    j += 1
+                } else {
+                    previousPreviousWordLexicalClass = previousPreviousSegment.getLexicalClass()
+//                    previousPreviousWord = previousPreviousSegment.word
+                    break
+                }
+            }
+        }
+        
+        var previousWordIsValidLastSentenceWord = false
+        if let previousPreviousWordLexicalClass = previousPreviousWordLexicalClass, previousPreviousWordLexicalClass == .verb, let previousWordLexicalClass = previousWordLexicalClass {
+            // adjectives are allowed
+            // e.g. that is beautiful
+            // we can end sentence after "beautiful"
+            // "is" is a verb
+            // demonstratives are allowed too
+            // I am doing this
+            // "this" is a demonstrative
+            // we can end after "this"
+            previousWordIsValidLastSentenceWord = previousWordLexicalClass != .conjunction && previousWordLexicalClass != .preposition && (previousWordLexicalClass != .determiner || (previousWordLexicalClass == .determiner && previousWord.count > 0 && (Determiners.isDemonstrative(previousWord) || Determiners.isPossessivePronoun(previousWord))))
+        } else if let previousWordLexicalClass = previousWordLexicalClass {
+            // e.g. that is a beautifl
+            // we can't end sentence after beautiful
+            // "a" is a determiner, more specifically an article
+            // we can't end on an article
+            previousWordIsValidLastSentenceWord = previousWordLexicalClass != .conjunction && previousWordLexicalClass != .preposition && previousWordLexicalClass != .adjective && (previousWordLexicalClass != .determiner || (previousWordLexicalClass == .determiner && previousWord.count > 0 && (Determiners.isDemonstrative(previousWord) || Determiners.isPossessivePronoun(previousWord))))
+            
         }
         
         var nextWordIsConjunction = false
@@ -180,10 +224,10 @@ class ExpressionSegment: AVCompositionTrackSegment {
         }
 
         // Handle Punctuation Suggestions
-        if self.isSilence() && withPunctuationSuggestions, avgPauseDuration != Utils.UNKNOWN {
+        if self.isSilence() && withPunctuationSuggestions && avgPauseDuration != Utils.UNKNOWN {
             // no need for self.word to be injected in string because
             // its the empty string for silence
-            if previousWordIsPunctuation && suggestsNewParagraph() {
+            if previousWordIsPunctuation && previousWordIsValidLastSentenceWord && suggestsNewParagraph() {
                 text += "\n\n"
             } else if !previousWordIsPunctuation && previousWordIsValidLastSentenceWord && suggestsNewParagraph() {
                 text += "\(exclaimWord ? "!" : ".")\n\n"
@@ -195,7 +239,7 @@ class ExpressionSegment: AVCompositionTrackSegment {
         }
 
         // Handle Space Suggestions
-        if self.isSilence() && withSpaceSuggestions, avgPauseDuration != Utils.UNKNOWN {
+        if self.isSilence() && withSpaceSuggestions && avgPauseDuration != Utils.UNKNOWN {
             let duration = self.timeMapping.source.duration.seconds
             if suggestsNewParagraph(includingFirstSegment: true) {
                 // We're going to a new paragraph if we have withPunctuationSuggestions on
@@ -213,7 +257,7 @@ class ExpressionSegment: AVCompositionTrackSegment {
         }
         
         // Handle Space Prefix
-        if !self.isSilence() && !self.isPunctuation() && withSpacePrefix && !removeSpaceInWord {
+        if !self.isSilence() && !self.isPunctuation() && withSpacePrefix && !removeLeadingSpace {
             text += " "
         }
         
@@ -399,7 +443,7 @@ class ExpressionSegment: AVCompositionTrackSegment {
         if self.isSilence() && avgPauseDuration != Utils.UNKNOWN {
             let duration = self.timeMapping.source.duration.seconds
             let isFirstSegment = self.timeMapping.source.start == CMTime.zero
-            if duration > NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER * max(1, avgPauseDuration) && (includingFirstSegment || !isFirstSegment) {
+            if duration > NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER && (includingFirstSegment || !isFirstSegment) {
                 return true
             }
         }
@@ -411,7 +455,7 @@ class ExpressionSegment: AVCompositionTrackSegment {
         if self.isSilence() && avgPauseDuration != Utils.UNKNOWN {
             let duration = self.timeMapping.source.duration.seconds
             let isFirstSegment = self.timeMapping.source.start == CMTime.zero
-            if duration > NEW_SENTENCE_PAUSE_DURATION_MULTIPLIER * max(1, avgPauseDuration) && (includingFirstSegment || !isFirstSegment) {
+            if duration > NEW_SENTENCE_PAUSE_DURATION_MULTIPLIER && (includingFirstSegment || !isFirstSegment) {
                 return true
             }
         }
@@ -423,7 +467,7 @@ class ExpressionSegment: AVCompositionTrackSegment {
         if self.isSilence() && avgPauseDuration != Utils.UNKNOWN {
             let duration = self.timeMapping.source.duration.seconds
             let isFirstSegment = self.timeMapping.source.start == CMTime.zero
-            if duration > COMMA_PAUSE_DURATION_MULTIPLIER * max(1, avgPauseDuration) && (includingFirstSegment || !isFirstSegment) {
+            if duration > COMMA_PAUSE_DURATION_MULTIPLIER && (includingFirstSegment || !isFirstSegment) {
                 return true
             }
         }

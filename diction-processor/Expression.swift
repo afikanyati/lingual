@@ -403,6 +403,7 @@ class Expression: AVMutableComposition {
                 duration = floor(Expression.defaultSegmentTimescale * DEFAULT_SEGMENT_DURATION)
             }
         } else {
+            // enters here when we get the final transcript which has timestamp data
             timestamp = accumulatedDuration + segment.timestamp > 0 ? floor(Expression.defaultSegmentTimescale * (accumulatedDuration + segment.timestamp)) : 0
             duration = segment.duration > 0 ? floor(Expression.defaultSegmentTimescale * segment.duration) : 0
         }
@@ -450,7 +451,7 @@ class Expression: AVMutableComposition {
     // We set background noise here because we can identify all the silences
     // We set sentence numbers here because we've built up the entire expression and can compute sentences factoring it all
     // This is where correct values for avgPauseDuration and speakingRate are set
-    func normalizeSegments(transcription: SFTranscription) {
+    func normalizeSegments() {
         print("===== Normalizing Segments =====")
         var lastEnd = CMTime.zero
         var segments = self.expressionSegments
@@ -1672,7 +1673,7 @@ extension Expression: SFSpeechRecognitionTaskDelegate {
                 print("===== Some words heard. Apple servers ended dictation session =====")
                 self.stopListeningForSpeech(pause: true) {[weak self] in
                     self?.performTranscriptionUpdate(result.bestTranscription, final: true)
-                    self?.normalizeSegments(transcription: result.bestTranscription)
+                    self?.normalizeSegments()
                     // Update duration
                     self?.accumulatedDuration = max(0, Date().timeIntervalSince(self!.recordStartDate!) - TRANSCRIPTION_LATENCY_DURATION)
                     self?.startListeningForSpeech(
@@ -1682,14 +1683,14 @@ extension Expression: SFSpeechRecognitionTaskDelegate {
                 }
             } else if self.isListening && self.request!.requiresOnDeviceRecognition {
                 self.performTranscriptionUpdate(result.bestTranscription, final: true)
-                self.normalizeSegments(transcription: result.bestTranscription)
+                self.normalizeSegments()
                 // Update duration
                 self.accumulatedDuration = max(0, Date().timeIntervalSince(self.recordStartDate!) - TRANSCRIPTION_LATENCY_DURATION)
                 // print("===== A contiguous clause was completed: \(self.expressionSegments)")
             } else {
                 // Only the on-server recognition should go here in theory
                 self.performTranscriptionUpdate(result.bestTranscription, final: true)
-                self.normalizeSegments(transcription: result.bestTranscription)
+                self.normalizeSegments()
                 // print("===== Completed expression: \(self.expressionSegments)")
             }
         }
