@@ -42,24 +42,11 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     // MARK: - General Audio Properties
     var recordingSession = AVAudioSession.sharedInstance()
     lazy var expression: Expression = {
-        return Expression(
-            vc: self,
-            speaker: Speaker(name: "Afika Nyati", avatarURL: URL(string: AVATAR_URL)!, playbackVoice: AVSpeechSynthesisVoice.speechVoices()[0], gender: .male),
-            minDb: minDb,
-            withDeviceRecognition: useOnDeviceRecognition,
-            withSpaceSuggestions: false,
-            withPunctuationSuggestions: true,
-            withFormattingSuggestions: true,
-            withTextStrictlyAsWords: false,
-            onListenUpdate: onExpressionListenUpdate,
-            onEchoFinish: onExpressionEchoFinish,
-            onEchoUpdate: onExpressionEchoUpdate,
-            onExpressionComplete: onExpressionComplete
-        )
+        return self.createNewExpression()
     }()
     
     // MARK: - Speech Recognition Properties
-    let audioEngine = AVAudioEngine()
+    var audioEngine = AVAudioEngine()
     let speechRecognizer: SFSpeechRecognizer? = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     var request: SFSpeechAudioBufferRecognitionRequest?
     var recognitionTask: SFSpeechRecognitionTask?
@@ -145,7 +132,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         }
     }
     
-    @objc func handleRouteChange(notification: Notification) {
+    @objc func handleAudioSessionRouteChange(notification: Notification) {
         guard let userInfo = notification.userInfo,
             let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
             let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else {
@@ -159,9 +146,12 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             // Reset listening for wake word
             DispatchQueue.main.async {
                 if !self.appActivated {
-//                     self.stopSpeechRecognition()
-//                     self.hello()
-//                     self.configureListeningForWakePhrase()
+                    self.stopListeningForWakePhrase() {[weak self] in
+                        self?.configureListeningForWakePhrase()
+                    }
+                } else {
+                    // Re-initiate Audio Engine to mend broken graph
+                    self.audioEngine = AVAudioEngine()
                 }
             }
         case .oldDeviceUnavailable: // Old device removed.
@@ -169,9 +159,12 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             // Reset listening for wake word
             DispatchQueue.main.async {
                 if !self.appActivated {
-//                    self.stopSpeechRecognition()
-//                    self.hello()
-//                    self.configureListeningForWakePhrase()
+                    self.stopListeningForWakePhrase() {[weak self] in
+                        self?.configureListeningForWakePhrase()
+                    }
+                } else {
+                    // Re-initiate Audio Engine to mend broken graph
+                    self.audioEngine = AVAudioEngine()
                 }
             }
         default: ()
@@ -203,34 +196,6 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             }
 
         default: ()
-        }
-    }
-    
-    func hello() {
-        if AVAudioSession.isHeadphonesConnected {
-            for input in self.recordingSession.availableInputs! {
-                if AVAudioSession.isHeadphonePortType(portType: input.portType) {
-                    self.configureNotificationObservers()
-                    do {
-                        try self.recordingSession.setPreferredInput(input)
-                    } catch {
-                        print("===== Unable to change preferred input =====")
-                    }
-                    break
-                }
-            }
-        } else {
-            for input in self.recordingSession.availableInputs! {
-                if !AVAudioSession.isHeadphonePortType(portType: input.portType) {
-                    self.configureNotificationObservers()
-                    do {
-                        try self.recordingSession.setPreferredInput(input)
-                    } catch {
-                        print("===== Unable to change preferred input =====")
-                    }
-                    break
-                }
-            }
         }
     }
     
@@ -324,20 +289,17 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         setAudioButtonsVisibility(visible: false)
         self.transcriptionText.attributedText = NSMutableAttributedString(string: "")
         self.navigationItem.rightBarButtonItem = nil
-        self.expression = Expression(
-            vc: self,
-            speaker: Speaker(name: "Afika Nyati", avatarURL: URL(string: AVATAR_URL)!, playbackVoice: AVSpeechSynthesisVoice.speechVoices()[0], gender: .male),
-            minDb: minDb,
-            withDeviceRecognition: useOnDeviceRecognition,
-            withSpaceSuggestions: false,
-            withPunctuationSuggestions: true,
-            withFormattingSuggestions: true,
-            withTextStrictlyAsWords: false,
-            onListenUpdate: onExpressionListenUpdate,
-            onEchoFinish: onExpressionEchoFinish,
-            onEchoUpdate: onExpressionEchoUpdate,
-            onExpressionComplete: onExpressionComplete
-        )
+        self.savedMessageTimer?.invalidate()
+        
+        if expression.isPlayingEcho {
+            expression.stopEcho(handler: onExpressionEchoFinish)
+        }
+        
+        if expression.isPlayingExpression {
+            expression.stop()
+        }
+
+        self.expression = createNewExpression()
     }
     
     func requestPermissions() {
@@ -379,6 +341,13 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         
         notificationCenter.addObserver(
             self,
+            selector: #selector(appGainsFocus),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+        
+        notificationCenter.addObserver(
+            self,
             selector: #selector(appLosesFocus),
             name: UIApplication.willResignActiveNotification,
             object: nil
@@ -407,7 +376,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         
         notificationCenter.addObserver(
             self,
-            selector: #selector(handleRouteChange),
+            selector: #selector(handleAudioSessionRouteChange),
             name: AVAudioSession.routeChangeNotification,
             object: nil
         )
@@ -425,6 +394,27 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         )
     }
     
+    func createNewExpression() -> Expression {
+        Expression(
+            vc: self,
+            speaker: Speaker(name: "Afika Nyati", avatarURL: URL(string: AVATAR_URL)!, vc: self),
+            minDb: minDb,
+            withDeviceRecognition: useOnDeviceRecognition,
+            withTemporalSuggestions: false,
+            withPunctuationSuggestions: true,
+            withFormattingSuggestions: true,
+            withTextStrictlyAsWords: false,
+            onListenUpdate: onExpressionListenUpdate,
+            onEchoFinish: onExpressionEchoFinish,
+            onEchoUpdate: onExpressionEchoUpdate,
+            onExpressionComplete: onExpressionComplete
+        )
+    }
+    
+    @objc func appGainsFocus() {
+        print("===== App Gains Focus =====")
+    }
+    
     @objc func appLosesFocus() {
         print("===== App Lost Focus =====")
         // Will occur when open control center
@@ -437,6 +427,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 self.stopListeningForWakePhrase()
             }
             
+            // keep recording outside of app if expression started
             if !self.expression.isListening {
                 self.appActivated = false
                 self.setActiveUI(as: false)
@@ -671,7 +662,8 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 
         let node = audioEngine.inputNode
         let recordingFormat = node.outputFormat(forBus: recordBus)
-        
+        print("===== Sample Rates ===== \n\tSoftware Format: \(recordingFormat.sampleRate)\n\tHardware Format: \(AVAudioSession.sharedInstance().sampleRate)")
+
         request = SFSpeechAudioBufferRecognitionRequest()
         request!.shouldReportPartialResults = true
         request!.requiresOnDeviceRecognition = false
@@ -729,7 +721,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         node.removeTap(onBus: self.recordBus)
 
         audioEngine.stop()
-        audioEngine.reset()
+        // We instantiate new audio engine in case headphones have been added or removed
+        // Removing an audio node will create a broken graph: https://developer.apple.com/documentation/avfoundation/avaudioengine
+        audioEngine = AVAudioEngine()
         
         // When this is not in the main thread, the recognition task doesn't end correctly
         // which prevents us from receiving the final transcription.
@@ -964,4 +958,12 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 // Instructions: Utter the following: "This is beautiful". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. "you are the best".
 // Expected Result: There should be a new paragraph created between "This is beautiful" and "you are the best". "You" should be capitalized and there should be no leading space on second sentence
 // Warning: Sometimes the transcript returns back a starting time for "you" that happens well before it is uttered. There is no control of this unfortunately
+//
+// 17) Test Punctuation and Temporal Suggestions Active
+// Instructions: In createNewExpression() method, set 'withTemporalSuggestions' and 'withPunctuationSuggestions' to true. And open application
+// Expected Result:  You should see a 'Conflicting View Modes' error dialog telling you it's selected punctuation suggestions.
+//
+// 18) Test Change Audio Inputs
+// Instructions: Start the app without earphones connected. While on the Wake Phrase Screen, connect earphones. Utter wake phrase.
+// Expected Result: The wake phrase should be registered without error
 //

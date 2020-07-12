@@ -11,11 +11,11 @@ import Speech
 import AVFoundation
 import NaturalLanguage
 
-let EMPHASIS_DELTA: Double = 0.15
+let EMPHASIS_DELTA: Double = 0.1
 // https://remotepossibilities.wordpress.com/2013/03/10/when-you-speak-how-often-and-how-long-should-you-pause-the-answer-try-1-2-3/
-let COMMA_PAUSE_DURATION_MULTIPLIER: Double = 1.5
-let NEW_SENTENCE_PAUSE_DURATION_MULTIPLIER: Double = 2.5
-let NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER: Double = 4 // Very nice
+let COMMA_PAUSE_DURATION_MULTIPLIER: Double = 2
+let NEW_SENTENCE_PAUSE_DURATION_MULTIPLIER: Double = 4
+let NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER: Double = 6 // Very nice
 let MAX_SEMANTICALLY_SIMILAR_WORDS = 5
 
 class ExpressionSegment: AVCompositionTrackSegment {
@@ -149,13 +149,13 @@ class ExpressionSegment: AVCompositionTrackSegment {
     /// Returns the text representation of the segment
     ///
     /// - Parameters:
-    ///     - withSpaceSuggestions: Whether the result should incorporate spacing modifications based on silence periods
+    ///     - withTemporalSuggestions: Whether the result should incorporate spacing modifications based on silence periods
     ///     - withPunctuationSuggestions: Whether the result should incorporate punctuation suggestions based on silence periods
     ///     - withFormattingSuggestions: Whether the result should incorporate formatting suggestions based on sound intensity
     ///     - strictlyAsWord: Whether result should convert all punctuation symbols to words
     ///
     /// - Returns: A new string representation of the segment
-    func getText(withSpaceSuggestions: Bool = false, withPunctuationSuggestions: Bool = false, withFormattingSuggestions: Bool = false, strictlyAsWord: Bool = false, withSpacePrefix: Bool = false, forEcho: Bool = false) -> String {
+    func getText(withTemporalSuggestions: Bool = false, withPunctuationSuggestions: Bool = false, withFormattingSuggestions: Bool = false, strictlyAsWord: Bool = false, withSpacePrefix: Bool = false, forEcho: Bool = false) -> String {
         var text = ""
         var capitalizeWord = false
         var exclaimWord = false
@@ -239,17 +239,13 @@ class ExpressionSegment: AVCompositionTrackSegment {
         }
 
         // Handle Space Suggestions
-        if self.isSilence() && withSpaceSuggestions && avgPauseDuration != Utils.UNKNOWN {
+        if self.isSilence() && withTemporalSuggestions && avgPauseDuration != Utils.UNKNOWN {
             let duration = self.timeMapping.source.duration.seconds
             if suggestsNewParagraph(includingFirstSegment: true) {
                 // We're going to a new paragraph if we have withPunctuationSuggestions on
-                if withPunctuationSuggestions {
-                    text += ""
-                } else {
-                    text += String(repeating: " ", count: Int(round(4 * duration)))
-                }
+                text += String(repeating: " ", count: Int(ceil(2 * duration)))
             } else if suggestsNewSentence(includingFirstSegment: true) {
-                text += String(repeating: " ", count: Int(round(2 * duration)))
+                text += String(repeating: " ", count: Int(ceil(2 * duration)))
             } else if suggestsNewComma(includingFirstSegment: true) {
                 // No need for space here
                 text += ""
@@ -396,33 +392,9 @@ class ExpressionSegment: AVCompositionTrackSegment {
     func setIndex(index: Int) {
         self.index = index
     }
-
-    func getSentenceExpression() -> Expression? {
-        let segments = self.expression.expressionSegments
-        var sentenceSegments = [ExpressionSegment]()
-        for segment in segments  {
-            if segment.timeMapping.source.start >= sentence.timeRange.start && segment.timeMapping.source.end <= sentence.timeRange.end {
-                sentenceSegments.append(segment)
-            }
-        }
-        
-        let sentence = Expression(
-            vc: self.expression.vc!,
-            speaker: self.expression.speaker,
-            minDb: self.expression.minDb,
-            withDeviceRecognition: self.expression.useOnDeviceRecognition,
-            withSpaceSuggestions: self.expression.withSpaceSuggestions,
-            withPunctuationSuggestions: self.expression.withPunctuationSuggestions,
-            withFormattingSuggestions: self.expression.withFormattingSuggestions,
-            withTextStrictlyAsWords: self.expression.withTextStrictlyAsWords,
-            onListenUpdate: self.expression.onListenUpdate,
-            onEchoFinish: self.expression.onEchoFinish,
-            onEchoUpdate: self.expression.onEchoUpdate,
-            onExpressionComplete: self.expression.onExpressionComplete
-        )
-        sentence.setSegments(segments: sentenceSegments)
-        
-        return nil
+    
+    func getIndex() -> Int {
+        return self.index
     }
 
     func setPitch(pitch: Pitch) {
@@ -435,6 +407,98 @@ class ExpressionSegment: AVCompositionTrackSegment {
         }
         
         return nil
+    }
+    
+    func getSentenceExpression() -> Expression? {
+        var lastEnd = CMTime.zero
+        let segments = self.expression.expressionSegments
+        var sentenceSegments = [ExpressionSegment]()
+        for segment in segments  {
+            if segment.timeMapping.source.start >= sentence.timeRange.start && segment.timeMapping.source.end <= sentence.timeRange.end {
+                let shiftedSegment = ExpressionSegment(
+                    expression: self.expression,
+                    word: segment.getText(),
+                    trackURL: segment.sourceURL!,
+                    trackID: segment.sourceTrackID,
+                    phoneticallySimilarWords: segment.getPhoneticallySimilarWords(),
+                    timeRange: CMTimeRangeMake(
+                        start: lastEnd,
+                        duration: segment.timeMapping.source.duration
+                    ),
+                    tokenType: segment.getTokenType(),
+                    lexicalClass: segment.getLexicalClass(),
+                    nameType: segment.getNameType(),
+                    lemma: segment.getLemma(),
+                    sentimentScore: segment.getSentiment()
+                )
+                
+                // Set segment index
+                if segment.getIndex() != Int(Utils.UNKNOWN) {
+                    // Import segment index
+                    let index = segment.getIndex()
+                    shiftedSegment.setIndex(index: index)
+                }
+                
+                // Set background noise
+                if segment.getBackgroundNoise() != Utils.UNKNOWN {
+                    // Import background noise
+                    let backgroundNoise = segment.getBackgroundNoise()
+                    shiftedSegment.setBackgroundNoise(noise: backgroundNoise)
+                }
+                
+                // Set avgPauseDuration
+                if segment.getAvgPauseDuration() != Utils.UNKNOWN {
+                    // Import average pause duration
+                    let avgPauseDuration = segment.getAvgPauseDuration()
+                    shiftedSegment.setAvgPauseDuration(duration: avgPauseDuration)
+                }
+                
+                // Set speakingRate
+                if segment.getSpeakingRate() != Utils.UNKNOWN {
+                    // Import speaking  rate
+                    let speakingRate = segment.getSpeakingRate()
+                    shiftedSegment.setSpeakingRate(rate: speakingRate)
+                }
+                
+                // Set soundIntensity
+                if segment.getSoundIntensity() != Utils.UNKNOWN {
+                    // Import sound intensity
+                    let soundIntensity = segment.getSoundIntensity()
+                    shiftedSegment.setSoundIntensity(intensity: soundIntensity)
+                }
+                
+                // Set pitch
+                if let pitch = segment.getPitch() {
+                    // Import pitch
+                    shiftedSegment.setPitch(pitch: pitch)
+                }
+                
+                // Set Sentence
+                shiftedSegment.setSentence(sentence: self.sentence)
+
+                sentenceSegments.append(shiftedSegment)
+                lastEnd = CMTimeAdd(lastEnd, segment.timeMapping.source.duration)
+            }
+        }
+        
+        let sentence = Expression(
+            vc: self.expression.vc!,
+            speaker: self.expression.speaker,
+            minDb: self.expression.minDb,
+            withDeviceRecognition: self.expression.useOnDeviceRecognition,
+            withTemporalSuggestions: self.expression.withTemporalSuggestions,
+            withPunctuationSuggestions: self.expression.withPunctuationSuggestions,
+            withFormattingSuggestions: self.expression.withFormattingSuggestions,
+            withTextStrictlyAsWords: self.expression.withTextStrictlyAsWords,
+            onListenUpdate: self.expression.onListenUpdate,
+            onEchoFinish: self.expression.onEchoFinish,
+            onEchoUpdate: self.expression.onEchoUpdate,
+            onExpressionComplete: self.expression.onExpressionComplete
+        )
+
+        sentence.setSegments(segments: sentenceSegments)
+        
+        return sentence
     }
     
     // MARK: - Helper Functions

@@ -52,7 +52,10 @@ class Expression: AVMutableComposition {
     public override var duration: CMTime {
         return self.expressionSegments.last!.timeMapping.source.end
     }
-    private(set) var withSpaceSuggestions: Bool
+    public var numSentences: Int {
+        return self.expressionSegments.last!.getSentence().number
+    }
+    private(set) var withTemporalSuggestions: Bool
     private(set) var withPunctuationSuggestions: Bool
     private(set) var withFormattingSuggestions: Bool
     private(set) var withTextStrictlyAsWords: Bool
@@ -82,16 +85,13 @@ class Expression: AVMutableComposition {
     
     // MARK: - Speech Recognition Properties
     private(set) var useOnDeviceRecognition: Bool
-    private let audioEngine = AVAudioEngine()
+    private var audioEngine = AVAudioEngine()
     private let speechRecognizer: SFSpeechRecognizer? = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     
     // MARK: - Speech Synthesis Properties
     private let speechSynthesizer = AVSpeechSynthesizer()
-    private var synthesizerVoice : AVSpeechSynthesisVoice? {
-        return Utils.getSynthesizerVoice(withGender: speaker.gender, vc: vc)
-    }
     var defaultVolume = Float(1.0)
     public var isPlayingEcho: Bool {
         return speechSynthesizer.isSpeaking
@@ -127,7 +127,7 @@ class Expression: AVMutableComposition {
         speaker: Speaker,
         minDb: Float,
         withDeviceRecognition: Bool,
-        withSpaceSuggestions: Bool = false,
+        withTemporalSuggestions: Bool = false,
         withPunctuationSuggestions: Bool = false,
         withFormattingSuggestions: Bool = false,
         withTextStrictlyAsWords: Bool = false,
@@ -144,10 +144,22 @@ class Expression: AVMutableComposition {
         self.onEchoFinish = onEchoFinish
         self.onEchoUpdate = onEchoUpdate
         self.onExpressionComplete = onExpressionComplete
-        self.withSpaceSuggestions = withSpaceSuggestions
         self.withPunctuationSuggestions = withPunctuationSuggestions
         self.withFormattingSuggestions = withFormattingSuggestions
         self.withTextStrictlyAsWords = withTextStrictlyAsWords
+        
+        if withPunctuationSuggestions && withTemporalSuggestions {
+            self.withTemporalSuggestions = false
+            let alertController = UIAlertController(title: "Conflicting View Modes", message: "You've attemped to activate both punctuation and temporal suggestions. Only one can be active at a time, so we've activated punctuation suggestions only.", preferredStyle: .alert)
+            let closeAction = UIAlertAction(title: "Close", style: .cancel, handler: nil)
+            alertController.addAction(closeAction)
+
+            DispatchQueue.main.async {
+                vc.present(alertController, animated: true, completion: nil)
+            }
+        } else {
+            self.withTemporalSuggestions = withTemporalSuggestions
+        }
 
         super.init()
 
@@ -165,6 +177,10 @@ class Expression: AVMutableComposition {
         
         // Configure Audio Write File
         self.configureAudioWriteFile()
+        
+        // Configure Observers
+        self.configureNotificationObservers()
+        
     }
     
     // MARK: - Configuration Methods
@@ -207,6 +223,62 @@ class Expression: AVMutableComposition {
         }
     }
     
+    func configureNotificationObservers() {
+        let notificationCenter = NotificationCenter.default
+        
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(handleAudioSessionRouteChange),
+            name: AVAudioSession.routeChangeNotification,
+            object: nil
+        )
+    }
+    
+    @objc func handleAudioSessionRouteChange(notification: Notification) {
+        guard let userInfo = notification.userInfo,
+            let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
+            let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else {
+                return
+        }
+
+        // Switch over the route change reason.
+        switch reason {
+        case .newDeviceAvailable: // New device found.
+            print("===== New Audio Device Found =====")
+            // Reset listening for wake word
+            DispatchQueue.main.async {
+                if self.isListening {
+                    self.stop() {[weak self] in
+                        self?.startListeningForSpeech(
+                            soundIntensityHandler: self?.soundIntensityHandler,
+                            onStartHandler: self?.onListeningStartHandler
+                        )
+                    }
+                } else {
+                    // Re-initiate Audio Engine to mend broken graph
+                    self.audioEngine = AVAudioEngine()
+                }
+            }
+        case .oldDeviceUnavailable: // Old device removed.
+            print("===== Old Audio Device Removed =====")
+            // Reset listening for wake word
+            DispatchQueue.main.async {
+                if self.isListening {
+                    self.stop() {[weak self] in
+                        self?.startListeningForSpeech(
+                            soundIntensityHandler: self?.soundIntensityHandler,
+                            onStartHandler: self?.onListeningStartHandler
+                        )
+                    }
+                } else {
+                    // Re-initiate Audio Engine to mend broken graph
+                    self.audioEngine = AVAudioEngine()
+                }
+            }
+        default: ()
+        }
+    }
+    
     // MARK: - Speech Listening Methods
     
     func startListeningForSpeech(soundIntensityHandler: ((_ intensity: Double?) -> Void)? = nil, onStartHandler: (() -> Void)? = nil) {
@@ -228,6 +300,7 @@ class Expression: AVMutableComposition {
 
         let node = audioEngine.inputNode
         let recordingFormat = node.outputFormat(forBus: recordBus)
+        print("===== Sample Rates ===== \n\tSoftware Format: \(recordingFormat.sampleRate)\n\tHardware Format: \(AVAudioSession.sharedInstance().sampleRate)")
         
         request = SFSpeechAudioBufferRecognitionRequest()
         request!.shouldReportPartialResults = true
@@ -335,14 +408,7 @@ class Expression: AVMutableComposition {
         if final {
             var segments = self.expressionSegments
             segments.removeSubrange(lowerStagingIndex..<segments.count)
-            do {
-                try self.tracks[0].validateSegments(segments)
-                self.tracks[0].segments = segments
-                self.expressionSegments = segments
-                print("===== Successfully validated and updated expression shortened segments array =====")
-            } catch {
-                print("===== Error removing temporary segments =====")
-            }
+            self.setSegments(segments: segments)
         }
         
         for (index, segment) in transcription.segments.enumerated() {
@@ -658,17 +724,17 @@ class Expression: AVMutableComposition {
             segment.setIndex(index: index)
             
             // Set background noise
-            if segment.getBackgroundNoise() == Double(Utils.UNKNOWN) {
+            if segment.getBackgroundNoise() == Utils.UNKNOWN {
                 segment.setBackgroundNoise(noise: backgroundNoise)
             }
             
             // Set avgPauseDuration
-            if segment.getAvgPauseDuration() == Double(Utils.UNKNOWN) {
+            if segment.getAvgPauseDuration() == Utils.UNKNOWN {
                 segment.setAvgPauseDuration(duration: avgPauseDuration)
             }
             
             // Set speakingRate
-            if segment.getSpeakingRate() == Double(Utils.UNKNOWN) {
+            if segment.getSpeakingRate() == Utils.UNKNOWN {
                 segment.setSpeakingRate(rate: speakingRate)
             }
 
@@ -723,7 +789,7 @@ class Expression: AVMutableComposition {
                 }
             } else if !segment.isSilence() {
                 // We can't let silences in here because getSentenceNumber can't handle empty strings
-                let number = getSentenceNumber(segments: normalizedSegments, segment: segment, index: index)
+                let number = getSentenceNumber(segments: normalizedSegments, segment: segment)
                 
                 if number != sentenceNumber && number == sentenceNumber + 1 {
                     // We've hit a sentence boundary. Update sentences
@@ -759,14 +825,7 @@ class Expression: AVMutableComposition {
         
         // print("Sentence Array: \(sentences)")
         segments = normalizedSegments
-        do {
-            try self.tracks[0].validateSegments(segments)
-            self.tracks[0].segments = segments
-            self.expressionSegments = segments
-            print("===== Successfully normalized and updated expression segments =====")
-        } catch {
-            print("===== Error updatings expression segments in normalize segments =====")
-        }
+        self.setSegments(segments: segments)
     }
     
     // MARK: - Listening Method Helpers
@@ -829,44 +888,20 @@ class Expression: AVMutableComposition {
         return (tokenTags, sentiment)
     }
     
-    func getSentenceNumber(segments: [ExpressionSegment], segment: ExpressionSegment, index: Int) -> Int {
+    func getSentenceNumber(segments: [ExpressionSegment], segment: ExpressionSegment) -> Int {
         if segment.isSilence() || segment.getLexicalClass() == .otherWhitespace || segment.getLexicalClass() == .paragraphBreak {
             return Int(Utils.UNKNOWN)
         }
         
-        // Contants
-        let word = segment.getText(
-            withSpaceSuggestions: self.withSpaceSuggestions,
-            withPunctuationSuggestions: self.withPunctuationSuggestions,
-            withFormattingSuggestions: self.withFormattingSuggestions,
-            strictlyAsWord: self.withTextStrictlyAsWords
-        )
-        let wholeText = self.getExpressionText()
-        
-        // Return Value
-        var sentenceNumber = -1
-        
-        // Find segment index
-        var segmentStartIndex : String.Index
-        if word.count > 0 && segment.timeMapping.source.start.seconds == 0 {
-            segmentStartIndex = word.index(word.startIndex, offsetBy: word.count / 2)
-        } else if word.count > 0 {
-            let segmentRange = findSegmentRange(segments: segments, wholeText: wholeText, segmentText: word, index: index)
-            segmentStartIndex = segmentRange.lowerBound
-        } else {
-            return sentenceNumber
-        }
-        
-        // Compute Sentences
-        var sentenceRanges = [Range<String.Index>]()
-        wholeText.enumerateSubstrings(in: wholeText.startIndex..., options: [.bySentences]) { (_, range, _, _) in
-            sentenceRanges.append(range)
-        }
-        
-        // Find sentence number
-        for (index, range) in sentenceRanges.enumerated() {
-            if range.contains(segmentStartIndex) {
-                sentenceNumber = index
+        var sentenceNumber = 0
+
+        for seg in segments {
+            if seg == segment {
+                break
+            }
+
+            if seg.isSentenceTerminator(withPunctuationSuggestions: self.withPunctuationSuggestions) {
+                sentenceNumber += 1
             }
         }
         
@@ -880,7 +915,7 @@ class Expression: AVMutableComposition {
         // compute number of processedChar
         if index >= segments.count && index - segments.count <= 1 {
             // new segment
-            lowerText = self.getExpressionText()
+            lowerText = self.getExpressionText(segments: segments)
         } else if index < segments.count && index > 0 {
             // is in in expressionSegments
             let lowerBoundarySegment = segments[index - 1]
@@ -931,13 +966,18 @@ class Expression: AVMutableComposition {
     
     // MARK: - Text Methods
     
-    func getExpressionText(from time: CMTime = CMTime.zero, forEcho: Bool = false) -> String {
+    func getExpressionText(from time: CMTime = CMTime.zero, segments: [ExpressionSegment]? = nil, forEcho: Bool = false) -> String {
         var text = ""
+        
+        var expressionSegments = self.expressionSegments
+        if let segments = segments {
+            expressionSegments = segments
+        }
 
         for segment in expressionSegments  {
             if segment.timeMapping.source.start >= time {
                 let word = segment.getText(
-                    withSpaceSuggestions: self.withSpaceSuggestions,
+                    withTemporalSuggestions: self.withTemporalSuggestions,
                     withPunctuationSuggestions: self.withPunctuationSuggestions,
                     withFormattingSuggestions: self.withFormattingSuggestions,
                     strictlyAsWord: self.withTextStrictlyAsWords,
@@ -955,7 +995,7 @@ class Expression: AVMutableComposition {
     }
     
     // We need to deal with segments from different places
-    func getExpressionText(until time: CMTime, segments: [ExpressionSegment]?, forEcho: Bool = false) -> String {
+    func getExpressionText(until time: CMTime, segments: [ExpressionSegment]? = nil, forEcho: Bool = false) -> String {
         var text = ""
         
         var expressionSegments = self.expressionSegments
@@ -966,7 +1006,7 @@ class Expression: AVMutableComposition {
         for segment in expressionSegments  {
             if segment.timeMapping.source.start <= time {
                 let word = segment.getText(
-                    withSpaceSuggestions: self.withSpaceSuggestions,
+                    withTemporalSuggestions: self.withTemporalSuggestions,
                     withPunctuationSuggestions: self.withPunctuationSuggestions,
                     withFormattingSuggestions: self.withFormattingSuggestions,
                     strictlyAsWord: self.withTextStrictlyAsWords,
@@ -1151,6 +1191,12 @@ class Expression: AVMutableComposition {
         handler?()
     }
     
+    func stop(handler: (() -> Void)? = nil) {
+        handleCompletionObserver()
+        player.stop()
+        handler?()
+    }
+    
     // MARK: - Echo Methods
     
     func startEcho(handler: (() -> Void)? = nil) {
@@ -1158,7 +1204,7 @@ class Expression: AVMutableComposition {
         print("==== Initiate new speech synthesizer utterance =====")
         let expressionText = self.getExpressionText(forEcho: false) // make forEcho true when we're doing voice only
         let utterance = AVSpeechUtterance(string: expressionText)
-        if let voice = synthesizerVoice {
+        if let voice = speaker.playbackVoice {
             utterance.voice = voice
         }
         utterance.rate = (AVSpeechUtteranceMaximumSpeechRate - AVSpeechUtteranceMinimumSpeechRate) / 2 + AVSpeechUtteranceMinimumSpeechRate
@@ -1184,6 +1230,7 @@ class Expression: AVMutableComposition {
     }
     
     func stopEcho(handler: (() -> Void)? = nil) {
+        speechSynthesizer.stopSpeaking(at: .immediate)
         handler?()
     }
     
@@ -1201,12 +1248,24 @@ class Expression: AVMutableComposition {
         self.skipSilence = skip
     }
     
-    func setWithSpaceSuggestions(to value: Bool) {
-        self.withSpaceSuggestions = value
+    func setWithTemporalSuggestions(to value: Bool) {
+        self.withTemporalSuggestions = value
+        
+        // We can only have one suggestion type on at a time
+        // Deactivate punctuation suggestions if active
+        if value && self.withPunctuationSuggestions {
+            self.withTemporalSuggestions = false
+        }
     }
     
     func setWithPunctuationSuggestions(to value: Bool) {
         self.withPunctuationSuggestions = value
+        
+        // We can only have one suggestion type on at a time
+        // Deactivate space suggestions if active
+        if value && self.withTemporalSuggestions {
+            self.withTemporalSuggestions = false
+        }
     }
     
     func setWithFormattingSuggestions(to value: Bool) {
@@ -1235,6 +1294,7 @@ class Expression: AVMutableComposition {
         for segment in expressionSegments {
             if segment.getSentence().number == number {
                 sentence = segment.getSentenceExpression()
+                break
             }
         }
         
@@ -1246,6 +1306,7 @@ class Expression: AVMutableComposition {
         for segment in expressionSegments {
             if segment.getSentence().timeRange.start <= forTrackTime && segment.getSentence().timeRange.end > forTrackTime {
                 sentence = segment.getSentenceExpression()
+                break
             }
         }
         
@@ -1336,7 +1397,7 @@ class Expression: AVMutableComposition {
     func getSegmentTextRange(of segment: ExpressionSegment) -> NSRange? {
         var characterRange : NSRange
         let word = segment.getText(
-            withSpaceSuggestions: self.withSpaceSuggestions,
+            withTemporalSuggestions: self.withTemporalSuggestions,
             withPunctuationSuggestions: self.withPunctuationSuggestions,
             withFormattingSuggestions: self.withFormattingSuggestions,
             strictlyAsWord: self.withTextStrictlyAsWords
@@ -1653,6 +1714,7 @@ extension Expression: SFSpeechRecognitionTaskDelegate {
         if !self.isListening && !self.useOnDeviceRecognition {
             self.onExpressionComplete?()
         } else if !self.isListening && self.useOnDeviceRecognition {
+            // Completion of speech recognition section
             print(self.expressionSegments)
             self.onExpressionComplete?()
         }
