@@ -38,7 +38,7 @@ final class InputSignalTracker: SignalTracker {
   // MARK: - Tracking
 
   func start() throws {
-    try session.setCategory(.playAndRecord, mode: .spokenAudio, options: .allowBluetooth)
+    try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.allowBluetooth, .defaultToSpeaker])
     
     audioEngine = AVAudioEngine()
 

@@ -12,6 +12,120 @@ import AVFoundation
 
 class Utils {
     static let UNKNOWN: Double = -1
+    
+    // MARK: - Factory Methods
+    public static func trimExpression(expression: Expression, keeping: CMTimeRange, permanent: Bool = false, onCompletionHandler: @escaping (_ expression: Expression?) -> Void) {
+        print("===== Trim Expression Factory Method =====")
+        expression.duplicate() { expression in
+            if let duplicateExpression = expression {
+                duplicateExpression.trimExpression(keeping: keeping, permanent: permanent) {
+                    onCompletionHandler(duplicateExpression)
+                }
+            }
+        }
+    }
+    
+    // MARK: - General Utilities
+    
+    // Cannot export to outputURL's that already exist
+    // Reference: https://stackoverflow.com/questions/20203548/avassetexportsession-not-exporting-time-range
+    public static func exportExpression(expression: Expression, filename: String, timeRange: CMTimeRange, onCompletionHandler: @escaping () -> Void) {
+        print("===== Export Expression =====")
+
+        if !AVAssetExportSession.exportPresets(compatibleWith: expression).contains(AVAssetExportPresetAppleM4A) {
+            print("\t[Error] Expected export preset value not compatible with expression")
+            fatalError()
+        }
+
+        guard let exporter = AVAssetExportSession(asset: expression, presetName: AVAssetExportPresetAppleM4A) else {
+            print("\t[Error] There was an error instantiating exporter")
+            fatalError()
+        }
+        
+        if !exporter.supportedFileTypes.contains(.m4a) {
+            print("\t[Error] Expected export file type not compatible with exporter")
+            fatalError()
+        }
+
+        let url = Utils.getFileURL(of: "\(filename).m4a")
+        exporter.outputURL = url
+        exporter.outputFileType = .m4a
+        exporter.timeRange = timeRange
+        exporter.shouldOptimizeForNetworkUse = true
+
+        // Export audio
+        exporter.exportAsynchronously() {
+            DispatchQueue.main.async {
+                if exporter.status == AVAssetExportSession.Status.completed {
+                    print("===== Expression successfully exported: \(filename).m4a =====")
+                    onCompletionHandler()
+                } else {
+                    print("===== [Error] Unable to export expression =====")
+                    if let error = exporter.error {
+                        print("\tMessage: \(error.localizedDescription)")
+                    }
+                    fatalError()
+                }
+            }
+        }
+    }
+    
+    public static func runPlayer(expression: Expression, startTime: CMTime, playbackRate: Float, volume: Float, onStartHandler: (() -> Void)? = nil) -> AVPlayer? {
+        print("===== Run Player =====")
+        if expression.player.currentItem == nil, let snapshot = expression.copy() as? AVAsset {
+            print("\tInitiating AVPlayer...")
+            let assetKeys = [
+                   "playable",
+                   "duration",
+                   "hasProtectedContent"
+               ]
+            let playerItem = AVPlayerItem(asset: snapshot, automaticallyLoadedAssetKeys: assetKeys)
+
+            playerItem.addObserver(
+                expression,
+                forKeyPath: #keyPath(AVPlayerItem.status),
+                options: [.old, .new],
+                context: nil
+            )
+
+            let player = AVPlayer(playerItem: playerItem)
+            
+            // Set Volume
+            player.volume = volume
+            
+            
+            // Set Rate
+            if playbackRate > 1.0 && playerItem.canPlayFastForward {
+                // Play fast forward
+                player.rate = playbackRate
+            } else if playbackRate > 0.0 && playbackRate < 1.0 && playerItem.canPlaySlowForward {
+                // Play slow forward
+                player.rate = playbackRate
+            } else if playbackRate < 0.0 && playbackRate > -1.0 && playerItem.canPlaySlowReverse {
+                // Play slow reverse
+                player.rate = playbackRate
+            } else if playbackRate < -1.0 && playerItem.canPlayFastReverse {
+                // Play fast reverse
+                player.rate = playbackRate
+            } else {
+                // Play as normal if playbackRate = 1.0
+                // Stop if playbackRate = 0.0
+                player.rate = playbackRate
+            }
+            
+            return player
+        } else if expression.player.status != .readyToPlay {
+            // just wait for item to be ready
+            print("\tWaiting for AVPlayerItem to be ready...\n")
+        } else {
+            print("\tImmediately Playing Item\n")
+            expression.player.play()
+            expression.player.seek(to: startTime)
+            onStartHandler?()
+        }
+        
+        return nil
+    }
 
     public static func computeNormalizedSoundIntensity(buffer: AVAudioPCMBuffer, minDb: Float) -> Double? {
         // gives you an array of pointers to each sample’s data

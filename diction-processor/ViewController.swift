@@ -40,10 +40,11 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     var onExpressionComplete: (() -> Void)?
     
     // MARK: - General Audio Properties
-    var recordingSession = AVAudioSession.sharedInstance()
+    var session = AVAudioSession.sharedInstance()
     lazy var expression: Expression = {
         return self.createNewExpression()
     }()
+    var tempExpression: Expression?
     
     // MARK: - Speech Recognition Properties
     var audioEngine = AVAudioEngine()
@@ -124,9 +125,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     }
     
     func configureAudioSession() {
-        recordingSession = AVAudioSession.sharedInstance()
+        session = AVAudioSession.sharedInstance()
         do {
-            try recordingSession.setCategory(.playAndRecord, mode: .spokenAudio, options: .allowBluetooth)
+            try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.allowBluetooth, .defaultToSpeaker])
         } catch {
             print("===== There was an error requesting permissions to record audio or setting session category =====")
         }
@@ -323,7 +324,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             }
         }
         
-        recordingSession.requestRecordPermission() {
+        session.requestRecordPermission() {
             allowed in
             DispatchQueue.main.async {
                 if allowed {
@@ -397,9 +398,10 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     func createNewExpression() -> Expression {
         Expression(
             vc: self,
+            filename: "expression-\(UUID().uuidString)",
             speaker: Speaker(name: "Afika Nyati", avatarURL: URL(string: AVATAR_URL)!, vc: self),
             minDb: minDb,
-            withDeviceRecognition: useOnDeviceRecognition,
+            withOnDeviceRecognition: useOnDeviceRecognition,
             withTemporalSuggestions: false,
             withPunctuationSuggestions: true,
             withFormattingSuggestions: true,
@@ -463,7 +465,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     @IBAction func recordButtonTapped(_ sender: Any) {
         let authStatus = SFSpeechRecognizer.authorizationStatus()
         
-        if recordingSession.recordPermission != .granted || authStatus != .authorized {
+        if session.recordPermission != .granted || authStatus != .authorized {
             let alertController = UIAlertController(title: "Speech Recognition Permission Denied", message: "Please grant permission for application to initiate speech transcription.", preferredStyle: .alert)
             alertController.addAction(UIAlertAction(title: "Grant Permission", style: .default) { [unowned self] action in
                 self.requestPermissions()
@@ -473,7 +475,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             return
         }
         
-        if authStatus == .authorized && recordingSession.recordPermission == .granted {
+        if authStatus == .authorized && session.recordPermission == .granted {
             if !expression.isListening {
                 print("===== Start Recording =====")
                 recordingButton.setTitle("Stop Expression", for: .normal)
@@ -689,7 +691,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         
         do {
             // it’s generally preferable to defer this call until your app begins audio playback
-            try recordingSession.setActive(true)
+            try session.setActive(true)
         } catch {
             print("===== Unable to activate audio session =====")
         }
@@ -769,7 +771,8 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 print("text: ", text)
                 if text.contains(self.wakePhrase) { // wake word/phrase needs to be two words to get pitch data
                     self.stopListeningForWakePhrase()
-                    let greetingMessage = self.numAppSessions <= 1 ? "Hey there, it's a pleasure to meet you!" : "Hello again!"
+                    let greetings = ["Hey there stranger!", "Nice to see you again!", "Hello again!", "Let's make magic!", "Welcome back!"]
+                    let greetingMessage = self.numAppSessions <= 1 ? "Hey there, it's a pleasure to meet you!" : greetings.randomElement()!
                     
                     let utterance = AVSpeechUtterance(string: greetingMessage) // Nice to hear you again. Let's make things happen.
                     self.synthesizerVoice = Utils.getSynthesizerVoice(withGender: .female, vc: self)
@@ -854,15 +857,16 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     func pitchEngine(_ pitchEngine: PitchEngine, didReceivePitch pitch: Pitch) {
         // TODO: Timing
         // print("Pitch { \n\tpitch: \(pitch.note.string) \n\tfrequency: \(pitch.frequency) \n}")
-
-        if !self.appActivated && pitch.note.octave >= 4 {
-            // is female
-            expression.setGender(as: .female)
-        } else if !self.appActivated {
-            // is male
-            expression.setGender(as: .male)
-        }
         
+        if pitch.frequency >= 65 {
+            if !self.appActivated && pitch.note.octave >= 4 {
+                // is female
+                expression.setGender(as: .female)
+            } else if !self.appActivated {
+                // is male
+                expression.setGender(as: .male)
+            }
+        }
     }
 
     func pitchEngine(_ pitchEngine: PitchEngine, didReceiveError error: Error) {
@@ -875,6 +879,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 }
 
 // List of tests:
+
+// Useful Resources:
+// Viewing App Storage on Device: https://stackoverflow.com/questions/15219511/theres-a-way-to-access-the-document-folder-in-iphone-ipad-real-device-no-simu
 
 // ====== Before Wake Phrase =====
 // +++++ On-server recognition
@@ -966,4 +973,118 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 // 18) Test Change Audio Inputs
 // Instructions: Start the app without earphones connected. While on the Wake Phrase Screen, connect earphones. Utter wake phrase.
 // Expected Result: The wake phrase should be registered without error
+//
+// 19) Test Play Sentence
+//
+// ===== Code Needed =====
+// expression.playSentence(number: 1)
+// =======================
+//
+// Instructions: Place code in an area where it maybe be executable. Utter the following: "This is the first sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the second sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the third sentence".
+// Expected Result: System should play back: "This is the second sentence".
+//
+// 20) Test Trim Expression: Permanent
+//
+// ===== Code Needed =====
+//expression.trimExpression(keeping: expression.getSentenceDetails(number: 1)!.timeRange, permanent: true) {
+//    self.expression.play(
+//        onStartHandler: { [weak self] in
+//            // print("Successfully executed playback on start handler")
+//            DispatchQueue.main.async {
+//                self?.playAudioButton.setTitle("Pause Audio", for: .normal)
+//            }
+//        },
+//        secondElapseHandler: { [weak self] in
+//            // print("Successfully executed playback secondT elapsed handler")
+//            DispatchQueue.main.async {
+//                self?.navigationItem.title = Utils.formattedTime(time: Float((self!.expression.player.currentTime().seconds)))
+//            }
+//        },
+//        segmentBoundaryHandler: { [weak self] in
+//            // print("Successfully executed playback on segment boundary handler")
+//            if let segment = self?.expression.getSegment(type: .current), segment.getText().count > 0, let range = self?.expression.getSegmentTextRange(of: segment) {
+//                self?.updateUIText(range: range)
+//            }
+//        }, onFinishHandler: { [weak self] in
+//            // print("Successfully executed playback on finish handler")
+//            DispatchQueue.main.async {
+//                self?.updateUIText()
+//                self?.playAudioButton.setTitle("Play Audio", for: .normal)
+//                self!.expression.player.replaceCurrentItem(with: nil)
+//                self?.navigationItem.title = ""
+//            }
+//        }
+//    )
+//}
+// =======================
+//
+// Instructions: Place code in an area where it maybe be executable. Utter the following: "This is the first sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the second sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the third sentence".
+// Expected Result: System should play back: "This is the second sentence".
+//
+// 21) Test Trim Expression: Not Permanent
+//
+// ===== Code Needed =====
+//expression.trimExpression(keeping: expression.getSentenceDetails(number: 1)!.timeRange, permanent: false) {
+//    self.expression.play(
+//        onStartHandler: { [weak self] in
+//            // print("Successfully executed playback on start handler")
+//            DispatchQueue.main.async {
+//                self?.playAudioButton.setTitle("Pause Audio", for: .normal)
+//            }
+//        },
+//        secondElapseHandler: { [weak self] in
+//            // print("Successfully executed playback secondT elapsed handler")
+//            DispatchQueue.main.async {
+//                self?.navigationItem.title = Utils.formattedTime(time: Float((self!.expression.player.currentTime().seconds)))
+//            }
+//        },
+//        segmentBoundaryHandler: { [weak self] in
+//            // print("Successfully executed playback on segment boundary handler")
+//            if let segment = self?.expression.getSegment(type: .current), segment.getText().count > 0, let range = self?.expression.getSegmentTextRange(of: segment) {
+//                self?.updateUIText(range: range)
+//            }
+//        }, onFinishHandler: { [weak self] in
+//            // print("Successfully executed playback on finish handler")
+//            DispatchQueue.main.async {
+//                self?.updateUIText()
+//                self?.playAudioButton.setTitle("Play Audio", for: .normal)
+//                self!.expression.player.replaceCurrentItem(with: nil)
+//                self?.navigationItem.title = ""
+//            }
+//        }
+//    )
+//}
+// =======================
+//
+// Instructions: Place code in an area where it maybe be executable. Utter the following: "This is the first sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the second sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the third sentence".
+// Expected Result: System should play back: "This is the second sentence".
+//
+// 22) Test Extract Sentence
+//
+// ===== Code Needed =====
+//expression.extractSentence(number: 1) { sentence in
+//    self.tempExpression = sentence
+//    print(sentence?.getExpressionText() ?? "NIL")
+//    sentence?.play(onFinishHandler: {
+//        print("Finished sentence!")
+//    })
+//}
+// =======================
+//
+// Instructions: Place code in an area where it maybe be executable. Utter the following: "This is the first sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the second sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the third sentence".
+// Expected Result: System should play back: "This is the second sentence".
+//
+// 23) Duplicate Expression
+//
+// ===== Code Needed =====
+//expression.duplicate() {expression in
+//    self.tempExpression = expression
+//    self.tempExpression?.play() {
+//        print("Finished Sentence!")
+//    }
+//}
+// =======================
+//
+// Instructions: Place code in an area where it maybe be executable. Record any expression.
+// Expected Result: System should play back your expression.
 //
