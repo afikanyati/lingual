@@ -882,6 +882,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 
 // Useful Resources:
 // Viewing App Storage on Device: https://stackoverflow.com/questions/15219511/theres-a-way-to-access-the-document-folder-in-iphone-ipad-real-device-no-simu
+// Debugging EXC_BAD_ACCESS: https://code.tutsplus.com/tutorials/what-is-exc_bad_access-and-how-to-debug-it--cms-24544
 
 // ====== Before Wake Phrase =====
 // +++++ On-server recognition

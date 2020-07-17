@@ -34,8 +34,7 @@ class Expression: AVMutableComposition {
             } else if _fileType == .m4a {
                 return ".m4a"
             } else {
-                print("===== [Error] There was a problem returning the specified file type =====")
-                fatalError()
+                fatalError("===== [Error] There was a problem returning the specified file type =====")
             }
         }
     }
@@ -276,8 +275,7 @@ class Expression: AVMutableComposition {
             try recordFile = AVAudioFile(forWriting: Utils.getFileURL(of: "\(self.filename)\(self.fileType)"), settings: audioEngine.inputNode.inputFormat(forBus: recordBus).settings)
             authorizedToListen = true
         } catch {
-            print("\t[Error] There was a problem instantiating the record file")
-            fatalError()
+            fatalError("\t[Error] There was a problem instantiating the record file")
         }
     }
     
@@ -362,7 +360,7 @@ class Expression: AVMutableComposition {
         }
 
         if !result {
-            fatalError()
+            fatalError("===== [Error] Representation Invariants were broken =====")
         }
     }
     
@@ -433,8 +431,7 @@ class Expression: AVMutableComposition {
             do {
                 try self.recordFile!.write(from: buffer)
             } catch {
-                print("\t[Error] There was a problem writing speech to file")
-                fatalError()
+                fatalError("\t[Error] There was a problem writing speech to file")
             }
         }
 
@@ -442,21 +439,18 @@ class Expression: AVMutableComposition {
         do {
             try audioEngine.start()
         } catch {
-            print("\t[Error] There was a problem starting speech recognition")
-            fatalError()
+            fatalError("\t[Error] There was a problem starting speech recognition")
         }
         
         do {
             // it’s generally preferable to defer this call until your app begins audio playback
             try recordingSession.setActive(true)
         } catch {
-            print("\t[Error] There was a problem activating audio session")
-            fatalError()
+            fatalError("\t[Error] There was a problem activating audio session")
         }
         
         guard let myRecognizer = SFSpeechRecognizer() else {
-            print("\t[Error] Speech Recognizer is not supported for current locale")
-            return
+            fatalError("\t[Error] Speech Recognizer is not supported for current locale")
         }
         
         if useOnDeviceRecognition && myRecognizer.supportsOnDeviceRecognition {
@@ -465,8 +459,7 @@ class Expression: AVMutableComposition {
         }
         
         if !myRecognizer.isAvailable {
-            print("\t[Error] Speech Recognizer is not available")
-            return
+            fatalError("\t[Error] Speech Recognizer is not available")
         }
         
         // Check rep invariant
@@ -550,8 +543,7 @@ class Expression: AVMutableComposition {
                 sentiment = sentimentScore
             }
         } else {
-            print("\t[Error] There was a problem computing segment tags")
-            fatalError()
+            fatalError("\t[Error] There was a problem computing segment tags")
         }
         
         let word = transcriptionIndex == 0
@@ -618,8 +610,7 @@ class Expression: AVMutableComposition {
                 // print("Existing segment without changes encountered.")
             }
         } else {
-            print("\t[Error] There was a problem with pigeonholing segment")
-            fatalError()
+            fatalError("\t[Error] There was a problem with pigeonholing segment")
         }
     }
     
@@ -856,8 +847,7 @@ class Expression: AVMutableComposition {
             // This assumes the new version is a better approximation of user speech
             index = stagedSegmentsLowestIndex + transcriptionIndex
         } else {
-            print("\t[Error] There was a problem computing segment index in computeSegmentTags")
-            fatalError()
+            fatalError("\t[Error] There was a problem computing segment index in computeSegmentTags")
         }
         
         let wholeText = segmentText.count == 1 && segmentText.first!.isPunctuation ?
@@ -935,8 +925,7 @@ class Expression: AVMutableComposition {
             // is first segment
             lowerText = ""
         } else {
-            print("\t[Error] There was a problem analyzing the index of segment in findSegmentRange")
-            fatalError()
+            fatalError("\t[Error] There was a problem analyzing the index of segment in findSegmentRange")
         }
         
         let lowerIndex = segmentText.count == 1 && segmentText.first!.isPunctuation ?
@@ -1183,8 +1172,7 @@ class Expression: AVMutableComposition {
         if let sentenceDetails = sentenceDetails {
             playSentence(number: sentenceDetails.number)
         } else {
-            print("\t[Error] There was a problem replaying current sentence")
-            fatalError()
+            fatalError("\t[Error] There was a problem replaying current sentence")
         }
     }
     
@@ -1246,25 +1234,28 @@ class Expression: AVMutableComposition {
     
     // MARK: - Mutating Methods
 
-    func trimExpression(keeping: CMTimeRange, permanent: Bool = false, onCompletionHandler: (() -> Void)? = nil) {
+    func trimExpression(keeping: CMTimeRange, permanent: Bool = false, overwrite: Bool = false, onCompletionHandler: (() -> Void)? = nil) {
         let keepRange = keeping
         print("===== Trim Expression keeping section starting: \(keepRange.start.seconds) until: \(keepRange.end.seconds) =====")
         
         var newExpressionSegments = [ExpressionSegment]()
         var silenceIndices = [Int]()
         if permanent {
-            print("expression segments before: \(self.expressionSegments.first!.timeMapping.source.start.seconds) \(self.expressionSegments.last!.timeMapping.source.end.seconds) \(self.expressionSegments.count)")
             print("\tModify start and end times...")
             self.startTime = CMTime.zero
             self.endTime = keepRange.duration
             
-            // Create new filename
-            print("\tCreate new filename ...")
-            self.filename = "expression-\(UUID().uuidString)"
+            // Create new filename if not or can't overwrite
+            if !overwrite || self._fileType != .m4a {
+                print("\tCreate new filename ...")
+                self.filename = "expression-\(UUID().uuidString)"
+            }
+            
             print("\tExporting and modifying segments...")
             Utils.exportExpression(
                 expression: self,
                 filename: self.filename,
+                fileType: self.fileType,
                 timeRange: keepRange
             ) {
                 // Manage Segments
@@ -1351,8 +1342,6 @@ class Expression: AVMutableComposition {
                     segment.setSpeakingRate(rate: speakingRate)
                 }
                 
-                print("expression segments after: \(newExpressionSegments.first!.timeMapping.source.start.seconds) \(newExpressionSegments.last!.timeMapping.source.end.seconds) \(newExpressionSegments.count)")
-                
                 print("\tUpdate expression file type...")
                 // Change File Type
                 // We need this to be placed before normalizeSegments so newExpressionSegments are
@@ -1372,8 +1361,6 @@ class Expression: AVMutableComposition {
                 onCompletionHandler?()
             }
         } else {
-            print("track segments before: \(self.tracks[self.activeTrack].segments.first!.timeMapping.source.start.seconds) \(self.tracks[self.activeTrack].segments.last!.timeMapping.source.end.seconds)")
-
             // Need to remove right side first because everything shifts
             // if we do left side first
             print("\tRemove time ranges from underlying AVMutableComposition...")
@@ -1402,10 +1389,6 @@ class Expression: AVMutableComposition {
                 // Remove Time Range
                 self.removeTimeRange(removeLeftRange)
             }
-            
-            print("track segments after: \(self.tracks[self.activeTrack].segments.first!.timeMapping.source.start.seconds) \(self.tracks[self.activeTrack].segments.last!.timeMapping.source.end.seconds)")
-            
-            print("expression segments before: \(self.expressionSegments.first!.timeMapping.source.start.seconds) \(self.expressionSegments.last!.timeMapping.source.end.seconds) \(self.expressionSegments.count)")
 
             print("\tModify expression start and end times...")
             self.startTime = CMTime.zero
@@ -1504,8 +1487,6 @@ class Expression: AVMutableComposition {
 
             // Check Representation Invariant
             self.checkRep()
-
-            print("expression segments after: \(newExpressionSegments.first!.timeMapping.source.start.seconds) \(newExpressionSegments.last!.timeMapping.source.end.seconds) \(newExpressionSegments.count)")
             
             // Run Completion Handler
             onCompletionHandler?()
@@ -1588,8 +1569,7 @@ class Expression: AVMutableComposition {
                 } else if number == sentenceNumber {
                     // Do nothing
                 } else {
-                    print("\t[Error] There was a problem updating segment sentences. Unexpected index behavior")
-                    fatalError()
+                    fatalError("\t[Error] There was a problem updating segment sentences. Unexpected index behavior")
                 }
             }
         }
@@ -1700,8 +1680,7 @@ class Expression: AVMutableComposition {
             self.endTime = self.expressionSegments.last!.timeMapping.source.end
             print("\tSuccessfully updated expression segments")
         } catch {
-            print("\t[Error] There was a problem updating expression segments")
-            fatalError()
+            fatalError("\t[Error] There was a problem updating expression segments")
         }
 
         checkRep()
@@ -1720,7 +1699,9 @@ class Expression: AVMutableComposition {
         Utils.exportExpression(
             expression: self,
             filename: duplicateFilename,
-            timeRange: CMTimeRangeMake(start: CMTime.zero, duration: self.duration)) {
+            fileType: self.fileType,
+            timeRange: CMTimeRangeMake(start: CMTime.zero, duration: self.duration)
+        ) {
             onCompletionHandler(Expression(
                 vc: self.vc,
                 filename: duplicateFilename,
@@ -2047,12 +2028,10 @@ class Expression: AVMutableComposition {
                 fatalError()
                 break
             case .unknown:
-                print("\t[Error] Player not ready")
-                fatalError()
+                fatalError("\t[Error] Player not ready")
                 break
             @unknown default:
-                print("\t[Error] Unknown player status received")
-                fatalError()
+                fatalError("\t[Error] Unknown player status received")
             }
         }
     }

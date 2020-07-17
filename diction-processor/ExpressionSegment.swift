@@ -11,7 +11,7 @@ import Speech
 import AVFoundation
 import NaturalLanguage
 
-let EMPHASIS_DELTA: Double = 0.15
+let EMPHASIS_DELTA: Double = 0.08
 // https://remotepossibilities.wordpress.com/2013/03/10/when-you-speak-how-often-and-how-long-should-you-pause-the-answer-try-1-2-3/
 let COMMA_PAUSE_DURATION_MULTIPLIER: Double = 2
 let NEW_SENTENCE_PAUSE_DURATION_MULTIPLIER: Double = 4
@@ -225,9 +225,11 @@ class ExpressionSegment: AVCompositionTrackSegment {
         }
         
         var nextWordIsConjunction = false
+        var nextWordIsPunctuation = false // If next segment is punctuation, don't show suggested punctuation.
         if let expression = self.expression, self.index != Int(Utils.UNKNOWN) && self.index + 1 < expression.expressionSegments.count  {
             let nextSegment = expression.expressionSegments[self.index + 1]
             nextWordIsConjunction = nextSegment.getLexicalClass() == .conjunction
+            nextWordIsPunctuation = nextSegment.isPunctuation()
         }
 
         // Handle Punctuation Suggestions
@@ -236,11 +238,11 @@ class ExpressionSegment: AVCompositionTrackSegment {
             // its the empty string for silence
             if previousWordIsPunctuation && previousWordIsValidLastSentenceWord && suggestsNewParagraph() {
                 text += "\n\n"
-            } else if !previousWordIsPunctuation && previousWordIsValidLastSentenceWord && suggestsNewParagraph() {
+            } else if !previousWordIsPunctuation && previousWordIsValidLastSentenceWord && !nextWordIsPunctuation && suggestsNewParagraph() {
                 text += "\(exclaimWord ? "!" : ".")\n\n"
-            } else if !previousWordIsPunctuation && previousWordIsValidLastSentenceWord && suggestsNewSentence() {
+            } else if !previousWordIsPunctuation && previousWordIsValidLastSentenceWord && !nextWordIsPunctuation && suggestsNewSentence() {
                 text += "\(exclaimWord ? "!" : ".")"
-            } else if !previousWordIsPunctuation && nextWordIsConjunction && suggestsNewComma() {
+            } else if !previousWordIsPunctuation && nextWordIsConjunction && !nextWordIsPunctuation && suggestsNewComma() {
                 text += ","
             }
         }
@@ -317,7 +319,13 @@ class ExpressionSegment: AVCompositionTrackSegment {
     }
     
     func isSentenceTerminator(withPunctuationSuggestions: Bool = false) -> Bool {
-        if withPunctuationSuggestions && (suggestsNewSentence() || suggestsNewParagraph()) {
+        var nextWordIsPunctuation = false // If next segment is punctuation, don't show suggested punctuation.
+        if let expression = self.expression, self.index != Int(Utils.UNKNOWN) && self.index + 1 < expression.expressionSegments.count  {
+            let nextSegment = expression.expressionSegments[self.index + 1]
+            nextWordIsPunctuation = nextSegment.isPunctuation()
+        }
+        
+        if withPunctuationSuggestions && (suggestsNewSentence() || suggestsNewParagraph()) && !nextWordIsPunctuation {
             return true
         }
         

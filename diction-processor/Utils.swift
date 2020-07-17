@@ -29,22 +29,39 @@ class Utils {
     
     // Cannot export to outputURL's that already exist
     // Reference: https://stackoverflow.com/questions/20203548/avassetexportsession-not-exporting-time-range
-    public static func exportExpression(expression: Expression, filename: String, timeRange: CMTimeRange, onCompletionHandler: @escaping () -> Void) {
+    // Deleting: https://stackoverflow.com/questions/42041405/delete-a-file-using-swift-in-ios
+    public static func exportExpression(expression: Expression, filename: String, fileType: String, timeRange: CMTimeRange, onCompletionHandler: @escaping () -> Void) {
         print("===== Export Expression =====")
+        
+        do {
+            let fileManager = FileManager.default
+            let filePath = Utils.getFileURL(of: "\(filename)\(fileType)").absoluteString
+            // Check if file exists
+            if fileManager.fileExists(atPath: filePath) {
+                // Delete file
+                print("\tFile exists at specified file path. Delete it...")
+                try fileManager.removeItem(atPath: filePath)
+                print("\tSuccessfully deleting existing file at file path...")
+            } else {
+                print("\tFile location is available to write a new file...")
+            }
+
+        } catch let error as NSError {
+            print("\t[Error] There was a problem while checking for and deleting existing file")
+            fatalError("\tMessage: \(error)")
+        }
 
         if !AVAssetExportSession.exportPresets(compatibleWith: expression).contains(AVAssetExportPresetAppleM4A) {
-            print("\t[Error] Expected export preset value not compatible with expression")
-            fatalError()
+            fatalError("\t[Error] Expected export preset value not compatible with expression")
         }
 
         guard let exporter = AVAssetExportSession(asset: expression, presetName: AVAssetExportPresetAppleM4A) else {
-            print("\t[Error] There was an error instantiating exporter")
-            fatalError()
+            fatalError("\t[Error] There was an problem instantiating exporter")
         }
         
         if !exporter.supportedFileTypes.contains(.m4a) {
-            print("\t[Error] Expected export file type not compatible with exporter")
-            fatalError()
+            print()
+            fatalError("\t[Error] Expected export file type not compatible with exporter")
         }
 
         let url = Utils.getFileURL(of: "\(filename).m4a")
@@ -153,6 +170,18 @@ class Utils {
     
     public static func getFileURL(of filename: String) -> URL {
         return getDocumentsDirectory().appendingPathComponent(filename)
+    }
+    
+    // Reference: https://stackoverflow.com/questions/32657533/temporary-file-path-using-swift
+    // Reference: https://medium.com/@victor.pavlychko/managing-temporary-files-in-swift-b076e1444c76
+    // Reference: https://iswift.org/cookbook/get-temporary-directory-path
+    // Reference: https://stackoverflow.com/questions/11897825/ios-temporary-folder-location
+    //
+    // Good pattern: https://stackoverflow.com/questions/50765879/swift-how-to-access-a-csv-file-in-temporary-directory-nstemporarydirectory
+    // Creating TemporaryFile class: https://oleb.net/blog/2018/03/temp-file-helper/
+    public static func getTempFileURL(of filename: String) -> URL {
+        // return URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(filename)
+        return FileManager.default.temporaryDirectory.appendingPathComponent(filename)
     }
     
     public static func formattedTime(time: Float) -> String {
