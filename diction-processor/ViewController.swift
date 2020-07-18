@@ -513,6 +513,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         if expression.isPlayingExpression {
             expression.pause() { [weak self] in
                 self?.playAudioButton.setTitle("Play Audio", for: .normal)
+                print("expressions: ", self!.expression.expressionSegments)
             }
         } else {
             playTextToSpeechButton.setTitle("Play Echo", for: .normal)
@@ -653,6 +654,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     func startListeningForWakePhrase() {
         print("===== Starting Listening for Wake Phrase =====")
         
+        // Play Sound
+        sounds.startListening()
+        
         // must be placed before we start listening for wake phrase
         // if pitch engine begins first, we are for some reason unable to do speech recognition
         pitchEngine.start()
@@ -768,9 +772,12 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 }
                 
                 text = text.lowercased()
-                print("text: ", text)
                 if text.contains(self.wakePhrase) { // wake word/phrase needs to be two words to get pitch data
                     self.stopListeningForWakePhrase()
+                    // Play Sound
+                    sounds.correctWakePhrase()
+                    
+                    // Play greating
                     let greetings = ["Hey there stranger!", "Nice to see you again!", "Hello again!", "Let's make magic!", "Welcome back!"]
                     let greetingMessage = self.numAppSessions <= 1 ? "Hey there, it's a pleasure to meet you!" : greetings.randomElement()!
                     
@@ -784,6 +791,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                     self.speechSynthesizer.speak(utterance)
                     print("===== Wake Phrase Detected =====")
                     self.activateApp()
+                } else {
+                    // Play Sound
+                    sounds.incorrectWakePhrase()
                 }
                 
                 return
@@ -806,10 +816,10 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                     // Should not go here when we've said wake phrase but the if-statement doesn't return true.
                     // Happens when there's another equally viable option for what sounds like the wake phrase.
                     // or put alternatively, the hypothesized transcript is the wake phrase while the final transcript is a homophone.
-                    print("===== Restart Listening and continue to look for wake phrase =====")
-                    self.stopListeningForWakePhrase() {[weak self] in
-                        self?.configureListeningForWakePhrase()
-                    }
+//                    print("===== Restart Listening and continue to look for wake phrase =====")
+//                    self.stopListeningForWakePhrase() {[weak self] in
+//                        self?.configureListeningForWakePhrase()
+//                    }
                 }
 
                 return

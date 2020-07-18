@@ -11,7 +11,7 @@ import Speech
 import AVFoundation
 import NaturalLanguage
 
-let EMPHASIS_DELTA: Double = 0.08
+let EMPHASIS_DELTA: Double = 0.15
 // https://remotepossibilities.wordpress.com/2013/03/10/when-you-speak-how-often-and-how-long-should-you-pause-the-answer-try-1-2-3/
 let COMMA_PAUSE_DURATION_MULTIPLIER: Double = 2
 let NEW_SENTENCE_PAUSE_DURATION_MULTIPLIER: Double = 4
@@ -49,12 +49,12 @@ class ExpressionSegment: AVCompositionTrackSegment {
         return Utils.UNKNOWN
     }
     /// Specifies information related to the sentence of the expression segment is a member of.
-    private var sentence = Sentence(number: -1, timeRange: CMTimeRange.zero)
+    private var sentence = Sentence(number: Int(Utils.UNKNOWN), text: "", timeRange: CMTimeRange.zero)
     /// Scores text as positive, negative, or neutral based on its sentiment polarity.
     private var sentimentScore: [ScaleUnitType:Float] = [
-        .word: -1,
-        .sentence: -1,
-        .all: -1
+        .word: Float(Utils.UNKNOWN),
+        .sentence: Float(Utils.UNKNOWN),
+        .all: Float(Utils.UNKNOWN)
     ]
     /// The pitch at which segment was uttered
     private var pitch: Pitch?
@@ -239,9 +239,13 @@ class ExpressionSegment: AVCompositionTrackSegment {
             if previousWordIsPunctuation && previousWordIsValidLastSentenceWord && suggestsNewParagraph() {
                 text += "\n\n"
             } else if !previousWordIsPunctuation && previousWordIsValidLastSentenceWord && !nextWordIsPunctuation && suggestsNewParagraph() {
-                text += "\(exclaimWord ? "!" : ".")\n\n"
+                let terminator = self.sentence.text.count > 0 && Utils.isQuestion(sentence: self.sentence.text) ? "?" : "."
+                let exclaimedTerminator = self.sentence.text.count > 0 && Utils.isQuestion(sentence: self.sentence.text) ? "?!" : "!"
+                text += "\(exclaimWord ? exclaimedTerminator : terminator)\n\n"
             } else if !previousWordIsPunctuation && previousWordIsValidLastSentenceWord && !nextWordIsPunctuation && suggestsNewSentence() {
-                text += "\(exclaimWord ? "!" : ".")"
+                let terminator = Utils.isQuestion(sentence: self.sentence.text) ? "?" : "."
+                let exclaimedTerminator = Utils.isQuestion(sentence: self.sentence.text) ? "?!" : "!"
+                text += "\(exclaimWord ? exclaimedTerminator : terminator)"
             } else if !previousWordIsPunctuation && nextWordIsConjunction && !nextWordIsPunctuation && suggestsNewComma() {
                 text += ","
             }

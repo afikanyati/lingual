@@ -54,6 +54,20 @@
 		8B766F5C24AC2AB200D41A13 /* QuadradicEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B766F4224AC2AB200D41A13 /* QuadradicEstimator.swift */; };
 		8B766F5D24AC2AB200D41A13 /* SimpleTransformer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B766F4324AC2AB200D41A13 /* SimpleTransformer.swift */; };
 		8B766F5E24AC2AB200D41A13 /* BarycentricEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B766F4424AC2AB200D41A13 /* BarycentricEstimator.swift */; };
+		8BA3052C24C24C240056E4DF /* Sequence+containsAnyOf.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA3052B24C24C240056E4DF /* Sequence+containsAnyOf.swift */; };
+		8BA3052E24C286550056E4DF /* SoundEffects.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA3052D24C286550056E4DF /* SoundEffects.swift */; };
+		8BA3054A24C28FCC0056E4DF /* commit-buffer.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BA3053E24C28FCC0056E4DF /* commit-buffer.wav */; };
+		8BA3054B24C28FCC0056E4DF /* stop-listening.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BA3053F24C28FCC0056E4DF /* stop-listening.wav */; };
+		8BA3054C24C28FCC0056E4DF /* play.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BA3054024C28FCC0056E4DF /* play.wav */; };
+		8BA3054D24C28FCC0056E4DF /* voice-command-accept.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BA3054124C28FCC0056E4DF /* voice-command-accept.wav */; };
+		8BA3054E24C28FCC0056E4DF /* voice-command-deny.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BA3054224C28FCC0056E4DF /* voice-command-deny.wav */; };
+		8BA3054F24C28FCC0056E4DF /* processing.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BA3054324C28FCC0056E4DF /* processing.wav */; };
+		8BA3055024C28FCC0056E4DF /* incorrect-wake-phrase.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BA3054424C28FCC0056E4DF /* incorrect-wake-phrase.wav */; };
+		8BA3055124C28FCC0056E4DF /* start-listening.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BA3054524C28FCC0056E4DF /* start-listening.wav */; };
+		8BA3055224C28FCC0056E4DF /* correct-wake-phrase.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BA3054624C28FCC0056E4DF /* correct-wake-phrase.wav */; };
+		8BA3055324C28FCC0056E4DF /* repeat.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BA3054724C28FCC0056E4DF /* repeat.wav */; };
+		8BA3055424C28FCC0056E4DF /* save-expression.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BA3054824C28FCC0056E4DF /* save-expression.wav */; };
+		8BA3055524C28FCC0056E4DF /* error.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BA3054924C28FCC0056E4DF /* error.wav */; };
 		8BCA1AFB24A3D0750068BABB /* ScaleUnitType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BCA1AFA24A3D0750068BABB /* ScaleUnitType.swift */; };
 		8BCA1AFD24A3DA3B0068BABB /* SegmentPosition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BCA1AFC24A3DA3B0068BABB /* SegmentPosition.swift */; };
 		8BCA1AFF24A3DA5B0068BABB /* SentencePosition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BCA1AFE24A3DA5B0068BABB /* SentencePosition.swift */; };
@@ -137,6 +151,20 @@
 		8B766F4224AC2AB200D41A13 /* QuadradicEstimator.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = QuadradicEstimator.swift; sourceTree = "<group>"; };
 		8B766F4324AC2AB200D41A13 /* SimpleTransformer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SimpleTransformer.swift; sourceTree = "<group>"; };
 		8B766F4424AC2AB200D41A13 /* BarycentricEstimator.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BarycentricEstimator.swift; sourceTree = "<group>"; };
+		8BA3052B24C24C240056E4DF /* Sequence+containsAnyOf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sequence+containsAnyOf.swift"; sourceTree = "<group>"; };
+		8BA3052D24C286550056E4DF /* SoundEffects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundEffects.swift; sourceTree = "<group>"; };
+		8BA3053E24C28FCC0056E4DF /* commit-buffer.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "commit-buffer.wav"; sourceTree = "<group>"; };
+		8BA3053F24C28FCC0056E4DF /* stop-listening.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "stop-listening.wav"; sourceTree = "<group>"; };
+		8BA3054024C28FCC0056E4DF /* play.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = play.wav; sourceTree = "<group>"; };
+		8BA3054124C28FCC0056E4DF /* voice-command-accept.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "voice-command-accept.wav"; sourceTree = "<group>"; };
+		8BA3054224C28FCC0056E4DF /* voice-command-deny.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "voice-command-deny.wav"; sourceTree = "<group>"; };
+		8BA3054324C28FCC0056E4DF /* processing.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = processing.wav; sourceTree = "<group>"; };
+		8BA3054424C28FCC0056E4DF /* incorrect-wake-phrase.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "incorrect-wake-phrase.wav"; sourceTree = "<group>"; };
+		8BA3054524C28FCC0056E4DF /* start-listening.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "start-listening.wav"; sourceTree = "<group>"; };
+		8BA3054624C28FCC0056E4DF /* correct-wake-phrase.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "correct-wake-phrase.wav"; sourceTree = "<group>"; };
+		8BA3054724C28FCC0056E4DF /* repeat.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = repeat.wav; sourceTree = "<group>"; };
+		8BA3054824C28FCC0056E4DF /* save-expression.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "save-expression.wav"; sourceTree = "<group>"; };
+		8BA3054924C28FCC0056E4DF /* error.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = error.wav; sourceTree = "<group>"; };
 		8BCA1AFA24A3D0750068BABB /* ScaleUnitType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleUnitType.swift; sourceTree = "<group>"; };
 		8BCA1AFC24A3DA3B0068BABB /* SegmentPosition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentPosition.swift; sourceTree = "<group>"; };
 		8BCA1AFE24A3DA5B0068BABB /* SentencePosition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentencePosition.swift; sourceTree = "<group>"; };
@@ -234,6 +262,25 @@
 			path = beethoven;
 			sourceTree = "<group>";
 		};
+		8BA3052F24C2867D0056E4DF /* sounds */ = {
+			isa = PBXGroup;
+			children = (
+				8BA3053E24C28FCC0056E4DF /* commit-buffer.wav */,
+				8BA3054624C28FCC0056E4DF /* correct-wake-phrase.wav */,
+				8BA3054924C28FCC0056E4DF /* error.wav */,
+				8BA3054424C28FCC0056E4DF /* incorrect-wake-phrase.wav */,
+				8BA3054024C28FCC0056E4DF /* play.wav */,
+				8BA3054324C28FCC0056E4DF /* processing.wav */,
+				8BA3054724C28FCC0056E4DF /* repeat.wav */,
+				8BA3054824C28FCC0056E4DF /* save-expression.wav */,
+				8BA3054524C28FCC0056E4DF /* start-listening.wav */,
+				8BA3053F24C28FCC0056E4DF /* stop-listening.wav */,
+				8BA3054124C28FCC0056E4DF /* voice-command-accept.wav */,
+				8BA3054224C28FCC0056E4DF /* voice-command-deny.wav */,
+			);
+			path = sounds;
+			sourceTree = "<group>";
+		};
 		8BEC135B24906FF30056E767 = {
 			isa = PBXGroup;
 			children = (
@@ -257,6 +304,7 @@
 		8BEC136624906FF30056E767 /* diction-processor */ = {
 			isa = PBXGroup;
 			children = (
+				8BA3052F24C2867D0056E4DF /* sounds */,
 				8B766F1A24AC2A2A00D41A13 /* beethoven */,
 				8B766F1924AC2A2300D41A13 /* pitchy */,
 				8BEC136724906FF30056E767 /* AppDelegate.swift */,
@@ -268,9 +316,11 @@
 				8B669B6024B012A900D5996B /* AVAudioSession+Headphones.swift */,
 				8B27A3DB24B6A839001E5F06 /* Double+Rounded.swift */,
 				8B27A3DD24B6A8E9001E5F06 /* Float+Rounded.swift */,
+				8BA3052D24C286550056E4DF /* SoundEffects.swift */,
 				8BD595C6249AE45D000B3127 /* Expression.swift */,
 				8B669B6824B01AF600D5996B /* Utils.swift */,
 				8B09CDFF24932E4E001EC02D /* ExpressionSegment.swift */,
+				8BA3052B24C24C240056E4DF /* Sequence+containsAnyOf.swift */,
 				8BE2EB1824BA44BC00E2D519 /* Determiners.swift */,
 				8B766E8D24A812AF00D41A13 /* PunctuationMap.swift */,
 				8B766E8824A7D7D200D41A13 /* Sentence.swift */,
@@ -413,9 +463,21 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8BA3054C24C28FCC0056E4DF /* play.wav in Resources */,
+				8BA3054E24C28FCC0056E4DF /* voice-command-deny.wav in Resources */,
+				8BA3055524C28FCC0056E4DF /* error.wav in Resources */,
+				8BA3055124C28FCC0056E4DF /* start-listening.wav in Resources */,
 				8BEC137724906FF60056E767 /* LaunchScreen.storyboard in Resources */,
+				8BA3054A24C28FCC0056E4DF /* commit-buffer.wav in Resources */,
+				8BA3054D24C28FCC0056E4DF /* voice-command-accept.wav in Resources */,
+				8BA3055224C28FCC0056E4DF /* correct-wake-phrase.wav in Resources */,
+				8BA3054B24C28FCC0056E4DF /* stop-listening.wav in Resources */,
 				8BEC137424906FF60056E767 /* Assets.xcassets in Resources */,
+				8BA3054F24C28FCC0056E4DF /* processing.wav in Resources */,
 				8BEC136F24906FF30056E767 /* Main.storyboard in Resources */,
+				8BA3055024C28FCC0056E4DF /* incorrect-wake-phrase.wav in Resources */,
+				8BA3055424C28FCC0056E4DF /* save-expression.wav in Resources */,
+				8BA3055324C28FCC0056E4DF /* repeat.wav in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -478,6 +540,7 @@
 				8B766F2324AC2AA300D41A13 /* AcousticWave.swift in Sources */,
 				8B766F5A24AC2AB200D41A13 /* LocationEstimator.swift in Sources */,
 				8B766F4824AC2AB200D41A13 /* Buffer.swift in Sources */,
+				8BA3052E24C286550056E4DF /* SoundEffects.swift in Sources */,
 				8B766F5424AC2AB200D41A13 /* QuinnsSecondEstimator.swift in Sources */,
 				8B766F4724AC2AB200D41A13 /* YINTransformer.swift in Sources */,
 				8B669B6924B01AF600D5996B /* Utils.swift in Sources */,
@@ -488,6 +551,7 @@
 				8BD595C7249AE45D000B3127 /* Expression.swift in Sources */,
 				8B766F4A24AC2AB200D41A13 /* YINUtil.swift in Sources */,
 				8B766F5324AC2AB200D41A13 /* OutputSignalTracker.swift in Sources */,
+				8BA3052C24C24C240056E4DF /* Sequence+containsAnyOf.swift in Sources */,
 				8B669B6524B0136500D5996B /* String+Substring.swift in Sources */,
 				8B766F5E24AC2AB200D41A13 /* BarycentricEstimator.swift in Sources */,
 				8B766F4624AC2AB200D41A13 /* YINEstimator.swift in Sources */,

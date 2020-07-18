@@ -87,7 +87,7 @@ class Utils {
         }
     }
     
-    public static func runPlayer(expression: Expression, startTime: CMTime, playbackRate: Float, volume: Float, onStartHandler: (() -> Void)? = nil) -> AVPlayer? {
+    public static func runPlayer(expression: Expression, startTime: CMTime, rate: Float, volume: Float, onStartHandler: (() -> Void)? = nil) -> AVPlayer? {
         print("===== Run Player =====")
         if expression.player.currentItem == nil, let snapshot = expression.copy() as? AVAsset {
             print("\tInitiating AVPlayer...")
@@ -108,27 +108,7 @@ class Utils {
             let player = AVPlayer(playerItem: playerItem)
             
             // Set Volume
-            player.volume = volume
-            
-            
-            // Set Rate
-            if playbackRate > 1.0 && playerItem.canPlayFastForward {
-                // Play fast forward
-                player.rate = playbackRate
-            } else if playbackRate > 0.0 && playbackRate < 1.0 && playerItem.canPlaySlowForward {
-                // Play slow forward
-                player.rate = playbackRate
-            } else if playbackRate < 0.0 && playbackRate > -1.0 && playerItem.canPlaySlowReverse {
-                // Play slow reverse
-                player.rate = playbackRate
-            } else if playbackRate < -1.0 && playerItem.canPlayFastReverse {
-                // Play fast reverse
-                player.rate = playbackRate
-            } else {
-                // Play as normal if playbackRate = 1.0
-                // Stop if playbackRate = 0.0
-                player.rate = playbackRate
-            }
+            Utils.setPlayerVolume(player: player, volume: volume)
             
             return player
         } else if expression.player.status != .readyToPlay {
@@ -137,11 +117,61 @@ class Utils {
         } else {
             print("\tImmediately Playing Item\n")
             expression.player.play()
+            let rateWasSet = Utils.setPlayerRate(player: expression.player, rate: rate)
+            if rateWasSet {
+                print("\tPlayer rate was successfully set...")
+            } else {
+                print("\t[Error] There was a problem setting player rate. Player had not been started yet.")
+            }
             expression.player.seek(to: startTime)
             onStartHandler?()
         }
         
         return nil
+    }
+    
+    public static func setPlayerRate(player: AVPlayer, rate: Float) -> Bool {
+        print("===== Set Player Rate =====")
+
+        // Player must be playing to set rate
+        // Reference: https://stackoverflow.com/questions/36378642/avplayeritems-canplayslowforward-property-never-called
+        if !player.isPlaying {
+            return false
+        }
+        
+        // Set Rate
+        if rate > 1.0 {
+            // Play fast forward
+            print("\tWill play expression in fast forward at rate: \(rate)...")
+            player.rate = rate
+        } else if rate > 0.0 && rate < 1.0 {
+            // Play slow forward
+            print("\tWill play expression in slow forward at rate: \(rate)...")
+            player.rate = rate
+        } else if rate < 0.0 && rate > -1.0 {
+            // Play slow reverse
+            print("\tWill play expression in slow reverse at rate: \(rate)...")
+            player.rate = rate
+        } else if rate < -1.0 {
+            // Play fast reverse
+            print("\tWill play expression in fast reverse at rate: \(rate)...")
+            player.rate = rate
+        } else {
+            // Play as normal if rate = 1.0
+            // Stop if rate = 0.0
+            print("\tWill play expression at rate: \(rate)...")
+            player.rate = rate
+        }
+        
+        return true
+    }
+    
+    public static func setPlayerVolume(player: AVPlayer, volume: Float) {
+        print("===== Set Player Volume =====")
+        
+        // Set volume
+        print("\tWill play expression at volume: \(volume)...")
+        player.volume = volume
     }
 
     public static func computeNormalizedSoundIntensity(buffer: AVAudioPCMBuffer, minDb: Float) -> Double? {
@@ -300,6 +330,31 @@ class Utils {
         }
         
         return synthesizerVoice
+    }
+    
+    // Reference: https://www.quora.com/Natural-Language-Processing-Whats-the-best-way-to-detect-if-a-piece-of-text-is-interrogative
+    // Helping Verbs 1: https://www.grammar-monster.com/glossary/helping_verb.htm#:~:text=A%20helping%20verb%20(also%20known,%2C%20had%2C%20having%2C%20will%20have
+    // Helping Verbs 2: https://grammar.yourdictionary.com/parts-of-speech/verbs/helping-verbs.html
+    // Reference: https://stackoverflow.com/questions/3573872/how-to-find-out-if-a-sentence-is-a-question-interrogative
+    // Reference: https://stackoverflow.com/questions/4083060/determine-if-a-sentence-is-an-inquiry
+    // Paper: https://pdfs.semanticscholar.org/72ea/54243949e475bc4e656cd517dbe51f487bc3.pdf
+    // Paper: https://www.aclweb.org/anthology/C10-1130.pdf
+    public static func isQuestion(sentence: String) -> Bool {
+        if sentence.count == 0 {
+            return false
+        }
+        
+        let elements: [String] = ["?"]
+        let starters: [String] = ["which", "won't", "can't", "isn't", "aren't", "is", "do", "does", "will", "can", "is", "did", "has", "had", "are", "were", "can", "could", "may", "might", "would", "shall", "should", "must", "am", "was", "have", "who", "what", "when", "where", "why", "how"]
+        let temp = sentence.lowercased()
+
+        let splitted: [String] = temp.components(separatedBy: " ")
+
+        if starters.contains(String(splitted[0])) {
+            return true;
+        } else {
+            return splitted.contains(anyOf: elements)
+        }
     }
     
     public static func isFirstPersonSingularPronoun(_ str: String) -> Bool {
