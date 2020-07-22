@@ -173,6 +173,21 @@ class Utils {
         print("\tWill play expression at volume: \(volume)...")
         player.volume = volume
     }
+    
+    public static func runSpeechSynthesizer(synthesizer: AVSpeechSynthesizer, text: String, voice: AVSpeechSynthesisVoice?, rate: Float, volume: Float) {
+        print("===== Play Speech Synthesizer =====")
+
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.rate = rate
+        utterance.volume = volume
+
+        if let voice = voice {
+            utterance.voice = voice
+            synthesizer.speak(utterance)
+        } else {
+            synthesizer.speak(utterance)
+        }
+    }
 
     public static func computeNormalizedSoundIntensity(buffer: AVAudioPCMBuffer, minDb: Float) -> Double? {
         // gives you an array of pointers to each sample’s data
@@ -224,7 +239,7 @@ class Utils {
             secs -= hours * TimeConstant.secsPerHour
         }
 
-        if secs > TimeConstant.secsPerMin {
+        if secs >= TimeConstant.secsPerMin {
             mins = secs / TimeConstant.secsPerMin
             secs -= mins * TimeConstant.secsPerMin
         }
@@ -265,9 +280,9 @@ class Utils {
                 // Male = Tom
                 synthesizerVoice = voice
                 break
-            } else if voice.name == "Allison (Enhanced)" && (gender == .female || gender == nil) && voice.quality == .enhanced {
+            } else if voice.name == "Ava (Enhanced)" && (gender == .female || gender == nil) && voice.quality == .enhanced {
                 // US
-                // Female = Allison
+                // Female = Ava
                 synthesizerVoice = voice
                 break
             }

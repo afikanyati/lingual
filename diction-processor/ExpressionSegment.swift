@@ -88,7 +88,8 @@ class ExpressionSegment: AVCompositionTrackSegment {
         lexicalClass: NLTag?,
         nameType: NLTag?,
         lemma: NLTag?,
-        sentimentScore: [ScaleUnitType: Float]?
+        sentimentScore: [ScaleUnitType: Float]?,
+        utterPunctuationSuggestion: Bool = false
     ) {
         self.word = word
         self.tokenType = tokenType
@@ -121,6 +122,30 @@ class ExpressionSegment: AVCompositionTrackSegment {
             sourceTimeRange: timeRange,
             targetTimeRange: timeRange
         )
+        
+        if let expression = self.expression, utterPunctuationSuggestion && self.suggestsNewParagraph() {
+            let rate: Float = 0.55
+            let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
+
+            Utils.runSpeechSynthesizer(
+                synthesizer: expression.speechSynthesizer,
+                text: "Placed on new line.",
+                voice: voice,
+                rate: rate,
+                volume: expression.playbackVolume
+            )
+        } else if let expression = self.expression, expression.withPunctuationSuggestions, utterPunctuationSuggestion && self.suggestsNewSentence() {
+            let rate: Float = 0.55
+            let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
+
+            Utils.runSpeechSynthesizer(
+                synthesizer: expression.speechSynthesizer,
+                text: "Added as new sentence.",
+                voice: voice,
+                rate: rate,
+                volume: expression.playbackVolume
+            )
+        }
     }
     
     // update for new properties
@@ -491,7 +516,8 @@ class ExpressionSegment: AVCompositionTrackSegment {
     // MARK: - Helper Functions
     
     func suggestsNewParagraph(includingFirstSegment: Bool = false) -> Bool {
-        if self.isSilence() && avgPauseDuration != Utils.UNKNOWN {
+//        if self.isSilence() && avgPauseDuration != Utils.UNKNOWN {
+        if self.isSilence() {
             let duration = self.timeMapping.source.duration.seconds
             let isFirstSegment = self.timeMapping.source.start == CMTime.zero
             if duration > NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER && (includingFirstSegment || !isFirstSegment) {
@@ -503,7 +529,8 @@ class ExpressionSegment: AVCompositionTrackSegment {
     }
     
     func suggestsNewSentence(includingFirstSegment: Bool = false) -> Bool {
-        if self.isSilence() && avgPauseDuration != Utils.UNKNOWN {
+//        if self.isSilence() && avgPauseDuration != Utils.UNKNOWN {
+        if self.isSilence() {
             let duration = self.timeMapping.source.duration.seconds
             let isFirstSegment = self.timeMapping.source.start == CMTime.zero
             if duration > NEW_SENTENCE_PAUSE_DURATION_MULTIPLIER && (includingFirstSegment || !isFirstSegment) {

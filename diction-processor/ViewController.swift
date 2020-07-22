@@ -272,12 +272,16 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         
         self.onExpressionComplete = {[weak self] in
             DispatchQueue.main.async {
+                print("expressions: ", self!.expression.expressionSegments)
+
+                self?.stopRecordingUITimer()
+                self?.soundIntensityIndicatorHeight.constant = 0
+
                 self?.navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Reset", style: .plain, target: self, action: #selector(self?.resetSession))
                 self?.navigationItem.title = "Saved!"
                 self?.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.red]
                 
-                self?
-                    .savedMessageTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { timer in
+                self?.savedMessageTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { timer in
                     self?.navigationItem.title = ""
                     self?.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
                 }
@@ -513,10 +517,8 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         if expression.isPlayingExpression {
             expression.pause() { [weak self] in
                 self?.playAudioButton.setTitle("Play Audio", for: .normal)
-                print("expressions: ", self!.expression.expressionSegments)
             }
         } else {
-            playTextToSpeechButton.setTitle("Play Echo", for: .normal)
             expression.play(
                 onStartHandler: { [weak self] in
                     // print("Successfully executed playback on start handler")
@@ -631,7 +633,6 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             }
             
             self.navigationItem.title = Utils.formattedTime(time: self.expression.getDurationListening())
-            
             self.UITimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { timer in
                 self.navigationItem.title = Utils.formattedTime(time: self.expression.getDurationListening())
             }
@@ -645,7 +646,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         DispatchQueue.main.async {
             self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
             self.navigationItem.title = ""
-            self.UITimer?.invalidate()
+            self.UITimer!.invalidate()
         }
     }
     
@@ -786,12 +787,12 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                     if let voice = self.synthesizerVoice {
                         utterance.voice = voice
                     }
-                    utterance.rate = (AVSpeechUtteranceMaximumSpeechRate - AVSpeechUtteranceMinimumSpeechRate) / 2 + AVSpeechUtteranceMinimumSpeechRate
+                    utterance.rate = AVSpeechUtteranceDefaultSpeechRate
                     utterance.volume = 1
                     self.speechSynthesizer.speak(utterance)
                     print("===== Wake Phrase Detected =====")
                     self.activateApp()
-                } else {
+                } else if !text.contains("rise") && !text.contains("rise and") {
                     // Play Sound
                     sounds.incorrectWakePhrase()
                 }

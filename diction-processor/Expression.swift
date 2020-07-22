@@ -116,7 +116,7 @@ class Expression: AVMutableComposition {
     private var recognitionTask: SFSpeechRecognitionTask?
     
     // MARK: - Speech Synthesis Properties
-    private let speechSynthesizer = AVSpeechSynthesizer()
+    public let speechSynthesizer = AVSpeechSynthesizer()
     public var isPlayingEcho: Bool {
         return speechSynthesizer.isSpeaking
     }
@@ -412,7 +412,7 @@ class Expression: AVMutableComposition {
             self.request!.append(buffer)
             // We place this here so we start tracking recording from the first buffer chnk we receive
             DispatchQueue.main.async {
-                if !self.isListening {
+                if self.audioEngine.isRunning && !self.isListening {
                     // A transcription can be in progress before call to startSpeechRecognition if
                     // Apple servers ended dictation session
                     // It cannot be if after a continguous clause was completed while on-device recognition
@@ -497,8 +497,9 @@ class Expression: AVMutableComposition {
             self.recognitionTask!.finish() // don't wrap in if statement because it is sometimes not .running
             self.request!.endAudio() // don't add a request = nil because it results in request not being there sometimes.
             self.pitchEngine.stop()
-            onStopHandler?()
         }
+        
+        onStopHandler?() // Needs to be outside DispatchQueue.main.async so it doesn't accidentally wrap two of them
     }
     
     func performTranscriptionUpdate(_ transcription: SFTranscription, finalTranscript: Bool = false) {
@@ -653,7 +654,8 @@ class Expression: AVMutableComposition {
                         lexicalClass: nil,
                         nameType: nil,
                         lemma: nil,
-                        sentimentScore: nil // silences have no sentiment
+                        sentimentScore: nil, // silences have no sentiment
+                        utterPunctuationSuggestion: true // give feedback that we're on a new sentence or paragraph. TODO: prevent multiple firing at once
                     )
                     
                     // Segment Sound intensity
@@ -972,7 +974,7 @@ class Expression: AVMutableComposition {
     
     // MARK: - Text Methods
     
-    func getExpressionText(from time: CMTime = CMTime.zero, segments: [ExpressionSegment]? = nil, forEcho: Bool = false) -> String {
+    func getExpressionText(from fromTime: CMTime = CMTime.zero, until untilTime: CMTime? = nil, segments: [ExpressionSegment]? = nil, forEcho: Bool = false) -> String {
         var text = ""
         
         var expressionSegments = self.expressionSegments
@@ -981,7 +983,18 @@ class Expression: AVMutableComposition {
         }
 
         for segment in expressionSegments  {
-            if segment.timeMapping.source.start >= time {
+            if let untilTime = untilTime, segment.timeMapping.source.start <= untilTime {
+                let word = segment.getText(
+                    withTemporalSuggestions: self.withTemporalSuggestions,
+                    withPunctuationSuggestions: self.withPunctuationSuggestions,
+                    withFormattingSuggestions: self.withFormattingSuggestions,
+                    strictlyAsWord: self.withTextStrictlyAsWords,
+                    withSpacePrefix: true,
+                    forEcho: forEcho
+                )
+                
+                text += word
+            } else if segment.timeMapping.source.start >= fromTime {
                 let word = segment.getText(
                     withTemporalSuggestions: self.withTemporalSuggestions,
                     withPunctuationSuggestions: self.withPunctuationSuggestions,
@@ -1002,40 +1015,6 @@ class Expression: AVMutableComposition {
         // not capitalized when we're dealing with expresssions that come from chopped up expressions
         text = text.capitalizeFirstLetter()
 
-        return text
-    }
-    
-    // We need to deal with segments from different places
-    func getExpressionText(until time: CMTime, segments: [ExpressionSegment]? = nil, forEcho: Bool = false) -> String {
-        var text = ""
-        
-        var expressionSegments = self.expressionSegments
-        if let segments = segments {
-            expressionSegments = segments
-        }
-        
-        for segment in expressionSegments  {
-            if segment.timeMapping.source.start <= time {
-                let word = segment.getText(
-                    withTemporalSuggestions: self.withTemporalSuggestions,
-                    withPunctuationSuggestions: self.withPunctuationSuggestions,
-                    withFormattingSuggestions: self.withFormattingSuggestions,
-                    strictlyAsWord: self.withTextStrictlyAsWords,
-                    withSpacePrefix: true,
-                    forEcho: forEcho
-                )
-                
-                text += word
-            }
-        }
-
-        // Remove whitespaces on edges
-        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // make sure first letter is capitalized
-        // not capitalized when we're dealing with expresssions that come from chopped up expressions
-        text = text.capitalizeFirstLetter()
-        
         return text
     }
     
@@ -1043,6 +1022,14 @@ class Expression: AVMutableComposition {
     
     func play(from: CMTime? = nil, to: CMTime? = nil, onStartHandler: (() -> Void)? = nil, secondElapseHandler: (() -> Void)? = nil, segmentBoundaryHandler: (() -> Void)? = nil, onFinishHandler: (() -> Void)? = nil) {
         print("===== Play Expression =====")
+        
+        // Get current time
+        let currentTime = player.currentTime()
+        print("current time: ", currentTime, currentTime > CMTime.zero)
+        if currentTime > CMTime.zero {
+            player.play()
+            return
+        }
         
         // Play Sound
         sounds.play()
@@ -1087,6 +1074,13 @@ class Expression: AVMutableComposition {
     }
     
     func playSentence(number: Int, onStartHandler: (() -> Void)? = nil, secondElapseHandler: (() -> Void)? = nil, segmentBoundaryHandler: (() -> Void)? = nil, onFinishHandler: (() -> Void)? = nil) {
+        
+        // Get current time
+        let currentTime = player.currentTime()
+        if currentTime > CMTime.zero {
+            player.play()
+            return
+        }
         
         // Play Sound
         sounds.play()
@@ -1134,6 +1128,13 @@ class Expression: AVMutableComposition {
     }
 
     func playSentence(forTrackTime: CMTime, onStartHandler: (() -> Void)? = nil, secondElapseHandler: (() -> Void)? = nil, segmentBoundaryHandler: (() -> Void)? = nil, onFinishHandler: (() -> Void)? = nil) {
+        
+        // Get current time
+        let currentTime = player.currentTime()
+        if currentTime > CMTime.zero {
+            player.play()
+            return
+        }
         
         // Play Sound
         sounds.play()
@@ -1215,19 +1216,22 @@ class Expression: AVMutableComposition {
     func startEcho(onStartHandler: (() -> Void)? = nil, onCompletionHandler: (() -> Void)? = nil) {
         // Computer understanding of the expression
         print("==== Initiate new speech synthesizer utterance =====")
-        let expressionText = self.getExpressionText(forEcho: false) // make forEcho true when we're doing voice only
-        let utterance = AVSpeechUtterance(string: expressionText)
-        if let voice = speaker.playbackVoice {
-            utterance.voice = voice
-        }
-        utterance.rate = (AVSpeechUtteranceMaximumSpeechRate - AVSpeechUtteranceMinimumSpeechRate) / 2 + AVSpeechUtteranceMinimumSpeechRate
-        utterance.volume = self.playbackVolume
-        speechSynthesizer.speak(utterance)
         
         if player.isPlaying {
             print("\tStop speech audio to play speech synthesizer")
             player.stop()
         }
+
+        let expressionText = self.getExpressionText(forEcho: true) // make forEcho true when we're doing voice only
+        let rate = (AVSpeechUtteranceMaximumSpeechRate - AVSpeechUtteranceMinimumSpeechRate) / 2 + AVSpeechUtteranceMinimumSpeechRate
+        
+        Utils.runSpeechSynthesizer(
+            synthesizer: self.speechSynthesizer,
+            text: expressionText,
+            voice: speaker.playbackVoice,
+            rate: rate,
+            volume: self.playbackVolume
+        )
         
         if let onCompletionHandler = onCompletionHandler {
             self.tempOnEchoFinish = onCompletionHandler
@@ -1261,6 +1265,11 @@ class Expression: AVMutableComposition {
             speechSynthesizer.stopSpeaking(at: .immediate)
         }
         
+        if player.isPlaying {
+            print("\tStop speech audio to play speech synthesizer")
+            player.stop()
+        }
+        
         // Create echo text
         let splitText = text.components(separatedBy: " ")
         var echoText = ""
@@ -1272,18 +1281,15 @@ class Expression: AVMutableComposition {
             }
         }
         echoText = echoText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let utterance = AVSpeechUtterance(string: echoText)
-        if let voice = speaker.playbackVoice {
-            utterance.voice = voice
-        }
-        utterance.rate = (AVSpeechUtteranceMaximumSpeechRate - AVSpeechUtteranceMinimumSpeechRate) / 2 + AVSpeechUtteranceMinimumSpeechRate
-        utterance.volume = self.playbackVolume
-        speechSynthesizer.speak(utterance)
+        let rate = (AVSpeechUtteranceMaximumSpeechRate - AVSpeechUtteranceMinimumSpeechRate) / 2 + AVSpeechUtteranceMinimumSpeechRate
         
-        if player.isPlaying {
-            print("\tStop speech audio to play speech synthesizer")
-            player.stop()
-        }
+        Utils.runSpeechSynthesizer(
+            synthesizer: self.speechSynthesizer,
+            text: echoText,
+            voice: speaker.playbackVoice,
+            rate: rate,
+            volume: self.playbackVolume
+        )
     }
     
     // MARK: - Mutating Methods
@@ -1561,7 +1567,13 @@ class Expression: AVMutableComposition {
             if index + 1 == segments.count {
                 // We've reached the end of the expression. Update sentence data
                 sentenceEndTime = segment.timeMapping.source.end
-                sentenceText += segment.getText(withSpacePrefix: true)
+                sentenceText += segment.getText(
+                    withTemporalSuggestions: self.withTemporalSuggestions,
+                    withPunctuationSuggestions: self.withPunctuationSuggestions,
+                    withFormattingSuggestions: self.withFormattingSuggestions,
+                    strictlyAsWord: self.withTextStrictlyAsWords,
+                    withSpacePrefix: true
+                )
                 let sentence = Sentence(
                     number: sentenceNumber,
                     text: sentenceText.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -1585,6 +1597,13 @@ class Expression: AVMutableComposition {
                     // We've hit a sentence boundary. Update sentences
                     // Update sentence data
                     sentenceEndTime = segment.timeMapping.source.start
+                    sentenceText += segment.getText(
+                        withTemporalSuggestions: self.withTemporalSuggestions,
+                        withPunctuationSuggestions: self.withPunctuationSuggestions,
+                        withFormattingSuggestions: self.withFormattingSuggestions,
+                        strictlyAsWord: self.withTextStrictlyAsWords,
+                        withSpacePrefix: true
+                    )
                     let sentence = Sentence(
                         number: sentenceNumber,
                         text: sentenceText.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -1623,7 +1642,14 @@ class Expression: AVMutableComposition {
                     )
                     sentenceNumber = number
                     sentenceStartTime = segment.timeMapping.source.start
-                    sentenceText += segment.getText(withSpacePrefix: true)
+                    // New sentence
+                    sentenceText = segment.getText(
+                        withTemporalSuggestions: self.withTemporalSuggestions,
+                        withPunctuationSuggestions: self.withPunctuationSuggestions,
+                        withFormattingSuggestions: self.withFormattingSuggestions,
+                        strictlyAsWord: self.withTextStrictlyAsWords,
+                        withSpacePrefix: true
+                    )
                     
                     // Add sentence to every segment before this one
                     for i in leftStaleSegmentIndex..<index {
@@ -1633,7 +1659,13 @@ class Expression: AVMutableComposition {
                     leftStaleSegmentIndex = index
                 } else if number == sentenceNumber {
                     // Add word to sentence
-                    sentenceText += segment.getText(withSpacePrefix: true)
+                    sentenceText += segment.getText(
+                        withTemporalSuggestions: self.withTemporalSuggestions,
+                        withPunctuationSuggestions: self.withPunctuationSuggestions,
+                        withFormattingSuggestions: self.withFormattingSuggestions,
+                        strictlyAsWord: self.withTextStrictlyAsWords,
+                        withSpacePrefix: true
+                    )
                 } else {
                     fatalError("\t[Error] There was a problem updating segment sentences. Unexpected index behavior")
                 }
@@ -2259,8 +2291,9 @@ extension Expression: SFSpeechRecognitionTaskDelegate {
         print("===== Expression successfully finished listening for new speech ===== ")
         if !self.isListening && !self.useOnDeviceRecognition {
             self.onExpressionComplete?()
-        } else if !self.isListening && self.useOnDeviceRecognition {
+        } else if self.useOnDeviceRecognition {
             // Completion of speech recognition section
+            // print("Swagggggg")
             self.onExpressionComplete?()
         }
         
@@ -2306,7 +2339,7 @@ extension Expression: SFSpeechRecognitionTaskDelegate {
                 
                 // Echo formatted String
                 if AVAudioSession.isHeadphonesConnected {
-                    self.echoText(text: result.bestTranscription.formattedString)
+                    // self.echoText(text: result.bestTranscription.formattedString)
                 }
             } else {
                 // Only the on-server recognition should go here in theory
