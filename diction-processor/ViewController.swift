@@ -656,7 +656,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         print("===== Starting Listening for Wake Phrase =====")
         
         // Play Sound
-        sounds.startListening()
+        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+            soundEngine.startListening()
+        }
         
         // must be placed before we start listening for wake phrase
         // if pitch engine begins first, we are for some reason unable to do speech recognition
@@ -776,25 +778,13 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 if text.contains(self.wakePhrase) { // wake word/phrase needs to be two words to get pitch data
                     self.stopListeningForWakePhrase()
                     // Play Sound
-                    sounds.correctWakePhrase()
+                    soundEngine.correctWakePhrase()
                     
-                    // Play greating
-                    let greetings = ["Hey there stranger!", "Nice to see you again!", "Hello again!", "Let's make magic!", "Welcome back!"]
-                    let greetingMessage = self.numAppSessions <= 1 ? "Hey there, it's a pleasure to meet you!" : greetings.randomElement()!
-                    
-                    let utterance = AVSpeechUtterance(string: greetingMessage) // Nice to hear you again. Let's make things happen.
-                    self.synthesizerVoice = Utils.getSynthesizerVoice(withGender: .female, vc: self)
-                    if let voice = self.synthesizerVoice {
-                        utterance.voice = voice
-                    }
-                    utterance.rate = AVSpeechUtteranceDefaultSpeechRate
-                    utterance.volume = 1
-                    self.speechSynthesizer.speak(utterance)
                     print("===== Wake Phrase Detected =====")
                     self.activateApp()
                 } else if !text.contains("rise") && !text.contains("rise and") {
                     // Play Sound
-                    sounds.incorrectWakePhrase()
+                    soundEngine.incorrectWakePhrase()
                 }
                 
                 return

@@ -11,10 +11,10 @@
 import Foundation
 import AVFoundation
 
-public let sounds = SoundEffects.shared
-public final class SoundEffects: NSObject {
+public let soundEngine = SoundEffectEngine.shared
+public final class SoundEffectEngine: NSObject {
     
-    static let shared = SoundEffects()
+    static let shared = SoundEffectEngine()
     
     var commitBufferPlayer: AVAudioPlayer? = nil
     var correctWakePhrasePlayer: AVAudioPlayer? = nil

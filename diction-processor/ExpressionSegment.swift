@@ -123,28 +123,30 @@ class ExpressionSegment: AVCompositionTrackSegment {
             targetTimeRange: timeRange
         )
         
-        if let expression = self.expression, utterPunctuationSuggestion && self.suggestsNewParagraph() {
-            let rate: Float = 0.55
+        if let expression = self.expression, AVAudioSession.isHeadphonesConnected && utterPunctuationSuggestion && self.suggestsNewParagraph() {
+            let rate: Float = 0.5
             let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
 
-            Utils.runSpeechSynthesizer(
+            let synthesizerItem = SynthesizerItem(
                 synthesizer: expression.speechSynthesizer,
-                text: "Placed on new line.",
+                text: "New line.",
                 voice: voice,
                 rate: rate,
                 volume: expression.playbackVolume
             )
-        } else if let expression = self.expression, expression.withPunctuationSuggestions, utterPunctuationSuggestion && self.suggestsNewSentence() {
-            let rate: Float = 0.55
+            expression.synthesizerQueue.enqueue(synthesizerItem)
+        } else if let expression = self.expression, AVAudioSession.isHeadphonesConnected && expression.withPunctuationSuggestions, utterPunctuationSuggestion && self.suggestsNewSentence() {
+            let rate: Float = 0.5
             let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
 
-            Utils.runSpeechSynthesizer(
+            let synthesizerItem = SynthesizerItem(
                 synthesizer: expression.speechSynthesizer,
-                text: "Added as new sentence.",
+                text: "New sentence.",
                 voice: voice,
                 rate: rate,
                 volume: expression.playbackVolume
             )
+            expression.synthesizerQueue.enqueue(synthesizerItem)
         }
     }
     

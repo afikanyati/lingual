@@ -55,7 +55,7 @@
 		8B766F5D24AC2AB200D41A13 /* SimpleTransformer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B766F4324AC2AB200D41A13 /* SimpleTransformer.swift */; };
 		8B766F5E24AC2AB200D41A13 /* BarycentricEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B766F4424AC2AB200D41A13 /* BarycentricEstimator.swift */; };
 		8BA3052C24C24C240056E4DF /* Sequence+containsAnyOf.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA3052B24C24C240056E4DF /* Sequence+containsAnyOf.swift */; };
-		8BA3052E24C286550056E4DF /* SoundEffects.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA3052D24C286550056E4DF /* SoundEffects.swift */; };
+		8BA3052E24C286550056E4DF /* SoundEffectEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA3052D24C286550056E4DF /* SoundEffectEngine.swift */; };
 		8BA3054A24C28FCC0056E4DF /* commit-buffer.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BA3053E24C28FCC0056E4DF /* commit-buffer.wav */; };
 		8BA3054B24C28FCC0056E4DF /* stop-listening.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BA3053F24C28FCC0056E4DF /* stop-listening.wav */; };
 		8BA3054C24C28FCC0056E4DF /* play.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BA3054024C28FCC0056E4DF /* play.wav */; };
@@ -68,6 +68,9 @@
 		8BA3055324C28FCC0056E4DF /* repeat.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BA3054724C28FCC0056E4DF /* repeat.wav */; };
 		8BA3055424C28FCC0056E4DF /* save-expression.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BA3054824C28FCC0056E4DF /* save-expression.wav */; };
 		8BA3055524C28FCC0056E4DF /* error.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BA3054924C28FCC0056E4DF /* error.wav */; };
+		8BA3055724C919920056E4DF /* Queue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA3055624C919920056E4DF /* Queue.swift */; };
+		8BA3055924C91A2B0056E4DF /* LinkedList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA3055824C91A2B0056E4DF /* LinkedList.swift */; };
+		8BA3055B24C920DA0056E4DF /* SynthesizerItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA3055A24C920DA0056E4DF /* SynthesizerItem.swift */; };
 		8BCA1AFB24A3D0750068BABB /* ScaleUnitType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BCA1AFA24A3D0750068BABB /* ScaleUnitType.swift */; };
 		8BCA1AFD24A3DA3B0068BABB /* SegmentPosition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BCA1AFC24A3DA3B0068BABB /* SegmentPosition.swift */; };
 		8BCA1AFF24A3DA5B0068BABB /* SentencePosition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BCA1AFE24A3DA5B0068BABB /* SentencePosition.swift */; };
@@ -152,7 +155,7 @@
 		8B766F4324AC2AB200D41A13 /* SimpleTransformer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SimpleTransformer.swift; sourceTree = "<group>"; };
 		8B766F4424AC2AB200D41A13 /* BarycentricEstimator.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BarycentricEstimator.swift; sourceTree = "<group>"; };
 		8BA3052B24C24C240056E4DF /* Sequence+containsAnyOf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sequence+containsAnyOf.swift"; sourceTree = "<group>"; };
-		8BA3052D24C286550056E4DF /* SoundEffects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundEffects.swift; sourceTree = "<group>"; };
+		8BA3052D24C286550056E4DF /* SoundEffectEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundEffectEngine.swift; sourceTree = "<group>"; };
 		8BA3053E24C28FCC0056E4DF /* commit-buffer.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "commit-buffer.wav"; sourceTree = "<group>"; };
 		8BA3053F24C28FCC0056E4DF /* stop-listening.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "stop-listening.wav"; sourceTree = "<group>"; };
 		8BA3054024C28FCC0056E4DF /* play.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = play.wav; sourceTree = "<group>"; };
@@ -165,6 +168,9 @@
 		8BA3054724C28FCC0056E4DF /* repeat.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = repeat.wav; sourceTree = "<group>"; };
 		8BA3054824C28FCC0056E4DF /* save-expression.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "save-expression.wav"; sourceTree = "<group>"; };
 		8BA3054924C28FCC0056E4DF /* error.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = error.wav; sourceTree = "<group>"; };
+		8BA3055624C919920056E4DF /* Queue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Queue.swift; sourceTree = "<group>"; };
+		8BA3055824C91A2B0056E4DF /* LinkedList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkedList.swift; sourceTree = "<group>"; };
+		8BA3055A24C920DA0056E4DF /* SynthesizerItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynthesizerItem.swift; sourceTree = "<group>"; };
 		8BCA1AFA24A3D0750068BABB /* ScaleUnitType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleUnitType.swift; sourceTree = "<group>"; };
 		8BCA1AFC24A3DA3B0068BABB /* SegmentPosition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentPosition.swift; sourceTree = "<group>"; };
 		8BCA1AFE24A3DA5B0068BABB /* SentencePosition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentencePosition.swift; sourceTree = "<group>"; };
@@ -316,10 +322,13 @@
 				8B669B6024B012A900D5996B /* AVAudioSession+Headphones.swift */,
 				8B27A3DB24B6A839001E5F06 /* Double+Rounded.swift */,
 				8B27A3DD24B6A8E9001E5F06 /* Float+Rounded.swift */,
-				8BA3052D24C286550056E4DF /* SoundEffects.swift */,
+				8BA3052D24C286550056E4DF /* SoundEffectEngine.swift */,
 				8BD595C6249AE45D000B3127 /* Expression.swift */,
+				8BA3055624C919920056E4DF /* Queue.swift */,
+				8BA3055824C91A2B0056E4DF /* LinkedList.swift */,
 				8B669B6824B01AF600D5996B /* Utils.swift */,
 				8B09CDFF24932E4E001EC02D /* ExpressionSegment.swift */,
+				8BA3055A24C920DA0056E4DF /* SynthesizerItem.swift */,
 				8BA3052B24C24C240056E4DF /* Sequence+containsAnyOf.swift */,
 				8BE2EB1824BA44BC00E2D519 /* Determiners.swift */,
 				8B766E8D24A812AF00D41A13 /* PunctuationMap.swift */,
@@ -506,11 +515,13 @@
 				8B766F2824AC2AA300D41A13 /* NoteCalculator.swift in Sources */,
 				8B766F4B24AC2AB200D41A13 /* Array+Extensions.swift in Sources */,
 				8BEC136C24906FF30056E767 /* ViewController.swift in Sources */,
+				8BA3055924C91A2B0056E4DF /* LinkedList.swift in Sources */,
 				8BEC136824906FF30056E767 /* AppDelegate.swift in Sources */,
 				8B669B6724B013F200D5996B /* TimeConstant+Minute+Hour.swift in Sources */,
 				8B669B6324B012F500D5996B /* AVPlayer+Playback.swift in Sources */,
 				8B766F5024AC2AB200D41A13 /* InputSignalTracker.swift in Sources */,
 				8BCA1AFD24A3DA3B0068BABB /* SegmentPosition.swift in Sources */,
+				8BA3055724C919920056E4DF /* Queue.swift in Sources */,
 				8BCA1B0124A43D530068BABB /* Speaker.swift in Sources */,
 				8B766E8C24A8094300D41A13 /* SoundIntensityDatum.swift in Sources */,
 				8B766F5B24AC2AB200D41A13 /* FFTTransformer.swift in Sources */,
@@ -540,7 +551,7 @@
 				8B766F2324AC2AA300D41A13 /* AcousticWave.swift in Sources */,
 				8B766F5A24AC2AB200D41A13 /* LocationEstimator.swift in Sources */,
 				8B766F4824AC2AB200D41A13 /* Buffer.swift in Sources */,
-				8BA3052E24C286550056E4DF /* SoundEffects.swift in Sources */,
+				8BA3052E24C286550056E4DF /* SoundEffectEngine.swift in Sources */,
 				8B766F5424AC2AB200D41A13 /* QuinnsSecondEstimator.swift in Sources */,
 				8B766F4724AC2AB200D41A13 /* YINTransformer.swift in Sources */,
 				8B669B6924B01AF600D5996B /* Utils.swift in Sources */,
@@ -548,6 +559,7 @@
 				8B766F2424AC2AA300D41A13 /* Pitch.swift in Sources */,
 				8B766E8924A7D7D200D41A13 /* Sentence.swift in Sources */,
 				8B766F4E24AC2AB200D41A13 /* QuinnsFirstEstimator.swift in Sources */,
+				8BA3055B24C920DA0056E4DF /* SynthesizerItem.swift in Sources */,
 				8BD595C7249AE45D000B3127 /* Expression.swift in Sources */,
 				8B766F4A24AC2AB200D41A13 /* YINUtil.swift in Sources */,
 				8B766F5324AC2AB200D41A13 /* OutputSignalTracker.swift in Sources */,

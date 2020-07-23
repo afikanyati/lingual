@@ -34,6 +34,9 @@ class Expression: AVMutableComposition {
             } else if _fileType == .m4a {
                 return ".m4a"
             } else {
+                // Play Sound
+                soundEngine.error()
+                
                 fatalError("===== [Error] There was a problem returning the specified file type =====")
             }
         }
@@ -117,12 +120,14 @@ class Expression: AVMutableComposition {
     
     // MARK: - Speech Synthesis Properties
     public let speechSynthesizer = AVSpeechSynthesizer()
+    public var synthesizerQueue = Queue<SynthesizerItem>()
     public var isPlayingEcho: Bool {
         return speechSynthesizer.isSpeaking
     }
     public var echoIsPaused: Bool {
         return speechSynthesizer.isPaused
     }
+    private(set) var isExhaustingSynthesizerQueue = false
     private(set) var onEchoFinish: (() -> Void)?
     private(set) var tempOnEchoFinish: (() -> Void)?
     private(set) var onEchoUpdate: ((_ range: NSRange) -> Void)?
@@ -275,7 +280,13 @@ class Expression: AVMutableComposition {
             try recordFile = AVAudioFile(forWriting: Utils.getFileURL(of: "\(self.filename)\(self.fileType)"), settings: audioEngine.inputNode.inputFormat(forBus: recordBus).settings)
             authorizedToListen = true
         } catch {
-            fatalError("\t[Error] There was a problem instantiating the record file")
+            // Play Sound
+            soundEngine.error()
+            
+            // wait for sound
+            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                fatalError("\t[Error] There was a problem instantiating the record file")
+            }
         }
     }
     
@@ -360,7 +371,13 @@ class Expression: AVMutableComposition {
         }
 
         if !result {
-            fatalError("===== [Error] Representation Invariants were broken =====")
+            // Play Sound
+            soundEngine.error()
+            
+            // wait for sound
+            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                fatalError("===== [Error] Representation Invariants were broken =====")
+            }
         }
     }
     
@@ -370,7 +387,9 @@ class Expression: AVMutableComposition {
         print("===== Starting Listening for Speech =====")
         
         // Play Sound
-        sounds.startListening()
+        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+            soundEngine.startListening()
+        }
         
         if !self.authorizedToListen {
             print("\t [Error] There was a problem while starting to listen for speech. Expression is not authorized to listen.")
@@ -434,7 +453,13 @@ class Expression: AVMutableComposition {
             do {
                 try self.recordFile!.write(from: buffer)
             } catch {
-                fatalError("\t[Error] There was a problem writing speech to file")
+                // Play Sound
+                soundEngine.error()
+                
+                // wait for sound
+                Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                    fatalError("\t[Error] There was a problem writing speech to file")
+                }
             }
         }
 
@@ -442,17 +467,32 @@ class Expression: AVMutableComposition {
         do {
             try audioEngine.start()
         } catch {
-            fatalError("\t[Error] There was a problem starting speech recognition")
+            // Play Sound
+            soundEngine.error()
+            
+            // wait for sound
+            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                fatalError("\t[Error] There was a problem starting speech recognition")
+            }
         }
         
         do {
             // it’s generally preferable to defer this call until your app begins audio playback
             try recordingSession.setActive(true)
         } catch {
-            fatalError("\t[Error] There was a problem activating audio session")
+            // Play Sound
+            soundEngine.error()
+            
+            // wait for sound
+            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                fatalError("\t[Error] There was a problem activating audio session")
+            }
         }
         
         guard let myRecognizer = SFSpeechRecognizer() else {
+            // Play Sound
+            soundEngine.error()
+            
             fatalError("\t[Error] Speech Recognizer is not supported for current locale")
         }
         
@@ -462,7 +502,13 @@ class Expression: AVMutableComposition {
         }
         
         if !myRecognizer.isAvailable {
-            fatalError("\t[Error] Speech Recognizer is not available")
+            // Play Sound
+            soundEngine.error()
+            
+            // wait for sound
+            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                fatalError("\t[Error] Speech Recognizer is not available")
+            }
         }
         
         // Check rep invariant
@@ -479,7 +525,7 @@ class Expression: AVMutableComposition {
         }
         
         // Play Sound
-        sounds.stopListening()
+        soundEngine.stopListening()
         
         let node = audioEngine.inputNode
         node.removeTap(onBus: self.recordBus)
@@ -550,6 +596,9 @@ class Expression: AVMutableComposition {
                 sentiment = sentimentScore
             }
         } else {
+            // Play Sound
+            soundEngine.error()
+            
             fatalError("\t[Error] There was a problem computing segment tags")
         }
         
@@ -617,7 +666,13 @@ class Expression: AVMutableComposition {
                 // print("Existing segment without changes encountered.")
             }
         } else {
-            fatalError("\t[Error] There was a problem with pigeonholing segment")
+            // Play Sound
+            soundEngine.error()
+            
+            // wait for sound
+            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                fatalError("\t[Error] There was a problem with pigeonholing segment")
+            }
         }
     }
     
@@ -855,6 +910,9 @@ class Expression: AVMutableComposition {
             // This assumes the new version is a better approximation of user speech
             index = stagedSegmentsLowestIndex + transcriptionIndex
         } else {
+            // Play Sound
+            soundEngine.error()
+            
             fatalError("\t[Error] There was a problem computing segment index in computeSegmentTags")
         }
         
@@ -933,6 +991,9 @@ class Expression: AVMutableComposition {
             // is first segment
             lowerText = ""
         } else {
+            // Play Sound
+            soundEngine.error()
+            
             fatalError("\t[Error] There was a problem analyzing the index of segment in findSegmentRange")
         }
         
@@ -1025,14 +1086,13 @@ class Expression: AVMutableComposition {
         
         // Get current time
         let currentTime = player.currentTime()
-        print("current time: ", currentTime, currentTime > CMTime.zero)
-        if currentTime > CMTime.zero {
+        if currentTime.seconds > CMTime.zero.seconds {
             player.play()
             return
         }
         
         // Play Sound
-        sounds.play()
+        soundEngine.play()
         
         if speechSynthesizer.isSpeaking {
             print("\tPause speech synthesizer to play speech audio.\n")
@@ -1083,7 +1143,7 @@ class Expression: AVMutableComposition {
         }
         
         // Play Sound
-        sounds.play()
+        soundEngine.play()
         
         if speechSynthesizer.isSpeaking {
             print("===== Pause speech synthesizer to play speech audio =====")
@@ -1137,7 +1197,7 @@ class Expression: AVMutableComposition {
         }
         
         // Play Sound
-        sounds.play()
+        soundEngine.play()
         
         if speechSynthesizer.isSpeaking {
             print("===== Pause speech synthesizer to play speech audio =====")
@@ -1184,7 +1244,7 @@ class Expression: AVMutableComposition {
     func replayCurrentSentence(handler: (() -> Void)? = nil) {
         
         // Play Sound
-        sounds.repeatSegment()
+        soundEngine.repeatSegment()
 
         // Get current time
         let currentTime = player.currentTime()
@@ -1195,7 +1255,13 @@ class Expression: AVMutableComposition {
         if let sentenceDetails = sentenceDetails {
             playSentence(number: sentenceDetails.number)
         } else {
-            fatalError("\t[Error] There was a problem replaying current sentence")
+            // Play Sound
+            soundEngine.error()
+ 
+            // wait for sound
+            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                fatalError("\t[Error] There was a problem replaying current sentence")
+            }
         }
     }
     
@@ -1221,17 +1287,21 @@ class Expression: AVMutableComposition {
             print("\tStop speech audio to play speech synthesizer")
             player.stop()
         }
-
-        let expressionText = self.getExpressionText(forEcho: true) // make forEcho true when we're doing voice only
-        let rate = (AVSpeechUtteranceMaximumSpeechRate - AVSpeechUtteranceMinimumSpeechRate) / 2 + AVSpeechUtteranceMinimumSpeechRate
         
-        Utils.runSpeechSynthesizer(
+        // Play Sound
+        soundEngine.play()
+
+        let expressionText = self.getExpressionText() // make forEcho true when we're doing voice only
+        let rate: Float = 0.5
+        let synthesizerItem = SynthesizerItem(
             synthesizer: self.speechSynthesizer,
             text: expressionText,
             voice: speaker.playbackVoice,
             rate: rate,
             volume: self.playbackVolume
         )
+        
+        Utils.runSpeechSynthesizer(item: synthesizerItem)
         
         if let onCompletionHandler = onCompletionHandler {
             self.tempOnEchoFinish = onCompletionHandler
@@ -1248,6 +1318,10 @@ class Expression: AVMutableComposition {
     
     func continueEcho(handler: (() -> Void)? = nil) {
         print("===== Continue Echo =====")
+        
+        // Play Sound
+        soundEngine.play()
+
         speechSynthesizer.continueSpeaking()
         handler?()
     }
@@ -1274,22 +1348,40 @@ class Expression: AVMutableComposition {
         let splitText = text.components(separatedBy: " ")
         var echoText = ""
         for word in splitText {
-            if word.count == 1 && word.first!.isPunctuation {
-                echoText += " \(PunctuationMap[word] ?? "") \(word)"
+            if word.contains("?") {
+                echoText += " \(word.replacingCharacters(in: word.startIndex...word.endIndex, with: " question mark ?"))"
+            } else if word.contains("!") {
+                echoText += " \(word.replacingCharacters(in: word.startIndex...word.endIndex, with: " exclamation mark !"))"
+            } else if word.contains(".") {
+                echoText += " \(word.replacingCharacters(in: word.startIndex...word.endIndex, with: " period ."))"
+            } else if word.contains(",") {
+                echoText += " \(word.replacingCharacters(in: word.startIndex...word.endIndex, with: " comma ,"))"
             } else {
                 echoText += " \(word)"
             }
         }
         echoText = echoText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let rate = (AVSpeechUtteranceMaximumSpeechRate - AVSpeechUtteranceMinimumSpeechRate) / 2 + AVSpeechUtteranceMinimumSpeechRate
+        let rate: Float = 0.55
         
-        Utils.runSpeechSynthesizer(
+        let synthesizerItem = SynthesizerItem(
             synthesizer: self.speechSynthesizer,
             text: echoText,
             voice: speaker.playbackVoice,
             rate: rate,
             volume: self.playbackVolume
         )
+        
+        self.synthesizerQueue.enqueue(synthesizerItem)
+        exhaustSynthesizerQueue()
+    }
+    
+    func exhaustSynthesizerQueue() {
+        let item = self.synthesizerQueue.dequeue()
+        self.isExhaustingSynthesizerQueue = !self.synthesizerQueue.isEmpty
+
+        if let item = item {
+            Utils.runSpeechSynthesizer(item: item)
+        }
     }
     
     // MARK: - Mutating Methods
@@ -1667,7 +1759,13 @@ class Expression: AVMutableComposition {
                         withSpacePrefix: true
                     )
                 } else {
-                    fatalError("\t[Error] There was a problem updating segment sentences. Unexpected index behavior")
+                    // Play Sound
+                    soundEngine.error()
+
+                    // wait for sound
+                    Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                        fatalError("\t[Error] There was a problem updating segment sentences. Unexpected index behavior")
+                    }
                 }
             }
         }
@@ -1782,7 +1880,13 @@ class Expression: AVMutableComposition {
             self.endTime = self.expressionSegments.last!.timeMapping.source.end
             print("\tSuccessfully updated expression segments")
         } catch {
-            fatalError("\t[Error] There was a problem updating expression segments")
+            // Play Sound
+            soundEngine.error()
+
+            // wait for sound
+            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                fatalError("\t[Error] There was a problem updating expression segments")
+            }
         }
 
         checkRep()
@@ -2136,13 +2240,32 @@ class Expression: AVMutableComposition {
                 if let error = player.currentItem!.error {
                     print("\tMessage: \(error.localizedDescription)")
                 }
-                fatalError()
+
+                // Play Sound
+                soundEngine.error()
+                
+                // wait for sound
+                Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                    fatalError()
+                }
                 break
             case .unknown:
-                fatalError("\t[Error] Player not ready")
+                // Play Sound
+                soundEngine.error()
+                
+                // wait for sound
+                Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                    fatalError("\t[Error] Player not ready")
+                }
                 break
             @unknown default:
-                fatalError("\t[Error] Unknown player status received")
+                // Play Sound
+                soundEngine.error()
+                
+                // wait for sound
+                Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                    fatalError("\t[Error] Unknown player status received")
+                }
             }
         }
     }
@@ -2298,7 +2421,7 @@ extension Expression: SFSpeechRecognitionTaskDelegate {
         }
         
         // Play sound
-        sounds.saveExpression()
+        soundEngine.saveExpression()
     }
     
     func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didHypothesizeTranscription transcription: SFTranscription) {
@@ -2325,9 +2448,10 @@ extension Expression: SFSpeechRecognitionTaskDelegate {
                     )
                     
                     // Play Sound
-                    sounds.commitBuffer()
+                    soundEngine.commitBuffer()
                 }
             } else if self.isListening && self.request!.requiresOnDeviceRecognition {
+
                 self.performTranscriptionUpdate(result.bestTranscription, finalTranscript: true)
                 self.normalizeSegments()
                 // Update duration
@@ -2335,11 +2459,11 @@ extension Expression: SFSpeechRecognitionTaskDelegate {
                 // print("===== A contiguous clause was completed: \(self.expressionSegments)")
                 
                 // Play Sound
-                sounds.commitBuffer()
+                soundEngine.commitBuffer()
                 
                 // Echo formatted String
                 if AVAudioSession.isHeadphonesConnected {
-                    // self.echoText(text: result.bestTranscription.formattedString)
+                    self.echoText(text: result.bestTranscription.formattedString)
                 }
             } else {
                 // Only the on-server recognition should go here in theory
@@ -2348,7 +2472,7 @@ extension Expression: SFSpeechRecognitionTaskDelegate {
                 // print("===== Completed expression: \(self.expressionSegments)")
                 
                 // Play Sound
-                sounds.commitBuffer()
+                soundEngine.commitBuffer()
             }
         }
     }
@@ -2371,9 +2495,13 @@ extension Expression: AVSpeechSynthesizerDelegate {
     
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         print("===== Speech synthesis utterance successfully completed =====")
-        self.onEchoFinish?()
-        self.tempOnEchoFinish?()
-        self.tempOnEchoFinish = nil
+        if self.isExhaustingSynthesizerQueue {
+            self.exhaustSynthesizerQueue()
+        } else {
+            self.onEchoFinish?()
+            self.tempOnEchoFinish?()
+            self.tempOnEchoFinish = nil
+        }
     }
     
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didPause utterance: AVSpeechUtterance) {

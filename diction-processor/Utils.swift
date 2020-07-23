@@ -174,18 +174,18 @@ class Utils {
         player.volume = volume
     }
     
-    public static func runSpeechSynthesizer(synthesizer: AVSpeechSynthesizer, text: String, voice: AVSpeechSynthesisVoice?, rate: Float, volume: Float) {
+    public static func runSpeechSynthesizer(item: SynthesizerItem) {
         print("===== Play Speech Synthesizer =====")
 
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.rate = rate
-        utterance.volume = volume
+        let utterance = AVSpeechUtterance(string: item.text)
+        utterance.rate = item.rate
+        utterance.volume = item.volume
 
-        if let voice = voice {
+        if let voice = item.voice {
             utterance.voice = voice
-            synthesizer.speak(utterance)
+            item.synthesizer.speak(utterance)
         } else {
-            synthesizer.speak(utterance)
+            item.synthesizer.speak(utterance)
         }
     }
 
