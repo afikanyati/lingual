@@ -46,13 +46,13 @@
                                     <action selector="speechToTextButtonTapped:" destination="BYZ-38-t0r" eventType="touchUpInside" id="FpG-oS-Tze"/>
                                 </connections>
                             </button>
-                            <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Q4P-7Q-bZD">
-                                <rect key="frame" x="152" y="662" width="110" height="50"/>
+                            <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Q4P-7Q-bZD" userLabel="Play Expression Button">
+                                <rect key="frame" x="125.5" y="662" width="163" height="50"/>
                                 <constraints>
                                     <constraint firstAttribute="height" constant="50" id="S3n-y4-z9b"/>
                                 </constraints>
                                 <fontDescription key="fontDescription" type="system" pointSize="24"/>
-                                <state key="normal" title="Play Audio"/>
+                                <state key="normal" title="Play Expression"/>
                                 <connections>
                                     <action selector="playButtonTapped:" destination="BYZ-38-t0r" eventType="touchUpInside" id="ehj-r1-9RE"/>
                                 </connections>

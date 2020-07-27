@@ -37,7 +37,14 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     var onExpressionListenUpdate: (() -> Void)?
     var onExpressionEchoFinish: (() -> Void)?
     var onExpressionEchoUpdate: ((_ range: NSRange) -> Void)?
+    var onExpressionListenStop: (() -> Void)?
     var onExpressionComplete: (() -> Void)?
+    static let PLAY_EXPRESSION_LABEL = "Play Expression"
+    static let PAUSE_EXPRESSION_LABEL = "Pause Expression"
+    static let PLAY_ECHO_LABEL = "Play Echo"
+    static let PAUSE_ECHO_LABEL = "Pause Echo"
+    static let START_EXPRESSION_LABEL = "Start Expression"
+    static let STOP_EXPRESSION_LABEL = "Stop Expression"
     
     // MARK: - General Audio Properties
     var session = AVAudioSession.sharedInstance()
@@ -103,6 +110,18 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     func activateApp() {
         appActivated = true
         setActiveUI(as: true)
+
+        expression.startListeningForVoiceCommands(
+            soundIntensityHandler: { intensity in
+                if let intensity = intensity {
+                    DispatchQueue.main.async {
+                        let height = CGFloat(intensity) * self.view.safeAreaLayoutGuide.layoutFrame.height
+                        let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
+                        self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+                    }
+                }
+            }
+        )
     }
     
     // MARK: - Setup
@@ -126,8 +145,10 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     
     func configureAudioSession() {
         session = AVAudioSession.sharedInstance()
+
         do {
             try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.allowBluetooth, .defaultToSpeaker])
+            try session.setPreferredSampleRate(48000)
         } catch {
             print("===== There was an error requesting permissions to record audio or setting session category =====")
         }
@@ -255,7 +276,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             DispatchQueue.main.async {
                 self?.updateUIText()
                 if (!self!.playTextToSpeechButton.isHidden) {
-                    self?.playTextToSpeechButton.setTitle("Play Echo", for: .normal)
+                    self?.playTextToSpeechButton.setTitle(ViewController.PLAY_ECHO_LABEL, for: .normal)
                 }
                 
                 if !self!.appActivated {
@@ -267,6 +288,16 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         self.onExpressionEchoUpdate = {[weak self] range in
             DispatchQueue.main.async {
                 self?.updateUIText(range: range)
+            }
+        }
+        
+        self.onExpressionListenStop = {[weak self] in
+            DispatchQueue.main.async {
+                self?.recordingButton.setTitle(ViewController.START_EXPRESSION_LABEL, for: .normal)
+                self?.navigationItem.leftBarButtonItem = nil
+                self?.setAudioButtonsVisibility(visible: true)
+                self?.stopRecordingUITimer()
+                self?.soundIntensityIndicatorHeight.constant = 0
             }
         }
         
@@ -411,8 +442,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             withFormattingSuggestions: true,
             withTextStrictlyAsWords: false,
             onListenUpdate: onExpressionListenUpdate,
-            onEchoFinish: onExpressionEchoFinish,
+            onListenStop: onExpressionListenStop,
             onEchoUpdate: onExpressionEchoUpdate,
+            onEchoFinish: onExpressionEchoFinish,
             onExpressionComplete: onExpressionComplete
         )
     }
@@ -434,7 +466,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             }
             
             // keep recording outside of app if expression started
-            if !self.expression.isListening {
+            if !self.expression.isListeningForSpeech {
                 self.appActivated = false
                 self.setActiveUI(as: false)
             }
@@ -454,12 +486,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         print("===== App Will Terminate =====")
         if !self.appActivated {
             self.stopListeningForWakePhrase()
-        } else if expression.isListening {
+        } else if expression.isListeningForSpeech {
             self.expression.stopListeningForSpeech() {[weak self] in
-                DispatchQueue.main.async {
-                    self?.stopRecordingUITimer()
-                    self?.soundIntensityIndicatorHeight.constant = 0
-                }
+                self?.onExpressionListenStop!()
             }
         }
     }
@@ -480,12 +509,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         }
         
         if authStatus == .authorized && session.recordPermission == .granted {
-            if !expression.isListening {
+            if !expression.isListeningForSpeech {
                 print("===== Start Recording =====")
-                recordingButton.setTitle("Stop Expression", for: .normal)
-                let spinner = UIActivityIndicatorView(style: .medium)
-                spinner.startAnimating()
-                navigationItem.leftBarButtonItem = UIBarButtonItem(customView: spinner)
+                recordingButton.setTitle(ViewController.STOP_EXPRESSION_LABEL, for: .normal)
                 self.savedMessageTimer?.invalidate()
                 expression.startListeningForSpeech(soundIntensityHandler: { intensity in
                     if let intensity = intensity {
@@ -500,14 +526,8 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 })
             } else {
                 print("===== Stop Recording =====")
-                recordingButton.setTitle("Start Expression", for: .normal)
-                navigationItem.leftBarButtonItem = nil
-                setAudioButtonsVisibility(visible: true)
                 expression.stopListeningForSpeech() {[weak self] in
-                    DispatchQueue.main.async {
-                        self?.stopRecordingUITimer()
-                        self?.soundIntensityIndicatorHeight.constant = 0
-                    }
+                    self?.onExpressionListenStop!()
                 }
             }
         }
@@ -516,14 +536,16 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     @IBAction func playButtonTapped(_ sender: Any) {
         if expression.isPlayingExpression {
             expression.pause() { [weak self] in
-                self?.playAudioButton.setTitle("Play Audio", for: .normal)
+                DispatchQueue.main.async {
+                    self?.playAudioButton.setTitle(ViewController.PLAY_EXPRESSION_LABEL, for: .normal)
+                }
             }
         } else {
             expression.play(
                 onStartHandler: { [weak self] in
                     // print("Successfully executed playback on start handler")
                     DispatchQueue.main.async {
-                        self?.playAudioButton.setTitle("Pause Audio", for: .normal)
+                        self?.playAudioButton.setTitle(ViewController.PAUSE_EXPRESSION_LABEL, for: .normal)
                     }
                 },
                 secondElapseHandler: { [weak self] in
@@ -534,14 +556,16 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 },
                 segmentBoundaryHandler: { [weak self] in
                     // print("Successfully executed playback on segment boundary handler")
-                    if let segment = self?.expression.getSegment(type: .current), segment.getText().count > 0, let range = self?.expression.getSegmentTextRange(of: segment) {
-                        self?.updateUIText(range: range)
+                    DispatchQueue.main.async {
+                        if let segment = self?.expression.getSegment(type: .current), segment.getText().count > 0, let range = self?.expression.getSegmentTextRange(of: segment) {
+                            self?.updateUIText(range: range)
+                        }
                     }
                 }, onFinishHandler: { [weak self] in
                     // print("Successfully executed playback on finish handler")
                     DispatchQueue.main.async {
                         self?.updateUIText()
-                        self?.playAudioButton.setTitle("Play Audio", for: .normal)
+                        self?.playAudioButton.setTitle(ViewController.PLAY_EXPRESSION_LABEL, for: .normal)
                         self!.expression.player.replaceCurrentItem(with: nil)
                         self?.navigationItem.title = ""
                     }
@@ -553,27 +577,26 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     @IBAction func speechToTextButtonTapped(_ sender: Any) {
         if expression.echoIsPaused {
             print("==== Speech synthesizer continue speaking =====")
-            expression.continueEcho() { [weak self] in
+            expression.startEcho(onStartHandler: { [weak self] in
                 DispatchQueue.main.async {
-                    self?.playTextToSpeechButton.setTitle("Pause Echo", for: .normal)
+                    self?.playTextToSpeechButton.setTitle(ViewController.PAUSE_ECHO_LABEL, for: .normal)
                 }
-            }
-            
+            })
         } else if expression.isPlayingEcho {
             print("==== Speech synthesizer paused =====")
             expression.pauseEcho() { [weak self] in
                 DispatchQueue.main.async {
-                    self?.playTextToSpeechButton.setTitle("Play Echo", for: .normal)
+                    self?.playTextToSpeechButton.setTitle(ViewController.PLAY_ECHO_LABEL, for: .normal)
                 }
             }
         } else {
-            playAudioButton.setTitle("Play Audio", for: .normal)
-            expression.startEcho() { [weak self] in
+            playAudioButton.setTitle(ViewController.PLAY_EXPRESSION_LABEL, for: .normal)
+            expression.startEcho(onStartHandler: { [weak self] in
                 DispatchQueue.main.async {
                     self?.navigationItem.title = ""
-                    self?.playTextToSpeechButton.setTitle("Pause Echo", for: .normal)
+                    self?.playTextToSpeechButton.setTitle(ViewController.PAUSE_ECHO_LABEL, for: .normal)
                 }
-            }
+            })
         }
     }
     
@@ -778,7 +801,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 if text.contains(self.wakePhrase) { // wake word/phrase needs to be two words to get pitch data
                     self.stopListeningForWakePhrase()
                     // Play Sound
-                    soundEngine.correctWakePhrase()
+                    Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                        soundEngine.correctWakePhrase()
+                    }
                     
                     print("===== Wake Phrase Detected =====")
                     self.activateApp()
@@ -836,7 +861,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         print("===== Speech synthesis utterance successfully completed =====")
         updateUIText()
         if (!playTextToSpeechButton.isHidden) {
-            playTextToSpeechButton.setTitle("Play Echo", for: .normal)
+            playTextToSpeechButton.setTitle(ViewController.PLAY_ECHO_LABEL, for: .normal)
         }
     }
     
@@ -862,10 +887,10 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         if pitch.frequency >= 65 {
             if !self.appActivated && pitch.note.octave >= 4 {
                 // is female
-                expression.setGender(as: .female)
+                expression.setGender(to: .female)
             } else if !self.appActivated {
                 // is male
-                expression.setGender(as: .male)
+                expression.setGender(to: .male)
             }
         }
     }
@@ -993,7 +1018,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 //        onStartHandler: { [weak self] in
 //            // print("Successfully executed playback on start handler")
 //            DispatchQueue.main.async {
-//                self?.playAudioButton.setTitle("Pause Audio", for: .normal)
+//                self?.playAudioButton.setTitle(PAUSE_EXPRESSION_LABEL, for: .normal)
 //            }
 //        },
 //        secondElapseHandler: { [weak self] in
@@ -1011,7 +1036,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 //            // print("Successfully executed playback on finish handler")
 //            DispatchQueue.main.async {
 //                self?.updateUIText()
-//                self?.playAudioButton.setTitle("Play Audio", for: .normal)
+//                self?.playAudioButton.setTitle(PLAY_EXPRESSION_LABEL, for: .normal)
 //                self!.expression.player.replaceCurrentItem(with: nil)
 //                self?.navigationItem.title = ""
 //            }
@@ -1031,7 +1056,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 //        onStartHandler: { [weak self] in
 //            // print("Successfully executed playback on start handler")
 //            DispatchQueue.main.async {
-//                self?.playAudioButton.setTitle("Pause Audio", for: .normal)
+//                self?.playAudioButton.setTitle(PAUSE_EXPRESSION_LABEL, for: .normal)
 //            }
 //        },
 //        secondElapseHandler: { [weak self] in
@@ -1049,7 +1074,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 //            // print("Successfully executed playback on finish handler")
 //            DispatchQueue.main.async {
 //                self?.updateUIText()
-//                self?.playAudioButton.setTitle("Play Audio", for: .normal)
+//                self?.playAudioButton.setTitle(PLAY_EXPRESSION_LABEL, for: .normal)
 //                self!.expression.player.replaceCurrentItem(with: nil)
 //                self?.navigationItem.title = ""
 //            }

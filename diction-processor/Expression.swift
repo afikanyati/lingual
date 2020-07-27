@@ -34,9 +34,6 @@ class Expression: AVMutableComposition {
             } else if _fileType == .m4a {
                 return ".m4a"
             } else {
-                // Play Sound
-                soundEngine.error()
-                
                 fatalError("===== [Error] There was a problem returning the specified file type =====")
             }
         }
@@ -84,6 +81,8 @@ class Expression: AVMutableComposition {
     private(set) var withTextStrictlyAsWords: Bool
     weak private(set) var vc: ViewController?
     private(set) var onListenUpdate: (() -> Void)?
+    private(set) var onListenStop: (() -> Void)?
+    private(set) var tempVoiceCommandHandler: (() -> Void)?
     private(set) var onExpressionComplete: (() -> Void)?
     private var observerContext = [String: (() -> Void)]()
     
@@ -95,7 +94,7 @@ class Expression: AVMutableComposition {
         return self.tracks.count
     }
     var recordingSession = AVAudioSession.sharedInstance()
-    private(set) var isListening = false
+    private(set) var isListeningForSpeech = false
     public var recordStartDate: Date?
     private var accumulatedDuration = TimeInterval(0)
     public var recordFile: AVAudioFile?
@@ -117,10 +116,13 @@ class Expression: AVMutableComposition {
     private let speechRecognizer: SFSpeechRecognizer? = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
+    private var lastRecognitionTask: RecognitionTask?
+    private(set) var isListeningForCommands = false
     
     // MARK: - Speech Synthesis Properties
     public let speechSynthesizer = AVSpeechSynthesizer()
     public var synthesizerQueue = Queue<SynthesizerItem>()
+    public var withPassiveEcho = true
     public var isPlayingEcho: Bool {
         return speechSynthesizer.isSpeaking
     }
@@ -137,10 +139,10 @@ class Expression: AVMutableComposition {
     private let playbackBus = 1
     public let minDb: Float
     private(set) var playbackRate: Float = 1
-    private(set) var playbackVolume = Float(1.0)
-    private var boundaryObserverToken: Any?
-    private var completionObserverToken: Any?
-    private var timerObserverToken: Any?
+    private(set) var playbackVolume: Float = 1
+    public var boundaryObserverToken: Any?
+    public var completionObserverToken: Any?
+    public var timerObserverToken: Any?
     private var previousBoundarySegment: ExpressionSegment?
     public var isPlayingExpression: Bool {
         return player.isPlaying
@@ -151,8 +153,8 @@ class Expression: AVMutableComposition {
     private var onListeningStartHandler: (() -> Void)?
     private var delayDate: Date?
     private var delayDuration = 0
-    private var startPlaybackAt: CMTime?
-    private var stopPlaybackAt: CMTime?
+    private(set) var startPlaybackAt: CMTime?
+    private(set) var stopPlaybackAt: CMTime?
     
     // MARK: - Initializer
 
@@ -169,8 +171,9 @@ class Expression: AVMutableComposition {
         withFormattingSuggestions: Bool = false,
         withTextStrictlyAsWords: Bool = false,
         onListenUpdate: (() -> Void)? = nil,
-        onEchoFinish: (() -> Void)? = nil,
+        onListenStop: (() -> Void)? = nil,
         onEchoUpdate: ((_ range: NSRange) -> Void)? = nil,
+        onEchoFinish: (() -> Void)? = nil,
         onExpressionComplete: (() -> Void)? = nil
     ) {
         self.filename = filename
@@ -178,6 +181,7 @@ class Expression: AVMutableComposition {
         self.minDb = minDb
         self.useOnDeviceRecognition = withOnDeviceRecognition
         self.onListenUpdate = onListenUpdate
+        self.onListenStop = onListenStop
         self.onEchoFinish = onEchoFinish
         self.onEchoUpdate = onEchoUpdate
         self.onExpressionComplete = onExpressionComplete
@@ -280,13 +284,7 @@ class Expression: AVMutableComposition {
             try recordFile = AVAudioFile(forWriting: Utils.getFileURL(of: "\(self.filename)\(self.fileType)"), settings: audioEngine.inputNode.inputFormat(forBus: recordBus).settings)
             authorizedToListen = true
         } catch {
-            // Play Sound
-            soundEngine.error()
-            
-            // wait for sound
-            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
-                fatalError("\t[Error] There was a problem instantiating the record file")
-            }
+            fatalError("\t[Error] There was a problem instantiating the record file")
         }
     }
     
@@ -315,7 +313,7 @@ class Expression: AVMutableComposition {
             print("===== New Audio Device Found =====")
             // Reset listening for wake word
             DispatchQueue.main.async {
-                if self.isListening {
+                if self.isListeningForSpeech {
                     self.stop() {[weak self] in
                         self?.startListeningForSpeech(
                             soundIntensityHandler: self?.soundIntensityHandler,
@@ -331,7 +329,7 @@ class Expression: AVMutableComposition {
             print("===== Old Audio Device Removed =====")
             // Reset listening for wake word
             DispatchQueue.main.async {
-                if self.isListening {
+                if self.isListeningForSpeech {
                     self.stop() {[weak self] in
                         self?.startListeningForSpeech(
                             soundIntensityHandler: self?.soundIntensityHandler,
@@ -349,47 +347,54 @@ class Expression: AVMutableComposition {
     
     func checkRep() {
         var result = true
+        // only isListeningForSpeech or isListeningForCommands should be active
+        result = result && !(self.isListeningForSpeech && self.isListeningForCommands)
         // startTime must be in front of endTime
         result = result && self.endTime >= self.startTime
         // start of expression segments should be the same as startTime
         if let firstSegment = self.expressionSegments.first {
             result = result && firstSegment.timeMapping.source.start == self.startTime
         }
+
         // end of expression segments should be the same as endTime
         if let lastSegment = self.expressionSegments.last {
             result = result && lastSegment.timeMapping.source.end == self.endTime
         }
-        
+
         // internal durations should be the same
         if let firstSegment = self.expressionSegments.first, let lastSegment = self.expressionSegments.last {
             result = result && CMTimeSubtract(self.endTime, self.startTime) == CMTimeSubtract(lastSegment.timeMapping.source.end, firstSegment.timeMapping.source.start)
         }
-        
+
         // durations should be the same as underlying track segments
         if let firstSegment = self.tracks[self.activeTrack].segments!.first, let lastSegment = self.tracks[self.activeTrack].segments!.last {
             result = result && CMTimeSubtract(self.endTime, self.startTime) == CMTimeSubtract(lastSegment.timeMapping.source.end, firstSegment.timeMapping.source.start)
         }
 
         if !result {
-            // Play Sound
-            soundEngine.error()
-            
-            // wait for sound
-            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
-                fatalError("===== [Error] Representation Invariants were broken =====")
-            }
+            fatalError("===== [Error] Representation Invariants were broken =====")
         }
     }
     
     // MARK: - Speech Listening Methods
     
-    func startListeningForSpeech(soundIntensityHandler: ((_ intensity: Double?) -> Void)? = nil, onStartHandler: (() -> Void)? = nil) {
-        print("===== Starting Listening for Speech =====")
-        
-        // Play Sound
-        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
-            soundEngine.startListening()
+    func startListeningForSpeech(soundIntensityHandler: ((_ intensity: Double?) -> Void)? = nil, forVoiceCommands: Bool = false, onStartHandler: (() -> Void)? = nil) {
+        if forVoiceCommands {
+            print("===== Starting Listening For Voice Commands =====")
+        } else {
+            print("===== Starting Listening for Speech =====")
         }
+        
+        if !forVoiceCommands {
+            // Play Sound
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                soundEngine.startListening()
+            }
+        }
+        
+        let spinner = UIActivityIndicatorView(style: .medium)
+        spinner.startAnimating()
+        self.vc!.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: spinner)
         
         if !self.authorizedToListen {
             print("\t [Error] There was a problem while starting to listen for speech. Expression is not authorized to listen.")
@@ -414,7 +419,7 @@ class Expression: AVMutableComposition {
 
         let node = audioEngine.inputNode
         let recordingFormat = node.outputFormat(forBus: recordBus)
-        print("===== Sample Rates ===== \n\tSoftware Format: \(recordingFormat.sampleRate)\n\tHardware Format: \(AVAudioSession.sharedInstance().sampleRate)")
+        print("===== Recording Info ===== \n\tSoftware Format: \(recordingFormat.sampleRate)\n\tHardware Format: \(AVAudioSession.sharedInstance().sampleRate) \n\tInput Latency: \(recordingSession.inputLatency.rounded(toPlaces: 5)) \n\tOutput Latency: \(recordingSession.outputLatency.rounded(toPlaces: 5)) \n\tIOBufferDuration: \(recordingSession.ioBufferDuration.rounded(toPlaces: 5))")
         
 //        let recordSettings: [String : AnyObject] = [
 //            AVSampleRateKey : NSNumber(value: Float(16000)),
@@ -431,12 +436,19 @@ class Expression: AVMutableComposition {
             self.request!.append(buffer)
             // We place this here so we start tracking recording from the first buffer chnk we receive
             DispatchQueue.main.async {
-                if self.audioEngine.isRunning && !self.isListening {
+                if self.audioEngine.isRunning && !self.isListeningForSpeech && !self.isListeningForCommands {
                     // A transcription can be in progress before call to startSpeechRecognition if
                     // Apple servers ended dictation session
                     // It cannot be if after a continguous clause was completed while on-device recognition
-                    self.isListening = true
-                    self.recordStartDate = Date()
+                    if forVoiceCommands {
+                        self.isListeningForCommands = true
+                        self.lastRecognitionTask = RecognitionTask.VOICE_COMMAND
+                    } else {
+                        self.isListeningForSpeech = true
+                        self.lastRecognitionTask = RecognitionTask.SPEECH
+                        self.recordStartDate = Date()
+                    }
+
                     onStartHandler?()
                 }
             }
@@ -445,19 +457,17 @@ class Expression: AVMutableComposition {
                 let soundIntensity = Utils.computeNormalizedSoundIntensity(buffer: buffer, minDb: self.minDb)
                 if let soundIntensity = soundIntensity {
                     let soundIntensityDatum = SoundIntensityDatum(date: Date(), intensity: soundIntensity)
-                    self.soundIntensityStream.append(soundIntensityDatum)
+                    if !forVoiceCommands {
+                        self.soundIntensityStream.append(soundIntensityDatum)
+                    }
                     soundIntensityHandler?(soundIntensity)
                 }
             }
             
-            do {
-                try self.recordFile!.write(from: buffer)
-            } catch {
-                // Play Sound
-                soundEngine.error()
-                
-                // wait for sound
-                Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+            if !forVoiceCommands {
+                do {
+                    try self.recordFile!.write(from: buffer)
+                } catch {
                     fatalError("\t[Error] There was a problem writing speech to file")
                 }
             }
@@ -467,32 +477,17 @@ class Expression: AVMutableComposition {
         do {
             try audioEngine.start()
         } catch {
-            // Play Sound
-            soundEngine.error()
-            
-            // wait for sound
-            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
-                fatalError("\t[Error] There was a problem starting speech recognition")
-            }
+            fatalError("\t[Error] There was a problem starting speech recognition")
         }
         
         do {
             // it’s generally preferable to defer this call until your app begins audio playback
             try recordingSession.setActive(true)
         } catch {
-            // Play Sound
-            soundEngine.error()
-            
-            // wait for sound
-            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
-                fatalError("\t[Error] There was a problem activating audio session")
-            }
+            fatalError("\t[Error] There was a problem activating audio session")
         }
         
         guard let myRecognizer = SFSpeechRecognizer() else {
-            // Play Sound
-            soundEngine.error()
-            
             fatalError("\t[Error] Speech Recognizer is not supported for current locale")
         }
         
@@ -502,13 +497,7 @@ class Expression: AVMutableComposition {
         }
         
         if !myRecognizer.isAvailable {
-            // Play Sound
-            soundEngine.error()
-            
-            // wait for sound
-            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
-                fatalError("\t[Error] Speech Recognizer is not available")
-            }
+            fatalError("\t[Error] Speech Recognizer is not available")
         }
         
         // Check rep invariant
@@ -518,34 +507,56 @@ class Expression: AVMutableComposition {
         recognitionTask = speechRecognizer?.recognitionTask(with: request!, delegate: self)
     }
     
-    func stopListeningForSpeech(pause: Bool = false, onStopHandler: (() -> Void)? = nil) {
-        print("===== Stopping Listening for Speech =====")
-        if isListening && !pause {
-            isListening = false
+    // make sure onStophandler is not also wrapped in DispatchQueue.main.async
+    func stopListeningForSpeech(pause: Bool = false, forVoiceCommands: Bool = false, onStopHandler: (() -> Void)? = nil) {
+        if !isListeningForSpeech && !isListeningForCommands {
+            onStopHandler?()
+            return
+        }
+
+        if forVoiceCommands {
+            print("===== Stopping Listening For Voice Commands =====")
+        } else {
+            print("===== Stopping Listening for Speech =====")
         }
         
-        // Play Sound
-        soundEngine.stopListening()
+        if (isListeningForSpeech || isListeningForCommands) && !pause {
+            isListeningForSpeech = false
+            isListeningForCommands = false
+        }
+        
+        // Gets cut midway when we initiate startListeningForSpeech
+        // Has to do with self.recognitionTask or self.request
+        if !forVoiceCommands {
+            // Play Sound
+            // soundEngine.stopListening()
+        }
         
         let node = audioEngine.inputNode
         node.removeTap(onBus: self.recordBus)
-
+        
         if pause {
             audioEngine.pause()
         } else {
             audioEngine.stop()
-            audioEngine.reset()
         }
-        
+
         // When this is not in the main thread, the recognition task doesn't end correctly
         // which prevents us from receiving the final transcription.
         DispatchQueue.main.async {
             self.recognitionTask!.finish() // don't wrap in if statement because it is sometimes not .running
             self.request!.endAudio() // don't add a request = nil because it results in request not being there sometimes.
             self.pitchEngine.stop()
+            onStopHandler?() // Needs to be outside DispatchQueue.main.async so it doesn't accidentally wrap two DispatchQueue.main.async if handler has one
         }
-        
-        onStopHandler?() // Needs to be outside DispatchQueue.main.async so it doesn't accidentally wrap two of them
+    }
+    
+    func startListeningForVoiceCommands(soundIntensityHandler: ((_ intensity: Double?) -> Void)? = nil, onStartHandler: (() -> Void)? = nil) {
+        startListeningForSpeech(soundIntensityHandler: soundIntensityHandler, forVoiceCommands: true, onStartHandler: onStartHandler)
+    }
+    
+    func stopListeningForVoiceCommands(pause: Bool = false, onStopHandler: (() -> Void)? = nil) {
+        stopListeningForSpeech(pause: pause, forVoiceCommands: true, onStopHandler: onStopHandler)
     }
     
     func performTranscriptionUpdate(_ transcription: SFTranscription, finalTranscript: Bool = false) {
@@ -596,9 +607,6 @@ class Expression: AVMutableComposition {
                 sentiment = sentimentScore
             }
         } else {
-            // Play Sound
-            soundEngine.error()
-            
             fatalError("\t[Error] There was a problem computing segment tags")
         }
         
@@ -666,13 +674,7 @@ class Expression: AVMutableComposition {
                 // print("Existing segment without changes encountered.")
             }
         } else {
-            // Play Sound
-            soundEngine.error()
-            
-            // wait for sound
-            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
-                fatalError("\t[Error] There was a problem with pigeonholing segment")
-            }
+            fatalError("\t[Error] There was a problem with pigeonholing segment")
         }
     }
     
@@ -910,9 +912,6 @@ class Expression: AVMutableComposition {
             // This assumes the new version is a better approximation of user speech
             index = stagedSegmentsLowestIndex + transcriptionIndex
         } else {
-            // Play Sound
-            soundEngine.error()
-            
             fatalError("\t[Error] There was a problem computing segment index in computeSegmentTags")
         }
         
@@ -991,9 +990,6 @@ class Expression: AVMutableComposition {
             // is first segment
             lowerText = ""
         } else {
-            // Play Sound
-            soundEngine.error()
-            
             fatalError("\t[Error] There was a problem analyzing the index of segment in findSegmentRange")
         }
         
@@ -1118,7 +1114,7 @@ class Expression: AVMutableComposition {
         // Set Start and End Times
         self.startPlaybackAt = from != nil ? from : self.startTime
         self.stopPlaybackAt = to != nil ? to : self.endTime
-        
+
         // Run Player
         let player = Utils.runPlayer(
             expression: self,
@@ -1127,7 +1123,7 @@ class Expression: AVMutableComposition {
             volume: self.playbackVolume,
             onStartHandler: onStartHandler
         )
-        
+
         if let player = player {
             self.player = player
         }
@@ -1255,13 +1251,7 @@ class Expression: AVMutableComposition {
         if let sentenceDetails = sentenceDetails {
             playSentence(number: sentenceDetails.number)
         } else {
-            // Play Sound
-            soundEngine.error()
- 
-            // wait for sound
-            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
-                fatalError("\t[Error] There was a problem replaying current sentence")
-            }
+            fatalError("\t[Error] There was a problem replaying current sentence")
         }
     }
     
@@ -1273,7 +1263,10 @@ class Expression: AVMutableComposition {
     
     func stop(handler: (() -> Void)? = nil) {
         print("===== Stop Expression =====")
-        handleCompletionObserver() // Stops player and resets startPlaybackAt / stopPlaybackAt
+        player.pause()
+        player.seek(to: self.startTime)
+        self.startPlaybackAt = nil
+        self.startPlaybackAt = nil
         handler?()
     }
     
@@ -1281,48 +1274,47 @@ class Expression: AVMutableComposition {
     
     func startEcho(onStartHandler: (() -> Void)? = nil, onCompletionHandler: (() -> Void)? = nil) {
         // Computer understanding of the expression
-        print("==== Initiate new speech synthesizer utterance =====")
+        
         
         if player.isPlaying {
             print("\tStop speech audio to play speech synthesizer")
-            player.stop()
+            self.stop()
         }
         
         // Play Sound
         soundEngine.play()
-
-        let expressionText = self.getExpressionText() // make forEcho true when we're doing voice only
-        let rate: Float = 0.5
-        let synthesizerItem = SynthesizerItem(
-            synthesizer: self.speechSynthesizer,
-            text: expressionText,
-            voice: speaker.playbackVoice,
-            rate: rate,
-            volume: self.playbackVolume
-        )
         
-        Utils.runSpeechSynthesizer(item: synthesizerItem)
+        if self.echoIsPaused {
+            // continue last echo
+            print("===== Continue Echo =====")
+            speechSynthesizer.continueSpeaking()
+        } else {
+            // start new echo
+            print("===== Start Echo =====")
+            print("\tInitiate new speech synthesizer utterance")
+            let expressionText = self.getExpressionText() // make forEcho true when we're doing voice only
+            let rate: Float = 0.5
+            let synthesizerItem = SynthesizerItem(
+                synthesizer: self.speechSynthesizer,
+                text: expressionText,
+                voice: speaker.playbackVoice,
+                rate: rate,
+                volume: self.playbackVolume
+            )
+            
+            Utils.runSpeechSynthesizer(item: synthesizerItem)
+            
+            if let onCompletionHandler = onCompletionHandler {
+                self.tempOnEchoFinish = onCompletionHandler
+            }
         
-        if let onCompletionHandler = onCompletionHandler {
-            self.tempOnEchoFinish = onCompletionHandler
+            onStartHandler?()
         }
-    
-        onStartHandler?()
     }
     
     func pauseEcho(handler: (() -> Void)? = nil) {
         print("===== Pause Echo =====")
         speechSynthesizer.pauseSpeaking(at: .immediate)
-        handler?()
-    }
-    
-    func continueEcho(handler: (() -> Void)? = nil) {
-        print("===== Continue Echo =====")
-        
-        // Play Sound
-        soundEngine.play()
-
-        speechSynthesizer.continueSpeaking()
         handler?()
     }
     
@@ -1341,7 +1333,7 @@ class Expression: AVMutableComposition {
         
         if player.isPlaying {
             print("\tStop speech audio to play speech synthesizer")
-            player.stop()
+            self.stop()
         }
         
         // Create echo text
@@ -1759,38 +1751,52 @@ class Expression: AVMutableComposition {
                         withSpacePrefix: true
                     )
                 } else {
-                    // Play Sound
-                    soundEngine.error()
-
-                    // wait for sound
-                    Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
-                        fatalError("\t[Error] There was a problem updating segment sentences. Unexpected index behavior")
-                    }
+                    fatalError("\t[Error] There was a problem updating segment sentences. Unexpected index behavior")
                 }
             }
         }
     }
     
-    func setPlaybackRate(wpm: Float) {
-        self.playbackRate = wpm / Float(self.avgSpeakingRate).rounded(toPlaces: DEFAULT_FIG_COUNT)
-    }
-    
     // MARK: - Setters
     
-    func setGender(as gender: Gender) {
+    func setGender(to gender: Gender) {
         speaker.gender = gender
         
         checkRep()
     }
     
-    func setSkipPunctuation(as skip: Bool) {
+    func setSkipPunctuation(to skip: Bool) {
         self.skipPunctuation = skip
         
         checkRep()
     }
     
-    func setSkipSilence(as skip: Bool) {
+    func setSkipSilence(to skip: Bool) {
         self.skipSilence = skip
+        
+        checkRep()
+    }
+    
+    func setWithPassiveEcho(to value: Bool) {
+        self.withPassiveEcho = value
+        
+        checkRep()
+    }
+    
+    func setPlaybackRate(to rate: Float) {
+        self.playbackRate = rate
+        
+        checkRep()
+    }
+    
+    func setPlaybackRate(wpm: Float) {
+        self.playbackRate = wpm / Float(self.avgSpeakingRate).rounded(toPlaces: DEFAULT_FIG_COUNT)
+        
+        checkRep()
+    }
+    
+    func setPlaybackVolume(to volume: Float) {
+        self.playbackVolume = volume
         
         checkRep()
     }
@@ -1880,13 +1886,7 @@ class Expression: AVMutableComposition {
             self.endTime = self.expressionSegments.last!.timeMapping.source.end
             print("\tSuccessfully updated expression segments")
         } catch {
-            // Play Sound
-            soundEngine.error()
-
-            // wait for sound
-            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
-                fatalError("\t[Error] There was a problem updating expression segments")
-            }
+            fatalError("\t[Error] There was a problem updating expression segments")
         }
 
         checkRep()
@@ -2223,7 +2223,7 @@ class Expression: AVMutableComposition {
                     print("\t[Error] There was a problem setting player rate. Player had not been started yet.")
                 }
                 
-                if self.startPlaybackAt! == CMTime.zero {
+                if self.startPlaybackAt! == self.startTime {
                     print("\tPlaying from start of recording...")
                     // Check to see if there is a silence at the start we need to skip
                     self.handleBoundaryTimeObserver(start: true)
@@ -2372,9 +2372,7 @@ class Expression: AVMutableComposition {
     func handleCompletionObserver() {
         print("===== Completed Recording =====")
         // Stop Playing
-        self.player.stop()
-        self.startPlaybackAt = nil
-        self.startPlaybackAt = nil
+        self.stop()
         
         // Play Finish Handler if present
         self.observerContext["onFinishHandler"]?()
@@ -2404,38 +2402,78 @@ class Expression: AVMutableComposition {
 extension Expression: SFSpeechRecognitionTaskDelegate {
     func speechRecognitionTaskFinishedReadingAudio(_ task: SFSpeechRecognitionTask) {
         print("===== System is no longer accepting new speech input =====")
+        
+        // Play sound
+        soundEngine.error()
     }
     
     func speechRecognitionTaskWasCancelled(_ task: SFSpeechRecognitionTask) {
         print("===== Expression cancelled looking listening for new speech ===== ")
+        
+        // Play sound
+        soundEngine.error()
     }
     
     func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didFinishSuccessfully successfully: Bool) {
         print("===== Expression successfully finished listening for new speech ===== ")
-        if !self.isListening && !self.useOnDeviceRecognition {
+        if !self.isListeningForSpeech && !self.useOnDeviceRecognition {
             self.onExpressionComplete?()
-        } else if self.useOnDeviceRecognition {
+            
+            // Play sound
+            soundEngine.saveExpression()
+        } else if let lastRecognitionTask = self.lastRecognitionTask, !self.isListeningForSpeech && self.useOnDeviceRecognition && lastRecognitionTask == RecognitionTask.SPEECH {
             // Completion of speech recognition section
-            // print("Swagggggg")
             self.onExpressionComplete?()
+            
+            // Play sound
+            soundEngine.saveExpression()
         }
-        
-        // Play sound
-        soundEngine.saveExpression()
     }
     
     func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didHypothesizeTranscription transcription: SFTranscription) {
         DispatchQueue.main.async {
-            if self.isListening {
+            if self.isListeningForSpeech {
                 print("===== Received hypothesis transcription: ", transcription.formattedString)
                 self.performTranscriptionUpdate(transcription)
+                
+                if let command = voiceCommandEngine.includesCommand(passage: transcription.formattedString) {
+                    print("===== Command Recognized =====")
+                    self.stopListeningForSpeech() {[weak self] in
+                        self?.onListenStop!()
+                    }
+                    // We put it in a handler so we can run it when we receive final transcript
+                    self.tempVoiceCommandHandler = {
+                        voiceCommandEngine.process(expression: self, query: command) {
+                            let firstCommandWord = command.components(separatedBy: " ").first!
+                            var endTime: CMTime?
+                            for (index, item) in self.expressionSegments.reversed().enumerated() {
+                                if item.getText() == firstCommandWord {
+                                    endTime = self.expressionSegments[self.expressionSegments.count - index - 1].timeMapping.source.start
+                                    break
+                                }
+                            }
+
+                            if let endTime = endTime {
+                                let keepRange = CMTimeRangeFromTimeToTime(start: self.startTime, end: endTime)
+                                self.trimExpression(keeping: keepRange, onCompletionHandler: self.onListenUpdate)
+                            }
+                            
+                            // Test whether it cut expression short
+                            // Do we keep time marching when not recording? Probably not
+                            // But we change startTime of track 2
+                            // Try to do the multi-track thing today
+                        }
+                    }
+                }
             }
         }
     }
     
     func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didFinishRecognition result: SFSpeechRecognitionResult) {
         DispatchQueue.main.async {
-            if self.isListening && !self.request!.requiresOnDeviceRecognition {
+            if self.isListeningForCommands {
+                voiceCommandEngine.process(expression: self, query: result.bestTranscription.formattedString)
+            } else if self.isListeningForSpeech && !self.request!.requiresOnDeviceRecognition {
                 print("===== Some words heard. Apple servers ended dictation session =====")
                 self.stopListeningForSpeech(pause: true) {[weak self] in
                     self?.performTranscriptionUpdate(result.bestTranscription, finalTranscript: true)
@@ -2450,8 +2488,7 @@ extension Expression: SFSpeechRecognitionTaskDelegate {
                     // Play Sound
                     soundEngine.commitBuffer()
                 }
-            } else if self.isListening && self.request!.requiresOnDeviceRecognition {
-
+            } else if self.isListeningForSpeech && self.request!.requiresOnDeviceRecognition {
                 self.performTranscriptionUpdate(result.bestTranscription, finalTranscript: true)
                 self.normalizeSegments()
                 // Update duration
@@ -2462,7 +2499,7 @@ extension Expression: SFSpeechRecognitionTaskDelegate {
                 soundEngine.commitBuffer()
                 
                 // Echo formatted String
-                if AVAudioSession.isHeadphonesConnected {
+                if self.withPassiveEcho && AVAudioSession.isHeadphonesConnected {
                     self.echoText(text: result.bestTranscription.formattedString)
                 }
             } else {
@@ -2470,9 +2507,11 @@ extension Expression: SFSpeechRecognitionTaskDelegate {
                 self.performTranscriptionUpdate(result.bestTranscription, finalTranscript: true)
                 self.normalizeSegments()
                 // print("===== Completed expression: \(self.expressionSegments)")
-                
-                // Play Sound
-                soundEngine.commitBuffer()
+
+                if let voiceCommandHandler = self.tempVoiceCommandHandler {
+                    voiceCommandHandler()
+                    self.tempVoiceCommandHandler = nil
+                }
             }
         }
     }
@@ -2513,7 +2552,7 @@ extension Expression: AVSpeechSynthesizerDelegate {
     }
     
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, willSpeakRangeOfSpeechString characterRange: NSRange, utterance: AVSpeechUtterance) {
-        if !self.isListening {
+        if !self.isListeningForSpeech {
             self.onEchoUpdate?(characterRange)
         }
     }

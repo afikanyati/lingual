@@ -116,15 +116,47 @@ class Utils {
             print("\tWaiting for AVPlayerItem to be ready...\n")
         } else {
             print("\tImmediately Playing Item\n")
+            let timeScale = CMTimeScale(NSEC_PER_SEC)
+            let time = CMTime(seconds: 1, preferredTimescale: timeScale)
+
+            expression.timerObserverToken = expression.player.addPeriodicTimeObserver(forInterval: time, queue: .main) {time in
+                expression.handlePeriodicTimeObserver()
+            }
+
+            var times = [NSValue]()
+            for segment in expression.expressionSegments {
+                times.append(NSValue(time: segment.timeMapping.source.start))
+            }
+
+            expression.boundaryObserverToken = expression.player.addBoundaryTimeObserver(forTimes: times, queue: .main) {
+                expression.handleBoundaryTimeObserver()
+            }
+            
+            expression.completionObserverToken = expression.player.addBoundaryTimeObserver(forTimes: [NSValue(time: expression.stopPlaybackAt!)], queue: .main) {
+                expression.handleCompletionObserver()
+            }
+            
             expression.player.play()
+
             let rateWasSet = Utils.setPlayerRate(player: expression.player, rate: rate)
             if rateWasSet {
                 print("\tPlayer rate was successfully set...")
             } else {
                 print("\t[Error] There was a problem setting player rate. Player had not been started yet.")
             }
-            expression.player.seek(to: startTime)
+            
+            if startTime == expression.startTime {
+                print("\tPlaying from start of recording...")
+                // Check to see if there is a silence at the start we need to skip
+                expression.handleBoundaryTimeObserver(start: true)
+            } else {
+                print("\tPlaying from \(startTime.seconds) seconds ...")
+                expression.player.seek(to: startTime)
+            }
+
             onStartHandler?()
+            
+            return expression.player
         }
         
         return nil

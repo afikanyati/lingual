@@ -16,8 +16,6 @@ extension AVPlayer {
     
     func stop() {
         pause()
-        if let item = currentItem {
-            seek(to: item.duration)
-        }
+        seek(to: CMTime.zero)
     }
 }
