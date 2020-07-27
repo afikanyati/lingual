@@ -117,7 +117,7 @@ public final class VoiceCommandEngine: NSObject {
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
                     let synthesizerItem = SynthesizerItem(
                         synthesizer: expression.speechSynthesizer,
-                        text: "An expression has already been started.",
+                        text: "Expression already started.",
                         voice: voice,
                         rate: rate,
                         volume: expression.playbackVolume
@@ -144,7 +144,7 @@ public final class VoiceCommandEngine: NSObject {
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
                     let synthesizerItem = SynthesizerItem(
                         synthesizer: expression.speechSynthesizer,
-                        text: "An expression has not been started.",
+                        text: "Expression not started.",
                         voice: voice,
                         rate: rate,
                         volume: expression.playbackVolume
@@ -156,21 +156,78 @@ public final class VoiceCommandEngine: NSObject {
             break
         case "echo expression", "ecko expression", "play echo", "play ecko", "start echo", "start ecko":
             // Play Sound
-            soundEngine.voiceCommandAccept()
-            
-            startEcho(expression: expression, handler: handler)
+            if !expression.isPlayingEcho {
+                soundEngine.voiceCommandAccept()
+                
+                startEcho(expression: expression, handler: handler)
+            } else {
+                // Play Sound
+                soundEngine.error()
+                
+                Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                    let rate: Float = 0.5
+                    let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
+                    let synthesizerItem = SynthesizerItem(
+                        synthesizer: expression.speechSynthesizer,
+                        text: "Echo already in progress.",
+                        voice: voice,
+                        rate: rate,
+                        volume: expression.playbackVolume
+                    )
+                    
+                    Utils.runSpeechSynthesizer(item: synthesizerItem)
+                }
+            }
             break
         case "pause echo", "pause ecko":
-            // Play Sound
-            soundEngine.voiceCommandAccept()
-            
-            pauseEcho(expression: expression, handler: handler)
+            if expression.isPlayingEcho {
+                // Play Sound
+                soundEngine.voiceCommandAccept()
+                
+                pauseEcho(expression: expression, handler: handler)
+            } else {
+                // Play Sound
+                soundEngine.error()
+                
+                Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                    let rate: Float = 0.5
+                    let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
+                    let synthesizerItem = SynthesizerItem(
+                        synthesizer: expression.speechSynthesizer,
+                        text: "Expression not being echoed.",
+                        voice: voice,
+                        rate: rate,
+                        volume: expression.playbackVolume
+                    )
+                    
+                    Utils.runSpeechSynthesizer(item: synthesizerItem)
+                }
+            }
             break
         case "stop echo", "stop ecko":
-            // Play Sound
-            soundEngine.voiceCommandAccept()
-            
-            stopEcho(expression: expression, handler: handler)
+            if expression.isPlayingEcho {
+                // Play Sound
+                soundEngine.voiceCommandAccept()
+                
+                stopEcho(expression: expression, handler: handler)
+            } else {
+                // Play Sound
+                soundEngine.error()
+                
+                Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                    let rate: Float = 0.5
+                    let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
+                    let synthesizerItem = SynthesizerItem(
+                        synthesizer: expression.speechSynthesizer,
+                        text: "Expression not being echoed.",
+                        voice: voice,
+                        rate: rate,
+                        volume: expression.playbackVolume
+                    )
+                    
+                    Utils.runSpeechSynthesizer(item: synthesizerItem)
+                }
+            }
             break
         case "activate punctuation":
             // Play Sound
@@ -267,7 +324,7 @@ public final class VoiceCommandEngine: NSObject {
                 },
                 segmentBoundaryHandler: {
                     DispatchQueue.main.async {
-                        if let segment = expression.vc!.expression.getSegment(type: .current), segment.getText().count > 0, let range = expression.vc!.expression.getSegmentTextRange(of: segment) {
+                        if let segment = expression.vc!.expression.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = expression.vc!.expression.getSegmentTextRange(of: segment) {
                             expression.vc!.updateUIText(range: range)
                         }
                     }

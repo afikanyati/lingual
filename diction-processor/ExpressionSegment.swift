@@ -62,6 +62,7 @@ class ExpressionSegment: AVCompositionTrackSegment {
     private var avgPauseDuration: Double = Double(Utils.UNKNOWN)
     /// The number of words spoken per minute.
     private var speakingRate: Double = Double(Utils.UNKNOWN)
+    private var voiceCommandWord: Bool
     
     /// Initializes the ExpressionSegment class instance
     ///
@@ -89,13 +90,15 @@ class ExpressionSegment: AVCompositionTrackSegment {
         nameType: NLTag?,
         lemma: NLTag?,
         sentimentScore: [ScaleUnitType: Float]?,
-        utterPunctuationSuggestion: Bool = false
+        utterPunctuationSuggestion: Bool = false,
+        voiceCommandWord: Bool = false
     ) {
         self.word = word
         self.tokenType = tokenType
         self.lexicalClass = lexicalClass
         self.nameType = nameType
         self.lemma = lemma
+        self.voiceCommandWord = voiceCommandWord
         
         if let expression = expression {
             self.expression = expression
@@ -152,7 +155,7 @@ class ExpressionSegment: AVCompositionTrackSegment {
     
     // update for new properties
     override var description: String {
-        return "ExpressionSegment{\n\tword: '\(self.word)' \n\tpitch: \(self.pitch?.note.string ?? "nil") \n\ttimeRange: (start: \(self.timeMapping.source.start), end: \(self.timeMapping.source.end.seconds), \n\tduration: \(self.timeMapping.source.duration.seconds)) \n\tphoneticallySimilarWords: \(String(describing: self.phoneticallySimilarWords)) \n\ttokenType: \(self.tokenType ?? NLTag(rawValue: "nil")) \n\tlexicalClass: \(self.lexicalClass ?? NLTag(rawValue: "nil")) \n\tnameType: \(self.nameType ?? NLTag(rawValue: "nil")) \n\tlemma: \(self.lemma ?? NLTag(rawValue: "nil")) \n\tbackgroundNoise: \(self.backgroundNoise) \n\tsoundIntensity: \(self.soundIntensity) \n\tavgExpressionSoundIntensity: \(self.avgExpressionSoundIntensity) \n\t sentence: \(self.sentence) \n\tsentimentScore: \(String(describing: self.sentimentScore)) \n\tisSilence: \(self.isSilence()) \n\tisPunctuation:\(self.isPunctuation()) \n\tisEmphasized: \(self.isEmphasized()) \n\tisNumber: \(self.isNumber()) \n\tisHomophone: \(self.isHomophone()) \n\tisSentenceTerminator: \(self.isSentenceTerminator()) \n\tavgPauseDuration: \(self.avgPauseDuration) \n\tspeakingRate: \(self.speakingRate)\n}"
+        return "ExpressionSegment{\n\tword: '\(self.word)' \n\tpitch: \(self.pitch?.note.string ?? "nil") \n\ttimeRange: (start: \(self.timeMapping.source.start), end: \(self.timeMapping.source.end.seconds), \n\tduration: \(self.timeMapping.source.duration.seconds)) \n\tphoneticallySimilarWords: \(String(describing: self.phoneticallySimilarWords)) \n\ttokenType: \(self.tokenType ?? NLTag(rawValue: "nil")) \n\tlexicalClass: \(self.lexicalClass ?? NLTag(rawValue: "nil")) \n\tnameType: \(self.nameType ?? NLTag(rawValue: "nil")) \n\tlemma: \(self.lemma ?? NLTag(rawValue: "nil")) \n\tbackgroundNoise: \(self.backgroundNoise) \n\tsoundIntensity: \(self.soundIntensity) \n\tavgExpressionSoundIntensity: \(self.avgExpressionSoundIntensity) \n\t sentence: \(self.sentence) \n\tsentimentScore: \(String(describing: self.sentimentScore)) \n\tisSilence: \(self.isSilence()) \n\tisPunctuation:\(self.isPunctuation()) \n\tisEmphasized: \(self.isEmphasized()) \n\tisNumber: \(self.isNumber()) \n\tisHomophone: \(self.isHomophone()) \n\tisSentenceTerminator: \(self.isSentenceTerminator()) \n\tisVoiceCommandWord: \(self.voiceCommandWord) \n\tavgPauseDuration: \(self.avgPauseDuration) \n\tspeakingRate: \(self.speakingRate)\n}"
     }
     
     static func ==(_ firstSegment: ExpressionSegment, _ secondSegment: ExpressionSegment) -> Bool {
@@ -168,6 +171,7 @@ class ExpressionSegment: AVCompositionTrackSegment {
             firstSegment.isNumber() == secondSegment.isNumber() &&
             firstSegment.isHomophone() == secondSegment.isHomophone() &&
             firstSegment.isSentenceTerminator() == secondSegment.isSentenceTerminator() &&
+            firstSegment.isVoiceCommandWord() == secondSegment.isVoiceCommandWord() &&
             firstSegment.getTokenType() == secondSegment.getTokenType() &&
             firstSegment.getNameType() == secondSegment.getNameType() &&
             firstSegment.getLexicalClass() == secondSegment.getLexicalClass() &&
@@ -349,6 +353,10 @@ class ExpressionSegment: AVCompositionTrackSegment {
         return self.phoneticallySimilarWords.count > 0
     }
     
+    func isVoiceCommandWord() -> Bool {
+        return self.voiceCommandWord
+    }
+    
     func isSentenceTerminator(withPunctuationSuggestions: Bool = false) -> Bool {
         var nextWordIsPunctuation = false // If next segment is punctuation, don't show suggested punctuation.
         if let expression = self.expression, self.index != Int(Utils.UNKNOWN) && self.index + 1 < expression.expressionSegments.count  {
@@ -457,6 +465,10 @@ class ExpressionSegment: AVCompositionTrackSegment {
     
     func setExpression(expression: Expression) {
         self.expression = expression
+    }
+    
+    func setIsVoiceCommandWord(to value: Bool) {
+        self.voiceCommandWord = value
     }
     
     // MARK: - Mutating Methods

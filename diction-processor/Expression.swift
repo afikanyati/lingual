@@ -1040,7 +1040,7 @@ class Expression: AVMutableComposition {
         }
 
         for segment in expressionSegments  {
-            if let untilTime = untilTime, segment.timeMapping.source.start <= untilTime {
+            if let untilTime = untilTime, segment.timeMapping.source.start <= untilTime && !segment.isVoiceCommandWord() {
                 let word = segment.getText(
                     withTemporalSuggestions: self.withTemporalSuggestions,
                     withPunctuationSuggestions: self.withPunctuationSuggestions,
@@ -1051,7 +1051,7 @@ class Expression: AVMutableComposition {
                 )
                 
                 text += word
-            } else if segment.timeMapping.source.start >= fromTime {
+            } else if segment.timeMapping.source.start >= fromTime && !segment.isVoiceCommandWord() {
                 let word = segment.getText(
                     withTemporalSuggestions: self.withTemporalSuggestions,
                     withPunctuationSuggestions: self.withPunctuationSuggestions,
@@ -1340,14 +1340,14 @@ class Expression: AVMutableComposition {
         let splitText = text.components(separatedBy: " ")
         var echoText = ""
         for word in splitText {
-            if word.contains("?") {
-                echoText += " \(word.replacingCharacters(in: word.startIndex...word.endIndex, with: " question mark ?"))"
-            } else if word.contains("!") {
-                echoText += " \(word.replacingCharacters(in: word.startIndex...word.endIndex, with: " exclamation mark !"))"
-            } else if word.contains(".") {
-                echoText += " \(word.replacingCharacters(in: word.startIndex...word.endIndex, with: " period ."))"
-            } else if word.contains(",") {
-                echoText += " \(word.replacingCharacters(in: word.startIndex...word.endIndex, with: " comma ,"))"
+            if let index = word.firstIndex(of: "?") {
+                echoText += " \(word.replacingCharacters(in: index...index, with: " question mark ?"))"
+            } else if let index = word.firstIndex(of: "!") {
+                echoText += " \(word.replacingCharacters(in: index...index, with: " exclamation mark !"))"
+            } else if let index = word.firstIndex(of: ".") {
+                echoText += " \(word.replacingCharacters(in: index...index, with: " period ."))"
+            } else if let index = word.firstIndex(of: ",") {
+                echoText += " \(word.replacingCharacters(in: index...index, with: " comma ,"))"
             } else {
                 echoText += " \(word)"
             }
@@ -2283,7 +2283,11 @@ class Expression: AVMutableComposition {
 
         if start {
             let segment = self.expressionSegments[0]
-            if self.skipPunctuation && segment.isPunctuation(), let nextSegment = self.getSegment(type: .next) {
+            if (
+                self.skipPunctuation && segment.isPunctuation() ||
+                self.skipSilence && segment.isSilence() ||
+                segment.isVoiceCommandWord()
+            ), let nextSegment = self.getSegment(type: .next) {
                 // skip to next segment
                 self.previousBoundarySegment = currentSegment
                 self.player.seek(
@@ -2291,16 +2295,6 @@ class Expression: AVMutableComposition {
                     toleranceBefore: CMTime.zero,
                     toleranceAfter: CMTime.zero
                 )
-                // print("===== Stumbled on Punctuation and skipped it =====")
-            } else if self.skipSilence && segment.isSilence(), let nextSegment = self.getSegment(type: .next) {
-                // skip to next segment
-                self.previousBoundarySegment = currentSegment
-                self.player.seek(
-                    to: nextSegment.timeMapping.source.start,
-                    toleranceBefore: CMTime.zero,
-                    toleranceAfter: CMTime.zero
-                )
-                // print("===== Stumbled on Silence and skipped it =====")
             } else {
                 self.previousBoundarySegment = currentSegment
             }
@@ -2311,7 +2305,11 @@ class Expression: AVMutableComposition {
             // We want to put it just before end
             let segment = self.expressionSegments.last!
             let END_BUFFER_DURATION = 0.05 // makes sure we don't seek to the exact end which causes the completion observer not to run
-            if self.skipPunctuation && segment.isPunctuation() {
+            if (
+                self.skipPunctuation && segment.isPunctuation() ||
+                self.skipSilence && segment.isSilence() ||
+                segment.isVoiceCommandWord()
+            ) {
                 // skip to next segment
                 self.previousBoundarySegment = currentSegment
                 self.player.seek(
@@ -2322,19 +2320,6 @@ class Expression: AVMutableComposition {
                     toleranceBefore: CMTime.zero,
                     toleranceAfter: CMTime.zero
                 )
-                // print("===== Stumbled on Punctuation and skipped it =====")
-            } else if self.skipSilence && segment.isSilence() {
-                // skip to next segment
-                self.previousBoundarySegment = currentSegment
-                self.player.seek(
-                    to: CMTimeMake(
-                        value: Int64(Expression.defaultSegmentTimescale * (self.player.currentItem!.duration.seconds - END_BUFFER_DURATION)),
-                        timescale: Int32(Expression.defaultSegmentTimescale)
-                    ),
-                    toleranceBefore: CMTime.zero,
-                    toleranceAfter: CMTime.zero
-                )
-                // print("===== Stumbled on Silence and skipped it =====")
             } else {
                 self.previousBoundarySegment = currentSegment
             }
@@ -2343,7 +2328,13 @@ class Expression: AVMutableComposition {
         } else if let segment = currentSegment {
             // We do an equality check with the previous boundary to make sure we are strictly moving
             // forward and not stuck in loop of playing an older segment
-            if let previousBoundarySegment = self.previousBoundarySegment, currentSegment != previousBoundarySegment && self.skipPunctuation && segment.isPunctuation(), let nextSegment = self.getSegment(type: .next) {
+            if let previousBoundarySegment = self.previousBoundarySegment,
+                currentSegment != previousBoundarySegment &&
+                (
+                    self.skipPunctuation && segment.isPunctuation() ||
+                    self.skipSilence && segment.isSilence() ||
+                    segment.isVoiceCommandWord()
+                ), let nextSegment = self.getSegment(type: .next) {
                 // skip to next segment
                 self.previousBoundarySegment = currentSegment
                 self.player.seek(
@@ -2351,16 +2342,6 @@ class Expression: AVMutableComposition {
                     toleranceBefore: CMTime.zero,
                     toleranceAfter: CMTime.zero
                 )
-                // print("===== Stumbled on Punctuation and skipped it =====")
-            } else if let previousBoundarySegment = self.previousBoundarySegment, currentSegment != previousBoundarySegment && self.skipSilence && segment.isSilence(), let nextSegment = self.getSegment(type: .next) {
-                // skip to next segment
-                self.previousBoundarySegment = currentSegment
-                self.player.seek(
-                    to: nextSegment.timeMapping.source.start,
-                    toleranceBefore: CMTime.zero,
-                    toleranceAfter: CMTime.zero
-                )
-                // print("===== Stumbled on Silence and skipped it =====")
             } else {
                 self.previousBoundarySegment = currentSegment
             }
@@ -2438,30 +2419,31 @@ extension Expression: SFSpeechRecognitionTaskDelegate {
                 
                 if let command = voiceCommandEngine.includesCommand(passage: transcription.formattedString) {
                     print("===== Command Recognized =====")
-                    self.stopListeningForSpeech() {[weak self] in
-                        self?.onListenStop!()
-                    }
+                    self.stopListeningForSpeech()
                     // We put it in a handler so we can run it when we receive final transcript
                     self.tempVoiceCommandHandler = {
                         voiceCommandEngine.process(expression: self, query: command) {
                             let firstCommandWord = command.components(separatedBy: " ").first!
-                            var endTime: CMTime?
-                            for (index, item) in self.expressionSegments.reversed().enumerated() {
-                                if item.getText() == firstCommandWord {
-                                    endTime = self.expressionSegments[self.expressionSegments.count - index - 1].timeMapping.source.start
-                                    break
+                            var labelSegmentAsVoiceCommand = false
+                            var updatedSegments = [ExpressionSegment]()
+                            for (index, segment) in self.expressionSegments.enumerated() {
+                                if segment.getText() == firstCommandWord {
+                                    labelSegmentAsVoiceCommand = true
+                                    let duplicateSegment = segment.duplicate(index: index)
+                                    duplicateSegment.setIsVoiceCommandWord(to: true)
+                                    updatedSegments.append(duplicateSegment)
+                                } else if labelSegmentAsVoiceCommand {
+                                    let duplicateSegment = segment.duplicate(index: index)
+                                    duplicateSegment.setIsVoiceCommandWord(to: true)
+                                    updatedSegments.append(duplicateSegment)
+                                } else {
+                                    updatedSegments.append(segment)
                                 }
                             }
-
-                            if let endTime = endTime {
-                                let keepRange = CMTimeRangeFromTimeToTime(start: self.startTime, end: endTime)
-                                self.trimExpression(keeping: keepRange, onCompletionHandler: self.onListenUpdate)
-                            }
-                            
-                            // Test whether it cut expression short
-                            // Do we keep time marching when not recording? Probably not
-                            // But we change startTime of track 2
-                            // Try to do the multi-track thing today
+                            // no need to put through setSegments because we don't need to change underlying segments
+                            self.expressionSegments = updatedSegments
+                            self.onListenStop!()
+                            print("expressions: ", self.expressionSegments)
                         }
                     }
                 }
@@ -2537,8 +2519,8 @@ extension Expression: AVSpeechSynthesizerDelegate {
         if self.isExhaustingSynthesizerQueue {
             self.exhaustSynthesizerQueue()
         } else {
-            self.onEchoFinish?()
             self.tempOnEchoFinish?()
+            self.onEchoFinish?()
             self.tempOnEchoFinish = nil
         }
     }

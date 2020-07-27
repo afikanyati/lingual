@@ -293,6 +293,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         
         self.onExpressionListenStop = {[weak self] in
             DispatchQueue.main.async {
+                self?.updateUIText()
                 self?.recordingButton.setTitle(ViewController.START_EXPRESSION_LABEL, for: .normal)
                 self?.navigationItem.leftBarButtonItem = nil
                 self?.setAudioButtonsVisibility(visible: true)
@@ -303,8 +304,6 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         
         self.onExpressionComplete = {[weak self] in
             DispatchQueue.main.async {
-                print("expressions: ", self!.expression.expressionSegments)
-
                 self?.stopRecordingUITimer()
                 self?.soundIntensityIndicatorHeight.constant = 0
 
@@ -557,7 +556,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 segmentBoundaryHandler: { [weak self] in
                     // print("Successfully executed playback on segment boundary handler")
                     DispatchQueue.main.async {
-                        if let segment = self?.expression.getSegment(type: .current), segment.getText().count > 0, let range = self?.expression.getSegmentTextRange(of: segment) {
+                        if let segment = self?.expression.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = self?.expression.getSegmentTextRange(of: segment) {
                             self?.updateUIText(range: range)
                         }
                     }
@@ -1029,7 +1028,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 //        },
 //        segmentBoundaryHandler: { [weak self] in
 //            // print("Successfully executed playback on segment boundary handler")
-//            if let segment = self?.expression.getSegment(type: .current), segment.getText().count > 0, let range = self?.expression.getSegmentTextRange(of: segment) {
+//            if let segment = self?.expression.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = self?.expression.getSegmentTextRange(of: segment) {
 //                self?.updateUIText(range: range)
 //            }
 //        }, onFinishHandler: { [weak self] in
@@ -1067,7 +1066,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 //        },
 //        segmentBoundaryHandler: { [weak self] in
 //            // print("Successfully executed playback on segment boundary handler")
-//            if let segment = self?.expression.getSegment(type: .current), segment.getText().count > 0, let range = self?.expression.getSegmentTextRange(of: segment) {
+//            if let segment = self?.expression.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = self?.expression.getSegmentTextRange(of: segment) {
 //                self?.updateUIText(range: range)
 //            }
 //        }, onFinishHandler: { [weak self] in
