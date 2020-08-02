@@ -21,7 +21,8 @@ public final class SoundEffectEngine: NSObject {
     var errorPlayer: AVAudioPlayer? = nil
     var incorrectWakePhrasePlayer: AVAudioPlayer? = nil
     var playPlayer: AVAudioPlayer? = nil
-    var processingPlayer: AVAudioPlayer? = nil
+    var processingPlayer: AVQueuePlayer? = nil
+    var processingLooper: AVPlayerLooper? = nil
     var repeatPlayer: AVAudioPlayer? = nil
     var saveExpressionPlayer: AVAudioPlayer? = nil
     var startListeningPlayer: AVAudioPlayer? = nil
@@ -83,12 +84,10 @@ public final class SoundEffectEngine: NSObject {
         // Processing
         let processingPath = Bundle.main.path(forResource: "processing", ofType: "wav")!
         let processingURL = URL(fileURLWithPath: processingPath)
-
-        do {
-            processingPlayer = try AVAudioPlayer(contentsOf: processingURL)
-        } catch {
-            print("===== [Error] There was a problem importing 'Processing' sound =====")
-        }
+        let asset = AVAsset(url: processingURL)
+        let item = AVPlayerItem(asset: asset)
+        processingPlayer = AVQueuePlayer(playerItem: item)
+        processingLooper = AVPlayerLooper(player: processingPlayer!, templateItem: item)
         
         // Repeat
         let repeatPath = Bundle.main.path(forResource: "repeat", ofType: "wav")!
@@ -156,7 +155,8 @@ public final class SoundEffectEngine: NSObject {
     func error() { errorPlayer?.play() }
     func incorrectWakePhrase() { incorrectWakePhrasePlayer?.play() }
     func play() { playPlayer?.play() }
-    func processing() { processingPlayer?.play() }
+    func startProcessing() { processingPlayer?.play() }
+    func stopProcessing() { processingPlayer?.stop() }
     func repeatSegment() { repeatPlayer?.play() }
     func saveExpression() { saveExpressionPlayer?.play() }
     func startListening() { startListeningPlayer?.play() }

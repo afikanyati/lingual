@@ -21,6 +21,7 @@ extension String {
         return self[min(fromIndex, length) ..< length]
     }
 
+    /// not including toIndex
     func substring(toIndex: Int) -> String {
         return self[0 ..< max(0, toIndex)]
     }

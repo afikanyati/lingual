@@ -12,6 +12,9 @@ import AVFoundation
 import NaturalLanguage
 
 let DEFAULT_USE_ON_DEVICE_RECOGNITION = true
+let MALE_LOWEST_VOICED_SPEECH_FREQUENCY: Double = 82
+let FEMALE_HIGHEST_VOICED_SPEECH_FREQUENCY: Double = 1047
+let MIN_SEED_INTENSITY_POINTS = 15
 let AVATAR_URL = "https://firebasestorage.googleapis.com/v0/b/afika-nyati-website.appspot.com/o/resume%2Fafika.jpg?alt=media&token=f1d32c1d-07b4-48b0-abf9-2200290645c5"
 
 // MARK: - ViewController
@@ -32,8 +35,11 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     var useOnDeviceRecognition = DEFAULT_USE_ON_DEVICE_RECOGNITION
     var numAppSessions = 0
     let wakePhrase = "rise and shine"
+    var isListeningForVolume = false
     var UITimer: Timer?
     var savedMessageTimer: Timer?
+    var volumeListeningRateTimer: Timer?
+    var stopListeningForVolumeTimer: Timer?
     var onExpressionListenUpdate: (() -> Void)?
     var onExpressionEchoFinish: (() -> Void)?
     var onExpressionEchoUpdate: ((_ range: NSRange) -> Void)?
@@ -47,7 +53,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     static let STOP_EXPRESSION_LABEL = "Stop Expression"
     
     // MARK: - General Audio Properties
-    var session = AVAudioSession.sharedInstance()
+    @objc dynamic var session = AVAudioSession.sharedInstance()
     lazy var expression: Expression = {
         return self.createNewExpression()
     }()
@@ -67,16 +73,18 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             estimationStrategy: .yin
         )
         let pitchEngine = PitchEngine(config: config, delegate: self)
-        pitchEngine.levelThreshold = minDb
+        pitchEngine.levelThreshold = minPower
         return pitchEngine
     }()
+    private var soundIntensityStream = [SoundIntensityDatum]()
+    private var pitchStream = [PitchDatum]()
     
     // MARK: - Speech Synthesis Properties
     let speechSynthesizer = AVSpeechSynthesizer()
     var synthesizerVoice : AVSpeechSynthesisVoice?
     
     // MARK: - Pitch Recognition Properties
-    let minDb: Float = -160.0
+    let minPower: Float = -160.0
     
     // MARK: - ViewController Lifecycle
     
@@ -104,18 +112,29 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         
         // Start listening for wake word
         configureListeningForWakePhrase()
+        
+        session.addObserver(
+            self, forKeyPath: #keyPath(AVAudioSession.outputVolume),
+            options: [.old, .new],
+            context: nil
+        )
     }
     
     // MARK: - Inactive
     func activateApp() {
         appActivated = true
         setActiveUI(as: true)
+        
+        // clear pitch and volume streams
+        self.pitchStream = [PitchDatum]()
+        self.soundIntensityStream = [SoundIntensityDatum]()
 
+        // start listening for voice commands
         expression.startListeningForVoiceCommands(
-            soundIntensityHandler: { intensity in
-                if let intensity = intensity {
+            soundIntensityHandler: { power in
+                if let power = power {
                     DispatchQueue.main.async {
-                        let height = CGFloat(intensity) * self.view.safeAreaLayoutGuide.layoutFrame.height
+                        let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
                         let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
                         self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
                     }
@@ -147,8 +166,10 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         session = AVAudioSession.sharedInstance()
 
         do {
-            try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.allowBluetooth, .defaultToSpeaker])
-            try session.setPreferredSampleRate(48000)
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .defaultToSpeaker, .duckOthers])
+            try session.setActive(true)
+        } catch let error as NSError {
+            print("===== There was an error requesting permissions to record audio or setting session category: \(error.localizedDescription) =====")
         } catch {
             print("===== There was an error requesting permissions to record audio or setting session category =====")
         }
@@ -295,7 +316,6 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             DispatchQueue.main.async {
                 self?.updateUIText()
                 self?.recordingButton.setTitle(ViewController.START_EXPRESSION_LABEL, for: .normal)
-                self?.navigationItem.leftBarButtonItem = nil
                 self?.setAudioButtonsVisibility(visible: true)
                 self?.stopRecordingUITimer()
                 self?.soundIntensityIndicatorHeight.constant = 0
@@ -333,8 +353,25 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         if expression.isPlayingExpression {
             expression.stop()
         }
-
-        self.expression = createNewExpression()
+        
+        if expression.isListeningForCommands || expression.isListeningForSpeech {
+            expression.stopListeningForSpeech() {
+                self.expression = self.createNewExpression()
+                self.expression.startListeningForVoiceCommands(
+                    soundIntensityHandler: { power in
+                        if let power = power {
+                            DispatchQueue.main.async {
+                                let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
+                                let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
+                                self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+                            }
+                        }
+                    }
+                )
+            }
+        } else {
+            self.expression = self.createNewExpression()
+        }
     }
     
     func requestPermissions() {
@@ -434,7 +471,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             vc: self,
             filename: "expression-\(UUID().uuidString)",
             speaker: Speaker(name: "Afika Nyati", avatarURL: URL(string: AVATAR_URL)!, vc: self),
-            minDb: minDb,
+            minPower: minPower,
             withOnDeviceRecognition: useOnDeviceRecognition,
             withTemporalSuggestions: false,
             withPunctuationSuggestions: true,
@@ -512,10 +549,10 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 print("===== Start Recording =====")
                 recordingButton.setTitle(ViewController.STOP_EXPRESSION_LABEL, for: .normal)
                 self.savedMessageTimer?.invalidate()
-                expression.startListeningForSpeech(soundIntensityHandler: { intensity in
-                    if let intensity = intensity {
+                expression.startListeningForSpeech(soundIntensityHandler: { power in
+                    if let power = power {
                         DispatchQueue.main.async {
-                            let height = CGFloat(intensity) * self.view.safeAreaLayoutGuide.layoutFrame.height
+                            let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
                             let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
                             self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
                         }
@@ -527,6 +564,17 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 print("===== Stop Recording =====")
                 expression.stopListeningForSpeech() {[weak self] in
                     self?.onExpressionListenStop!()
+                    self?.expression.startListeningForVoiceCommands(
+                        soundIntensityHandler: { power in
+                            if let power = power {
+                                DispatchQueue.main.async {
+                                    let height = CGFloat(Utils.normalizedPower(power: power, minPower: self!.minPower)) * self!.view.safeAreaLayoutGuide.layoutFrame.height
+                                    let soundIntensityHeight: CGFloat = CGFloat(min(height, self!.view.safeAreaLayoutGuide.layoutFrame.height))
+                                    self?.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+                                }
+                            }
+                        }
+                    )
                 }
             }
         }
@@ -703,9 +751,11 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             self.request!.append(buffer)
             
             DispatchQueue.main.async {
-                let soundIntensity = Utils.computeNormalizedSoundIntensity(buffer: buffer, minDb: self.minDb)
-                if let soundIntensity = soundIntensity {
-                    let soundIntensityHeight = CGFloat(min((CGFloat(soundIntensity) * self.view.safeAreaLayoutGuide.layoutFrame.height), self.view.safeAreaLayoutGuide.layoutFrame.height))
+                let power = Utils.computeSoundIntensity(buffer: buffer)
+                if let power = power {
+                    let soundIntensityDatum = SoundIntensityDatum(date: Date(), power: power)
+                    self.soundIntensityStream.append(soundIntensityDatum)
+                    let soundIntensityHeight = CGFloat(min((CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height), self.view.safeAreaLayoutGuide.layoutFrame.height))
                     self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
                 }
             }
@@ -716,13 +766,6 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             try audioEngine.start()
         } catch let error {
             print("[Error] There was a problem starting speech recognition: \(error.localizedDescription)")
-        }
-        
-        do {
-            // it’s generally preferable to defer this call until your app begins audio playback
-            try session.setActive(true)
-        } catch {
-            print("===== Unable to activate audio session =====")
         }
         
         guard let myRecognizer = SFSpeechRecognizer() else {
@@ -746,7 +789,6 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     
     func stopListeningForWakePhrase(onStopHandler: (() -> Void)? = nil) {
         print("===== Stopping Listening for Wake Phrase =====")
-        soundIntensityIndicatorHeight.constant = 0
         
         let node = audioEngine.inputNode
         node.removeTap(onBus: self.recordBus)
@@ -759,10 +801,188 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         // When this is not in the main thread, the recognition task doesn't end correctly
         // which prevents us from receiving the final transcription.
         DispatchQueue.main.async {
+            self.soundIntensityIndicatorHeight.constant = 0
             self.recognitionTask!.finish() // don't wrap in if statement because it is sometimes not .running
             self.request!.endAudio() // don't add a request = nil because it results in request not being there sometimes.
             self.pitchEngine.stop()
             onStopHandler?()
+        }
+    }
+    
+    // MARK: - Volume Adjuster Methods
+    
+    func startListeningForVolume() {
+        print("===== Starting Listening for Volume =====")
+        print("volume: ", AVAudioSession.sharedInstance().outputVolume)
+        // set listening flag to true
+        
+        
+        // Play Sound
+        soundEngine.startListening()
+        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+            soundEngine.startProcessing()
+        }
+        
+        // clear pitch and sound intensity streams
+        self.pitchStream = [PitchDatum]()
+        self.soundIntensityStream = [SoundIntensityDatum]()
+        
+        // must be placed before we start listening for wake phrase
+        // if pitch engine begins first, we are for some reason unable to do speech recognition
+        pitchEngine.start()
+
+        let node = audioEngine.inputNode
+        let recordingFormat = node.outputFormat(forBus: recordBus)
+        
+        node.installTap(onBus: recordBus, bufferSize: 1024, format: recordingFormat) { [unowned self] (buffer, _) in
+            DispatchQueue.main.async {
+                if !self.isListeningForVolume {
+                    self.isListeningForVolume = true
+                    self.stopListeningForVolumeTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { timer in
+                        self.stopListeningForVolume() {
+                            self.expression.startListeningForVoiceCommands(
+                                soundIntensityHandler: { power in
+                                    if let power = power {
+                                        DispatchQueue.main.async {
+                                            let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
+                                            let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
+                                            self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+
+                let power = Utils.computeSoundIntensity(buffer: buffer)
+                if let power = power {
+                    let soundIntensityDatum = SoundIntensityDatum(date: Date(), power: power)
+                    self.soundIntensityStream.append(soundIntensityDatum)
+                    let soundIntensityHeight = CGFloat(min((CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height), self.view.safeAreaLayoutGuide.layoutFrame.height))
+                    self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+                    
+                    if soundIntensityDatum.power > self.getBackgroundNoise() + Utils.TALKING_POWER_DELTA && self.isListeningForVolume && self.stopListeningForVolumeTimer != nil {
+                        // continue if power still coming through
+                        self.stopListeningForVolumeTimer?.invalidate()
+                        self.stopListeningForVolumeTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { timer in
+                            if self.stopListeningForVolumeTimer != nil {
+                                self.stopListeningForVolume() {
+                                    self.expression.startListeningForVoiceCommands(
+                                        soundIntensityHandler: { power in
+                                            if let power = power {
+                                                DispatchQueue.main.async {
+                                                    let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
+                                                    let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
+                                                    self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        audioEngine.prepare()
+        do {
+            try audioEngine.start()
+        } catch let error {
+            print("[Error] There was a problem starting speech recognition: \(error.localizedDescription)")
+        }
+    }
+    
+    func stopListeningForVolume(onStopHandler: (() -> Void)? = nil) {
+        print("===== Stopping Listening for Volume =====")
+
+        // Play Sound
+        soundEngine.stopProcessing()
+        soundEngine.stopListening()
+    
+        
+        
+        let node = audioEngine.inputNode
+        node.removeTap(onBus: self.recordBus)
+
+        audioEngine.stop()
+        // We instantiate new audio engine in case headphones have been added or removed
+        // Removing an audio node will create a broken graph: https://developer.apple.com/documentation/avfoundation/avaudioengine
+        audioEngine = AVAudioEngine()
+
+        DispatchQueue.main.async {
+            self.soundIntensityIndicatorHeight.constant = 0
+            self.isListeningForVolume = false
+            self.stopListeningForVolumeTimer = nil
+            self.pitchEngine.stop()
+            print("volume: ", AVAudioSession.sharedInstance().outputVolume)
+            onStopHandler?()
+        }
+    }
+    
+    // MARK: - Getters
+    
+    func getBackgroundNoise() -> Double {
+        var numDatum: Double = 0
+        
+        var backgroundNoiseSum: Double = 0
+
+        for datum in self.soundIntensityStream {
+            if datum.power != -Double.infinity {
+                backgroundNoiseSum += datum.power
+                numDatum += 1
+            }
+        }
+        
+        if numDatum == 0 {
+            return Double.infinity
+        }
+        
+        return backgroundNoiseSum / numDatum
+    }
+    
+    func getPitch() -> Double {
+        let numPitches: Double = Double(self.pitchStream.count)
+        
+        if numPitches == 0 {
+            return Utils.UNKNOWN
+        }
+        var pitchSum: Double = 0
+
+        for datum in self.pitchStream {
+            pitchSum += datum.pitch.frequency
+        }
+        
+        return pitchSum / numPitches
+    }
+    
+    // MARK: - Key-Value Observer
+    
+    override func observeValue(forKeyPath keyPath: String?,
+                               of object: Any?,
+                               change: [NSKeyValueChangeKey : Any]?,
+                               context: UnsafeMutableRawPointer?) {
+        if keyPath == #keyPath(AVAudioSession.outputVolume) {
+            print("Output Volume Changed!!!JSK!!!!! ")
+
+            var outputVolume: Float
+            if let volume = change?[.oldKey] as? Float {
+                outputVolume = volume
+                print("\told volume: ", outputVolume)
+            } else {
+                outputVolume = -1
+                print("\told volume: ", outputVolume)
+            }
+            // Get the status change from the change dictionary
+            if let volume = change?[.newKey] as? Float {
+                outputVolume = volume
+                print("\tnew volume: ", outputVolume, session.outputVolume)
+            } else {
+                outputVolume = -1
+                print("\tnew volume: ", outputVolume, session.outputVolume)
+            }
         }
     }
     
@@ -881,15 +1101,54 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     // MARK: - Pitch Recognition Delegates
     func pitchEngine(_ pitchEngine: PitchEngine, didReceivePitch pitch: Pitch) {
         // TODO: Timing
-        // print("Pitch { \n\tpitch: \(pitch.note.string) \n\tfrequency: \(pitch.frequency) \n}")
         
-        if pitch.frequency >= 65 {
-            if !self.appActivated && pitch.note.octave >= 4 {
-                // is female
-                expression.setGender(to: .female)
-            } else if !self.appActivated {
-                // is male
-                expression.setGender(to: .male)
+        if let lastSoundIntensity = self.soundIntensityStream.last, pitch.frequency >= MALE_LOWEST_VOICED_SPEECH_FREQUENCY && pitch.frequency <= FEMALE_HIGHEST_VOICED_SPEECH_FREQUENCY && self.getBackgroundNoise() != Double.infinity && self.soundIntensityStream.count > MIN_SEED_INTENSITY_POINTS && lastSoundIntensity.power > self.getBackgroundNoise() + Utils.TALKING_POWER_DELTA {
+            // Add to pitch stream
+            let pitchDatum = PitchDatum(date: Date(), pitch: pitch)
+            self.pitchStream.append(pitchDatum)
+            
+            // Set speaker pitch
+            if !self.appActivated {
+                do {
+                    
+                    if expression.speaker.pitch == nil {
+                        print("===== Base vocal frequency detected =====")
+                        // when uncommented, it stops system from hearing wake phrase
+//                        let rate: Float = 0.5
+//                        let volume = AVAudioSession.sharedInstance().outputVolume
+//                        let voice = Utils.getSynthesizerVoice(
+//                            withGender: pitch.note.octave >= 4 ? .female : .male,
+//                            vc: self
+//                        )
+//                        let synthesizerItem = SynthesizerItem(
+//                            synthesizer: self.speechSynthesizer,
+//                            text: "Base vocal frequency detected",
+//                            voice: voice,
+//                            rate: rate,
+//                            volume: volume
+//                        )
+//
+//                        Utils.runSpeechSynthesizer(item: synthesizerItem)
+                    }
+
+                    let avgPitch = try Pitch(frequency: self.getPitch())
+                    expression.setSpeakerPitch(to: avgPitch)
+                } catch {
+                    fatalError("===== [Error] There was a problem calculating average pitch =====")
+                }
+            }
+        }
+        
+        if let lastSoundIntensity = self.soundIntensityStream.last, pitch.frequency >= MALE_LOWEST_VOICED_SPEECH_FREQUENCY && pitch.frequency <= FEMALE_HIGHEST_VOICED_SPEECH_FREQUENCY && self.getBackgroundNoise() != Double.infinity && self.soundIntensityStream.count > 0 && lastSoundIntensity.power > self.getBackgroundNoise() + Utils.VOLUME_POWER_DELTA {
+            // print("power: ", lastSoundIntensity.power, self.getBackgroundNoise(), Utils.VOLUME_POWER_DELTA)
+            if self.isListeningForVolume && self.volumeListeningRateTimer == nil {
+                
+                Utils.setMainVolume(to: Float(Utils.normalizePitch(incidentPitch: pitch, basePitch: self.expression.speaker.pitch!)))
+                // MAKE SURE TO ALSO CHANGE VOLUME OF SOUND EFFECTS
+                self.volumeListeningRateTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: false) { timer in
+                    self.volumeListeningRateTimer = nil
+                    // 0.2 interval seems good
+                }
             }
         }
     }
@@ -992,15 +1251,25 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 // Expected Result: There should be a new paragraph created between "This is beautiful" and "you are the best". "You" should be capitalized and there should be no leading space on second sentence
 // Warning: Sometimes the transcript returns back a starting time for "you" that happens well before it is uttered. There is no control of this unfortunately
 //
-// 17) Test Punctuation and Temporal Suggestions Active
+// 17) Test Punctuation Suggestion: End on Negative Adjective
+// Instructions: Utter the following: "This is not beautiful". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. "you are the word".
+// Expected Result: There should be a new paragraph created between "This is not beautiful" and "you are the worst". "You" should be capitalized and there should be no leading space on second sentence
+// Warning: Sometimes the transcript returns back a starting time for "you" that happens well before it is uttered. There is no control of this unfortunately
+//
+// 18) Test Punctuation Suggestion: End on Negative Quantifier Adjective
+// Instructions: Utter the following: "This is so beautiful". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. "Can I have it?". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds.
+// Expected Result: There should be a new paragraph created between "This is not beautiful" and "Can I have it?". "Can" should be capitalized and there should be a question mark at the end of the sentence.
+// Warning: Sometimes the transcript returns back a starting time for "can" that happens well before it is uttered. There is no control of this unfortunately
+//
+// 19) Test Punctuation and Temporal Suggestions Active
 // Instructions: In createNewExpression() method, set 'withTemporalSuggestions' and 'withPunctuationSuggestions' to true. And open application
 // Expected Result:  You should see a 'Conflicting View Modes' error dialog telling you it's selected punctuation suggestions.
 //
-// 18) Test Change Audio Inputs
+// 20) Test Change Audio Inputs
 // Instructions: Start the app without earphones connected. While on the Wake Phrase Screen, connect earphones. Utter wake phrase.
 // Expected Result: The wake phrase should be registered without error
 //
-// 19) Test Play Sentence
+// 21) Test Play Sentence
 //
 // ===== Code Needed =====
 // expression.playSentence(number: 1)
@@ -1009,7 +1278,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 // Instructions: Place code in an area where it maybe be executable. Utter the following: "This is the first sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the second sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the third sentence".
 // Expected Result: System should play back: "This is the second sentence".
 //
-// 20) Test Trim Expression: Permanent
+// 22) Test Trim Expression: Permanent
 //
 // ===== Code Needed =====
 //expression.trimExpression(keeping: expression.getSentenceDetails(number: 1)!.timeRange, permanent: true) {
@@ -1047,7 +1316,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 // Instructions: Place code in an area where it maybe be executable. Utter the following: "This is the first sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the second sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the third sentence".
 // Expected Result: System should play back: "This is the second sentence".
 //
-// 21) Test Trim Expression: Not Permanent
+// 23) Test Trim Expression: Not Permanent
 //
 // ===== Code Needed =====
 //expression.trimExpression(keeping: expression.getSentenceDetails(number: 1)!.timeRange, permanent: false) {
@@ -1085,7 +1354,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 // Instructions: Place code in an area where it maybe be executable. Utter the following: "This is the first sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the second sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the third sentence".
 // Expected Result: System should play back: "This is the second sentence".
 //
-// 22) Test Extract Sentence
+// 24) Test Extract Sentence
 //
 // ===== Code Needed =====
 //expression.extractSentence(number: 1) { sentence in
@@ -1100,7 +1369,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 // Instructions: Place code in an area where it maybe be executable. Utter the following: "This is the first sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the second sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the third sentence".
 // Expected Result: System should play back: "This is the second sentence".
 //
-// 23) Duplicate Expression
+// 25) Duplicate Expression
 //
 // ===== Code Needed =====
 //expression.duplicate() {expression in
@@ -1113,4 +1382,10 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 //
 // Instructions: Place code in an area where it maybe be executable. Record any expression.
 // Expected Result: System should play back your expression.
+//
+// 26) Voice Commands
+//
+// Instructions: Open app and utter wake phrase. Start expression by uttering "Start Expression". Speak an expression. End expression by uttering "Stop Expression". Play expression by uttering "Play Expression".
+// Expected Result: Your expression should playback *** without *** 'Stop Expression' in it.
+//
 //

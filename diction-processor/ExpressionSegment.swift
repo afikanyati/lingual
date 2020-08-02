@@ -11,7 +11,6 @@ import Speech
 import AVFoundation
 import NaturalLanguage
 
-let EMPHASIS_DELTA: Double = 0.15
 // https://remotepossibilities.wordpress.com/2013/03/10/when-you-speak-how-often-and-how-long-should-you-pause-the-answer-try-1-2-3/
 let COMMA_PAUSE_DURATION_MULTIPLIER: Double = 2
 let NEW_SENTENCE_PAUSE_DURATION_MULTIPLIER: Double = 4
@@ -38,23 +37,23 @@ class ExpressionSegment: AVCompositionTrackSegment {
     /// A stem form of a word token, if known.
     private var lemma: NLTag?
     /// The average background noise at the time of recording.
-    private var backgroundNoise: Double = Double(Utils.UNKNOWN)
+    private var backgroundNoise: Double = Double.infinity
     /// The sound intensity of utterance at the time of recording.
-    private var soundIntensity: Double = Double(Utils.UNKNOWN)
-    private var avgExpressionSoundIntensity: Double {
+    private var power: Double = Double.infinity
+    private var avgExpressionPower: Double {
         if let expr = self.expression {
-            return expr.getSoundIntensity()
+            return expr.getPower()
         }
         
-        return Utils.UNKNOWN
+        return Double.infinity
     }
     /// Specifies information related to the sentence of the expression segment is a member of.
     private var sentence = Sentence(number: Int(Utils.UNKNOWN), text: "", timeRange: CMTimeRange.zero)
     /// Scores text as positive, negative, or neutral based on its sentiment polarity.
     private var sentimentScore: [ScaleUnitType:Float] = [
-        .word: Float(Utils.UNKNOWN),
-        .sentence: Float(Utils.UNKNOWN),
-        .all: Float(Utils.UNKNOWN)
+        .word: Float.infinity,
+        .sentence: Float.infinity,
+        .all: Float.infinity
     ]
     /// The pitch at which segment was uttered
     private var pitch: Pitch?
@@ -127,7 +126,7 @@ class ExpressionSegment: AVCompositionTrackSegment {
         )
         
         if let expression = self.expression, AVAudioSession.isHeadphonesConnected && utterPunctuationSuggestion && self.suggestsNewParagraph() {
-            let rate: Float = 0.5
+            let rate: Float = 0.52
             let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
 
             let synthesizerItem = SynthesizerItem(
@@ -139,7 +138,7 @@ class ExpressionSegment: AVCompositionTrackSegment {
             )
             expression.synthesizerQueue.enqueue(synthesizerItem)
         } else if let expression = self.expression, AVAudioSession.isHeadphonesConnected && expression.withPunctuationSuggestions, utterPunctuationSuggestion && self.suggestsNewSentence() {
-            let rate: Float = 0.5
+            let rate: Float = 0.52
             let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
 
             let synthesizerItem = SynthesizerItem(
@@ -155,7 +154,7 @@ class ExpressionSegment: AVCompositionTrackSegment {
     
     // update for new properties
     override var description: String {
-        return "ExpressionSegment{\n\tword: '\(self.word)' \n\tpitch: \(self.pitch?.note.string ?? "nil") \n\ttimeRange: (start: \(self.timeMapping.source.start), end: \(self.timeMapping.source.end.seconds), \n\tduration: \(self.timeMapping.source.duration.seconds)) \n\tphoneticallySimilarWords: \(String(describing: self.phoneticallySimilarWords)) \n\ttokenType: \(self.tokenType ?? NLTag(rawValue: "nil")) \n\tlexicalClass: \(self.lexicalClass ?? NLTag(rawValue: "nil")) \n\tnameType: \(self.nameType ?? NLTag(rawValue: "nil")) \n\tlemma: \(self.lemma ?? NLTag(rawValue: "nil")) \n\tbackgroundNoise: \(self.backgroundNoise) \n\tsoundIntensity: \(self.soundIntensity) \n\tavgExpressionSoundIntensity: \(self.avgExpressionSoundIntensity) \n\t sentence: \(self.sentence) \n\tsentimentScore: \(String(describing: self.sentimentScore)) \n\tisSilence: \(self.isSilence()) \n\tisPunctuation:\(self.isPunctuation()) \n\tisEmphasized: \(self.isEmphasized()) \n\tisNumber: \(self.isNumber()) \n\tisHomophone: \(self.isHomophone()) \n\tisSentenceTerminator: \(self.isSentenceTerminator()) \n\tisVoiceCommandWord: \(self.voiceCommandWord) \n\tavgPauseDuration: \(self.avgPauseDuration) \n\tspeakingRate: \(self.speakingRate)\n}"
+        return "ExpressionSegment{\n\tword: '\(self.word)' \n\tpitch: \(self.pitch?.note.string ?? "nil") \n\ttimeRange: (start: \(self.timeMapping.source.start), end: \(self.timeMapping.source.end.seconds), \n\tduration: \(self.timeMapping.source.duration.seconds)) \n\tphoneticallySimilarWords: \(String(describing: self.phoneticallySimilarWords)) \n\ttokenType: \(self.tokenType ?? NLTag(rawValue: "nil")) \n\tlexicalClass: \(self.lexicalClass ?? NLTag(rawValue: "nil")) \n\tnameType: \(self.nameType ?? NLTag(rawValue: "nil")) \n\tlemma: \(self.lemma ?? NLTag(rawValue: "nil")) \n\tbackgroundNoise: \(self.backgroundNoise) \n\tpower: \(self.power) \n\tavgExpressionPower: \(self.avgExpressionPower) \n\t sentence: \(self.sentence) \n\tsentimentScore: \(String(describing: self.sentimentScore)) \n\tisSilence: \(self.isSilence()) \n\tisPunctuation: \(self.isPunctuation()) \n\tisEmphasized: \(self.isEmphasized()) \n\tisNumber: \(self.isNumber()) \n\tisHomophone: \(self.isHomophone()) \n\tisSentenceTerminator: \(self.isSentenceTerminator()) \n\tisVoiceCommandWord: \(self.voiceCommandWord) \n\tavgPauseDuration: \(self.avgPauseDuration) \n\tspeakingRate: \(self.speakingRate)\n}"
     }
     
     static func ==(_ firstSegment: ExpressionSegment, _ secondSegment: ExpressionSegment) -> Bool {
@@ -178,7 +177,7 @@ class ExpressionSegment: AVCompositionTrackSegment {
             firstSegment.getLemma() == secondSegment.getLemma() &&
             firstSegment.getSentiment() == secondSegment.getSentiment() &&
             firstSegment.getBackgroundNoise() == secondSegment.getBackgroundNoise() &&
-            firstSegment.getSoundIntensity() == secondSegment.getSoundIntensity() &&
+            firstSegment.getPower() == secondSegment.getPower() &&
             firstSegment.getSentence() == secondSegment.getSentence() &&
             firstSegment.getSpeakingRate() == secondSegment.getSpeakingRate() &&
             firstSegment.getAvgPauseDuration() == secondSegment.getAvgPauseDuration()
@@ -198,9 +197,8 @@ class ExpressionSegment: AVCompositionTrackSegment {
         var capitalizeWord = false
         var exclaimWord = false
         var removeLeadingSpace = false
-        var previousWordIsPunctuation = false
-        var previousWordLexicalClass: NLTag?
-        var previousWord = ""
+        var previousWordIsSentenceTerminator = false
+        var previousWordIsValidLastSentenceWord = false
         var i = 1
         if let expression = self.expression, self.index != Int(Utils.UNKNOWN) && self.index > 0 && expression.expressionSegments.count > self.index {
             while self.index - i >= 0 {
@@ -210,49 +208,12 @@ class ExpressionSegment: AVCompositionTrackSegment {
                     capitalizeWord = previousSegment.isSentenceTerminator(withPunctuationSuggestions: withPunctuationSuggestions)
                     removeLeadingSpace = withPunctuationSuggestions && previousSegment.suggestsNewParagraph()
                 } else {
-                    previousWordIsPunctuation = previousSegment.isPunctuation()
-                    previousWordLexicalClass = previousSegment.getLexicalClass()
-                    previousWord = previousSegment.word
+                    previousWordIsSentenceTerminator = previousSegment.isSentenceTerminator(withPunctuationSuggestions: withPunctuationSuggestions)
+                    previousWordIsValidLastSentenceWord = previousSegment.isValidSentenceLastWord()
                     exclaimWord = previousSegment.isEmphasized()
                     break
                 }
             }
-        }
-        
-        var previousPreviousWordLexicalClass: NLTag?
-//        var previousPreviousWord: String
-        var j = i + 1
-        if let expression = self.expression, self.index != Int(Utils.UNKNOWN) && self.index > 1 && expression.expressionSegments.count > self.index {
-            while self.index - j >= 0 {
-                let previousPreviousSegment = expression.expressionSegments[self.index - j]
-                if previousPreviousSegment.isSilence() {
-                    j += 1
-                } else {
-                    previousPreviousWordLexicalClass = previousPreviousSegment.getLexicalClass()
-//                    previousPreviousWord = previousPreviousSegment.word
-                    break
-                }
-            }
-        }
-        
-        var previousWordIsValidLastSentenceWord = false
-        if let previousPreviousWordLexicalClass = previousPreviousWordLexicalClass, previousPreviousWordLexicalClass == .verb, let previousWordLexicalClass = previousWordLexicalClass {
-            // adjectives are allowed
-            // e.g. that is beautiful
-            // we can end sentence after "beautiful"
-            // "is" is a verb
-            // demonstratives are allowed too
-            // I am doing this
-            // "this" is a demonstrative
-            // we can end after "this"
-            previousWordIsValidLastSentenceWord = previousWordLexicalClass != .conjunction && previousWordLexicalClass != .preposition && (previousWordLexicalClass != .determiner || (previousWordLexicalClass == .determiner && previousWord.count > 0 && (Determiners.isDemonstrative(previousWord) || Determiners.isPossessivePronoun(previousWord))))
-        } else if let previousWordLexicalClass = previousWordLexicalClass {
-            // e.g. that is a beautifl
-            // we can't end sentence after beautiful
-            // "a" is a determiner, more specifically an article
-            // we can't end on an article
-            previousWordIsValidLastSentenceWord = previousWordLexicalClass != .conjunction && previousWordLexicalClass != .preposition && previousWordLexicalClass != .adjective && (previousWordLexicalClass != .determiner || (previousWordLexicalClass == .determiner && previousWord.count > 0 && (Determiners.isDemonstrative(previousWord) || Determiners.isPossessivePronoun(previousWord))))
-            
         }
         
         var nextWordIsConjunction = false
@@ -267,17 +228,17 @@ class ExpressionSegment: AVCompositionTrackSegment {
         if self.isSilence() && withPunctuationSuggestions && avgPauseDuration != Utils.UNKNOWN {
             // no need for self.word to be injected in string because
             // its the empty string for silence
-            if previousWordIsPunctuation && previousWordIsValidLastSentenceWord && suggestsNewParagraph() {
+            if previousWordIsSentenceTerminator && suggestsNewParagraph() {
                 text += "\n\n"
-            } else if !previousWordIsPunctuation && previousWordIsValidLastSentenceWord && !nextWordIsPunctuation && suggestsNewParagraph() {
+            } else if previousWordIsValidLastSentenceWord && !nextWordIsPunctuation && suggestsNewParagraph() {
                 let terminator = self.sentence.text.count > 0 && Utils.isQuestion(sentence: self.sentence.text) ? "?" : "."
                 let exclaimedTerminator = self.sentence.text.count > 0 && Utils.isQuestion(sentence: self.sentence.text) ? "?!" : "!"
                 text += "\(exclaimWord ? exclaimedTerminator : terminator)\n\n"
-            } else if !previousWordIsPunctuation && previousWordIsValidLastSentenceWord && !nextWordIsPunctuation && suggestsNewSentence() {
+            } else if previousWordIsValidLastSentenceWord && !nextWordIsPunctuation && suggestsNewSentence() {
                 let terminator = Utils.isQuestion(sentence: self.sentence.text) ? "?" : "."
                 let exclaimedTerminator = Utils.isQuestion(sentence: self.sentence.text) ? "?!" : "!"
                 text += "\(exclaimWord ? exclaimedTerminator : terminator)"
-            } else if !previousWordIsPunctuation && nextWordIsConjunction && !nextWordIsPunctuation && suggestsNewComma() {
+            } else if !previousWordIsSentenceTerminator && nextWordIsConjunction && !nextWordIsPunctuation && suggestsNewComma() {
                 text += ","
             }
         }
@@ -338,8 +299,8 @@ class ExpressionSegment: AVCompositionTrackSegment {
     }
     
     func isEmphasized() -> Bool {
-        if self.soundIntensity != Double(Utils.UNKNOWN) && self.avgExpressionSoundIntensity != Double(Utils.UNKNOWN) {
-            return self.soundIntensity > self.avgExpressionSoundIntensity + EMPHASIS_DELTA
+        if self.power != Double.infinity && self.avgExpressionPower != Double.infinity {
+            return self.power > self.avgExpressionPower + Utils.EMPHASIS_POWER_DELTA
         }
         
         return false
@@ -357,15 +318,85 @@ class ExpressionSegment: AVCompositionTrackSegment {
         return self.voiceCommandWord
     }
     
+    func isValidSentenceLastWord() -> Bool {
+        var previousWordLexicalClass: NLTag?
+        var previousWord = ""
+        var i = 1
+        if let expression = self.expression, self.index != Int(Utils.UNKNOWN) && self.index > 0 && expression.expressionSegments.count > self.index {
+            while self.index - i >= 0 {
+                let previousSegment = expression.expressionSegments[self.index - i]
+                if previousSegment.isSilence() {
+                    i += 1
+                } else {
+                    previousWordLexicalClass = previousSegment.getLexicalClass()
+                    previousWord = previousSegment.word
+                    break
+                }
+            }
+        }
+
+        var isValidSentenceLastWord = false
+        if let previousWordLexicalClass = previousWordLexicalClass, previousWordLexicalClass == .verb || (previousWordLexicalClass == .determiner && Determiners.isDemonstrative(previousWord)) || previousWordLexicalClass == .adverb, let lexicalClass = self.lexicalClass {
+            // adjectives are allowed
+            // e.g. it is beautiful
+            // we can end sentence after "beautiful"
+            // "is" is a verb
+            // e.g. it is not that beautiful
+            // we can end sentence after "beautiful"
+            // determiners are allowed too
+            // "that" is a determiner
+            // e.g. it is not beautiful
+            // adverbs are allowed too
+            // I am doing this
+            // "this" is a demonstrative
+            // we can end after "this"
+            isValidSentenceLastWord = lexicalClass != .conjunction && lexicalClass != .preposition && (lexicalClass != .determiner || (lexicalClass == .determiner && previousWord.count > 0 && (Determiners.isDemonstrative(self.word) || Determiners.isPossessivePronoun(self.word))))
+        } else if let lexicalClass = self.lexicalClass {
+            // e.g. that is a beautiful
+            // we can't end sentence after beautiful
+            // "a" is a determiner, more specifically an article
+            // we can't end on an article
+            isValidSentenceLastWord = lexicalClass != .conjunction && lexicalClass != .preposition && lexicalClass != .adjective && (lexicalClass != .determiner || (lexicalClass == .determiner && previousWord.count > 0 && (Determiners.isDemonstrative(self.word) || Determiners.isPossessivePronoun(self.word))))
+        }
+        
+        return isValidSentenceLastWord
+    }
+    
     func isSentenceTerminator(withPunctuationSuggestions: Bool = false) -> Bool {
+        var previousWordIsValidLastSentenceWord = false
+        var previousWordIsSentenceTerminator = false
+        var i = 1
+        if let expression = self.expression, self.index != Int(Utils.UNKNOWN) && self.index > 0 && expression.expressionSegments.count > self.index {
+            while self.index - i >= 0 {
+                let previousSegment = expression.expressionSegments[self.index - i]
+                if previousSegment.isSilence() {
+                    i += 1
+                } else {
+                    previousWordIsValidLastSentenceWord = previousSegment.isValidSentenceLastWord()
+                    previousWordIsSentenceTerminator = previousSegment.isPunctuation()
+                    break
+                }
+            }
+        }
+
         var nextWordIsPunctuation = false // If next segment is punctuation, don't show suggested punctuation.
         if let expression = self.expression, self.index != Int(Utils.UNKNOWN) && self.index + 1 < expression.expressionSegments.count  {
             let nextSegment = expression.expressionSegments[self.index + 1]
             nextWordIsPunctuation = nextSegment.isPunctuation()
         }
         
-        if withPunctuationSuggestions && (suggestsNewSentence() || suggestsNewParagraph()) && !nextWordIsPunctuation {
+        if withPunctuationSuggestions && self.isSilence() && (suggestsNewSentence() || suggestsNewParagraph()) && !nextWordIsPunctuation {
             return true
+        }
+        
+        if self.isSilence() && withPunctuationSuggestions && avgPauseDuration != Utils.UNKNOWN {
+            if previousWordIsSentenceTerminator && suggestsNewParagraph() {
+                return true
+            } else if previousWordIsValidLastSentenceWord && !nextWordIsPunctuation && suggestsNewParagraph() {
+                return true
+            } else if previousWordIsValidLastSentenceWord && !nextWordIsPunctuation && suggestsNewSentence() {
+                return true
+            }
         }
         
         return self.lexicalClass == .sentenceTerminator
@@ -411,12 +442,12 @@ class ExpressionSegment: AVCompositionTrackSegment {
         self.backgroundNoise = noise
     }
 
-    func getSoundIntensity() -> Double {
-        return self.soundIntensity
+    func getPower() -> Double {
+        return self.power
     }
     
-    func setSoundIntensity(intensity: Double) {
-        self.soundIntensity = intensity
+    func setPower(power: Double) {
+        self.power = power
     }
     
     func getSentence() -> Sentence {
@@ -493,8 +524,8 @@ class ExpressionSegment: AVCompositionTrackSegment {
         // Set segment index
         duplicateSegment.setIndex(index: self.index)
         
-        // Set soundIntensity
-        duplicateSegment.setSoundIntensity(intensity: self.soundIntensity)
+        // Set power
+        duplicateSegment.setPower(power: self.power)
         
         // Set pitch
         if let pitch = self.pitch {

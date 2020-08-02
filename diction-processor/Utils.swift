@@ -1,5 +1,5 @@
 //
-//  computeSoundIntensityHeight.swift
+//  Utils.swift
 //  diction-processor
 //
 //  Created by Afika Nyati on 7/3/20.
@@ -9,9 +9,119 @@
 import UIKit
 import Foundation
 import AVFoundation
+import MediaPlayer
 
 class Utils {
     static let UNKNOWN: Double = -1
+    static let SILENCE_SKIP_THRESHOLD = 0.1
+    static var TALKING_POWER_DELTA: Double {
+        if AVAudioSession.isHeadphonesConnected {
+            // With headphones, in a relatively empty, small room, near the window, using AirPods Pro mic
+            // the background noise read an average of -75dB
+            // when talking, the avg. power was -33dB
+            // ∆ = 42dB
+            // We use 30dB to give some wiggle room
+            return 30
+        }
+        
+        // Without headphones, in a relatively empty, small room, near the window, using iPhone SE mic, 30 cm away
+        // the background noise read an average of -41dB
+        // when talking, the avg. power was -25dB
+        // ∆ = 16dB
+        // We use 10dB to give some wiggle room
+        return 10
+    }
+    static var VOLUME_POWER_DELTA: Double {
+        if AVAudioSession.isHeadphonesConnected {
+            return 20
+        }
+
+        return 5
+    }
+    static var EMPHASIS_POWER_DELTA: Double {
+        if AVAudioSession.isHeadphonesConnected {
+            // With headphones, in a relatively empty, small room, near the window, using AirPods Pro mic
+            // the background noise read an average of -69.7dB
+            // when talking, the avg. power was -38.9dB
+            // when emphasizing, the power was -22.1dB
+            // ∆ = 16.8dB
+            // We use 16dB to give some wiggle room
+            return 16
+        }
+        
+        // Without headphones, in a relatively empty, small room, near the window, using iPhone SE mic, 30 cm away
+        // the background noise read an average of -35dB
+        // when talking, the avg. power was -28.9dB
+        // when emphasizing, the power was -23.5dB
+        // ∆ = 5.4dB
+        // We use 5dB to give some wiggle room
+        return 5
+    }
+    static var DISCRETE_VOLUME_DELTA: Float = 0.2
+    
+    static let pitchToFrequencyMap: [String : Double] = [
+        "C0": 16,
+        "D0": 18,
+        "E0": 21,
+        "F0": 22,
+        "G0": 25,
+        "A1": 28,
+        "B1": 31,
+        "C1": 33,
+        "D1": 37,
+        "E1": 41,
+        "F1": 44,
+        "G1": 49,
+        "A2": 55,
+        "B2": 62,
+        "C2": 65,
+        "D2": 73,
+        "E2": 82,
+        "F2": 87,
+        "G2": 98,
+        "A3": 110,
+        "B3": 123,
+        "C3": 131,
+        "D3": 147,
+        "E3": 165,
+        "F3": 175,
+        "G3": 196,
+        "A4": 220,
+        "B4": 247,
+        "C4": 262,
+        "D4": 294,
+        "E4": 330,
+        "F4": 349,
+        "G4": 392,
+        "A5": 440,
+        "B5": 494,
+        "C5": 523,
+        "D5": 587,
+        "E5": 659,
+        "F5": 698,
+        "G5": 784,
+        "A6": 880,
+        "B6": 988,
+        "C6": 1047,
+        "D6": 1175,
+        "E6": 1319,
+        "F6": 1397,
+        "G6": 1568,
+        "A7": 1760,
+        "B7": 1976,
+        "C7": 2093,
+        "D7": 2349,
+        "E7": 2637,
+        "F7": 2794,
+        "G7": 3136,
+        "A8": 3520,
+        "B8": 3951,
+        "C8": 4186,
+        "D8": 4699,
+        "E8": 5274,
+        "F8": 5588,
+        "G8": 6272
+    ]
     
     // MARK: - Factory Methods
     public static func trimExpression(expression: Expression, keeping: CMTimeRange, permanent: Bool = false, onCompletionHandler: @escaping (_ expression: Expression?) -> Void) {
@@ -220,8 +330,242 @@ class Utils {
             item.synthesizer.speak(utterance)
         }
     }
+    
+    public static func setMainVolume(to volume: Float) {
+        MPVolumeView.setVolume(volume)
+        print("volume: ", AVAudioSession.sharedInstance().outputVolume, volume)
+    }
+    
+    // Use only if you don't have access to a Pitch object that has approximate frequency
+    public static func pitchToFrequency(pitch: String) -> Double {
+        let musicLetters: Set = ["A", "B", "C", "D", "E", "F", "G"]
 
-    public static func computeNormalizedSoundIntensity(buffer: AVAudioPCMBuffer, minDb: Float) -> Double? {
+        // remove sharp
+        var naturalizedPitch = pitch
+        if naturalizedPitch.count > 2 {
+            naturalizedPitch = pitch.replacingOccurrences(of: "#", with: "").capitalized
+        }
+        
+        if !musicLetters.contains(naturalizedPitch[0]) {
+            print("pitch is not musical letter: ", naturalizedPitch[0])
+            return Utils.UNKNOWN
+        }
+        
+        if Int(naturalizedPitch[1])! < 0 || Int(naturalizedPitch[1])! > 8 {
+            print("pitch is not regular octave: ", naturalizedPitch[1])
+            return Utils.UNKNOWN
+        }
+
+        return pitchToFrequencyMap[naturalizedPitch] ?? Utils.UNKNOWN
+    }
+    
+    public static func frequencyToPitch(frequency: Double) -> String {
+        var pitch: String
+        switch (frequency) {
+        case 0...pitchToFrequencyMap["D0"]! - 1:
+            pitch = "C0"
+        case pitchToFrequencyMap["D0"]!...pitchToFrequencyMap["E0"]! - 1:
+            pitch = "D0"
+        case pitchToFrequencyMap["E0"]!...pitchToFrequencyMap["F0"]! - 1:
+            pitch = "E0"
+        case pitchToFrequencyMap["F0"]!...pitchToFrequencyMap["G0"]! - 1:
+            pitch = "F0"
+        case pitchToFrequencyMap["G0"]!...pitchToFrequencyMap["A1"]! - 1:
+            pitch = "G0"
+        case pitchToFrequencyMap["A1"]!...pitchToFrequencyMap["B1"]! - 1:
+            pitch = "A1"
+        case pitchToFrequencyMap["B1"]!...pitchToFrequencyMap["C1"]! - 1:
+            pitch = "B1"
+        case pitchToFrequencyMap["C1"]!...pitchToFrequencyMap["D1"]! - 1:
+            pitch = "C1"
+        case pitchToFrequencyMap["D1"]!...pitchToFrequencyMap["E1"]! - 1:
+            pitch = "D1"
+        case pitchToFrequencyMap["E1"]!...pitchToFrequencyMap["F1"]! - 1:
+            pitch = "E1"
+        case pitchToFrequencyMap["F1"]!...pitchToFrequencyMap["G1"]! - 1:
+            pitch = "F1"
+        case pitchToFrequencyMap["G1"]!...pitchToFrequencyMap["A2"]! - 1:
+            pitch = "G1"
+        case pitchToFrequencyMap["A2"]!...pitchToFrequencyMap["B2"]! - 1:
+            pitch = "A2"
+        case pitchToFrequencyMap["B2"]!...pitchToFrequencyMap["C2"]! - 1:
+            pitch = "B2"
+        case pitchToFrequencyMap["C2"]!...pitchToFrequencyMap["D2"]! - 1:
+            return "C2"
+        case pitchToFrequencyMap["D2"]!...pitchToFrequencyMap["E2"]! - 1:
+            pitch = "D2"
+        case pitchToFrequencyMap["E2"]!...pitchToFrequencyMap["F2"]! - 1:
+            pitch = "E2"
+        case pitchToFrequencyMap["F2"]!...pitchToFrequencyMap["G2"]! - 1:
+            pitch = "F2"
+        case pitchToFrequencyMap["G2"]!...pitchToFrequencyMap["A3"]! - 1:
+            pitch = "G2"
+        case pitchToFrequencyMap["A3"]!...pitchToFrequencyMap["B3"]! - 1:
+            pitch = "A3"
+        case pitchToFrequencyMap["B3"]!...pitchToFrequencyMap["C3"]! - 1:
+            pitch = "B3"
+        case pitchToFrequencyMap["C3"]!...pitchToFrequencyMap["D3"]! - 1:
+            pitch = "C3"
+        case pitchToFrequencyMap["D3"]!...pitchToFrequencyMap["E3"]! - 1:
+            pitch = "D3"
+        case pitchToFrequencyMap["E3"]!...pitchToFrequencyMap["F3"]! - 1:
+            pitch = "E3"
+        case pitchToFrequencyMap["F3"]!...pitchToFrequencyMap["G3"]! - 1:
+            pitch = "F3"
+        case pitchToFrequencyMap["G3"]!...pitchToFrequencyMap["A4"]! - 1:
+            pitch = "G3"
+        case pitchToFrequencyMap["A4"]!...pitchToFrequencyMap["B4"]! - 1:
+            pitch = "A4"
+        case pitchToFrequencyMap["B4"]!...pitchToFrequencyMap["C4"]! - 1:
+            pitch = "B4"
+        case pitchToFrequencyMap["C4"]!...pitchToFrequencyMap["D4"]! - 1:
+            pitch = "C4"
+        case pitchToFrequencyMap["D4"]!...pitchToFrequencyMap["E4"]! - 1:
+            pitch = "D4"
+        case pitchToFrequencyMap["E4"]!...pitchToFrequencyMap["F4"]! - 1:
+            pitch = "E4"
+        case pitchToFrequencyMap["F4"]!...pitchToFrequencyMap["G4"]! - 1:
+            pitch = "F4"
+        case pitchToFrequencyMap["G4"]!...pitchToFrequencyMap["A5"]! - 1:
+            pitch = "G4"
+        case pitchToFrequencyMap["A5"]!...pitchToFrequencyMap["B5"]! - 1:
+            pitch = "A5"
+        case pitchToFrequencyMap["B5"]!...pitchToFrequencyMap["C5"]! - 1:
+            pitch = "B5"
+        case pitchToFrequencyMap["C5"]!...pitchToFrequencyMap["D5"]! - 1:
+            pitch = "C5"
+        case pitchToFrequencyMap["D5"]!...pitchToFrequencyMap["E5"]! - 1:
+            pitch = "D5"
+        case pitchToFrequencyMap["E5"]!...pitchToFrequencyMap["F5"]! - 1:
+            pitch = "E5"
+        case pitchToFrequencyMap["F5"]!...pitchToFrequencyMap["G5"]! - 1:
+            pitch = "F5"
+        case pitchToFrequencyMap["G5"]!...pitchToFrequencyMap["A6"]! - 1:
+            pitch = "G5"
+        case pitchToFrequencyMap["A6"]!...pitchToFrequencyMap["B6"]! - 1:
+            pitch = "A6"
+        case pitchToFrequencyMap["B6"]!...pitchToFrequencyMap["C6"]! - 1:
+            pitch = "B6"
+        case pitchToFrequencyMap["C6"]!...pitchToFrequencyMap["D6"]! - 1:
+            pitch = "C6"
+        case pitchToFrequencyMap["D6"]!...pitchToFrequencyMap["E6"]! - 1:
+            pitch = "D6"
+        case pitchToFrequencyMap["E6"]!...pitchToFrequencyMap["F6"]! - 1:
+            pitch = "E6"
+        case pitchToFrequencyMap["F6"]!...pitchToFrequencyMap["G6"]! - 1:
+            pitch = "F6"
+        case pitchToFrequencyMap["G6"]!...pitchToFrequencyMap["A7"]! - 1:
+            pitch = "G6"
+        case pitchToFrequencyMap["A7"]!...pitchToFrequencyMap["B7"]! - 1:
+            pitch = "A7"
+        case pitchToFrequencyMap["B7"]!...pitchToFrequencyMap["C7"]! - 1:
+            pitch = "B7"
+        case pitchToFrequencyMap["C7"]!...pitchToFrequencyMap["D7"]! - 1:
+            pitch = "C7"
+        case pitchToFrequencyMap["D7"]!...pitchToFrequencyMap["E7"]! - 1:
+            pitch = "D7"
+        case pitchToFrequencyMap["E7"]!...pitchToFrequencyMap["F7"]! - 1:
+            pitch = "E7"
+        case pitchToFrequencyMap["F7"]!...pitchToFrequencyMap["G7"]! - 1:
+            pitch = "F7"
+        case pitchToFrequencyMap["G7"]!...pitchToFrequencyMap["A8"]! - 1:
+            pitch = "G7"
+        case pitchToFrequencyMap["A8"]!...pitchToFrequencyMap["B8"]! - 1:
+            pitch = "A8"
+        case pitchToFrequencyMap["B8"]!...pitchToFrequencyMap["C8"]! - 1:
+            pitch = "B8"
+        case pitchToFrequencyMap["C8"]!...pitchToFrequencyMap["D8"]! - 1:
+            pitch = "C8"
+        case pitchToFrequencyMap["D8"]!...pitchToFrequencyMap["E8"]! - 1:
+            pitch = "D8"
+        case pitchToFrequencyMap["E8"]!...pitchToFrequencyMap["F8"]! - 1:
+            pitch = "E8"
+        case pitchToFrequencyMap["F8"]!...pitchToFrequencyMap["G8"]! - 1:
+            pitch = "F8"
+        case pitchToFrequencyMap["G8"]!...Double.infinity:
+            pitch = "G8"
+        default:
+            pitch =  ""
+        }
+        
+        return pitch
+    }
+    
+    public static func getHigherPitch(pitch: Pitch, offsets: Int) -> String {
+        let letters = "ABCDEFG"
+        let letter = pitch.note.letter.rawValue
+        let octave = pitch.note.octave
+        
+        let letterStringIndex = letters.firstIndex(of: letter.first!)!
+        let letterIndex = letters.distance(to: letterStringIndex)
+        let newLetterIndex = (letterIndex + offsets) % letters.count
+        let newOctaveNumber = octave + Int(floor(Float(letterIndex + offsets) / Float(letters.count)))
+        let normalizedOctaveNumber = min(newOctaveNumber, 8)
+        let newPitch: String = letters[newLetterIndex] + String(normalizedOctaveNumber)
+        return newPitch
+    }
+    
+    public static func getLowerPitch(pitch: Pitch, offsets: Int) -> Pitch {
+        let letters = "ABCDEFG"
+        let letter = pitch.note.letter.rawValue
+        let octave = pitch.note.octave
+        
+        let letterStringIndex = letters.firstIndex(of: letter.first!)!
+        let letterIndex = letters.distance(to: letterStringIndex)
+        let newLetterIndex = (letterIndex - offsets) % letters.count
+        let normalizedLetterIndex = newLetterIndex > 0 ? newLetterIndex : letters.count - newLetterIndex
+        let newOctaveNumber = octave + Int(floor(Float(letterIndex - offsets) / Float(letters.count)))
+        let normalizedOctaveNumber = max(newOctaveNumber, 0)
+        let newPitch: String = letters[normalizedLetterIndex] + String(normalizedOctaveNumber)
+        do {
+            let pitch = try Pitch(frequency: pitchToFrequencyMap[newPitch]!)
+            return pitch
+        } catch {
+            fatalError("===== [Error] There was a problem getting lower pitch =====")
+        }
+    }
+    
+    public static func normalizePitch(incidentPitch: Pitch, basePitch: Pitch) -> Double {
+        var index: Double
+        switch (incidentPitch.frequency) {
+        case 0...pitchToFrequencyMap[Utils.frequencyToPitch(frequency: Utils.pitchToFrequency(pitch: basePitch.note.string))]! - 1:
+            index = 1
+            break
+        case pitchToFrequencyMap[Utils.frequencyToPitch(frequency: Utils.pitchToFrequency(pitch: basePitch.note.string))]!...pitchToFrequencyMap[Utils.frequencyToPitch(frequency: Utils.pitchToFrequency(pitch: Utils.getHigherPitch(pitch: basePitch, offsets: 1)))]! - 1:
+            index = 2
+            break
+        case pitchToFrequencyMap[Utils.frequencyToPitch(frequency: Utils.pitchToFrequency(pitch: Utils.getHigherPitch(pitch: basePitch, offsets: 1)))]!...pitchToFrequencyMap[Utils.frequencyToPitch(frequency: Utils.pitchToFrequency(pitch: Utils.getHigherPitch(pitch: basePitch, offsets: 2)))]! - 1:
+            index = 3
+            break
+        case pitchToFrequencyMap[Utils.frequencyToPitch(frequency: Utils.pitchToFrequency(pitch: Utils.getHigherPitch(pitch: basePitch, offsets: 2)))]!...pitchToFrequencyMap[Utils.frequencyToPitch(frequency: Utils.pitchToFrequency(pitch: Utils.getHigherPitch(pitch: basePitch, offsets: 3)))]! - 1:
+            index = 4
+            break
+        case pitchToFrequencyMap[Utils.frequencyToPitch(frequency: Utils.pitchToFrequency(pitch: Utils.getHigherPitch(pitch: basePitch, offsets: 3)))]!...pitchToFrequencyMap[Utils.frequencyToPitch(frequency: Utils.pitchToFrequency(pitch: Utils.getHigherPitch(pitch: basePitch, offsets: 4)))]! - 1:
+            index = 5
+            break
+        case pitchToFrequencyMap[Utils.frequencyToPitch(frequency: Utils.pitchToFrequency(pitch: Utils.getHigherPitch(pitch: basePitch, offsets: 4)))]!...pitchToFrequencyMap[Utils.frequencyToPitch(frequency: Utils.pitchToFrequency(pitch: Utils.getHigherPitch(pitch: basePitch, offsets: 5)))]! - 1:
+            index = 6
+            break
+        case pitchToFrequencyMap[Utils.frequencyToPitch(frequency: Utils.pitchToFrequency(pitch: Utils.getHigherPitch(pitch: basePitch, offsets: 5)))]!...pitchToFrequencyMap[Utils.frequencyToPitch(frequency: Utils.pitchToFrequency(pitch: Utils.getHigherPitch(pitch: basePitch, offsets: 6)))]! - 1:
+            index = 7
+            break
+        case pitchToFrequencyMap[Utils.frequencyToPitch(frequency: Utils.pitchToFrequency(pitch: Utils.getHigherPitch(pitch: basePitch, offsets: 6)))]!...pitchToFrequencyMap[Utils.frequencyToPitch(frequency: Utils.pitchToFrequency(pitch: Utils.getHigherPitch(pitch: basePitch, offsets: 7)))]! - 1:
+            index = 8
+            break
+        case pitchToFrequencyMap[Utils.frequencyToPitch(frequency: Utils.pitchToFrequency(pitch: Utils.getHigherPitch(pitch: basePitch, offsets: 7)))]!...pitchToFrequencyMap[Utils.frequencyToPitch(frequency: Utils.pitchToFrequency(pitch: Utils.getHigherPitch(pitch: basePitch, offsets: 8)))]! - 1:
+            index = 9
+            break
+        case pitchToFrequencyMap[Utils.frequencyToPitch(frequency: Utils.pitchToFrequency(pitch: Utils.getHigherPitch(pitch: basePitch, offsets: 8)))]!...pitchToFrequencyMap[Utils.frequencyToPitch(frequency: Utils.pitchToFrequency(pitch: Utils.getHigherPitch(pitch: basePitch, offsets: 9)))]! - 1:
+            index = 10
+            break
+        default:
+            index = 10
+        }
+
+        return index / Double(10)
+    }
+
+    public static func computeSoundIntensity(buffer: AVAudioPCMBuffer) -> Double? {
         // gives you an array of pointers to each sample’s data
         guard let channelData = buffer.floatChannelData else { return nil }
 
@@ -238,11 +582,8 @@ class Utils {
         // Convert the RMS to decibels
         // This should be a value between -160 and 0, but if rms is negative, this value would be NaN.
         let avgPower = 20 * log10(rms)
-        
-        // Scale the decibels into a value suitable for your vuMeter.
-        let meterLevel = normalizedPower(power: avgPower, minDb: minDb)
-        
-        return meterLevel
+
+        return avgPower
     }
     
     public static func getFileURL(of filename: String) -> URL {
@@ -408,15 +749,16 @@ class Utils {
         return (str.count == 1 && str.contains("I")) || str.contains("I'")
     }
 
-    private static func normalizedPower(power: Double, minDb: Float) -> Double {
+    // Scale the decibels into a value suitable for your vuMeter.
+    public static func normalizedPower(power: Double, minPower: Float) -> Double {
         guard power.isFinite else { return 0.0 }
         
-        if power < Double(minDb) {
+        if power < Double(minPower) {
             return 0.0
         } else if power >= 1.0 {
             return 1.0
         } else {
-            return (abs(Double(minDb)) - abs(power)) / abs(Double(minDb))
+            return (abs(Double(minPower)) - abs(power)) / abs(Double(minPower))
         }
     }
     

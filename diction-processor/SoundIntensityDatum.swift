@@ -10,17 +10,17 @@ import Foundation
 
 struct SoundIntensityDatum {
     var date: Date
-    var intensity: Double
+    var power: Double
 
     var description: String {
-        return "SoundIntensityDatum {\n\tdate: \(date)\n\tintensity:\(intensity)\n}"
+        return "SoundIntensityDatum {\n\tdate: \(date)\n\tpower:\(power)\n}"
     }
    
-   mutating func setDate(value: Date) {
-       date = value
-   }
-   
-   mutating func setIntensity(value: Double) {
-       intensity = value
-   }
+    mutating func setDate(value: Date) {
+        date = value
+    }
+
+    mutating func setDecibels(value: Double) {
+        power = value
+    }
 }

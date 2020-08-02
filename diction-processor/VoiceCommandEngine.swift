@@ -38,7 +38,24 @@ public final class VoiceCommandEngine: NSObject {
         "activate formatting suggestions",
         "deactivate formatting suggestions",
         "activate passive echo",
-        "deactivate passive echo"
+        "deactivate passive echo",
+        "turn volume up",
+        "turn volume down",
+        "increase volume",
+        "decrease volume",
+        "adjust volume up",
+        "adjust volume down",
+        "volume up",
+        "volume down",
+        "just volume up",
+        "i just volume up",
+        "just volume down",
+        "i just volume down",
+        "adjust volume",
+        "i just volume",
+        "just volume",
+        "change volume",
+        "volume"
     ]
     
     func includesCommand(passage: String) -> String? {
@@ -101,58 +118,12 @@ public final class VoiceCommandEngine: NSObject {
             pauseExpression(expression: expression, handler: handler)
             break
         case "start expression":
-            if !expression.isListeningForSpeech {
-                // no need to play sound
-                // we will piggyback off of start expression sound
-
-                expression.stopListeningForVoiceCommands() {
-                    self.startListeningForSpeech(expression: expression, handler: handler)
-                }
-            } else {
-                // Play Sound
-                soundEngine.error()
-                
-                Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
-                    let rate: Float = 0.5
-                    let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
-                    let synthesizerItem = SynthesizerItem(
-                        synthesizer: expression.speechSynthesizer,
-                        text: "Expression already started.",
-                        voice: voice,
-                        rate: rate,
-                        volume: expression.playbackVolume
-                    )
-                    
-                    Utils.runSpeechSynthesizer(item: synthesizerItem)
-                }
-            }
-            
+            self.startListeningForSpeech(expression: expression, handler: handler)
             break
         case "stop expression":
-            if let _ = expression.tempVoiceCommandHandler {
-                // Play Sound
-                soundEngine.voiceCommandAccept()
-
-                // we've always stopped expression before getting here
-                stopListeningForSpeech(expression: expression, handler: handler)
-            } else {
-                // Play Sound
-                soundEngine.error()
-                
-                Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
-                    let rate: Float = 0.5
-                    let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
-                    let synthesizerItem = SynthesizerItem(
-                        synthesizer: expression.speechSynthesizer,
-                        text: "Expression not started.",
-                        voice: voice,
-                        rate: rate,
-                        volume: expression.playbackVolume
-                    )
-                    
-                    Utils.runSpeechSynthesizer(item: synthesizerItem)
-                }
-            }
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+            stopListeningForSpeech(expression: expression, handler: handler)
             break
         case "echo expression", "ecko expression", "play echo", "play ecko", "start echo", "start ecko":
             // Play Sound
@@ -165,7 +136,7 @@ public final class VoiceCommandEngine: NSObject {
                 soundEngine.error()
                 
                 Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
-                    let rate: Float = 0.5
+                    let rate: Float = 0.52
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
                     let synthesizerItem = SynthesizerItem(
                         synthesizer: expression.speechSynthesizer,
@@ -190,7 +161,7 @@ public final class VoiceCommandEngine: NSObject {
                 soundEngine.error()
                 
                 Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
-                    let rate: Float = 0.5
+                    let rate: Float = 0.52
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
                     let synthesizerItem = SynthesizerItem(
                         synthesizer: expression.speechSynthesizer,
@@ -215,7 +186,7 @@ public final class VoiceCommandEngine: NSObject {
                 soundEngine.error()
                 
                 Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
-                    let rate: Float = 0.5
+                    let rate: Float = 0.52
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
                     let synthesizerItem = SynthesizerItem(
                         synthesizer: expression.speechSynthesizer,
@@ -299,6 +270,82 @@ public final class VoiceCommandEngine: NSObject {
             soundEngine.voiceCommandAccept()
             
             deactivatePassiveEcho(expression: expression, handler: handler)
+        case "turn volume up", "increase volume", "adjust volume up", "volume up", "just volume up", "i just volume up":
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+            
+            let currentVolume = expression.playbackVolume
+            if currentVolume < 1 {
+                setPlaybackVolume(to: min(currentVolume + Utils.DISCRETE_VOLUME_DELTA, 1)) {
+                    let rate: Float = 0.52
+                    let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
+                    let synthesizerItem = SynthesizerItem(
+                        synthesizer: expression.speechSynthesizer,
+                        text: "Volume increased.",
+                        voice: voice,
+                        rate: rate,
+                        volume: expression.playbackVolume
+                    )
+                    
+                    Utils.runSpeechSynthesizer(item: synthesizerItem)
+                }
+            } else {
+                // Play Sound
+                soundEngine.error()
+                
+                Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                    let rate: Float = 0.52
+                    let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
+                    let synthesizerItem = SynthesizerItem(
+                        synthesizer: expression.speechSynthesizer,
+                        text: "Volume already at maximum.",
+                        voice: voice,
+                        rate: rate,
+                        volume: expression.playbackVolume
+                    )
+                    
+                    Utils.runSpeechSynthesizer(item: synthesizerItem)
+                }
+            }
+        case "turn volume down", "decrease volume", "adjust volume down", "volume down", "just volume down", "i just volume down":
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+            
+            let currentVolume = expression.playbackVolume
+            if currentVolume > 0 {
+                setPlaybackVolume(to: max(currentVolume - Utils.DISCRETE_VOLUME_DELTA, 0.1)) {
+                    let rate: Float = 0.52
+                    let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
+                    let synthesizerItem = SynthesizerItem(
+                        synthesizer: expression.speechSynthesizer,
+                        text: "Volume decreased.",
+                        voice: voice,
+                        rate: rate,
+                        volume: expression.playbackVolume
+                    )
+                    
+                    Utils.runSpeechSynthesizer(item: synthesizerItem)
+                }
+            } else {
+                // Play Sound
+                soundEngine.error()
+                
+                Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                    let rate: Float = 0.52
+                    let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
+                    let synthesizerItem = SynthesizerItem(
+                        synthesizer: expression.speechSynthesizer,
+                        text: "Volume already at minimum.",
+                        voice: voice,
+                        rate: rate,
+                        volume: expression.playbackVolume
+                    )
+                    
+                    Utils.runSpeechSynthesizer(item: synthesizerItem)
+                }
+            }
+        case "adjust volume", "i just volume", "just volume", "change volume", "volume":
+            startListeningForVolume(expression: expression)
         default:
             soundEngine.voiceCommandDeny()
         }
@@ -359,10 +406,10 @@ public final class VoiceCommandEngine: NSObject {
         print("\tVoice Command: Start Listening For Speech")
         expression.vc!.recordingButton.setTitle("Stop Expression", for: .normal)
         expression.vc!.savedMessageTimer?.invalidate()
-        expression.startListeningForSpeech(soundIntensityHandler: { intensity in
-            if let intensity = intensity {
+        expression.startListeningForSpeech(soundIntensityHandler: { power in
+            if let power = power {
                 DispatchQueue.main.async {
-                    let height = CGFloat(intensity) * expression.vc!.view.safeAreaLayoutGuide.layoutFrame.height
+                    let height = CGFloat(Utils.normalizedPower(power: power, minPower: expression.minPower)) * expression.vc!.view.safeAreaLayoutGuide.layoutFrame.height
                     let soundIntensityHeight: CGFloat = CGFloat(min(height, expression.vc!.view.safeAreaLayoutGuide.layoutFrame.height))
                     expression.vc!.soundIntensityIndicatorHeight.constant = soundIntensityHeight
                 }
@@ -377,10 +424,10 @@ public final class VoiceCommandEngine: NSObject {
         print("\tVoice Command: Stop Listening For Speech")
         expression.stopListeningForSpeech() {
             expression.startListeningForVoiceCommands(
-                soundIntensityHandler: { intensity in
-                    if let intensity = intensity {
+                soundIntensityHandler: { power in
+                    if let power = power {
                         DispatchQueue.main.async {
-                            let height = CGFloat(intensity) * expression.vc!.view.safeAreaLayoutGuide.layoutFrame.height
+                            let height = CGFloat(Utils.normalizedPower(power: power, minPower: expression.minPower)) * expression.vc!.view.safeAreaLayoutGuide.layoutFrame.height
                             let soundIntensityHeight: CGFloat = CGFloat(min(height, expression.vc!.view.safeAreaLayoutGuide.layoutFrame.height))
                             expression.vc!.soundIntensityIndicatorHeight.constant = soundIntensityHeight
                         }
@@ -489,9 +536,22 @@ public final class VoiceCommandEngine: NSObject {
         handler?()
     }
     
-    func setPlaybackVolume(expression: Expression, to volume: Float, handler: (() -> Void)? = nil) {
+    func setPlaybackVolume(to volume: Float, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Set Playback Volume")
-        expression.setPlaybackVolume(to: volume)
+        Utils.setMainVolume(to: volume)
         handler?()
+    }
+    
+    func startListeningForVolume(expression: Expression) {
+        if expression.isListeningForSpeech {
+            expression.stopListeningForSpeech() {
+                expression.vc!.startListeningForVolume()
+            }
+        } else if expression.isListeningForCommands {
+            expression.stopListeningForVoiceCommands() {
+                expression.vc!.startListeningForVolume()
+                
+            }
+        }
     }
 }
