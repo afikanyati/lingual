@@ -37,7 +37,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     let wakePhrase = "rise and shine"
     var isListeningForVolume = false
     var UITimer: Timer?
-    var savedMessageTimer: Timer?
+    var appNotificationTimer: Timer?
     var volumeListeningRateTimer: Timer?
     var stopListeningForVolumeTimer: Timer?
     var onExpressionListenUpdate: (() -> Void)?
@@ -166,7 +166,8 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         session = AVAudioSession.sharedInstance()
 
         do {
-            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .defaultToSpeaker, .duckOthers])
+            // .voiceChat mode does not default to speakers
+            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth, .duckOthers])
             try session.setActive(true)
         } catch let error as NSError {
             print("===== There was an error requesting permissions to record audio or setting session category: \(error.localizedDescription) =====")
@@ -326,25 +327,25 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             DispatchQueue.main.async {
                 self?.stopRecordingUITimer()
                 self?.soundIntensityIndicatorHeight.constant = 0
-
                 self?.navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Reset", style: .plain, target: self, action: #selector(self?.resetSession))
-                self?.navigationItem.title = "Saved!"
-                self?.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.red]
-                
-                self?.savedMessageTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { timer in
-                    self?.navigationItem.title = ""
-                    self?.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
-                }
             }
+            
+            self?.registerAppNotification(text: "Saved!", type: .success)
         }
     }
     
     @objc func resetSession() {
         print("===== Reset Session =====")
-        setAudioButtonsVisibility(visible: false)
-        self.transcriptionText.attributedText = NSMutableAttributedString(string: "")
-        self.navigationItem.rightBarButtonItem = nil
-        self.savedMessageTimer?.invalidate()
+        DispatchQueue.main.async {
+            self.setAudioButtonsVisibility(visible: false)
+            self.transcriptionText.attributedText = NSMutableAttributedString(string: "")
+            self.navigationItem.rightBarButtonItem = nil
+        }
+
+        clearAppNotification()
+        
+        // Give haptic feedback
+        hapticEngine.selection()
         
         if expression.isPlayingEcho {
             expression.stopEcho(handler: onExpressionEchoFinish)
@@ -485,6 +486,45 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         )
     }
     
+    func registerAppNotification(text: String, type: NotificationType? = nil) {
+        DispatchQueue.main.async {
+            // Stop UI Timer if we receive app notification while recording
+            if self.expression.isListeningForSpeech {
+                self.stopRecordingUITimer()
+            }
+            
+            self.navigationItem.title = text
+            self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.red]
+            
+            self.appNotificationTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false) {[weak self] timer in
+                // Restart UI Timer is we received app notification while receiving
+                if self!.expression.isListeningForSpeech {
+                    self!.startRecordingUITimer(recording: true)
+                }
+                self?.navigationItem.title = ""
+                self?.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
+            }
+            
+            // Give haptic feedback
+            if let type = type {
+                switch (type) {
+                case .error:
+                    hapticEngine.error()
+                case .warning:
+                    hapticEngine.warning()
+                default:
+                    hapticEngine.success()
+                }
+            }
+        }
+    }
+    
+    func clearAppNotification() {
+        DispatchQueue.main.async {
+            self.appNotificationTimer?.invalidate()
+        }
+    }
+    
     @objc func appGainsFocus() {
         print("===== App Gains Focus =====")
     }
@@ -548,7 +588,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             if !expression.isListeningForSpeech {
                 print("===== Start Recording =====")
                 recordingButton.setTitle(ViewController.STOP_EXPRESSION_LABEL, for: .normal)
-                self.savedMessageTimer?.invalidate()
+                clearAppNotification()
                 expression.startListeningForSpeech(soundIntensityHandler: { power in
                     if let power = power {
                         DispatchQueue.main.async {
@@ -560,6 +600,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 }, onStartHandler: {
                     self.startRecordingUITimer(recording: true)
                 })
+                
+                // Give haptic feedback
+                hapticEngine.selection()
             } else {
                 print("===== Stop Recording =====")
                 expression.stopListeningForSpeech() {[weak self] in
@@ -576,6 +619,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                         }
                     )
                 }
+                
+                // Give haptic feedback
+                hapticEngine.selection()
             }
         }
     }
@@ -587,6 +633,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                     self?.playAudioButton.setTitle(ViewController.PLAY_EXPRESSION_LABEL, for: .normal)
                 }
             }
+            
+            // Give haptic feedback
+            hapticEngine.selection()
         } else {
             expression.play(
                 onStartHandler: { [weak self] in
@@ -598,7 +647,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 secondElapseHandler: { [weak self] in
                     // print("Successfully executed playback second elapsed handler")
                     DispatchQueue.main.async {
-                        self?.navigationItem.title = Utils.formattedTime(time: Float((self!.expression.player.currentTime().seconds)))
+                        if !self!.expression.isListeningForSpeech {
+                            self?.navigationItem.title = "\(Utils.formattedTime(time: Float((self!.expression.player.currentTime().seconds))))/\(Utils.formattedTime(time: Float(self!.expression.duration.seconds)))"
+                        }
                     }
                 },
                 segmentBoundaryHandler: { [weak self] in
@@ -614,10 +665,15 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                         self?.updateUIText()
                         self?.playAudioButton.setTitle(ViewController.PLAY_EXPRESSION_LABEL, for: .normal)
                         self!.expression.player.replaceCurrentItem(with: nil)
-                        self?.navigationItem.title = ""
+                        if self!.expression.isListeningForSpeech {
+                            self?.navigationItem.title = ""
+                        }
                     }
                 }
             )
+            
+            // Give haptic feedback
+            hapticEngine.selection()
         }
     }
     
@@ -629,6 +685,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                     self?.playTextToSpeechButton.setTitle(ViewController.PAUSE_ECHO_LABEL, for: .normal)
                 }
             })
+            
+            // Give haptic feedback
+            hapticEngine.selection()
         } else if expression.isPlayingEcho {
             print("==== Speech synthesizer paused =====")
             expression.pauseEcho() { [weak self] in
@@ -636,6 +695,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                     self?.playTextToSpeechButton.setTitle(ViewController.PLAY_ECHO_LABEL, for: .normal)
                 }
             }
+            
+            // Give haptic feedback
+            hapticEngine.selection()
         } else {
             playAudioButton.setTitle(ViewController.PLAY_EXPRESSION_LABEL, for: .normal)
             expression.startEcho(onStartHandler: { [weak self] in
@@ -644,6 +706,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                     self?.playTextToSpeechButton.setTitle(ViewController.PAUSE_ECHO_LABEL, for: .normal)
                 }
             })
+            
+            // Give haptic feedback
+            hapticEngine.selection()
         }
     }
     
@@ -703,8 +768,8 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             }
             
             self.navigationItem.title = Utils.formattedTime(time: self.expression.getDurationListening())
-            self.UITimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { timer in
-                self.navigationItem.title = Utils.formattedTime(time: self.expression.getDurationListening())
+            self.UITimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) {[weak self] timer in
+                self?.navigationItem.title = Utils.formattedTime(time: self!.expression.getDurationListening())
             }
         }
     }
@@ -716,8 +781,18 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         DispatchQueue.main.async {
             self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
             self.navigationItem.title = ""
-            self.UITimer!.invalidate()
+            self.UITimer?.invalidate()
         }
+    }
+    
+    func activateListeningIndicator() {
+        let spinner = UIActivityIndicatorView(style: .medium)
+        spinner.startAnimating()
+        self.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: spinner)
+    }
+    
+    func deactivateListeningIndicator() {
+        self.navigationItem.leftBarButtonItem = nil
     }
     
     // MARK: - Wake Phrase Methods
@@ -729,6 +804,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
             soundEngine.startListening()
         }
+        
+        // Give haptic feedback
+        hapticEngine.heavyImpact()
         
         // must be placed before we start listening for wake phrase
         // if pitch engine begins first, we are for some reason unable to do speech recognition
@@ -792,6 +870,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         
         let node = audioEngine.inputNode
         node.removeTap(onBus: self.recordBus)
+        
+        // Give haptic feedback
+        hapticEngine.heavyImpact()
 
         audioEngine.stop()
         // We instantiate new audio engine in case headphones have been added or removed
@@ -838,15 +919,15 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             DispatchQueue.main.async {
                 if !self.isListeningForVolume {
                     self.isListeningForVolume = true
-                    self.stopListeningForVolumeTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { timer in
-                        self.stopListeningForVolume() {
-                            self.expression.startListeningForVoiceCommands(
+                    self.stopListeningForVolumeTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) {[weak self] timer in
+                        self?.stopListeningForVolume() {
+                            self?.expression.startListeningForVoiceCommands(
                                 soundIntensityHandler: { power in
                                     if let power = power {
                                         DispatchQueue.main.async {
-                                            let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
-                                            let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
-                                            self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+                                            let height = CGFloat(Utils.normalizedPower(power: power, minPower: self!.minPower)) * self!.view.safeAreaLayoutGuide.layoutFrame.height
+                                            let soundIntensityHeight: CGFloat = CGFloat(min(height, self!.view.safeAreaLayoutGuide.layoutFrame.height))
+                                            self?.soundIntensityIndicatorHeight.constant = soundIntensityHeight
                                         }
                                     }
                                 }
@@ -865,16 +946,16 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                     if soundIntensityDatum.power > self.getBackgroundNoise() + Utils.TALKING_POWER_DELTA && self.isListeningForVolume && self.stopListeningForVolumeTimer != nil {
                         // continue if power still coming through
                         self.stopListeningForVolumeTimer?.invalidate()
-                        self.stopListeningForVolumeTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { timer in
-                            if self.stopListeningForVolumeTimer != nil {
-                                self.stopListeningForVolume() {
-                                    self.expression.startListeningForVoiceCommands(
+                        self.stopListeningForVolumeTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) {[weak self] timer in
+                            if self?.stopListeningForVolumeTimer != nil {
+                                self?.stopListeningForVolume() {
+                                    self?.expression.startListeningForVoiceCommands(
                                         soundIntensityHandler: { power in
                                             if let power = power {
                                                 DispatchQueue.main.async {
-                                                    let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
-                                                    let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
-                                                    self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+                                                    let height = CGFloat(Utils.normalizedPower(power: power, minPower: self!.minPower)) * self!.view.safeAreaLayoutGuide.layoutFrame.height
+                                                    let soundIntensityHeight: CGFloat = CGFloat(min(height, self!.view.safeAreaLayoutGuide.layoutFrame.height))
+                                                    self?.soundIntensityIndicatorHeight.constant = soundIntensityHeight
                                                 }
                                             }
                                         }
@@ -1024,11 +1105,17 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                         soundEngine.correctWakePhrase()
                     }
                     
+                    // Give haptic feedback
+                    hapticEngine.success()
+                    
                     print("===== Wake Phrase Detected =====")
                     self.activateApp()
                 } else if !text.contains("rise") && !text.contains("rise and") {
                     // Play Sound
                     soundEngine.incorrectWakePhrase()
+                    
+                    // Give haptic feedback
+                    hapticEngine.error()
                 }
                 
                 return
@@ -1139,18 +1226,18 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             }
         }
         
-        if let lastSoundIntensity = self.soundIntensityStream.last, pitch.frequency >= MALE_LOWEST_VOICED_SPEECH_FREQUENCY && pitch.frequency <= FEMALE_HIGHEST_VOICED_SPEECH_FREQUENCY && self.getBackgroundNoise() != Double.infinity && self.soundIntensityStream.count > 0 && lastSoundIntensity.power > self.getBackgroundNoise() + Utils.VOLUME_POWER_DELTA {
-            // print("power: ", lastSoundIntensity.power, self.getBackgroundNoise(), Utils.VOLUME_POWER_DELTA)
-            if self.isListeningForVolume && self.volumeListeningRateTimer == nil {
-                
-                Utils.setMainVolume(to: Float(Utils.normalizePitch(incidentPitch: pitch, basePitch: self.expression.speaker.pitch!)))
-                // MAKE SURE TO ALSO CHANGE VOLUME OF SOUND EFFECTS
-                self.volumeListeningRateTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: false) { timer in
-                    self.volumeListeningRateTimer = nil
-                    // 0.2 interval seems good
-                }
-            }
-        }
+//        if let lastSoundIntensity = self.soundIntensityStream.last, pitch.frequency >= MALE_LOWEST_VOICED_SPEECH_FREQUENCY && pitch.frequency <= FEMALE_HIGHEST_VOICED_SPEECH_FREQUENCY && self.getBackgroundNoise() != Double.infinity && self.soundIntensityStream.count > 0 && lastSoundIntensity.power > self.getBackgroundNoise() + Utils.VOLUME_POWER_DELTA {
+//            // print("power: ", lastSoundIntensity.power, self.getBackgroundNoise(), Utils.VOLUME_POWER_DELTA)
+//            if self.isListeningForVolume && self.volumeListeningRateTimer == nil {
+//
+//                Utils.setMainVolume(to: Float(Utils.normalizePitch(incidentPitch: pitch, basePitch: self.expression.speaker.pitch!)))
+//                // MAKE SURE TO ALSO CHANGE VOLUME OF SOUND EFFECTS
+//                self.volumeListeningRateTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: false) {[weak self] timer in
+//                    self?.volumeListeningRateTimer = nil
+//                    // 0.2 interval seems good
+//                }
+//            }
+//        }
     }
 
     func pitchEngine(_ pitchEngine: PitchEngine, didReceiveError error: Error) {
@@ -1292,7 +1379,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 //        secondElapseHandler: { [weak self] in
 //            // print("Successfully executed playback secondT elapsed handler")
 //            DispatchQueue.main.async {
-//                self?.navigationItem.title = Utils.formattedTime(time: Float((self!.expression.player.currentTime().seconds)))
+//                if !self!.expression.isListeningForSpeech {
+//                    self?.navigationItem.title = "\(Utils.formattedTime(time: Float((self!.expression.player.currentTime().seconds))))/\(self!.expression.duration.seconds)"
+//                }
 //            }
 //        },
 //        segmentBoundaryHandler: { [weak self] in
@@ -1304,9 +1393,11 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 //            // print("Successfully executed playback on finish handler")
 //            DispatchQueue.main.async {
 //                self?.updateUIText()
-//                self?.playAudioButton.setTitle(PLAY_EXPRESSION_LABEL, for: .normal)
+//                self?.playAudioButton.setTitle(ViewController.PLAY_EXPRESSION_LABEL, for: .normal)
 //                self!.expression.player.replaceCurrentItem(with: nil)
-//                self?.navigationItem.title = ""
+//                if self!.expression.isListeningForSpeech {
+//                    self?.navigationItem.title = ""
+//                }
 //            }
 //        }
 //    )
@@ -1330,7 +1421,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 //        secondElapseHandler: { [weak self] in
 //            // print("Successfully executed playback secondT elapsed handler")
 //            DispatchQueue.main.async {
-//                self?.navigationItem.title = Utils.formattedTime(time: Float((self!.expression.player.currentTime().seconds)))
+//                if !self!.expression.isListeningForSpeech {
+//                    self?.navigationItem.title = "\(Utils.formattedTime(time: Float((self!.expression.player.currentTime().seconds))))/\(self!.expression.duration.seconds)"
+//                }
 //            }
 //        },
 //        segmentBoundaryHandler: { [weak self] in
@@ -1342,9 +1435,11 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 //            // print("Successfully executed playback on finish handler")
 //            DispatchQueue.main.async {
 //                self?.updateUIText()
-//                self?.playAudioButton.setTitle(PLAY_EXPRESSION_LABEL, for: .normal)
+//                self?.playAudioButton.setTitle(ViewController.PLAY_EXPRESSION_LABEL, for: .normal)
 //                self!.expression.player.replaceCurrentItem(with: nil)
-//                self?.navigationItem.title = ""
+//                if self!.expression.isListeningForSpeech {
+//                    self?.navigationItem.title = ""
+//                }
 //            }
 //        }
 //    )
@@ -1388,4 +1483,22 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 // Instructions: Open app and utter wake phrase. Start expression by uttering "Start Expression". Speak an expression. End expression by uttering "Stop Expression". Play expression by uttering "Play Expression".
 // Expected Result: Your expression should playback *** without *** 'Stop Expression' in it.
 //
+// 27) Uttering Voice Command Mid-Expression
 //
+// Instructions: Open app and utter wake phrase. Start expression by uttering "Start Expression". Speak an expression. Mid expression utter "Play Expression". Let audio play until completion. Continue speaking an expression. End expression by uttering "Stop Expression". Play expression by uttering "Play Expression".
+// Expected Result: Mid-expression you should hear yourself utter the expression up until that point. After ending expression, your expression should playback *** without *** 'Stop Expression' in it.
+//
+// 28) Test track collapsing implementation
+//
+// Instructions: Open app and utter wake phrase. Start expression by uttering "Start Expression". Utter "this is the first sentence". Then utter "Play Expression". Let audio play until completion. Then utter "this is the second sentence". Then utter "Play Expression". Let audio play until completion. Then utter "this is the third sentence". Then utter "Play Expression". End expression by uttering "Stop Expression"
+// Expected Result: At each stage of "play expression", each new utterance should be added to the expression playback without voice command playback between each utterance.
+
+// 29) Double Play Expression Test
+//
+// Instructions: Open app and utter wake phrase. Start expression by uttering "Start Expression". Speak an expression. Mid expression utter "Play Expression". Let audio play until completion. After completion, utter "Play Expression" again.
+// Expected Result: Expression should be played back twice without any voice command utters played back.
+
+// 30) Emphasis Test
+//
+// Instructions:
+// Expected Result: 

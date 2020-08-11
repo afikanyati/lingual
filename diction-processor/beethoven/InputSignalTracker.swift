@@ -39,7 +39,7 @@ final class InputSignalTracker: SignalTracker {
 
   func start() throws {
     do {
-        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .defaultToSpeaker, .duckOthers])
+        try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth, .duckOthers])
     } catch let error as NSError {
         print("===== There was an error requesting permissions to record audio or setting session category: \(error.localizedDescription) =====")
     } catch {

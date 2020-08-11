@@ -46,7 +46,7 @@ class Utils {
             // when emphasizing, the power was -22.1dB
             // ∆ = 16.8dB
             // We use 16dB to give some wiggle room
-            return 16
+            return 30
         }
         
         // Without headphones, in a relatively empty, small room, near the window, using iPhone SE mic, 30 cm away
@@ -55,7 +55,7 @@ class Utils {
         // when emphasizing, the power was -23.5dB
         // ∆ = 5.4dB
         // We use 5dB to give some wiggle room
-        return 5
+        return 10
     }
     static var DISCRETE_VOLUME_DELTA: Float = 0.2
     
@@ -234,8 +234,14 @@ class Utils {
             }
 
             var times = [NSValue]()
-            for segment in expression.expressionSegments {
-                times.append(NSValue(time: segment.timeMapping.source.start))
+            for segment in expression.expressionTracks[0] {
+                times.append(NSValue(time: segment.timeMapping.target.start))
+            }
+            
+            if expression.expressionTracks.count == 2 {
+                for segment in expression.expressionTracks[1] {
+                    times.append(NSValue(time: segment.timeMapping.target.start))
+                }
             }
 
             expression.boundaryObserverToken = expression.player.addBoundaryTimeObserver(forTimes: times, queue: .main) {
@@ -284,24 +290,24 @@ class Utils {
         // Set Rate
         if rate > 1.0 {
             // Play fast forward
-            print("\tWill play expression in fast forward at rate: \(rate)...")
+            print("\tWill play expression in fast forward at rate: \(rate)")
             player.rate = rate
         } else if rate > 0.0 && rate < 1.0 {
             // Play slow forward
-            print("\tWill play expression in slow forward at rate: \(rate)...")
+            print("\tWill play expression in slow forward at rate: \(rate)")
             player.rate = rate
         } else if rate < 0.0 && rate > -1.0 {
             // Play slow reverse
-            print("\tWill play expression in slow reverse at rate: \(rate)...")
+            print("\tWill play expression in slow reverse at rate: \(rate)")
             player.rate = rate
         } else if rate < -1.0 {
             // Play fast reverse
-            print("\tWill play expression in fast reverse at rate: \(rate)...")
+            print("\tWill play expression in fast reverse at rate: \(rate)")
             player.rate = rate
         } else {
             // Play as normal if rate = 1.0
             // Stop if rate = 0.0
-            print("\tWill play expression at rate: \(rate)...")
+            print("\tWill play expression at rate: \(rate)")
             player.rate = rate
         }
         
@@ -309,10 +315,10 @@ class Utils {
     }
     
     public static func setPlayerVolume(player: AVPlayer, volume: Float) {
-        print("===== Set Player Volume =====")
+        // print("===== Set Player Volume =====")
         
         // Set volume
-        print("\tWill play expression at volume: \(volume)...")
+        // print("\tWill play expression at volume: \(volume)")
         player.volume = volume
     }
     

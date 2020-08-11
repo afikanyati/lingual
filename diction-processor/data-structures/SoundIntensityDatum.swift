@@ -8,12 +8,12 @@
 
 import Foundation
 
-struct SoundIntensityDatum {
+struct SoundIntensityDatum: CustomStringConvertible {
     var date: Date
     var power: Double
 
     var description: String {
-        return "SoundIntensityDatum {\n\tdate: \(date)\n\tpower:\(power)\n}"
+        return "SoundIntensityDatum (\n\tdate: \(date)\n\tpower:\(power)\n)"
     }
    
     mutating func setDate(value: Date) {

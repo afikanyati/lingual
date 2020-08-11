@@ -19,14 +19,18 @@ let DEFAULT_FIG_COUNT = 2
 
 class Expression: AVMutableComposition {
     // MARK: - Static Properties
+    /// Stores the timescale used to scale the values specified for CMTime objects
     static let defaultSegmentTimescale = Double(10000)
 
     // MARK: - Composition Properties
+    /// Stores the filename of the expression
     private(set) var filename: String
     // Change recording format:
     // Reference 1: https://stackoverflow.com/questions/4279311/how-to-record-voice-in-m4a-format
     // Reference 2: https://developer.apple.com/forums/thread/27411
+    /// Stores the private AVFileType of the source URL
     private var _fileType: AVFileType = .caf // Used when instantiating ExpressionSegment class instances
+    /// Stores the filetype of the source URL
     public var fileType: String {
         get {
             if _fileType == .caf {
@@ -38,24 +42,36 @@ class Expression: AVMutableComposition {
             }
         }
     }
-    /// Supplies information about the speaker.
+    /// Stores information about the speaker
     private(set) var speaker: Speaker
-    private(set) var expressionSegments = [ExpressionSegment]()
+    /// Stores a list of expression tracks that contain a list of the high-level representation of expression segments
+    private(set) var expressionTracks: [[ExpressionSegment]] = [[]]
+    /// Stores the starting time of the expression
     private(set) var startTime: CMTime = CMTime.zero // When we remove or add we change this
+    /// Stores the ending time of the expression
     private(set) var endTime: CMTime = CMTime.zero // When we remove or add we change this
+    /// Stores the duration of the expression
     public override var duration: CMTime {
         return CMTimeSubtract(self.endTime, self.startTime)
     }
+    /// Sotres th
     public var numSentences: Int {
-        return self.expressionSegments.last!.getSentence().number + 1
+        var sentenceCount = 0
+        for track in self.expressionTracks {
+            if let lastSegment = track.last {
+                sentenceCount = lastSegment.getSentence().number
+            }
+        }
+        
+        return sentenceCount + 1
     }
-    /// The language of the segment
+    /// The language of the expression
     public var language: NLLanguage? {
-        if expressionSegments.count == 0 {
+        if self.expressionTracks[0].count == 0 {
             return nil
         }
 
-        if let firstSegment = expressionSegments.first, let language = NLLanguageRecognizer.dominantLanguage(for: firstSegment.getText()) {
+        if let firstSegment = self.expressionTracks[0].first, let language = NLLanguageRecognizer.dominantLanguage(for: firstSegment.getText()) {
             return language
         }
         
@@ -64,41 +80,56 @@ class Expression: AVMutableComposition {
     /// The average number of words spoken per minute.
     public var avgSpeakingRate: Double {
         var speakingRate: Double = 0
+        var segmentCount = 0
         // Can be used to vary speed relative to WPM
-        let segments = expressionSegments
-        
-        for segment in segments {
-            speakingRate += segment.getSpeakingRate()
+        for track in self.expressionTracks {
+            segmentCount += track.count
+            for segment in track {
+                speakingRate += segment.getSpeakingRate()
+            }
         }
-        
-        speakingRate /= Double(segments.count)
+
+        speakingRate /= Double(segmentCount)
 
         return speakingRate
     }
+    /// Specifies whether expression will present visual indications of temporal silences on screen
     private(set) var withTemporalSuggestions: Bool
+    /// Specifies whether expression will present punctuation suggestions based on duration of silences
     private(set) var withPunctuationSuggestions: Bool
+    /// Specifies whether expression will present emphasis suggestions based on fluctuating sound intensity of speaker
     private(set) var withFormattingSuggestions: Bool
+    /// Specifies whether expression will only present written language as words (versus numerals or punctuation symbols)
     private(set) var withTextStrictlyAsWords: Bool
+    /// Stores a reference to the main view controller
     weak private(set) var vc: ViewController?
-    private(set) var onListenUpdate: (() -> Void)?
-    private(set) var onListenStop: (() -> Void)?
+    /// Stores a temporary voice command handler that runs once listening has stopped
     private(set) var tempVoiceCommandHandler: (() -> Void)?
-    private(set) var onExpressionComplete: (() -> Void)?
+    /// Stores handlers to be executed when expression is played
     private var observerContext = [String: (() -> Void)]()
     
     // MARK: - Recording Properties
+    /// Stores the bus from which audio input will be extracted
     let recordBus = 0
-    private(set) var authorizedToListen = false
+    /// Stores whether expression is authorized to listen for speech. This is typically false when then source filetype is .m4a vs. .caf, which happens on expression export
+    private(set) var authorizedToListenForSpeech = false
+    /// Stores the currently active recording track
     var activeTrack: Int = 0
-    var numTracks: Int {
-        return self.tracks.count
-    }
+    /// Stores a count of the number of unique clips that have been recording throughout expression (factors recording breaks due to voice commands)
+    private(set) var clipCount: Int = 0
+    /// Stores a reference to the shared audio session object
     var recordingSession = AVAudioSession.sharedInstance()
-    private(set) var isListeningForSpeech = false
+    /// Stores a reference to the moment current expression clip started listening
     public var recordStartDate: Date?
+    /// Stores the total duration of time across segments capturing during the current listening clip
     private var accumulatedDuration = TimeInterval(0)
+    /// Stores a reference to the audio file where listening buffers are being saved to
     public var recordFile: AVAudioFile?
+    /// Stores a stream of sound intensity values received throughout the process of listening
     private var soundIntensityStream = [SoundIntensityDatum]()
+    /// Stores a reference to the minimum power value accepted for sound intensity datum
+    public let minPower: Float
+    /// Stores a reference to the expression's pitch engine which computes pitch values in real-time
     private lazy var pitchEngine: PitchEngine = { [weak self] in
         let config = Config(
             bufferSize: 1024,
@@ -108,58 +139,116 @@ class Expression: AVMutableComposition {
         pitchEngine.levelThreshold = minPower
         return pitchEngine
     }()
+    /// Stores a stream of pitch values received throughout the process of listening
     private var pitchStream = [PitchDatum]()
+    /// Stores a handler to be executed when a new listening buffer is received and processed
+    private(set) var onListenUpdate: (() -> Void)?
+    /// Stores a handler to be executed when listening has stopped
+    private(set) var onListenStop: (() -> Void)?
     
     // MARK: - Speech Recognition Properties
+    /// Specifies whether speech recognition should use on-device compute or cloud compute
     private(set) var useOnDeviceRecognition: Bool
+    /// Stores a reference to expression's audio engine used for speech recognition
     private var audioEngine = AVAudioEngine()
+    /// Stores a reference to the expression's speech recognizer object
     private let speechRecognizer: SFSpeechRecognizer? = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+    /// Stores a reference to the audio buffer used by the speech recognition system to process listening buffer blocks
     private var request: SFSpeechAudioBufferRecognitionRequest?
+    /// Stores a reference to the speech recognition task object
     private var recognitionTask: SFSpeechRecognitionTask?
+    /// Stores the type of recognition last executed e.g. speech or voice command
     private var lastRecognitionTask: RecognitionTask?
+    /// Specifies whether expression is currently listening for speech
+    private(set) var isListeningForSpeech = false
+    /// Specifies whether expression has paused listening for speech (active, but paused vs. inactive)
+    private(set) var pausedListeningForSpeech = false
+    /// Specifies whether expression is currently listening for voice commands
     private(set) var isListeningForCommands = false
+    /// Stores a handler to be executed when listening starts
+    private var onListeningStartHandler: (() -> Void)?
     
     // MARK: - Speech Synthesis Properties
+    /// Stores a reference to expression's speech synthesizer object
     public let speechSynthesizer = AVSpeechSynthesizer()
+    /// Stores a queue of synthesizer tasks to be executed serially
     public var synthesizerQueue = Queue<SynthesizerItem>()
+    /// Specifies whether expression has been instructed to clear out contents of synthesizer queue
+    private(set) var isExhaustingSynthesizerQueue = false
+    /// Specifies whether passive echo should execute when headphones are connected
     public var withPassiveEcho = true
+    /// Specifies whether echo is currently playing
     public var isPlayingEcho: Bool {
         return speechSynthesizer.isSpeaking
     }
+    /// Specifies whether echo is currently paused (active, but paused vs. inactive)
     public var echoIsPaused: Bool {
         return speechSynthesizer.isPaused
     }
-    private(set) var isExhaustingSynthesizerQueue = false
+    /// Stores a handler to be executed when echo is complete (always executes)
     private(set) var onEchoFinish: (() -> Void)?
+    /// Stores a temporary handler to be executed when echo is complete (executes on-demand)
     private(set) var tempOnEchoFinish: (() -> Void)?
+    /// Stores a handler to be executed when a new echo range is received and processed
     private(set) var onEchoUpdate: ((_ range: NSRange) -> Void)?
+    /// Stores a handler to be executed when expression is complete
+    private(set) var onExpressionComplete: (() -> Void)?
     
     // MARK: - Audio Playback Properties
+    /// Stores a reference to the expression's player object
     private(set) var player = AVPlayer()
+    /// Stores a reference to the bus used for audio playback
     private let playbackBus = 1
-    public let minPower: Float
+    /// Stores the current playback rate of expression playback
     private(set) var playbackRate: Float = 1
+    /// Stores the current playback volume of expression playback
     public var playbackVolume: Float {
         return AVAudioSession.sharedInstance().outputVolume
     }
+    /// Stores a reference to the playback observer that executes after each segment
     public var boundaryObserverToken: Any?
-    public var completionObserverToken: Any?
+    /// Stores a reference to the playback observer that executes each second
     public var timerObserverToken: Any?
+    /// Stores a reference to the playback observer that executes when playback is complete
+    public var completionObserverToken: Any?
+    /// Stores a reference to the last segment processed during expression playback. Prevents repeat processing.
     private var previousBoundarySegment: ExpressionSegment?
+    /// Specifies whether expression is currently playing
     public var isPlayingExpression: Bool {
         return player.isPlaying
     }
+    /// Specifies whether segments corresponding to punctuation should be skipped
     private(set) var skipPunctuation = true
+    /// Specifies whether segments corresponding to silences should be skipped
     private(set) var skipSilence = true
+    /// Stores a UI handler to be executed when new sound intensity data is received
     private var soundIntensityHandler: ((_ power: Double?) -> Void)?
-    private var onListeningStartHandler: (() -> Void)?
-    private var delayDate: Date?
-    private var delayDuration = 0
+    /// Specifies the time value at which expression playback should begin
     private(set) var startPlaybackAt: CMTime?
+    /// Specifies the time value at which expression playback should end
     private(set) var stopPlaybackAt: CMTime?
     
     // MARK: - Initializer
 
+    /// Initializes the Expression class instance
+    ///
+    /// - Parameters:
+    ///     - vc: Suppliess a reference to the main view controller
+    ///     - filename: Supplies the filename of the expression
+    ///     - fileType: Suppliess the filetype of the source URL
+    ///     - speaker: Suppliess information about the speaker
+    ///     - minPower: Supplies the minimum power value accepted for sound intensity datum
+    ///     - segments: Supplies an optional array of expression segments to seed the expression
+    ///     - withOnDeviceRecognition: Supplies whether speech recognition should use on-device compute or cloud compute
+    ///     - withTemporalSuggestions: Supplies whether expression will present visual indications of temporal silences on screen
+    ///     - withPunctuationSuggestions: Supplies whether expression will present punctuation suggestions based on duration of silences
+    ///     - withFormattingSuggestions: Supplies whether expression will present emphasis suggestions based on fluctuating sound intensity of speaker
+    ///     - withTextStrictlyAsWords: Supplies whether expression will only present written language as words (versus numerals or punctuation symbols)
+    ///     - onListenUpdate: Supplies a handler to be executed when a new listening buffer is received and processed
+    ///     - onListenStop: Supplies a handler to be executed when listening has stopped
+    ///     - onEchoUpdate: Supplies a handler to be executed when a new echo range is received and processed
+    ///     - onEchoFinish: Supplies a handler to be executed when echo is complete (always executes)
+    ///     - onExpressionComplete: Supplies a handler to be executed when expression is complete.
     init(
         vc: ViewController? = nil,
         filename: String,
@@ -178,6 +267,7 @@ class Expression: AVMutableComposition {
         onEchoFinish: (() -> Void)? = nil,
         onExpressionComplete: (() -> Void)? = nil
     ) {
+        print("===== Instantiating new expression: \(filename) =====")
         self.filename = filename
         self.speaker = speaker
         self.minPower = minPower
@@ -226,9 +316,6 @@ class Expression: AVMutableComposition {
         
         if let fileType = fileType {
             self._fileType = fileType
-        } else {
-            // Configure Audio Write File
-            self.configureAudioWriteFile()
         }
         
         // Assign delegates
@@ -239,8 +326,8 @@ class Expression: AVMutableComposition {
         
         // A user might pass in segments when expression instantiated
         if let segments = segments {
-            self.startTime = segments.first!.timeMapping.source.start
-            self.endTime = segments.last!.timeMapping.source.end
+            self.startTime = segments.first!.timeMapping.target.start
+            self.endTime = segments.last!.timeMapping.target.end
             self.setSegments(segments: segments, replaceExpressionDetails: true)
         }
         
@@ -283,8 +370,12 @@ class Expression: AVMutableComposition {
     func configureAudioWriteFile() {
         print("===== Configure Expression Audio Write File =====")
         do {
-            try recordFile = AVAudioFile(forWriting: Utils.getFileURL(of: "\(self.filename)\(self.fileType)"), settings: audioEngine.inputNode.inputFormat(forBus: recordBus).settings)
-            authorizedToListen = true
+            try recordFile = AVAudioFile(
+                forWriting: Utils.getFileURL(of: "\(self.filename)-\(self.clipCount)\(self.fileType)"),
+                settings: audioEngine.inputNode.inputFormat(forBus: recordBus).settings
+            )
+            authorizedToListenForSpeech = true
+            print("\tSource URL for writing expression successfully created: \(self.filename)-\(self.clipCount)\(self.fileType)")
         } catch {
             fatalError("\t[Error] There was a problem instantiating the record file")
         }
@@ -351,27 +442,92 @@ class Expression: AVMutableComposition {
         var result = true
         // only isListeningForSpeech or isListeningForCommands should be active
         result = result && !(self.isListeningForSpeech && self.isListeningForCommands)
+//        print("only isListeningForSpeech or isListeningForCommands should be active: ", !(self.isListeningForSpeech && self.isListeningForCommands))
+//        print("current result: ", result)
+
         // startTime must be in front of endTime
         result = result && self.endTime >= self.startTime
+//        print("startTime must be in front of endTime: ", self.endTime >= self.startTime)
+//        print("current result: ", result)
+
         // start of expression segments should be the same as startTime
-        if let firstSegment = self.expressionSegments.first {
-            result = result && firstSegment.timeMapping.source.start == self.startTime
+        if let firstSegment = self.expressionTracks[0].first {
+            result = result && firstSegment.timeMapping.target.start == self.startTime
+//            print("start of expression segments should be the same as startTime: ", firstSegment.timeMapping.target.start == self.startTime, firstSegment.timeMapping.target.start.seconds, self.startTime.seconds)
+//            print("current result: ", result)
         }
 
+        // never have more than two tracks
+        result = result && self.expressionTracks.count <= 2
+//        print("never have more than two tracks: ", self.expressionTracks.count)
+//        print("current result: ", result)
+
         // end of expression segments should be the same as endTime
-        if let lastSegment = self.expressionSegments.last {
-            result = result && lastSegment.timeMapping.source.end == self.endTime
+        if self.expressionTracks.count == 2, let lastSegment = self.expressionTracks[1].last {
+            result = result && self.endTime == CMTimeAdd(self.expressionTracks[0].last!.timeMapping.target.end, lastSegment.timeMapping.target.end)
+//            print("[With two tracks] end of expression segments should be the same as endTime: ", self.endTime == CMTimeAdd(self.expressionTracks[0].last!.timeMapping.target.end, lastSegment.timeMapping.target.end), self.endTime.seconds, CMTimeAdd(self.expressionTracks[0].last!.timeMapping.target.end, lastSegment.timeMapping.target.end))
+//            print("current result: ", result)
+        } else if let lastSegment = self.expressionTracks[0].last {
+            result = result && self.endTime == lastSegment.timeMapping.target.end
+//            print("[With one track] end of expression segments should be the same as endTime: ", self.endTime == lastSegment.timeMapping.target.end, self.endTime.seconds, lastSegment.timeMapping.target.end.seconds)
+//            print("current result: ", result)
         }
 
         // internal durations should be the same
-        if let firstSegment = self.expressionSegments.first, let lastSegment = self.expressionSegments.last {
-            result = result && CMTimeSubtract(self.endTime, self.startTime) == CMTimeSubtract(lastSegment.timeMapping.source.end, firstSegment.timeMapping.source.start)
+        if self.expressionTracks.count == 2, let firstSegment = self.expressionTracks[0].first, let lastSegment = self.expressionTracks[1].last {
+            result = result && CMTimeSubtract(self.endTime, self.startTime) ==
+            CMTimeSubtract(
+                CMTimeAdd(
+                    self.expressionTracks[0].last!.timeMapping.target.end,
+                    lastSegment.timeMapping.target.end
+                ),
+                firstSegment.timeMapping.target.start
+            )
+//            print(
+//                "[With two tracks] internal durations should be the same: ",
+//                CMTimeSubtract(self.endTime, self.startTime) ==
+//                CMTimeSubtract(
+//                    CMTimeAdd(
+//                        self.expressionTracks[0].last!.timeMapping.target.end,
+//                        lastSegment.timeMapping.target.end
+//                    ),
+//                    firstSegment.timeMapping.target.start
+//                ),
+//                CMTimeSubtract(self.endTime, self.startTime).seconds,
+//                CMTimeSubtract(
+//                    CMTimeAdd(
+//                        self.expressionTracks[0].last!.timeMapping.target.end,
+//                        lastSegment.timeMapping.target.end
+//                    ),
+//                    firstSegment.timeMapping.target.start
+//                ).seconds
+//            )
+//            print("current result: ", result)
+        } else if let firstSegment = self.expressionTracks[0].first, let lastSegment = self.expressionTracks[0].last {
+            result = result && CMTimeSubtract(self.endTime, self.startTime) == CMTimeSubtract(lastSegment.timeMapping.target.end, firstSegment.timeMapping.target.start)
+//            print("[With one track] internal durations should be the same: ", CMTimeSubtract(self.endTime, self.startTime) == CMTimeSubtract(lastSegment.timeMapping.target.end, firstSegment.timeMapping.target.start), CMTimeSubtract(self.endTime, self.startTime).seconds, CMTimeSubtract(lastSegment.timeMapping.target.end, firstSegment.timeMapping.target.start).seconds)
+//            print("current result: ", result)
         }
 
-        // durations should be the same as underlying track segments
-        if let firstSegment = self.tracks[self.activeTrack].segments!.first, let lastSegment = self.tracks[self.activeTrack].segments!.last {
-            result = result && CMTimeSubtract(self.endTime, self.startTime) == CMTimeSubtract(lastSegment.timeMapping.source.end, firstSegment.timeMapping.source.start)
+        // duration of first track should be the same as underlying track segments
+        // we only check is we have two expression tracks because that's when we're guaranteed to have saved expression segments to lower level track representation
+        if self.expressionTracks.count == 2, let firstSegment = self.tracks[0].segments.first, let lastSegment = self.tracks[0].segments.last {
+            result = result && CMTimeSubtract(self.expressionTracks[0].last!.timeMapping.target.end, self.expressionTracks[0].first!.timeMapping.target.start) == CMTimeSubtract(lastSegment.timeMapping.target.end, firstSegment.timeMapping.target.start)
+//            print("duration of first track should be the same as underlying track segments: ", CMTimeSubtract(self.expressionTracks[0].last!.timeMapping.target.end, self.expressionTracks[0].first!.timeMapping.target.start) == CMTimeSubtract(lastSegment.timeMapping.target.end, firstSegment.timeMapping.target.start), CMTimeSubtract(self.expressionTracks[0].last!.timeMapping.target.end, self.expressionTracks[0].first!.timeMapping.target.end).seconds, CMTimeSubtract(lastSegment.timeMapping.target.end, firstSegment.timeMapping.target.start).seconds)
+//            print("current result: ", result)
         }
+        
+        // make sure that second track is active track if it exists
+        if self.expressionTracks.count == 2 {
+            result = result && self.activeTrack == 1
+//            print("[With two tracks] make sure that second track is active track if it exists: ", self.activeTrack == 1, self.activeTrack)
+//            print("current result: ", result)
+        }
+        
+        // make sure paused listening for speech  only occurs if listening for speech
+        result = result && (self.isListeningForSpeech || (!self.isListeningForSpeech && !self.pausedListeningForSpeech))
+//        print("make sure paused listening for speech  only occurs if listening for speech: ", (self.isListeningForSpeech || (!self.isListeningForSpeech && !self.pausedListeningForSpeech)))
+//        print("current result: ", result)
 
         if !result {
             fatalError("===== [Error] Representation Invariants were broken =====")
@@ -388,25 +544,25 @@ class Expression: AVMutableComposition {
             }
             
             return
-        } else if self.isListeningForSpeech {
+        } else if self.isListeningForSpeech && !self.pausedListeningForSpeech {
             // Play Sound
             soundEngine.error()
 
-            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {[weak self] timer in
                 let rate: Float = 0.52
-                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self.vc)
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self!.vc)
                 let synthesizerItem = SynthesizerItem(
-                    synthesizer: self.speechSynthesizer,
+                    synthesizer: self!.speechSynthesizer,
                     text: "Expression already started.",
                     voice: voice,
                     rate: rate,
-                    volume: self.playbackVolume
+                    volume: self!.playbackVolume
                 )
                 
                 Utils.runSpeechSynthesizer(item: synthesizerItem)
             }
             
-            // Execture start Handler
+            // Execute start Handler
             onStartHandler?()
             return
         }
@@ -417,33 +573,62 @@ class Expression: AVMutableComposition {
             print("===== Starting Listening for Speech =====")
         }
         
-        if !forVoiceCommands {
+        if !forVoiceCommands && !self.pausedListeningForSpeech {
             // Play Sound
             Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
                 soundEngine.startListening()
             }
+            
+            // Give haptic feedback
+            hapticEngine.heavyImpact()
         }
         
-        let spinner = UIActivityIndicatorView(style: .medium)
-        spinner.startAnimating()
-        self.vc!.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: spinner)
+        // Visually indicate app is listening
+        self.vc!.activateListeningIndicator()
         
-        if !self.authorizedToListen {
-            print("\t [Error] There was a problem while starting to listen for speech. Expression is not authorized to listen.")
+        // if we have segments in first track, it implies this is n > 1
+        // recording session
+        // We must prepare a new track if it's not there
+        if !forVoiceCommands && self.expressionTracks[0].count > 0 && self.expressionTracks.count == 1 {
+            print("\tAdding new track to expression...")
+            print("\tIncrementing expression clip count from \(self.clipCount) to \(self.clipCount + 1)...")
+            // Increment clip count used to create unique track URLs to write audio into
+            self.clipCount += 1
+
+            // Configure Audio Write File
+            self.configureAudioWriteFile()
+            
+            // Add new expression track
+            addNewTrack()
+        } else if (!forVoiceCommands && self.expressionTracks[0].count > 0 && self.expressionTracks.count > 1) ||
+            (!forVoiceCommands && self.expressionTracks[0].count == 0 && self.expressionTracks.count == 1) {
+            print("\tIncrementing expression clip count from \(self.clipCount) to \(self.clipCount + 1)...")
+            // Increment clip count used to create unique track URLs to write audio into
+            self.clipCount += 1
+
+            // Configure Audio Write File
+            self.configureAudioWriteFile()
+        }
+        
+        if !forVoiceCommands && !self.authorizedToListenForSpeech {
+            print("\t[Error] There was a problem while starting to listen for speech. Expression is not authorized to listen.")
             return
         }
         
         // Activate Pitch Recognition
         pitchEngine.start()
         
+        // Set sound intensity handler
         if let soundIntensityHandler = soundIntensityHandler {
             self.soundIntensityHandler = soundIntensityHandler
         }
         
+        // Set listening handler
         if let onListeningStartHandler = onStartHandler {
             self.onListeningStartHandler = onListeningStartHandler
         }
         
+        // Make sure any previous recognition tasks are finished
         if recognitionTask != nil {
             recognitionTask?.finish()
             recognitionTask = nil
@@ -460,15 +645,19 @@ class Expression: AVMutableComposition {
 //            AVEncoderAudioQualityKey : NSNumber(value: Int32(AVAudioQuality.low.rawValue))
 //        ]
         
+        // Set up values for speech recognition
         request = SFSpeechAudioBufferRecognitionRequest()
         request!.shouldReportPartialResults = true
         request!.requiresOnDeviceRecognition = false // Set to false by default, but conditionally changed below
 
+        // Tap into microphone bus to receive and process audio input buffers
         node.installTap(onBus: recordBus, bufferSize: 1024, format: recordingFormat) { [unowned self] (buffer, _) in
             self.request!.append(buffer)
             // We place this here so we start tracking recording from the first buffer chnk we receive
             DispatchQueue.main.async {
-                if self.audioEngine.isRunning && !self.isListeningForSpeech && !self.isListeningForCommands {
+                if self.audioEngine.isRunning &&
+                    (!self.isListeningForSpeech || self.pausedListeningForSpeech) &&
+                    !self.isListeningForCommands {
                     // A transcription can be in progress before call to startSpeechRecognition if
                     // Apple servers ended dictation session
                     // It cannot be if after a continguous clause was completed while on-device recognition
@@ -477,6 +666,7 @@ class Expression: AVMutableComposition {
                         self.lastRecognitionTask = RecognitionTask.VOICE_COMMAND
                     } else {
                         self.isListeningForSpeech = true
+                        self.pausedListeningForSpeech = false
                         self.lastRecognitionTask = RecognitionTask.SPEECH
                         self.recordStartDate = Date()
                     }
@@ -484,7 +674,8 @@ class Expression: AVMutableComposition {
                     onStartHandler?()
                 }
             }
-
+            
+            // Handle sound intensity information
             DispatchQueue.main.async {
                 let power = Utils.computeSoundIntensity(buffer: buffer)
                 if let power = power {
@@ -496,6 +687,7 @@ class Expression: AVMutableComposition {
                 }
             }
             
+            // Write buffer data to audio file
             if !forVoiceCommands {
                 do {
                     try self.recordFile!.write(from: buffer)
@@ -504,7 +696,8 @@ class Expression: AVMutableComposition {
                 }
             }
         }
-
+        
+        // Prepare and start audio engine
         audioEngine.prepare()
         do {
             try audioEngine.start()
@@ -512,15 +705,18 @@ class Expression: AVMutableComposition {
             fatalError("\t[Error] There was a problem starting speech recognition")
         }
         
+        // Make sure we have support for speech recognition
         guard let myRecognizer = SFSpeechRecognizer() else {
             fatalError("\t[Error] Speech Recognizer is not supported for current locale")
         }
         
+        // Set on-device recognition to desired setting
         if useOnDeviceRecognition && myRecognizer.supportsOnDeviceRecognition {
             print("\tUsing On-Device Recognition")
             request!.requiresOnDeviceRecognition = true
         }
         
+        // Confirm  that speech recognizer is available for speech recogition
         if !myRecognizer.isAvailable {
             fatalError("\t[Error] Speech Recognizer is not available")
         }
@@ -528,7 +724,8 @@ class Expression: AVMutableComposition {
         // Check rep invariant
         checkRep()
         
-        speechRecognizer?.defaultTaskHint = .dictation
+        // Let speech recognizer know we're performing dictation or voice commands
+        speechRecognizer?.defaultTaskHint = forVoiceCommands ? .search : .dictation
         recognitionTask = speechRecognizer?.recognitionTask(with: request!, delegate: self)
     }
     
@@ -538,15 +735,19 @@ class Expression: AVMutableComposition {
             // Play Sound
             soundEngine.error()
             
-            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+            // Give haptic feedback
+            hapticEngine.heavyImpact()
+            
+            // Delay error message to allow error earcon to complete
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {[weak self] timer in
                 let rate: Float = 0.52
-                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self.vc)
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self!.vc)
                 let synthesizerItem = SynthesizerItem(
-                    synthesizer: self.speechSynthesizer,
+                    synthesizer: self!.speechSynthesizer,
                     text: "Expression not started.",
                     voice: voice,
                     rate: rate,
-                    volume: self.playbackVolume
+                    volume: self!.playbackVolume
                 )
                 
                 Utils.runSpeechSynthesizer(item: synthesizerItem)
@@ -566,10 +767,13 @@ class Expression: AVMutableComposition {
         if (isListeningForSpeech || isListeningForCommands) && !pause {
             isListeningForSpeech = false
             isListeningForCommands = false
+            pausedListeningForSpeech = false
+            self.accumulatedDuration = TimeInterval(0)
+            self.recordStartDate = nil
+        } else if pause {
+            pausedListeningForSpeech = true
         }
-        
-        // Gets cut midway when we initiate startListeningForSpeech
-        // Has to do with self.recognitionTask or self.request
+
         if !forVoiceCommands {
             // Play Sound
             // soundEngine.stopListening()
@@ -590,8 +794,12 @@ class Expression: AVMutableComposition {
             self.recognitionTask!.finish() // don't wrap in if statement because it is sometimes not .running
             self.request!.endAudio() // don't add a request = nil because it results in request not being there sometimes.
             self.pitchEngine.stop()
-            self.vc!.navigationItem.leftBarButtonItem = nil
+            self.vc!.deactivateListeningIndicator()
             onStopHandler?() // Needs to be outside DispatchQueue.main.async so it doesn't accidentally wrap two DispatchQueue.main.async if handler has one
+            if !forVoiceCommands {
+                // execute listen stop handler
+                self.onListenStop?()
+            }
         }
     }
     
@@ -603,44 +811,60 @@ class Expression: AVMutableComposition {
         stopListeningForSpeech(pause: pause, forVoiceCommands: true, onStopHandler: onStopHandler)
     }
     
+    func addNewTrack() {
+        print("===== Add new track =====")
+        // Add new track to expression data structure
+        self.expressionTracks.append([])
+        
+        // update active track
+        self.activeTrack = 1
+    }
+    
     func performTranscriptionUpdate(_ transcription: SFTranscription, finalTranscript: Bool = false) {
         // Find staged segments lower index
         var stagedSegmentsLowestIndex: Int = -1
-        for (index, segment) in self.expressionSegments.enumerated() {
-            if segment.timeMapping.source.duration.seconds == DEFAULT_SEGMENT_DURATION {
+        for (index, segment) in self.expressionTracks[self.activeTrack].enumerated() {
+            if segment.timeMapping.target.duration.seconds == DEFAULT_SEGMENT_DURATION {
                 stagedSegmentsLowestIndex = index
                 break
             }
         }
 
         if finalTranscript {
-            var segments = self.expressionSegments
+            var segments = self.expressionTracks[self.activeTrack]
             segments.removeSubrange(stagedSegmentsLowestIndex..<segments.count)
             // Don't ship to setSegments(segments: [ExpressionSegment])
             // It's not normalized yet
-            self.expressionSegments = segments
+            self.expressionTracks[self.activeTrack] = segments
         }
         
         for (index, segment) in transcription.segments.enumerated() {
-            processTranscriptSegment(segment: segment, transcriptionIndex: index, stagedSegmentsLowestIndex: stagedSegmentsLowestIndex, transcription: transcription)
+            processTranscriptSegment(
+                segment: segment,
+                transcriptionIndex: index,
+                stagedSegmentsLowestIndex: stagedSegmentsLowestIndex,
+                transcription: transcription
+            )
         }
-
-        onListenUpdate?()
     }
     
     func processTranscriptSegment(segment: SFTranscriptionSegment, transcriptionIndex: Int, stagedSegmentsLowestIndex: Int, transcription: SFTranscription) {
-        // Create Expression Segment
-        var segments = self.expressionSegments
+        // get existing segments
+        var segments = self.expressionTracks[self.activeTrack]
         
         // Manage NLP
         var segmentTags: [String : NLTag?]
         var sentiment: [ScaleUnitType: Float]?
         if stagedSegmentsLowestIndex == -1 || transcriptionIndex >= (segments.count - stagedSegmentsLowestIndex) {
              // New segment, compute values
-            (segmentTags, sentiment) = computeSegmentTags(transcription: transcription, stagedSegmentsLowestIndex: stagedSegmentsLowestIndex, transcriptionIndex: transcriptionIndex)
+            (segmentTags, sentiment) = computeSegmentTags(
+                transcription: transcription,
+                stagedSegmentsLowestIndex: stagedSegmentsLowestIndex,
+                transcriptionIndex: transcriptionIndex
+            )
         } else if transcriptionIndex < (segments.count - stagedSegmentsLowestIndex) {
             // existing segment, get values
-            let existingSegment = self.expressionSegments[stagedSegmentsLowestIndex + transcriptionIndex]
+            let existingSegment = self.expressionTracks[self.activeTrack][stagedSegmentsLowestIndex + transcriptionIndex]
             segmentTags = [
                 "nameType": existingSegment.getNameType(),
                 "lemma": existingSegment.getLemma(),
@@ -654,6 +878,7 @@ class Expression: AVMutableComposition {
             fatalError("\t[Error] There was a problem computing segment tags")
         }
         
+        // Compute segment text
         let word = transcriptionIndex == 0
             && segments.count > 0
             && !segments.last!.isSentenceTerminator()
@@ -663,23 +888,41 @@ class Expression: AVMutableComposition {
                 segment.substring
 
         // Compute timestamp and duration
-        var timestamp: Double
+        var sourceTimestamp: Double
         var duration: Double
         if segment.duration <= 0 {
             // temporary segment
             // give it default temporary values
             if stagedSegmentsLowestIndex == -1 {
                 // First temporary segment
-                timestamp = 0
+                
+                // Set source timestamp
+                sourceTimestamp = 0
+                
+                // Set duration
                 duration = floor(Expression.defaultSegmentTimescale * DEFAULT_SEGMENT_DURATION)
             } else {
-                let processedSeconds: Double = segments[stagedSegmentsLowestIndex].timeMapping.source.start.seconds
-                timestamp = floor(Expression.defaultSegmentTimescale * (processedSeconds + Double(transcriptionIndex) * DEFAULT_SEGMENT_DURATION))
+                let processedSeconds: Double = segments[stagedSegmentsLowestIndex].timeMapping.target.start.seconds
+                // Set source timestamp
+                sourceTimestamp = floor(Expression.defaultSegmentTimescale * (
+                        processedSeconds +
+                        Double(transcriptionIndex) * DEFAULT_SEGMENT_DURATION
+                    )
+                )
+                
+                // Set duration
                 duration = floor(Expression.defaultSegmentTimescale * DEFAULT_SEGMENT_DURATION)
             }
         } else {
             // enters here when we get the final transcript which has timestamp data
-            timestamp = self.accumulatedDuration + segment.timestamp > 0 ? floor(Expression.defaultSegmentTimescale * (accumulatedDuration + segment.timestamp)) : 0
+            
+            // Set source timestamp
+            sourceTimestamp = self.accumulatedDuration + segment.timestamp > 0 ?
+                    floor(Expression.defaultSegmentTimescale * (accumulatedDuration + segment.timestamp))
+                :
+                    0
+            
+            // Set duration
             duration = segment.duration > 0 ? floor(Expression.defaultSegmentTimescale * segment.duration) : 0
         }
         
@@ -688,11 +931,16 @@ class Expression: AVMutableComposition {
         let expressionSegment = ExpressionSegment(
             expression: self,
             word: word,
-            trackURL: Utils.getFileURL(of: "\(self.filename)\(self.fileType)"),
-            trackID: self.tracks[self.activeTrack].trackID,
+            trackURL: Utils.getFileURL(of: "\(self.filename)-\(self.clipCount)\(self.fileType)"),
+            trackID: self.tracks[0].trackID,
+            trackIndex: self.activeTrack,
             phoneticallySimilarWords: phoneticallySimilarWords,
-            timeRange: CMTimeRangeMake(
-                start: CMTimeMake(value: Int64(timestamp), timescale: Int32(Expression.defaultSegmentTimescale)),
+            sourceTimeRange: CMTimeRangeMake(
+                start: CMTimeMake(value: Int64(sourceTimestamp), timescale: Int32(Expression.defaultSegmentTimescale)),
+                duration: CMTimeMake(value: Int64(duration), timescale: Int32(Expression.defaultSegmentTimescale))
+            ),
+            targetTimeRange: CMTimeRangeMake( // This will be properly set in normalize Segments
+                start: CMTimeMake(value: Int64(sourceTimestamp), timescale: Int32(Expression.defaultSegmentTimescale)),
                 duration: CMTimeMake(value: Int64(duration), timescale: Int32(Expression.defaultSegmentTimescale))
             ),
             tokenType: segmentTags["tokenType"]!,
@@ -705,14 +953,14 @@ class Expression: AVMutableComposition {
         if stagedSegmentsLowestIndex == -1 || transcriptionIndex >= (segments.count - stagedSegmentsLowestIndex) {
             // New segment, append to speechSegments
             segments.append(expressionSegment)
-            self.expressionSegments = segments
+            self.expressionTracks[self.activeTrack] = segments
         } else if transcriptionIndex <= (segments.count - stagedSegmentsLowestIndex) {
             // Existing segment, overwrite old copy
             // This assumes the new version is a better approximation of user speech
             let oldSegment = segments[stagedSegmentsLowestIndex + transcriptionIndex]
             if oldSegment != expressionSegment {
                 segments[stagedSegmentsLowestIndex + transcriptionIndex] = expressionSegment
-                self.expressionSegments = segments
+                self.expressionTracks[self.activeTrack] = segments
             } else {
                 // Existing segment without changes encountered.
                 // print("Existing segment without changes encountered.")
@@ -726,47 +974,66 @@ class Expression: AVMutableComposition {
     // We set background noise here because we can identify all the silences
     // We set sentence numbers here because we've built up the entire expression and can compute sentences factoring it all
     // This is where correct values for avgPauseDuration and speakingRate are set
-    func normalizeSegments(segments: [ExpressionSegment]? = nil, replaceExpressionDetails: Bool = false) {
+    func normalizeSegments(
+        segments: [ExpressionSegment]? = nil,
+        normalizeType: TimeNormalizerType = .source,
+        replaceExpressionDetails: Bool = false,
+        saveToLowLevelRepr: Bool = false,
+        saveToTrack: Int = Int(Utils.UNKNOWN)
+    ) {
         print("===== Normalizing Segments =====")
         var lastEnd = CMTime.zero
         var normalizedSegments = [ExpressionSegment]()
         var silenceIndices = [Int]()
         
-        var segs = self.expressionSegments
+        var segs = self.expressionTracks[self.activeTrack]
         if let segments = segments {
             segs = segments
         }
         
-        for (index, segment) in segs.enumerated() {
-            if segment.timeMapping.source.start.seconds != lastEnd.seconds {
-                if segment.timeMapping.source.start.seconds > lastEnd.seconds && !segment.isSilence() {
+        for segment in segs {
+            if segment.timeMapping[normalizeType].start.seconds != lastEnd.seconds {
+                if segment.timeMapping[normalizeType].start.seconds > lastEnd.seconds && !segment.isSilence() {
                     // Add a silent segment in front of current segment to account for early time
                     let silentSegment = ExpressionSegment(
                         expression: self,
                         word: "",
-                        trackURL: Utils.getFileURL(of: "\(self.filename)\(self.fileType)"),
-                        trackID: self.tracks[self.activeTrack].trackID,
+                        trackURL: Utils.getFileURL(of: "\(self.filename)-\(self.clipCount)\(self.fileType)"),
+                        trackID: self.tracks[0].trackID,
+                        trackIndex: saveToTrack != Int(Utils.UNKNOWN) ? saveToTrack : self.activeTrack,
                         phoneticallySimilarWords: [],
-                        timeRange: CMTimeRangeMake(
+                        // If we're normalizing target, this might be wrong
+                        sourceTimeRange: CMTimeRangeMake(
                             start: lastEnd,
                             duration: segment.timeMapping.source.start - lastEnd
+                        ),
+                        // If we're normalizing source, this might be wrong
+                        targetTimeRange: CMTimeRangeMake(
+                            start: lastEnd,
+                            duration: segment.timeMapping.target.start - lastEnd
                         ),
                         tokenType: nil,
                         lexicalClass: nil,
                         nameType: nil,
                         lemma: nil,
                         sentimentScore: nil, // silences have no sentiment
-                        utterPunctuationSuggestion: true // give feedback that we're on a new sentence or paragraph. TODO: prevent multiple firing at once
+                        utterPunctuationSuggestion: true // give feedback that we're on a new sentence or paragraph.
                     )
                     
                     // Segment Sound intensity
-                    let startOfSegmentDuration: Double = segment.timeMapping.source.start.seconds
-                    if segment.getPower() == Double.infinity {
-                        // Add sound intensity
+                    let startOfSegmentDuration: Double = lastEnd.seconds
+                    
+                    // Sound Intensity
+                    if segment.getPower() != Double.infinity {
+                        // Import sound intensity
+                        let power = segment.getPower()
+                        segment.setPower(power: power)
+                    } else if self.soundIntensityStream.count > 0 {
+                        // Add sound intensities
                         let datum = getRecordingSoundIntensityDatum(timestamp: startOfSegmentDuration)
                         segment.setPower(power: datum.power.rounded(toPlaces: SOUND_INTENSITY_SIG_FIG_COUNT))
                     }
-                    
+
                     // Silence Sound Intensity/Background Noise
                     if self.soundIntensityStream.count > 0 {
                         let startOfSilenceDuration: Double = lastEnd.seconds
@@ -774,11 +1041,17 @@ class Expression: AVMutableComposition {
                         silentSegment.setPower(power: backgroundNoise.power.rounded(toPlaces: SOUND_INTENSITY_SIG_FIG_COUNT))
                     }
                     
-                    if self.pitchStream.count > 0 {
+                    // Pitch
+                    if let pitch = segment.getPitch() {
+                        // Import pitch
+                        segment.setPitch(pitch: pitch)
+                    } else if self.pitchStream.count > 0 {
                         // Add pitch
                         let pitch = getRecordingPitch(timestamp: startOfSegmentDuration)
                         segment.setPitch(pitch: pitch.pitch)
                     }
+                    
+                    // Silences don't have pitch
                     
                     // Save silence index
                     silenceIndices.append(normalizedSegments.count)
@@ -788,16 +1061,24 @@ class Expression: AVMutableComposition {
                     normalizedSegments.append(segment)
                     
                     // Update last end value
-                    lastEnd = segment.timeMapping.source.end
-                } else if segment.timeMapping.source.start.seconds > lastEnd.seconds && segment.isSilence() {
+                    lastEnd = segment.timeMapping[normalizeType].end
+                } else if segment.timeMapping[normalizeType].start.seconds > lastEnd.seconds && segment.isSilence() {
                     // Modify silent segment in front of current segment to account for early time
                     let modifiedSegment = ExpressionSegment(
                         expression: self,
                         word: segment.getText(),
                         trackURL: segment.sourceURL!,
                         trackID: segment.sourceTrackID,
+                        trackIndex: saveToTrack != Int(Utils.UNKNOWN) ? saveToTrack : segment.getTrackIndex(),
                         phoneticallySimilarWords: segment.getPhoneticallySimilarWords(),
-                        timeRange: CMTimeRangeFromTimeToTime(start: lastEnd, end: segment.timeMapping.source.end),
+                        sourceTimeRange: normalizeType == .source ?
+                            CMTimeRangeFromTimeToTime(start: lastEnd, end: segment.timeMapping.source.end)
+                            :
+                            segment.timeMapping.source,
+                        targetTimeRange: normalizeType == .target ?
+                            CMTimeRangeFromTimeToTime(start: lastEnd, end: segment.timeMapping.target.end)
+                            :
+                            segment.timeMapping.target,
                         tokenType: segment.getTokenType(),
                         lexicalClass: segment.getLexicalClass(),
                         nameType: segment.getNameType(),
@@ -806,11 +1087,22 @@ class Expression: AVMutableComposition {
                     )
                     
                     let startOfSilenceDuration: Double = lastEnd.seconds
-                    if segment.getPower() == Double.infinity {
-                        // Add sound intensity
+                    
+                    // Sound Intensity
+                    if segment.getPower() != Double.infinity {
+                        // Import sound intensity
+                        let power = segment.getPower()
+                        modifiedSegment.setPower(power: power)
+                    } else if self.soundIntensityStream.count > 0 {
+                        // Add sound intensities
                         let datum = getRecordingSoundIntensityDatum(timestamp: startOfSilenceDuration)
                         modifiedSegment.setPower(power: datum.power.rounded(toPlaces: SOUND_INTENSITY_SIG_FIG_COUNT))
                     }
+                    
+                    // Silences don't have pitch
+                    
+                    // Is Voice Command
+                    modifiedSegment.setIsVoiceCommandWord(to: segment.isVoiceCommandWord())
                     
                     // Save silence index
                     silenceIndices.append(normalizedSegments.count)
@@ -819,19 +1111,30 @@ class Expression: AVMutableComposition {
                     normalizedSegments.append(modifiedSegment)
                     
                     // Update last end value
-                    lastEnd = segment.timeMapping.source.end
-                } else if segment.timeMapping.source.start.seconds < lastEnd.seconds && index != 0 {
+                    lastEnd = segment.timeMapping[normalizeType].end
+                } else if segment.timeMapping[normalizeType].start.seconds < lastEnd.seconds {
                     // segment overlaps with previous segment, shift it forwards
                     let normalizedSegment = ExpressionSegment(
                         expression: self,
                         word: segment.getText(),
                         trackURL: segment.sourceURL!,
                         trackID: segment.sourceTrackID,
+                        trackIndex: saveToTrack != Int(Utils.UNKNOWN) ? saveToTrack : segment.getTrackIndex(),
                         phoneticallySimilarWords: segment.getPhoneticallySimilarWords(),
-                        timeRange: CMTimeRangeMake(
-                            start: lastEnd,
-                            duration: segment.timeMapping.source.duration
-                        ),
+                        sourceTimeRange: normalizeType == .source ?
+                            CMTimeRangeMake(
+                                start: lastEnd,
+                                duration: segment.timeMapping.source.duration
+                            )
+                            :
+                            segment.timeMapping.source,
+                        targetTimeRange: normalizeType == .target ?
+                            CMTimeRangeMake(
+                                start: lastEnd,
+                                duration: segment.timeMapping.target.duration
+                            )
+                            :
+                            segment.timeMapping.target,
                         tokenType: segment.getTokenType(),
                         lexicalClass: segment.getLexicalClass(),
                         nameType: segment.getNameType(),
@@ -861,16 +1164,19 @@ class Expression: AVMutableComposition {
                         let pitch = getRecordingPitch(timestamp: startOfSegmentDuration)
                         segment.setPitch(pitch: pitch.pitch)
                     }
+                    
+                    // Is Voice Command
+                    normalizedSegment.setIsVoiceCommandWord(to: segment.isVoiceCommandWord())
 
                     // Add to segments array
                     normalizedSegments.append(normalizedSegment)
                     // print("Normalized time of segment: \(normalizedSegment.getText())")
                     
                     // Update last end value
-                    lastEnd = CMTimeAdd(lastEnd, segment.timeMapping.source.duration)
+                    lastEnd = CMTimeAdd(lastEnd, segment.timeMapping[normalizeType].duration)
                 }
             } else {
-                let middleOfSegmentDuration: Double = segment.timeMapping.source.start.seconds
+                let middleOfSegmentDuration: Double = segment.timeMapping[normalizeType].start.seconds
 
                 // Sound Intensity
                 if segment.getPower() != Double.infinity {
@@ -893,16 +1199,21 @@ class Expression: AVMutableComposition {
                     segment.setPitch(pitch: pitch.pitch)
                 }
                 
+                // Save silence index
+                if segment.isSilence() {
+                    silenceIndices.append(normalizedSegments.count)
+                }
+                
                 // Add to segments array
                 normalizedSegments.append(segment)
                 
                 // Update last end value
-                lastEnd = segment.timeMapping.source.end
+                lastEnd = segment.timeMapping[normalizeType].end
             }
         }
         
         var avgPauseDuration: Double = silenceIndices.reduce(0, { result, i in
-            return result + normalizedSegments[i].timeMapping.source.duration.seconds
+            return result + normalizedSegments[i].timeMapping[normalizeType].duration.seconds
         }) / Double(silenceIndices.count)
         avgPauseDuration = avgPauseDuration.rounded(toPlaces: DEFAULT_FIG_COUNT)
         
@@ -930,7 +1241,12 @@ class Expression: AVMutableComposition {
             segment.setSpeakingRate(rate: speakingRate)
         }
         
-        self.setSegments(segments: normalizedSegments, replaceExpressionDetails: replaceExpressionDetails)
+        self.setSegments(
+            segments: normalizedSegments,
+            replaceExpressionDetails: replaceExpressionDetails,
+            saveToLowLevelRepr: saveToLowLevelRepr,
+            saveToTrack: saveToTrack
+        )
         
         checkRep()
     }
@@ -942,10 +1258,10 @@ class Expression: AVMutableComposition {
         let segmentText = transcription.segments[transcriptionIndex].substring
         
         var index: Int
-        if stagedSegmentsLowestIndex == -1 || transcriptionIndex > (self.expressionSegments.count - stagedSegmentsLowestIndex) {
+        if stagedSegmentsLowestIndex == -1 || transcriptionIndex > (self.expressionTracks[self.activeTrack].count - stagedSegmentsLowestIndex) {
             // New segment, append to speechSegments
-            index = self.expressionSegments.count
-        } else if transcriptionIndex <= (self.expressionSegments.count - stagedSegmentsLowestIndex) {
+            index = self.expressionTracks[self.activeTrack].count
+        } else if transcriptionIndex <= (self.expressionTracks[self.activeTrack].count - stagedSegmentsLowestIndex) {
             // Existing segment, overwrite old copy
             // This assumes the new version is a better approximation of user speech
             index = stagedSegmentsLowestIndex + transcriptionIndex
@@ -954,9 +1270,9 @@ class Expression: AVMutableComposition {
         }
         
         let wholeText = segmentText.count == 1 && segmentText.first!.isPunctuation ?
-            getExpressionText() + segmentText
+            getExpressionText(segments: self.expressionTracks[self.activeTrack]) + segmentText
         :
-            getExpressionText() + " \(segmentText)"
+            getExpressionText(segments: self.expressionTracks[self.activeTrack]) + " \(segmentText)"
         tagger.string = wholeText
 
         var nameType: NLTag?
@@ -966,7 +1282,7 @@ class Expression: AVMutableComposition {
         var wordSentimentScore: NLTag?
         var sentenceSentimentScore: NLTag?
         var paragraphSentimentScore: NLTag?
-        let range = findSegmentRange(segments: self.expressionSegments, wholeText: wholeText, segmentText: segmentText, index: index)
+        let range = findSegmentRange(segments: self.expressionTracks[self.activeTrack], wholeText: wholeText, segmentText: segmentText, index: index)
         let rangeStartIndex: Int = wholeText.distance(from: wholeText.startIndex, to: range.lowerBound)
         let stringIndex = wholeText.index(wholeText.startIndex, offsetBy: rangeStartIndex)
         (nameType, _) = tagger.tag(at: stringIndex, unit: .word, scheme: .nameType)
@@ -1004,7 +1320,7 @@ class Expression: AVMutableComposition {
                 break
             }
 
-            if seg.isSentenceTerminator(withPunctuationSuggestions: self.withPunctuationSuggestions) {
+            if seg.isSentenceTerminator() {
                 sentenceNumber += 1
             }
         }
@@ -1023,7 +1339,7 @@ class Expression: AVMutableComposition {
         } else if index < segments.count && index > 0 {
             // is in in expressionSegments
             let lowerBoundarySegment = segments[index - 1]
-            lowerText = self.getExpressionText(until: lowerBoundarySegment.timeMapping.source.start, segments: segments)
+            lowerText = self.getExpressionText(until: lowerBoundarySegment.timeMapping.target.start, segments: segments) // We assume that this is only called when source == target, so using either is fine
         } else if index == 0 && segments.count == 0 {
             // is first segment
             lowerText = ""
@@ -1072,34 +1388,44 @@ class Expression: AVMutableComposition {
     func getExpressionText(from fromTime: CMTime = CMTime.zero, until untilTime: CMTime? = nil, segments: [ExpressionSegment]? = nil, forEcho: Bool = false) -> String {
         var text = ""
         
-        var expressionSegments = self.expressionSegments
+        var expressionSegments: [ExpressionSegment]? = nil
         if let segments = segments {
             expressionSegments = segments
         }
-
-        for segment in expressionSegments  {
-            if let untilTime = untilTime, segment.timeMapping.source.start <= untilTime && !segment.isVoiceCommandWord() {
-                let word = segment.getText(
-                    withTemporalSuggestions: self.withTemporalSuggestions,
-                    withPunctuationSuggestions: self.withPunctuationSuggestions,
-                    withFormattingSuggestions: self.withFormattingSuggestions,
-                    strictlyAsWord: self.withTextStrictlyAsWords,
-                    withSpacePrefix: true,
-                    forEcho: forEcho
-                )
-                
-                text += word
-            } else if segment.timeMapping.source.start >= fromTime && !segment.isVoiceCommandWord() {
-                let word = segment.getText(
-                    withTemporalSuggestions: self.withTemporalSuggestions,
-                    withPunctuationSuggestions: self.withPunctuationSuggestions,
-                    withFormattingSuggestions: self.withFormattingSuggestions,
-                    strictlyAsWord: self.withTextStrictlyAsWords,
-                    withSpacePrefix: true,
-                    forEcho: forEcho
-                )
-                
-                text += word
+        
+        // Compute text on multi segment tracks
+        if segments == nil && expressionTracks.count == 2 && self.expressionTracks[0].count > 0 && self.expressionTracks[1].count > 0  {
+            text = "\(getExpressionText(segments: self.expressionTracks[0])) \(getExpressionText(segments: self.expressionTracks[1]))"
+        } else {
+            if expressionSegments == nil {
+                expressionSegments = self.expressionTracks[0]
+            }
+            
+            // We have been given a specific set of segments to compute on vs. multi segment tracks
+            for segment in expressionSegments!  {
+                if let untilTime = untilTime, segment.timeMapping.target.start <= untilTime && !segment.isVoiceCommandWord() {
+                    let word = segment.getText(
+                        withTemporalSuggestions: self.withTemporalSuggestions,
+                        withPunctuationSuggestions: self.withPunctuationSuggestions,
+                        withFormattingSuggestions: self.withFormattingSuggestions,
+                        strictlyAsWord: self.withTextStrictlyAsWords,
+                        withSpacePrefix: true,
+                        forEcho: forEcho
+                    )
+                    
+                    text += word
+                } else if segment.timeMapping.target.start >= fromTime && !segment.isVoiceCommandWord() {
+                    let word = segment.getText(
+                        withTemporalSuggestions: self.withTemporalSuggestions,
+                        withPunctuationSuggestions: self.withPunctuationSuggestions,
+                        withFormattingSuggestions: self.withFormattingSuggestions,
+                        strictlyAsWord: self.withTextStrictlyAsWords,
+                        withSpacePrefix: true,
+                        forEcho: forEcho
+                    )
+                    
+                    text += word
+                }
             }
         }
         
@@ -1126,7 +1452,9 @@ class Expression: AVMutableComposition {
         }
         
         // Play Sound
-        soundEngine.play()
+        if !self.isListeningForSpeech {
+            soundEngine.play()
+        }
         
         if speechSynthesizer.isSpeaking {
             print("\tPause speech synthesizer to play speech audio.\n")
@@ -1294,13 +1622,13 @@ class Expression: AVMutableComposition {
     }
     
     func pause(handler: (() -> Void)? = nil) {
-        print("===== Pause Expression =====")
+        print("===== Pause Playing Expression =====")
         player.pause()
         handler?()
     }
     
     func stop(handler: (() -> Void)? = nil) {
-        print("===== Stop Expression =====")
+        print("===== Stop Playing Expression =====")
         player.pause()
         player.seek(to: self.startTime)
         self.startPlaybackAt = nil
@@ -1363,7 +1691,8 @@ class Expression: AVMutableComposition {
     }
     
     func echoText(text: String) {
-        print("==== Echo expression snippet =====")
+        print("==== Echo expression text =====")
+        
         // Stop existing echo
         if speechSynthesizer.isSpeaking {
             speechSynthesizer.stopSpeaking(at: .immediate)
@@ -1373,6 +1702,8 @@ class Expression: AVMutableComposition {
             print("\tStop speech audio to play speech synthesizer")
             self.stop()
         }
+        
+        print("\techoing: \"\(text)\"")
         
         // Create echo text
         let splitText = text.components(separatedBy: " ")
@@ -1415,10 +1746,14 @@ class Expression: AVMutableComposition {
     }
     
     // MARK: - Mutating Methods
-
+    
+    // TRACKS MUST BE COLLAPSED INTO SINGLE TRACK TO USE THIS
     func trimExpression(keeping: CMTimeRange, permanent: Bool = false, overwrite: Bool = false, onCompletionHandler: (() -> Void)? = nil) {
         let keepRange = keeping
         print("===== Trim Expression keeping section starting: \(keepRange.start.seconds) until: \(keepRange.end.seconds) =====")
+        if self.expressionTracks.count == 2 {
+            fatalError("===== There was a problem trimming expression. Expression tracks were not collapsed =====")
+        }
         
         var newExpressionSegments = [ExpressionSegment]()
         var silenceIndices = [Int]()
@@ -1445,8 +1780,8 @@ class Expression: AVMutableComposition {
                 if keepRange.start == CMTime.zero {
                     print("\tExpression Segments don't require time-shifting...")
                     // requires no time-shifting if on the left side of range
-                    for (index, seg) in self.expressionSegments.enumerated() {
-                        if keepRange.containsTimeRange(seg.timeMapping.source) {
+                    for (index, seg) in self.expressionTracks[0].enumerated() {
+                        if keepRange.containsTimeRange(seg.timeMapping.target) {
                             let segment = seg.duplicate(index: index)
                             
                             // Save silence index
@@ -1458,19 +1793,19 @@ class Expression: AVMutableComposition {
                             newExpressionSegments.append(segment)
                             
                             // Update lastEnd
-                            lastEnd = seg.timeMapping.source.end
+                            lastEnd = seg.timeMapping.target.end
                         }
                     }
                 } else {
                     print("\tExpression Segments require time-shifting...")
                     // requires time-shifting if on the right side of range
-                    for (index, seg) in self.expressionSegments.enumerated() {
-                        if keepRange.containsTimeRange(seg.timeMapping.source) {
+                    for (index, seg) in self.expressionTracks[0].enumerated() {
+                        if keepRange.containsTimeRange(seg.timeMapping.target) {
                             let shiftedSegment = seg.duplicate(
                                 index: index,
                                 timeRange: CMTimeRangeMake(
                                     start: lastEnd,
-                                    duration: seg.timeMapping.source.duration
+                                    duration: seg.timeMapping.target.duration
                                 )
                             )
 
@@ -1483,14 +1818,14 @@ class Expression: AVMutableComposition {
                             newExpressionSegments.append(shiftedSegment)
 
                             // Update lastEnd
-                            lastEnd = CMTimeAdd(lastEnd, seg.timeMapping.source.duration)
+                            lastEnd = CMTimeAdd(lastEnd, seg.timeMapping.target.duration)
                         }
                     }
                 }
 
                 print("\tUpdate index, backgroundNoise, avgPauseDuration, and speakingRate...")
                 var avgPauseDuration: Double = silenceIndices.reduce(0, { result, i in
-                   return result + newExpressionSegments[i].timeMapping.source.duration.seconds
+                   return result + newExpressionSegments[i].timeMapping.target.duration.seconds
                 }) / Double(silenceIndices.count)
                 avgPauseDuration = avgPauseDuration.rounded(toPlaces: DEFAULT_FIG_COUNT)
 
@@ -1529,7 +1864,11 @@ class Expression: AVMutableComposition {
                 // Correct any time-related errors
                 // Normalize Segments will setSegments
                 // Make sure we update segments to reflect new track URL
-                self.normalizeSegments(segments: newExpressionSegments, replaceExpressionDetails: true)
+                self.normalizeSegments(
+                    segments: newExpressionSegments,
+                    normalizeType: .target,
+                    replaceExpressionDetails: true
+                )
 
                 // Check Representation Invariant
                 self.checkRep()
@@ -1576,8 +1915,8 @@ class Expression: AVMutableComposition {
             if keepRange.start == CMTime.zero {
                 print("\tExpression Segments don't require time-shifting...")
                 // requires no time-shifting if on the left side of range
-                for (index, seg) in self.expressionSegments.enumerated() {
-                    if keepRange.containsTimeRange(seg.timeMapping.source) {
+                for (index, seg) in self.expressionTracks[0].enumerated() {
+                    if keepRange.containsTimeRange(seg.timeMapping.target) {
                         let segment = seg.duplicate(index: index)
                         
                         // Save silence index
@@ -1589,19 +1928,19 @@ class Expression: AVMutableComposition {
                         newExpressionSegments.append(segment)
                         
                         // Update lastEnd
-                        lastEnd = seg.timeMapping.source.end
+                        lastEnd = seg.timeMapping.target.end
                     }
                 }
             } else {
                 print("\tExpression Segments require time-shifting...")
                 // requires time-shifting if on the right side of range
-                for (index, seg) in self.expressionSegments.enumerated() {
-                    if keepRange.containsTimeRange(seg.timeMapping.source) {
+                for (index, seg) in self.expressionTracks[0].enumerated() {
+                    if keepRange.containsTimeRange(seg.timeMapping.target) {
                         let shiftedSegment = seg.duplicate(
                             index: index,
                             timeRange: CMTimeRangeMake(
                                 start: lastEnd,
-                                duration: seg.timeMapping.source.duration
+                                duration: seg.timeMapping.target.duration
                             )
                         )
 
@@ -1614,7 +1953,7 @@ class Expression: AVMutableComposition {
                         newExpressionSegments.append(shiftedSegment)
 
                         // Update lastEnd
-                        lastEnd = CMTimeAdd(lastEnd, seg.timeMapping.source.duration)
+                        lastEnd = CMTimeAdd(lastEnd, seg.timeMapping.target.duration)
                     }
                 }
             }
@@ -1622,7 +1961,7 @@ class Expression: AVMutableComposition {
             print("\tUpdate index, backgroundNoise, avgPauseDuration, and speakingRate...")
 
             var avgPauseDuration: Double = silenceIndices.reduce(0, { result, i in
-               return result + newExpressionSegments[i].timeMapping.source.duration.seconds
+               return result + newExpressionSegments[i].timeMapping.target.duration.seconds
             }) / Double(silenceIndices.count)
             avgPauseDuration = avgPauseDuration.rounded(toPlaces: DEFAULT_FIG_COUNT)
 
@@ -1654,9 +1993,9 @@ class Expression: AVMutableComposition {
             print("\tUpdate Expression Segments...")
             // Update Segments
             // We cannot go through setSegments method because these expression segments might not be normalized
-            self.expressionSegments = newExpressionSegments
+            self.expressionTracks[0] = newExpressionSegments
             // Compute segment sentences
-            updateSegmentSentences(segments: self.expressionSegments)
+            updateSegmentSentences(segments: self.expressionTracks[0])
 
             // Check Representation Invariant
             self.checkRep()
@@ -1669,7 +2008,7 @@ class Expression: AVMutableComposition {
     // Mutates Segments
     func updateSegmentSentences(segments: [ExpressionSegment]) {
         print("===== Update Segment Sentences =====")
-        var sentenceNumber = 0
+        var currentSentenceNumber = 0
         var sentenceText = ""
         var sentenceStartTime = CMTime.zero
         var sentenceEndTime: CMTime
@@ -1679,16 +2018,20 @@ class Expression: AVMutableComposition {
         for (index, segment) in segments.enumerated() {
             if index + 1 == segments.count {
                 // We've reached the end of the expression. Update sentence data
-                sentenceEndTime = segment.timeMapping.source.end
-                sentenceText += segment.getText(
-                    withTemporalSuggestions: self.withTemporalSuggestions,
-                    withPunctuationSuggestions: self.withPunctuationSuggestions,
-                    withFormattingSuggestions: self.withFormattingSuggestions,
-                    strictlyAsWord: self.withTextStrictlyAsWords,
-                    withSpacePrefix: true
-                )
+                sentenceEndTime = segment.timeMapping.target.end
+                
+                if !segment.isVoiceCommandWord() {
+                    sentenceText += segment.getText(
+                        withTemporalSuggestions: self.withTemporalSuggestions,
+                        withPunctuationSuggestions: self.withPunctuationSuggestions,
+                        withFormattingSuggestions: self.withFormattingSuggestions,
+                        strictlyAsWord: self.withTextStrictlyAsWords,
+                        withSpacePrefix: true
+                    )
+                }
+                
                 let sentence = Sentence(
-                    number: sentenceNumber,
+                    number: currentSentenceNumber,
                     text: sentenceText.trimmingCharacters(in: .whitespacesAndNewlines),
                     timeRange: CMTimeRangeFromTimeToTime(
                         start: sentenceStartTime,
@@ -1703,13 +2046,16 @@ class Expression: AVMutableComposition {
                 for i in leftStaleSegmentIndex...index {
                     segments[i].setSentence(sentence: sentence)
                 }
+            } else if segment.isVoiceCommandWord() {
+                // Don't add word to sentenceText
+                // We don't want these in Sentence class object instances
             } else if segment.isSilence() {
                 if index > 0 && !segments[index - 1].isSentenceTerminator() {
-                    // Do nothing
+                    // Do nothing if last segment wasn't a sentence boundary
                 } else if index > 0 && segments[index - 1].isSentenceTerminator() {
                     // We've hit a sentence boundary. Update sentences
                     // Update sentence data
-                    sentenceEndTime = segment.timeMapping.source.start
+                    sentenceEndTime = segment.timeMapping.target.start
                     sentenceText += segment.getText(
                         withTemporalSuggestions: self.withTemporalSuggestions,
                         withPunctuationSuggestions: self.withPunctuationSuggestions,
@@ -1718,15 +2064,15 @@ class Expression: AVMutableComposition {
                         withSpacePrefix: true
                     )
                     let sentence = Sentence(
-                        number: sentenceNumber,
+                        number: currentSentenceNumber,
                         text: sentenceText.trimmingCharacters(in: .whitespacesAndNewlines),
                         timeRange: CMTimeRangeFromTimeToTime(
                             start: sentenceStartTime,
                             end: sentenceEndTime
                         )
                     )
-                    sentenceNumber += 1
-                    sentenceStartTime = segment.timeMapping.source.start
+                    currentSentenceNumber += 1
+                    sentenceStartTime = segment.timeMapping.target.start
                     // Clear sentence
                     sentenceText = ""
                     
@@ -1736,25 +2082,25 @@ class Expression: AVMutableComposition {
                     }
                     leftStaleSegmentIndex = index
                 }
-            } else if !segment.isSilence() {
+            } else if !segment.isSilence() && !segment.isVoiceCommandWord() {
                 // We can't let silences in here because getSentenceNumber can't handle empty strings
-                let number = getSentenceNumber(segments: segments, segment: segment)
+                let sentenceNumber = getSentenceNumber(segments: segments, segment: segment)
                 
-                if number != sentenceNumber && number == sentenceNumber + 1 {
+                if sentenceNumber != currentSentenceNumber && sentenceNumber == currentSentenceNumber + 1 {
                     // We've hit a sentence boundary. Update sentences
                     // print("We've hit a sentence boundary. Update sentence data")
                     // Update sentence data
-                    sentenceEndTime = segment.timeMapping.source.start
+                    sentenceEndTime = segment.timeMapping.target.start
                     let sentence = Sentence(
-                        number: sentenceNumber,
+                        number: currentSentenceNumber,
                         text: sentenceText.trimmingCharacters(in: .whitespacesAndNewlines),
                         timeRange: CMTimeRangeFromTimeToTime(
                             start: sentenceStartTime,
                             end: sentenceEndTime
                         )
                     )
-                    sentenceNumber = number
-                    sentenceStartTime = segment.timeMapping.source.start
+                    currentSentenceNumber = sentenceNumber
+                    sentenceStartTime = segment.timeMapping.target.start
                     // New sentence
                     sentenceText = segment.getText(
                         withTemporalSuggestions: self.withTemporalSuggestions,
@@ -1770,7 +2116,7 @@ class Expression: AVMutableComposition {
                     }
 
                     leftStaleSegmentIndex = index
-                } else if number == sentenceNumber {
+                } else if sentenceNumber == currentSentenceNumber {
                     // Add word to sentence
                     sentenceText += segment.getText(
                         withTemporalSuggestions: self.withTemporalSuggestions,
@@ -1786,6 +2132,79 @@ class Expression: AVMutableComposition {
         }
     }
     
+    // time must be at a segment boundary to make everything work correctly
+    func insertPassage(segments: [ExpressionSegment], at time: CMTime) {
+        print("===== Inserting Passage =====")
+        print("\tMerging expression track two segments into expression track one")
+        var updatedSegments = [ExpressionSegment]()
+        var insertedSegments = false
+
+        for segment in self.expressionTracks[0] {
+            if segment.timeMapping.target.end < time {
+                // add to array if before insert time
+                updatedSegments.append(segment)
+            } else if segment.timeMapping.target.end >= time && !insertedSegments {
+                // encountered first segment that occurs after insert time
+                // add segment array here
+                insertedSegments = true
+                updatedSegments.append(segment)
+                updatedSegments = updatedSegments + segments
+            } else if segment.timeMapping.target.end >= time {
+                // place remaining segments after inserted segments
+                updatedSegments.append(segment)
+            }
+        }
+
+        self.normalizeSegments(
+            segments: updatedSegments,
+            normalizeType: .target,
+            replaceExpressionDetails: true,
+            saveToLowLevelRepr: true,
+            saveToTrack: 0
+        )
+
+        print("\tSuccessfully inserted passage into expression!")
+    }
+    
+    // time must be at a segment boundary to make everything work correctly
+    func removePassage(range: CMTimeRange) {
+        print("===== Removing Passage =====")
+        print("\tFiltering out passage segments...")
+        var updatedSegments = [ExpressionSegment]()
+        
+        let beforeTime = range.start
+        let afterTime = range.end
+
+        for segment in self.expressionTracks[0] {
+            if segment.timeMapping.target.start <= beforeTime {
+                // add to array if before passage to be removed
+                updatedSegments.append(segment)
+            } else if segment.timeMapping.target.end >= afterTime {
+                // add to array if after passage to be removed
+                updatedSegments.append(segment)
+            }
+        }
+
+        self.normalizeSegments(
+            segments: updatedSegments,
+            normalizeType: .target,
+            replaceExpressionDetails: true,
+            saveToLowLevelRepr: true,
+            saveToTrack: 0
+        )
+
+        print("\tSuccessfully removed passage from expression!")
+    }
+    
+    func updatePassage(segments: [ExpressionSegment], range: CMTimeRange) {
+        print("===== Updating Passage =====")
+        print("\tRemoving current passsage from expression...")
+        self.removePassage(range: range)
+        print("\tAdding new passage to expression...")
+        self.insertPassage(segments: segments, at: range.start)
+        print("\tSuccessfully updated passage in expression!")
+    }
+    
     // MARK: - Setters
     
     func setSpeakerPitch(to pitch: Pitch) {
@@ -1794,18 +2213,21 @@ class Expression: AVMutableComposition {
         checkRep()
     }
     
+    // Audio variable
     func setSkipPunctuation(to skip: Bool) {
         self.skipPunctuation = skip
         
         checkRep()
     }
     
+    // Audio variable
     func setSkipSilence(to skip: Bool) {
         self.skipSilence = skip
         
         checkRep()
     }
     
+    // Audio variable
     func setWithPassiveEcho(to value: Bool) {
         self.withPassiveEcho = value
         
@@ -1840,6 +2262,7 @@ class Expression: AVMutableComposition {
         self._fileType = fileType
     }
     
+    // Visual variable
     func setWithTemporalSuggestions(to value: Bool) {
         self.withTemporalSuggestions = value
         
@@ -1849,9 +2272,13 @@ class Expression: AVMutableComposition {
             self.withTemporalSuggestions = false
         }
         
+        // Make sure new setting is reflecting visually
+        self.onListenUpdate?()
+        
         checkRep()
     }
     
+    // Visual variable
     func setWithPunctuationSuggestions(to value: Bool) {
         self.withPunctuationSuggestions = value
         
@@ -1861,25 +2288,37 @@ class Expression: AVMutableComposition {
             self.withTemporalSuggestions = false
         }
         
+        // Make sure new setting is reflecting visually
+        self.onListenUpdate?()
+        
         checkRep()
     }
     
+    // Visual variable
     func setWithFormattingSuggestions(to value: Bool) {
         self.withFormattingSuggestions = value
         
+        // Make sure new setting is reflecting visually
+        self.onListenUpdate?()
+        
         checkRep()
     }
     
+    // Visual variable
     func setWithTextStrictlyAsWords(to value: Bool) {
         self.withTextStrictlyAsWords = value
         
+        // Make sure new setting is reflecting visually
+        self.onListenUpdate?()
+
         checkRep()
     }
     
     // expression details refer to expression, sourceURL, and trackID
     // we have to duplicate segments to reset these
     // thus is a costly computation
-    func setSegments(segments: [ExpressionSegment], replaceExpressionDetails: Bool = false) {
+    // TODO: Confirm that source and target don't affect setting segments to low-level representation
+    func setSegments(segments: [ExpressionSegment], replaceExpressionDetails: Bool = false, saveToLowLevelRepr: Bool = false, saveToTrack: Int = Int(Utils.UNKNOWN)) {
         print("===== Set Segments =====")
         var setSegmentExpression = false
         // set expression reference in segments
@@ -1890,9 +2329,11 @@ class Expression: AVMutableComposition {
         var updatedSegments = [ExpressionSegment]()
         if replaceExpressionDetails {
             for (index, segment) in segments.enumerated() {
-                let seg = segment.duplicate(
+                var seg: ExpressionSegment
+                seg = segment.duplicate(
                     newExpression: self,
-                    index: index
+                    index: index,
+                    trackIndex: 0
                 )
 
                 // Add segment to array
@@ -1908,16 +2349,33 @@ class Expression: AVMutableComposition {
         }
         
         let finalSegments = replaceExpressionDetails ? updatedSegments : segments
+        
+        // In insertTimeRange we seek to update track zero even if we're on active on track 1
+        let track = saveToTrack != Int(Utils.UNKNOWN) ? saveToTrack : self.activeTrack
 
         // attempt to replace segments
         do {
-            try self.tracks[self.activeTrack].validateSegments(finalSegments)
-            self.expressionSegments = finalSegments
-            self.tracks[self.activeTrack].segments = finalSegments
+            self.expressionTracks[track] = finalSegments
+            if self.activeTrack == 0 || saveToLowLevelRepr {
+                // only save to mutable track if we're on first take or explicit flag is set
+                print("\tUpdating lower level track representation...")
+                try self.tracks[0].validateSegments(finalSegments)
+                self.tracks[0].segments = finalSegments
+            }
             // Compute segment sentences
-            updateSegmentSentences(segments: self.expressionSegments)
-            self.endTime = self.expressionSegments.last!.timeMapping.source.end
-            print("\tSuccessfully updated expression segments")
+            updateSegmentSentences(segments: finalSegments)
+            
+            var endTime = CMTime.zero
+            
+            for track in self.expressionTracks {
+                if let lastSegment = track.last {
+                    print("\tnew endTime: ", CMTimeAdd(endTime, lastSegment.timeMapping.target.end).seconds)
+                    endTime = CMTimeAdd(endTime, lastSegment.timeMapping.target.end)
+                }
+            }
+            self.endTime = endTime
+
+            print("\tSuccessfully updated expression segments!")
         } catch {
             fatalError("\t[Error] There was a problem updating expression segments")
         }
@@ -1931,8 +2389,13 @@ class Expression: AVMutableComposition {
     // https://stackoverflow.com/questions/58025109/exporting-mp3-with-avassetexportsession
     // We do not compute sentences for segments here because the segments lack a reference to an expression
     // Without a reference to an expression, they cannot compute getText correctly
+    // MUST HAVE A SINGLE COLLAPSED TRACK
     func duplicate(onCompletionHandler: @escaping (_ expression: Expression?) -> Void) {
         print("===== Duplicate Expression =====")
+        if self.expressionTracks.count == 2 {
+            fatalError("===== There was a problem trimming expression. Expression tracks were not collapsed =====")
+        }
+
         // Export Expression
         let duplicateFilename = "expression-\(UUID().uuidString)"
         Utils.exportExpression(
@@ -1947,7 +2410,7 @@ class Expression: AVMutableComposition {
                 fileType: .m4a,
                 speaker: self.speaker,
                 minPower: self.minPower,
-                segments: self.expressionSegments, // Will copy segments so there are not multiple pointers to a single segment
+                segments: self.expressionTracks[0], // Will copy segments so there are not multiple pointers to a single segment
                 withOnDeviceRecognition: self.useOnDeviceRecognition,
                 withTemporalSuggestions: self.withTemporalSuggestions,
                 withPunctuationSuggestions: self.withPunctuationSuggestions,
@@ -1958,9 +2421,17 @@ class Expression: AVMutableComposition {
     }
     
     func getSentenceDetails(number: Int) -> Sentence? {
-        for segment in expressionSegments {
+        for segment in self.expressionTracks[0] {
             if segment.getSentence().number == number {
                 return segment.getSentence()
+            }
+        }
+        
+        if self.expressionTracks.count == 2 {
+            for segment in self.expressionTracks[1] {
+                if segment.getSentence().number == number {
+                    return segment.getSentence()
+                }
             }
         }
         
@@ -1968,9 +2439,17 @@ class Expression: AVMutableComposition {
     }
 
     func getSentenceDetails(forTrackTime: CMTime) -> Sentence? {
-        for segment in expressionSegments {
+        for segment in self.expressionTracks[0] {
             if segment.getSentence().timeRange.containsTime(forTrackTime) {
                 return segment.getSentence()
+            }
+        }
+        
+        if self.expressionTracks.count == 2 {
+            for segment in self.expressionTracks[1] {
+                if segment.getSentence().timeRange.containsTime(forTrackTime) {
+                    return segment.getSentence()
+                }
             }
         }
         
@@ -1978,23 +2457,45 @@ class Expression: AVMutableComposition {
     }
     
     func extractSentence(number: Int, onCompletionHandler: @escaping (_ sentence: Expression?) -> Void) {
-        for segment in expressionSegments {
+        for segment in self.expressionTracks[0] {
             if segment.getSentence().number == number {
+                segment.createSentenceExpression() { sentence in
+                    onCompletionHandler(sentence)
+                }
+                return
+            }
+        }
+        
+        if self.expressionTracks.count == 2 {
+            for segment in self.expressionTracks[1] {
+                if segment.getSentence().number == number {
+                    segment.createSentenceExpression() { sentence in
+                        onCompletionHandler(sentence)
+                    }
+                    return
+                }
+            }
+        }
+    }
+    
+    func extractSentence(forTrackTime: CMTime, onCompletionHandler: @escaping (_ sentence: Expression?) -> Void) {
+        for segment in self.expressionTracks[0] {
+            if segment.getSentence().timeRange.containsTime(forTrackTime) {
                 segment.createSentenceExpression() { sentence in
                     onCompletionHandler(sentence)
                 }
                 break
             }
         }
-    }
-    
-    func extractSentence(forTrackTime: CMTime, onCompletionHandler: @escaping (_ sentence: Expression?) -> Void) {
-        for segment in expressionSegments {
-            if segment.getSentence().timeRange.containsTime(forTrackTime) {
-                segment.createSentenceExpression() { sentence in
-                    onCompletionHandler(sentence)
+        
+        if self.expressionTracks.count == 2 {
+            for segment in self.expressionTracks[1] {
+                if segment.getSentence().timeRange.containsTime(forTrackTime) {
+                    segment.createSentenceExpression() { sentence in
+                        onCompletionHandler(sentence)
+                    }
+                    return
                 }
-                break
             }
         }
     }
@@ -2041,13 +2542,13 @@ class Expression: AVMutableComposition {
                 result = segment
                 break
             case .previous:
-                if let currentSegmentIndex = getSegmentIndex(segment: segment), currentSegmentIndex > 0 {
-                    result = expressionSegments[currentSegmentIndex - 1]
+                if let (currentSegmentTrack, currentSegmentIndex) = getSegmentLocation(segment: segment), currentSegmentTrack < self.expressionTracks.count, currentSegmentIndex > 0 {
+                    result = expressionTracks[currentSegmentTrack][currentSegmentIndex - 1]
                 }
                 break
             case .next:
-                if let currentSegmentIndex = getSegmentIndex(segment: segment), currentSegmentIndex + 1 < expressionSegments.count {
-                    result = expressionSegments[currentSegmentIndex + 1]
+                if let (currentSegmentTrack, currentSegmentIndex) = getSegmentLocation(segment: segment), currentSegmentTrack < self.expressionTracks.count, currentSegmentIndex + 1 < expressionTracks[currentSegmentTrack].count {
+                    result = expressionTracks[currentSegmentTrack][currentSegmentIndex + 1]
                 }
                 break
             }
@@ -2058,22 +2559,43 @@ class Expression: AVMutableComposition {
     
     func getSegment(forTrackTime: CMTime) -> ExpressionSegment? {
         var segment: ExpressionSegment?
-        for seg in expressionSegments {
-            if seg.timeMapping.source.containsTime(forTrackTime) {
+        for seg in self.expressionTracks[0] {
+            if seg.timeMapping.target.containsTime(forTrackTime) {
                 segment = seg
+                return segment
             }
         }
         
-        return segment
+        if self.expressionTracks.count == 2 {
+            for seg in self.expressionTracks[1] {
+                let trackOneLastSegment = self.expressionTracks[0].last!
+                // We subtract because segments in track two do not factor time from track one
+                if seg.timeMapping.target.containsTime(CMTimeSubtract(forTrackTime, trackOneLastSegment.timeMapping.target.end)) {
+                    segment = seg
+                    return segment
+                }
+            }
+        }
+        
+        return nil
     }
     
-    private func getSegmentIndex(segment: ExpressionSegment) -> Int? {
+    private func getSegmentLocation(segment: ExpressionSegment) -> (Int, Int)? {
         if segment.getIndex() != Int(Utils.UNKNOWN) {
-            return segment.getIndex()
+            return (segment.getTrackIndex(), segment.getIndex())
         } else {
-            for (index, s) in expressionSegments.enumerated() {
+            for (index, s) in self.expressionTracks[0].enumerated() {
                 if (s == segment) {
-                    return index
+                    return (segment.getTrackIndex(), index)
+                }
+            }
+            
+            if self.expressionTracks.count == 2 {
+                for (index, s) in self.expressionTracks[1].enumerated() {
+                    if (s == segment) {
+                        // WARNING: this is not an index that factors track one
+                        return (segment.getTrackIndex(), index)
+                    }
                 }
             }
         }
@@ -2092,10 +2614,10 @@ class Expression: AVMutableComposition {
             strictlyAsWord: self.withTextStrictlyAsWords
         ).lowercased()
         let text = getExpressionText().lowercased()
-        if word.count > 0 && segment.timeMapping.source.start.seconds == 0 {
+        if word.count > 0 && segment.timeMapping.target.start.seconds == 0 {
             characterRange = NSRange(location: 0, length: word.count)
         } else if word.count > 0 {
-            let numProcessedChar = text.count - getExpressionText(from: segment.timeMapping.source.start).lowercased().count
+            let numProcessedChar = text.count - getExpressionText(from: segment.timeMapping.target.start).lowercased().count
             let unprocessedTranscription = text.substring(fromIndex: numProcessedChar).lowercased()
             let substringRange = unprocessedTranscription.range(of: word)
             let numCharToSubstring = unprocessedTranscription.count - unprocessedTranscription[substringRange!.lowerBound..<unprocessedTranscription.endIndex].count
@@ -2113,7 +2635,7 @@ class Expression: AVMutableComposition {
         }
         var counts = [Int: Int]()
         self.soundIntensityStream.forEach {
-            if $0.power != Double.infinity {
+            if $0.power != Double.infinity && $0.power != Double.nan {
                 counts[Int($0.power)] = (counts[Int($0.power)] ?? 0) + 1
             }
         }
@@ -2131,11 +2653,21 @@ class Expression: AVMutableComposition {
         
         switch type {
         case .all:
-            for segment in expressionSegments {
+            for segment in self.expressionTracks[0] {
                 let power = segment.getPower()
                 if power != Double.infinity {
                     powerSum += power
                     numSegments += 1
+                }
+            }
+            
+            if self.expressionTracks.count == 2 {
+                for segment in self.expressionTracks[1] {
+                    let power = segment.getPower()
+                    if power != Double.infinity {
+                        powerSum += power
+                        numSegments += 1
+                    }
                 }
             }
             
@@ -2146,12 +2678,24 @@ class Expression: AVMutableComposition {
             return Double.infinity
         case .sentence:
             if let sentenceNumber = sentenceNumber {
-                for segment in self.expressionSegments {
+                for segment in self.expressionTracks[0] {
                     if segment.getSentence().number == sentenceNumber {
                         let power = segment.getPower()
                         if power != Double.infinity {
                             powerSum += power
                             numSegments += 1
+                        }
+                    }
+                }
+                
+                if self.expressionTracks.count == 2 {
+                    for segment in self.expressionTracks[1] {
+                        if segment.getSentence().number == sentenceNumber {
+                            let power = segment.getPower()
+                            if power != Double.infinity {
+                                powerSum += power
+                                numSegments += 1
+                            }
                         }
                     }
                 }
@@ -2184,7 +2728,13 @@ class Expression: AVMutableComposition {
     
     func getDurationListening() -> Float {
         // print("===== Get Duration Listening =====")
-        return Float(Date().timeIntervalSince(self.recordStartDate!))
+        if self.clipCount > 1 && self.recordStartDate != nil {
+            return Float(self.expressionTracks[0].last!.timeMapping.target.end.seconds) + Float(Date().timeIntervalSince(self.recordStartDate!))
+        } else if self.recordStartDate != nil {
+            return Float(Date().timeIntervalSince(self.recordStartDate!))
+        }
+        
+        return 0
     }
     
     //    func getLocation() {
@@ -2210,7 +2760,7 @@ class Expression: AVMutableComposition {
             // Switch over the status
             switch status {
             case .readyToPlay:
-                print("===== Playing Recording =====")
+                print("===== Playing Expression =====")
                 let timeScale = CMTimeScale(NSEC_PER_SEC)
                 let time = CMTime(seconds: 1, preferredTimescale: timeScale)
 
@@ -2219,8 +2769,14 @@ class Expression: AVMutableComposition {
                 }
 
                 var times = [NSValue]()
-                for segment in self.expressionSegments {
-                    times.append(NSValue(time: segment.timeMapping.source.start))
+                for segment in self.expressionTracks[0] {
+                    times.append(NSValue(time: segment.timeMapping.target.start))
+                }
+                
+                if self.expressionTracks.count == 2 {
+                    for segment in self.expressionTracks[1] {
+                        times.append(NSValue(time: segment.timeMapping.target.start))
+                    }
                 }
 
                 boundaryObserverToken = player.addBoundaryTimeObserver(forTimes: times, queue: .main) {
@@ -2255,7 +2811,7 @@ class Expression: AVMutableComposition {
                     onStartHandler()
                 }
             case .failed:
-                print("\t[Error] There was a problem making track ready to play: \(self.filename)\(self.fileType)")
+                print("\t[Error] There was a problem making track ready to play: \(self.tracks[0].segments.first!.sourceURL!)")
                 if let error = player.currentItem!.error {
                     print("\tMessage: \(error.localizedDescription)")
                 }
@@ -2301,16 +2857,16 @@ class Expression: AVMutableComposition {
         let currentSegment = self.getSegment(type: .current)
 
         if start {
-            let segment = self.expressionSegments[0]
+            let segment = self.expressionTracks[0][0]
             if (
                 (self.skipPunctuation && segment.isPunctuation()) ||
-                (self.skipSilence && segment.isSilence() && segment.timeMapping.source.duration.seconds > Utils.SILENCE_SKIP_THRESHOLD) ||
+                (self.skipSilence && segment.isSilence() && segment.timeMapping.target.duration.seconds > Utils.SILENCE_SKIP_THRESHOLD) ||
                 segment.isVoiceCommandWord()
             ), let nextSegment = self.getSegment(type: .next) {
                 // skip to next segment
                 self.previousBoundarySegment = currentSegment
                 self.player.seek(
-                    to: nextSegment.timeMapping.source.start,
+                    to: nextSegment.timeMapping.target.start,
                     toleranceBefore: CMTime.zero,
                     toleranceAfter: CMTime.zero
                 )
@@ -2327,18 +2883,17 @@ class Expression: AVMutableComposition {
             }
             
             self.observerContext["segmentBoundaryHandler"]?()
-        } else if currentSegment == self.expressionSegments.last! {
+        } else if let segment = currentSegment, segment == self.expressionTracks[0].last! {
             // last segment of expression
             // We want to put it just before end
-            let segment = self.expressionSegments.last!
             let END_BUFFER_DURATION = 0.05 // makes sure we don't seek to the exact end which causes the completion observer not to run
             if (
                 (self.skipPunctuation && segment.isPunctuation()) ||
-                (self.skipSilence && segment.isSilence() && segment.timeMapping.source.duration.seconds > Utils.SILENCE_SKIP_THRESHOLD) ||
+                (self.skipSilence && segment.isSilence() && segment.timeMapping.target.duration.seconds > Utils.SILENCE_SKIP_THRESHOLD) ||
                 segment.isVoiceCommandWord()
             ) {
                 // skip to next segment
-                self.previousBoundarySegment = currentSegment
+                self.previousBoundarySegment = segment
                 self.player.seek(
                     to: CMTimeMake(
                         value: Int64(Expression.defaultSegmentTimescale * (self.player.currentItem!.duration.seconds - END_BUFFER_DURATION)),
@@ -2367,13 +2922,13 @@ class Expression: AVMutableComposition {
                 currentSegment != previousBoundarySegment &&
                 (
                     (self.skipPunctuation && segment.isPunctuation()) ||
-                    (self.skipSilence && segment.isSilence() && segment.timeMapping.source.duration.seconds > Utils.SILENCE_SKIP_THRESHOLD) ||
+                    (self.skipSilence && segment.isSilence() && segment.timeMapping.target.duration.seconds > Utils.SILENCE_SKIP_THRESHOLD) ||
                     segment.isVoiceCommandWord()
                 ), let nextSegment = self.getSegment(type: .next) {
                 // skip to next segment
                 self.previousBoundarySegment = currentSegment
                 self.player.seek(
-                    to: nextSegment.timeMapping.source.start,
+                    to: nextSegment.timeMapping.target.start,
                     toleranceBefore: CMTime.zero,
                     toleranceAfter: CMTime.zero
                 )
@@ -2394,7 +2949,7 @@ class Expression: AVMutableComposition {
     }
     
     func handleCompletionObserver() {
-        print("===== Completed Recording =====")
+        print("===== Completed Playing Expression =====")
         // Stop Playing
         self.stop()
         
@@ -2419,6 +2974,52 @@ class Expression: AVMutableComposition {
             // print("===== Cleared Player Timer Token =====")
         }
     }
+    
+    func handleVoiceCommand(command: String) {
+        if command == "stop expression" && AVAudioSession.isHeadphonesConnected {
+            voiceCommandEngine.process(expression: self, query: command)
+            
+            self.onListenUpdate?()
+        } else if !AVAudioSession.isHeadphonesConnected && (
+            command == "play expression" ||
+            command == "echo expression" ||
+            command == "ecko expression" ||
+            command == "play ecko" ||
+            command == "play echo" ||
+            command == "start ecko" ||
+            command == "start echo"
+        ) {
+            // We don't have headphones connected, so we don't start listening until playback is complete
+            // If we listen immediately, the words will be heard and processed
+            voiceCommandEngine.process(expression: self, query: command) {
+                // Reset accumulated Duration for next clip capture
+                self.accumulatedDuration = TimeInterval(0)
+
+                if self.pausedListeningForSpeech {
+                    // Start listening for speech again if paused
+                    // It won't be paused if the processed voice command was 'stop expression'
+                    self.startListeningForSpeech(
+                        soundIntensityHandler: self.soundIntensityHandler,
+                        onStartHandler: self.onListeningStartHandler
+                    )
+                }
+            }
+        } else {
+            voiceCommandEngine.process(expression: self, query: command)
+            
+            // Reset accumulated Duration for next clip capture
+            self.accumulatedDuration = TimeInterval(0)
+
+            if self.pausedListeningForSpeech {
+                // Start listening for speech again if paused
+                // It won't be paused if the processed voice command was 'stop expression'
+                self.startListeningForSpeech(
+                    soundIntensityHandler: self.soundIntensityHandler,
+                    onStartHandler: self.onListeningStartHandler
+                )
+            }
+        }
+    }
 }
 
 // MARK: - Speech Recognition Delegate Extension
@@ -2439,18 +3040,21 @@ extension Expression: SFSpeechRecognitionTaskDelegate {
     }
     
     func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didFinishSuccessfully successfully: Bool) {
-        print("===== Expression successfully finished listening for new speech ===== ")
         if !self.isListeningForSpeech && !self.useOnDeviceRecognition {
+            print("===== Expression successfully finished listening for new speech ===== ")
             self.onExpressionComplete?()
             
             // Play sound
             soundEngine.saveExpression()
         } else if let lastRecognitionTask = self.lastRecognitionTask, !self.isListeningForSpeech && self.useOnDeviceRecognition && lastRecognitionTask == RecognitionTask.SPEECH {
+            print("===== Expression successfully finished listening for new speech ===== ")
             // Completion of speech recognition section
             self.onExpressionComplete?()
             
             // Play sound
             soundEngine.saveExpression()
+            
+            print("final segments: ", self.expressionTracks[0])
         }
         
     }
@@ -2466,37 +3070,68 @@ extension Expression: SFSpeechRecognitionTaskDelegate {
 
                 self.performTranscriptionUpdate(transcription)
                 
+                // execute listen update handler
+                self.onListenUpdate?()
+                
                 if let command = voiceCommandEngine.includesCommand(passage: transcription.formattedString) {
-                    print("===== Command Recognized =====")
-                    self.stopListeningForSpeech()
+                    print("\tCommand Recognized!")
+                    self.stopListeningForSpeech(pause: true)
+
                     // We put it in a handler so we can run it when we receive final transcript
                     self.tempVoiceCommandHandler = {
-                        voiceCommandEngine.process(expression: self, query: command) {
-                            let firstCommandWord = command.components(separatedBy: " ").first!
-                            var lowestCommandIndex: Int?
-                            for (index, segment) in self.expressionSegments.reversed().enumerated() {
-                                if segment.getText() == firstCommandWord {
-                                    lowestCommandIndex = self.expressionSegments.count - index - 1
-                                    break
-                                }
+                        let firstCommandWord = command.components(separatedBy: " ").first!
+                        var lowestCommandIndex: Int?
+                        for (index, segment) in self.expressionTracks[self.activeTrack].reversed().enumerated() {
+                            print("get voice word: ", firstCommandWord.lowercased(), segment.getText().lowercased())
+                            if segment.getText().lowercased() == firstCommandWord.lowercased() {
+                                lowestCommandIndex = self.expressionTracks[self.activeTrack].count - index - 1
+                                break
                             }
-
-                            var updatedSegments = [ExpressionSegment]()
-                            for (index, segment) in self.expressionSegments.enumerated() {
-                                if let lowestCommandIndex = lowestCommandIndex, index >= lowestCommandIndex  {
-                                    let duplicateSegment = segment.duplicate(index: index)
-                                    duplicateSegment.setIsVoiceCommandWord(to: true)
-                                    updatedSegments.append(duplicateSegment)
-                                } else {
-                                    updatedSegments.append(segment)
-                                }
-                            }
-
-                            // no need to put through setSegments because we don't need to change underlying segments
-                            self.expressionSegments = updatedSegments
-                            self.onListenStop!()
-                            print("expressions: ", self.expressionSegments)
                         }
+
+                        var updatedSegments = [ExpressionSegment]()
+                        for (index, segment) in self.expressionTracks[self.activeTrack].enumerated() {
+                            if let lowestCommandIndex = lowestCommandIndex, index >= lowestCommandIndex  {
+                                let duplicateSegment = segment.duplicate(index: index)
+                                duplicateSegment.setIsVoiceCommandWord(to: true)
+                                updatedSegments.append(duplicateSegment)
+                            } else {
+                                updatedSegments.append(segment)
+                            }
+                        }
+
+                        // no need to put through setSegments because we don't need to change underlying segments
+                        self.expressionTracks[self.activeTrack] = updatedSegments
+                       
+                        
+                        // Merge tracks
+                        if self.expressionTracks.count == 2 {
+                            // duplicate expression tracks
+                            var segments = [ExpressionSegment]()
+                            for (index, segment) in self.expressionTracks[1].enumerated() {
+                                let duplicate = segment.duplicate(index: index)
+                                segments.append(duplicate)
+                            }
+                            
+                            // Clear track 1 segments
+                            // This is done so the normalize process that occurs in insertPassage
+                            // does not factor in segments
+                            self.expressionTracks[1] = []
+                            
+                            self.insertPassage(
+                                segments: segments,
+                                at: self.expressionTracks[0].last!.timeMapping.target.end
+                            )
+                            
+                            // set active track
+                            self.activeTrack = 1
+                        } else {
+                            self.normalizeSegments()
+                            self.onListenUpdate?()
+                        }
+                        
+                        // Handle voice command
+                        self.handleVoiceCommand(command: command)
                     }
                 }
             }
@@ -2507,71 +3142,112 @@ extension Expression: SFSpeechRecognitionTaskDelegate {
         DispatchQueue.main.async {
             if self.isListeningForCommands {
                 voiceCommandEngine.process(expression: self, query: result.bestTranscription.formattedString)
-            } else if self.isListeningForSpeech && !self.request!.requiresOnDeviceRecognition {
+            } else if self.isListeningForSpeech && !self.pausedListeningForSpeech && !self.request!.requiresOnDeviceRecognition {
                 print("===== Some words heard. Apple servers ended dictation session =====")
                 self.stopListeningForSpeech(pause: true) {[weak self] in
+                    // Play Sound
+                    soundEngine.commitBuffer()
+
                     self?.performTranscriptionUpdate(result.bestTranscription, finalTranscript: true)
                     self?.normalizeSegments()
+                    
+                    // execute listen update handler
+                    self?.onListenUpdate?()
+
                     // Update duration
                     self?.accumulatedDuration = max(0, Date().timeIntervalSince(self!.recordStartDate!) - TRANSCRIPTION_LATENCY_DURATION)
+
                     self?.startListeningForSpeech(
                         soundIntensityHandler: self?.soundIntensityHandler,
                         onStartHandler: self?.onListeningStartHandler
                     )
-                    
-                    // Play Sound
-                    soundEngine.commitBuffer()
                 }
-            } else if self.isListeningForSpeech && self.request!.requiresOnDeviceRecognition {
-                self.performTranscriptionUpdate(result.bestTranscription, finalTranscript: true)
-                self.normalizeSegments()
-                // Update duration
-                self.accumulatedDuration = max(0, Date().timeIntervalSince(self.recordStartDate!) - TRANSCRIPTION_LATENCY_DURATION)
-                // print("===== A contiguous clause was completed: \(self.expressionSegments)")
-                
+            } else if self.isListeningForSpeech && !self.pausedListeningForSpeech && self.request!.requiresOnDeviceRecognition {
                 // Play Sound
                 soundEngine.commitBuffer()
+
+                self.performTranscriptionUpdate(result.bestTranscription, finalTranscript: true)
+                self.normalizeSegments()
+                
+                // execute listen update handler
+                self.onListenUpdate?()
+                
+                // Update duration
+                self.accumulatedDuration = max(0, Date().timeIntervalSince(self.recordStartDate!) - TRANSCRIPTION_LATENCY_DURATION)
+
+                // print("===== A contiguous clause was completed: \(self.expressionSegments)")
                 
                 if let command = voiceCommandEngine.includesCommand(passage: result.bestTranscription.formattedString) {
-                    print("===== Command Recognized =====")
-                    self.stopListeningForSpeech()
+                    print("\tCommand Recognized!")
+                    self.stopListeningForSpeech(pause: true)
+                    
                     // We put it in a handler so we can run it when we receive final transcript
                     self.tempVoiceCommandHandler = {
-                        voiceCommandEngine.process(expression: self, query: command) {
-                            let firstCommandWord = command.components(separatedBy: " ").first!
-                            var lowestCommandIndex: Int?
-                            for (index, segment) in self.expressionSegments.reversed().enumerated() {
-                                if segment.getText() == firstCommandWord {
-                                    lowestCommandIndex = self.expressionSegments.count - index - 1
-                                    break
-                                }
+                        let firstCommandWord = command.components(separatedBy: " ").first!
+                        var lowestCommandIndex: Int?
+                        for (index, segment) in self.expressionTracks[self.activeTrack].reversed().enumerated() {
+                            print("get voice word: ", firstCommandWord.lowercased(), segment.getText().lowercased())
+                            if segment.getText().lowercased() == firstCommandWord.lowercased() {
+                                lowestCommandIndex = self.expressionTracks[self.activeTrack].count - index - 1
+                                break
                             }
-
-                            var updatedSegments = [ExpressionSegment]()
-                            for (index, segment) in self.expressionSegments.enumerated() {
-                                if let lowestCommandIndex = lowestCommandIndex, index >= lowestCommandIndex  {
-                                    let duplicateSegment = segment.duplicate(index: index)
-                                    duplicateSegment.setIsVoiceCommandWord(to: true)
-                                    updatedSegments.append(duplicateSegment)
-                                } else {
-                                    updatedSegments.append(segment)
-                                }
-                            }
-
-                            // no need to put through setSegments because we don't need to change underlying segments
-                            self.expressionSegments = updatedSegments
-                            self.onListenStop!()
-                            print("expressions: ", self.expressionSegments)
                         }
+
+                        var updatedSegments = [ExpressionSegment]()
+                        for (index, segment) in self.expressionTracks[self.activeTrack].enumerated() {
+                            if let lowestCommandIndex = lowestCommandIndex, index >= lowestCommandIndex  {
+                                let duplicateSegment = segment.duplicate(index: index)
+                                duplicateSegment.setIsVoiceCommandWord(to: true)
+                                updatedSegments.append(duplicateSegment)
+                            } else {
+                                updatedSegments.append(segment)
+                            }
+                        }
+
+                        // no need to put through setSegments because we don't need to change underlying segments
+                        self.expressionTracks[self.activeTrack] = updatedSegments
+
+                        // Merge tracks
+                        if self.expressionTracks.count == 2 {
+                            // duplicate expression tracks
+                            var segments = [ExpressionSegment]()
+                            for (index, segment) in self.expressionTracks[1].enumerated() {
+                                let duplicate = segment.duplicate(index: index)
+                                segments.append(duplicate)
+                            }
+                            
+                            // Clear track 1 segments
+                            // This is done so the normalize process that occurs in insertPassage
+                            // does not factor in segments
+                            self.expressionTracks[1] = []
+                            
+                            self.insertPassage(
+                                segments: segments,
+                                at: self.expressionTracks[0].last!.timeMapping.target.end
+                            )
+                            
+                            // set active track
+                            self.activeTrack = 1
+                        }
+                        
+                        // Handle voice command
+                        self.handleVoiceCommand(command: command)
                     }
                 } else if self.withPassiveEcho && AVAudioSession.isHeadphonesConnected {
                     // Echo formatted String
                     self.echoText(text: result.bestTranscription.formattedString)
+                    
+                    // Give haptic feedback
+                    hapticEngine.lightImpact()
                 }
             } else {
                 // Only the on-server recognition should go here in theory
                 self.performTranscriptionUpdate(result.bestTranscription, finalTranscript: true)
                 self.normalizeSegments()
+                
+                // execute listen update handler
+                self.onListenUpdate?()
+                
                 // print("===== Completed expression: \(self.expressionSegments)")
 
                 if let voiceCommandHandler = self.tempVoiceCommandHandler {
@@ -2628,7 +3304,6 @@ extension Expression: AVSpeechSynthesizerDelegate {
 
 extension Expression: PitchEngineDelegate {
     func pitchEngine(_ pitchEngine: PitchEngine, didReceivePitch pitch: Pitch) {
-        // TODO: Timing
         if let lastSoundIntensity = self.soundIntensityStream.last, pitch.frequency >= MALE_LOWEST_VOICED_SPEECH_FREQUENCY && pitch.frequency <= FEMALE_HIGHEST_VOICED_SPEECH_FREQUENCY && self.soundIntensityStream.count > MIN_SEED_INTENSITY_POINTS && lastSoundIntensity.power > self.getBackgroundNoise() + Utils.TALKING_POWER_DELTA {
             let pitchDatum = PitchDatum(date: Date(), pitch: pitch)
             self.pitchStream.append(pitchDatum)

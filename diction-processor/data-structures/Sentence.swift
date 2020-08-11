@@ -9,23 +9,14 @@
 import Foundation
 import AVFoundation
 
-struct Sentence {
+struct Sentence: CustomStringConvertible {
     var number: Int
     var text: String
-//    var total: Int
     var timeRange: CMTimeRange
-    var description: String {
-//        return "Sentence {\n\tnumber: \(number)\n\ttotal:\(total)\n\ttimeRange: (start: \(timeRange.start.seconds), end: \(timeRange.end.seconds))\n}"
-        return "Sentence {\n\ttext: \(text)\n\tnumber: \(number)\n\ttimeRange: (start: \(timeRange.start.seconds), end: \(timeRange.end.seconds), duration: \(timeRange.duration.seconds)\n}"
-    }
     
     mutating func setNumber(value: Int) {
         number = value
     }
-    
-//    mutating func setTotal(value: Int) {
-//        total = value
-//    }
     
     mutating func setTimeRange(value: CMTimeRange) {
         timeRange = value
@@ -37,7 +28,11 @@ struct Sentence {
     
     static func ==(_ firstSentence: Sentence, _ secondSentence: Sentence) -> Bool {
         return firstSentence.number == secondSentence.number &&
-//            firstSentence.total == secondSentence.total &&
+            firstSentence.text == secondSentence.text &&
             firstSentence.timeRange == secondSentence.timeRange
+    }
+    
+    var description: String {
+        return "Sentence (\n\t\ttext: \(text)\n\t\tnumber: \(number)\n\t\ttimeRange: (\n\t\t\tstart: \(timeRange.start.seconds),\n\t\t\tend: \(timeRange.end.seconds),\n\t\t\tduration: \(timeRange.duration.seconds)\n\t\t)\n\t)"
     }
 }

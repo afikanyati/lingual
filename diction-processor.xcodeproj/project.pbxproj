@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		8B09CE0024932E4E001EC02D /* ExpressionSegment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B09CDFF24932E4E001EC02D /* ExpressionSegment.swift */; };
+		8B24440224DB6F4A0050C959 /* HapticEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B24440124DB6F4A0050C959 /* HapticEngine.swift */; };
+		8B24440424DB75170050C959 /* NotificationType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B24440324DB75170050C959 /* NotificationType.swift */; };
+		8B24440724DCE50D0050C959 /* TimeNormalizerType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B24440624DCE50D0050C959 /* TimeNormalizerType.swift */; };
 		8B27A3DC24B6A839001E5F06 /* Double+Rounded.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B27A3DB24B6A839001E5F06 /* Double+Rounded.swift */; };
 		8B27A3DE24B6A8E9001E5F06 /* Float+Rounded.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B27A3DD24B6A8E9001E5F06 /* Float+Rounded.swift */; };
 		8B669B5F24B0127E00D5996B /* Date+Subtract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B5E24B0127E00D5996B /* Date+Subtract.swift */; };
@@ -17,6 +20,7 @@
 		8B669B6724B013F200D5996B /* TimeConstant+Minute+Hour.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B6624B013F200D5996B /* TimeConstant+Minute+Hour.swift */; };
 		8B669B6924B01AF600D5996B /* Utils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B6824B01AF600D5996B /* Utils.swift */; };
 		8B669B6B24B2C3DD00D5996B /* PitchDatum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B6A24B2C3DD00D5996B /* PitchDatum.swift */; };
+		8B74881E24DCE7C9004C94A0 /* CMTimeMapping+subscript.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B74881D24DCE7C9004C94A0 /* CMTimeMapping+subscript.swift */; };
 		8B766E8924A7D7D200D41A13 /* Sentence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B766E8824A7D7D200D41A13 /* Sentence.swift */; };
 		8B766E8C24A8094300D41A13 /* SoundIntensityDatum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B766E8B24A8094300D41A13 /* SoundIntensityDatum.swift */; };
 		8B766E8E24A812AF00D41A13 /* PunctuationMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B766E8D24A812AF00D41A13 /* PunctuationMap.swift */; };
@@ -114,6 +118,9 @@
 
 /* Begin PBXFileReference section */
 		8B09CDFF24932E4E001EC02D /* ExpressionSegment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpressionSegment.swift; sourceTree = "<group>"; };
+		8B24440124DB6F4A0050C959 /* HapticEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticEngine.swift; sourceTree = "<group>"; };
+		8B24440324DB75170050C959 /* NotificationType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationType.swift; sourceTree = "<group>"; };
+		8B24440624DCE50D0050C959 /* TimeNormalizerType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeNormalizerType.swift; sourceTree = "<group>"; };
 		8B27A3DB24B6A839001E5F06 /* Double+Rounded.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Double+Rounded.swift"; sourceTree = "<group>"; };
 		8B27A3DD24B6A8E9001E5F06 /* Float+Rounded.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Float+Rounded.swift"; sourceTree = "<group>"; };
 		8B669B5E24B0127E00D5996B /* Date+Subtract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Subtract.swift"; sourceTree = "<group>"; };
@@ -123,6 +130,7 @@
 		8B669B6624B013F200D5996B /* TimeConstant+Minute+Hour.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TimeConstant+Minute+Hour.swift"; sourceTree = "<group>"; };
 		8B669B6824B01AF600D5996B /* Utils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utils.swift; sourceTree = "<group>"; };
 		8B669B6A24B2C3DD00D5996B /* PitchDatum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitchDatum.swift; sourceTree = "<group>"; };
+		8B74881D24DCE7C9004C94A0 /* CMTimeMapping+subscript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CMTimeMapping+subscript.swift"; sourceTree = "<group>"; };
 		8B766E8824A7D7D200D41A13 /* Sentence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sentence.swift; sourceTree = "<group>"; };
 		8B766E8B24A8094300D41A13 /* SoundIntensityDatum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundIntensityDatum.swift; sourceTree = "<group>"; };
 		8B766E8D24A812AF00D41A13 /* PunctuationMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PunctuationMap.swift; sourceTree = "<group>"; };
@@ -232,6 +240,36 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		8B24440524DCE44F0050C959 /* enums */ = {
+			isa = PBXGroup;
+			children = (
+				8BCA1AFA24A3D0750068BABB /* ScaleUnitType.swift */,
+				8B24440324DB75170050C959 /* NotificationType.swift */,
+				8BA3056024CBD43D0056E4DF /* RecognitionTask.swift */,
+				8BCA1AFE24A3DA5B0068BABB /* SentencePosition.swift */,
+				8BCA1AFC24A3DA3B0068BABB /* SegmentPosition.swift */,
+				8B24440624DCE50D0050C959 /* TimeNormalizerType.swift */,
+				8BCA1B0224A43DB70068BABB /* Gender.swift */,
+			);
+			path = enums;
+			sourceTree = "<group>";
+		};
+		8B74881F24DCF4C6004C94A0 /* data-structures */ = {
+			isa = PBXGroup;
+			children = (
+				8BCA1B0024A43D530068BABB /* Speaker.swift */,
+				8B669B6A24B2C3DD00D5996B /* PitchDatum.swift */,
+				8B766E8B24A8094300D41A13 /* SoundIntensityDatum.swift */,
+				8B766E8824A7D7D200D41A13 /* Sentence.swift */,
+				8BE2EB1824BA44BC00E2D519 /* Determiners.swift */,
+				8BA3055A24C920DA0056E4DF /* SynthesizerItem.swift */,
+				8BA3055824C91A2B0056E4DF /* LinkedList.swift */,
+				8BA3055624C919920056E4DF /* Queue.swift */,
+				8B766E8D24A812AF00D41A13 /* PunctuationMap.swift */,
+			);
+			path = "data-structures";
+			sourceTree = "<group>";
+		};
 		8B766F1924AC2A2300D41A13 /* pitchy */ = {
 			isa = PBXGroup;
 			children = (
@@ -314,6 +352,7 @@
 				8BA3056A24D107560056E4DF /* MPVolumeView+volumeSlider.swift */,
 				8BA3052B24C24C240056E4DF /* Sequence+containsAnyOf.swift */,
 				8B669B5E24B0127E00D5996B /* Date+Subtract.swift */,
+				8B74881D24DCE7C9004C94A0 /* CMTimeMapping+subscript.swift */,
 			);
 			path = extensions;
 			sourceTree = "<group>";
@@ -341,6 +380,8 @@
 		8BEC136624906FF30056E767 /* diction-processor */ = {
 			isa = PBXGroup;
 			children = (
+				8B74881F24DCF4C6004C94A0 /* data-structures */,
+				8B24440524DCE44F0050C959 /* enums */,
 				8BA3056C24D107E90056E4DF /* extensions */,
 				8BA3052F24C2867D0056E4DF /* sounds */,
 				8B766F1A24AC2A2A00D41A13 /* beethoven */,
@@ -348,25 +389,12 @@
 				8BEC136724906FF30056E767 /* AppDelegate.swift */,
 				8BEC136924906FF30056E767 /* SceneDelegate.swift */,
 				8BEC136B24906FF30056E767 /* ViewController.swift */,
-				8BA3052D24C286550056E4DF /* SoundEffectEngine.swift */,
-				8BA3055C24CB99AC0056E4DF /* VoiceCommandEngine.swift */,
 				8BD595C6249AE45D000B3127 /* Expression.swift */,
-				8BA3056024CBD43D0056E4DF /* RecognitionTask.swift */,
-				8BA3055624C919920056E4DF /* Queue.swift */,
-				8BA3055824C91A2B0056E4DF /* LinkedList.swift */,
-				8B669B6824B01AF600D5996B /* Utils.swift */,
 				8B09CDFF24932E4E001EC02D /* ExpressionSegment.swift */,
-				8BA3055A24C920DA0056E4DF /* SynthesizerItem.swift */,
-				8BE2EB1824BA44BC00E2D519 /* Determiners.swift */,
-				8B766E8D24A812AF00D41A13 /* PunctuationMap.swift */,
-				8B766E8824A7D7D200D41A13 /* Sentence.swift */,
-				8BCA1AFE24A3DA5B0068BABB /* SentencePosition.swift */,
-				8BCA1AFA24A3D0750068BABB /* ScaleUnitType.swift */,
-				8BCA1AFC24A3DA3B0068BABB /* SegmentPosition.swift */,
-				8B766E8B24A8094300D41A13 /* SoundIntensityDatum.swift */,
-				8B669B6A24B2C3DD00D5996B /* PitchDatum.swift */,
-				8BCA1B0224A43DB70068BABB /* Gender.swift */,
-				8BCA1B0024A43D530068BABB /* Speaker.swift */,
+				8B669B6824B01AF600D5996B /* Utils.swift */,
+				8BA3055C24CB99AC0056E4DF /* VoiceCommandEngine.swift */,
+				8BA3052D24C286550056E4DF /* SoundEffectEngine.swift */,
+				8B24440124DB6F4A0050C959 /* HapticEngine.swift */,
 				8BEC136D24906FF30056E767 /* Main.storyboard */,
 				8BEC137324906FF60056E767 /* Assets.xcassets */,
 				8BEC137524906FF60056E767 /* LaunchScreen.storyboard */,
@@ -553,6 +581,7 @@
 				8B766F5B24AC2AB200D41A13 /* FFTTransformer.swift in Sources */,
 				8B766F4F24AC2AB200D41A13 /* Transformer.swift in Sources */,
 				8B766F4924AC2AB200D41A13 /* Estimator.swift in Sources */,
+				8B24440224DB6F4A0050C959 /* HapticEngine.swift in Sources */,
 				8B766F5C24AC2AB200D41A13 /* QuadradicEstimator.swift in Sources */,
 				8B27A3DC24B6A839001E5F06 /* Double+Rounded.swift in Sources */,
 				8B669B6B24B2C3DD00D5996B /* PitchDatum.swift in Sources */,
@@ -575,6 +604,7 @@
 				8B669B6124B012A900D5996B /* AVAudioSession+Headphones.swift in Sources */,
 				8BA3056324D0FB460056E4DF /* Collection+distance.swift in Sources */,
 				8B09CE0024932E4E001EC02D /* ExpressionSegment.swift in Sources */,
+				8B24440724DCE50D0050C959 /* TimeNormalizerType.swift in Sources */,
 				8BEC137224906FF30056E767 /* diction_processor.xcdatamodeld in Sources */,
 				8BCA1B0324A43DB70068BABB /* Gender.swift in Sources */,
 				8B766F2324AC2AA300D41A13 /* AcousticWave.swift in Sources */,
@@ -583,10 +613,12 @@
 				8BA3052E24C286550056E4DF /* SoundEffectEngine.swift in Sources */,
 				8B766F5424AC2AB200D41A13 /* QuinnsSecondEstimator.swift in Sources */,
 				8B766F4724AC2AB200D41A13 /* YINTransformer.swift in Sources */,
+				8B24440424DB75170050C959 /* NotificationType.swift in Sources */,
 				8B669B6924B01AF600D5996B /* Utils.swift in Sources */,
 				8BCA1AFF24A3DA5B0068BABB /* SentencePosition.swift in Sources */,
 				8B766F2424AC2AA300D41A13 /* Pitch.swift in Sources */,
 				8B766E8924A7D7D200D41A13 /* Sentence.swift in Sources */,
+				8B74881E24DCE7C9004C94A0 /* CMTimeMapping+subscript.swift in Sources */,
 				8B766F4E24AC2AB200D41A13 /* QuinnsFirstEstimator.swift in Sources */,
 				8BA3055B24C920DA0056E4DF /* SynthesizerItem.swift in Sources */,
 				8BD595C7249AE45D000B3127 /* Expression.swift in Sources */,

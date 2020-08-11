@@ -59,7 +59,6 @@ public final class VoiceCommandEngine: NSObject {
     ]
     
     func includesCommand(passage: String) -> String? {
-        print("===== Voice Command Engine: Includes Command =====")
         let bagOfWords = passage.lowercased().components(separatedBy: " ")
         
         // Check for two word commands
@@ -67,14 +66,16 @@ public final class VoiceCommandEngine: NSObject {
             for i in 0..<bagOfWords.count - 1 {
                 let phrase = "\(bagOfWords[i]) \(bagOfWords[i+1])"
                 if voiceCommands.contains(phrase) {
-                    print("\tFound Expression: \(phrase)")
+                    print("===== Voice Command Engine: Includes Command =====")
+                    print("\tFound voice command: \"\(phrase)\"")
                     return phrase
                 }
             }
         } else if bagOfWords.count == 2 {
             let phrase = "\(bagOfWords[0]) \(bagOfWords[1])"
             if voiceCommands.contains(phrase) {
-                print("\tFound Expression: \(phrase)")
+                print("===== Voice Command Engine: Includes Command =====")
+                print("\tFound voice command: \"\(phrase)\"")
                 return phrase
             }
         }
@@ -84,14 +85,16 @@ public final class VoiceCommandEngine: NSObject {
             for i in 0..<bagOfWords.count - 2 {
                 let phrase = "\(bagOfWords[i]) \(bagOfWords[i+1]) \(bagOfWords[i+2])"
                 if voiceCommands.contains(phrase) {
-                    print("\tFound Expression: \(phrase)")
+                    print("===== Voice Command Engine: Includes Command =====")
+                    print("\tFound voice command: \"\(phrase)\"")
                     return phrase
                 }
             }
         } else if bagOfWords.count == 3 {
             let phrase = "\(bagOfWords[0]) \(bagOfWords[1]) \(bagOfWords[2])"
             if voiceCommands.contains(phrase) {
-                print("\tFound Expression: \(phrase)")
+                print("===== Voice Command Engine: Includes Command =====")
+                print("\tFound voice command: \"\(phrase)\"")
                 return phrase
             }
         }
@@ -102,7 +105,7 @@ public final class VoiceCommandEngine: NSObject {
     func process(expression: Expression, query: String, handler: (() -> Void)? = nil) {
         print("===== Processing Voice Command =====")
         let query = query.lowercased()
-        print("\tQuery: \(query)")
+        print("\tQuery: \"\(query)\"")
         
         switch (query) {
         case "play expression":
@@ -366,7 +369,9 @@ public final class VoiceCommandEngine: NSObject {
                 },
                 secondElapseHandler: {
                     DispatchQueue.main.async {
-                        expression.vc!.navigationItem.title = Utils.formattedTime(time: Float((expression.vc!.expression.player.currentTime().seconds)))
+                        if !expression.isListeningForSpeech {
+                            expression.vc!.navigationItem.title = "\(Utils.formattedTime(time: Float((expression.player.currentTime().seconds))))/\(expression.duration.seconds)"
+                        }
                     }
                 },
                 segmentBoundaryHandler: {
@@ -378,15 +383,16 @@ public final class VoiceCommandEngine: NSObject {
                 }, onFinishHandler: {
                     DispatchQueue.main.async {
                         expression.vc!.updateUIText()
-                        expression.vc!.playAudioButton.setTitle(ViewController.PLAY_EXPRESSION_LABEL, for: .normal)
                         expression.vc!.expression.player.replaceCurrentItem(with: nil)
-                        expression.vc!.navigationItem.title = ""
+                        expression.vc!.playAudioButton.setTitle(ViewController.PLAY_EXPRESSION_LABEL, for: .normal)
+                        if !expression.isListeningForSpeech {
+                            expression.vc!.navigationItem.title = ""
+                        }
+                        handler?()
                     }
                 }
             )
         }
-        
-        handler?()
     }
     
     func pauseExpression(expression: Expression, handler: (() -> Void)? = nil) {
@@ -405,7 +411,7 @@ public final class VoiceCommandEngine: NSObject {
     func startListeningForSpeech(expression: Expression, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Start Listening For Speech")
         expression.vc!.recordingButton.setTitle("Stop Expression", for: .normal)
-        expression.vc!.savedMessageTimer?.invalidate()
+        expression.vc!.clearAppNotification()
         expression.startListeningForSpeech(soundIntensityHandler: { power in
             if let power = power {
                 DispatchQueue.main.async {
