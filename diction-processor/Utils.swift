@@ -124,12 +124,12 @@ class Utils {
     ]
     
     // MARK: - Factory Methods
-    public static func trimExpression(expression: Expression, keeping: CMTimeRange, permanent: Bool = false, onCompletionHandler: @escaping (_ expression: Expression?) -> Void) {
-        print("===== Trim Expression Factory Method =====")
-        expression.duplicate() { expression in
-            if let duplicateExpression = expression {
-                duplicateExpression.trimExpression(keeping: keeping, permanent: permanent) {
-                    onCompletionHandler(duplicateExpression)
+    public static func trimNote(note: Note, keeping: CMTimeRange, permanent: Bool = false, onCompletionHandler: @escaping (_ note: Note?) -> Void) {
+        print("===== Trim Note Factory Method =====")
+        note.duplicate() { note in
+            if let duplicateNote = note {
+                duplicateNote.trim(keeping: keeping, permanent: permanent) {
+                    onCompletionHandler(duplicateNote)
                 }
             }
         }
@@ -140,8 +140,8 @@ class Utils {
     // Cannot export to outputURL's that already exist
     // Reference: https://stackoverflow.com/questions/20203548/avassetexportsession-not-exporting-time-range
     // Deleting: https://stackoverflow.com/questions/42041405/delete-a-file-using-swift-in-ios
-    public static func exportExpression(expression: Expression, filename: String, fileType: String, timeRange: CMTimeRange, onCompletionHandler: @escaping () -> Void) {
-        print("===== Export Expression =====")
+    public static func exportNote(note: Note, filename: String, fileType: String, timeRange: CMTimeRange, onCompletionHandler: (() -> Void)? = nil) {
+        print("===== Export Note =====")
         
         do {
             let fileManager = FileManager.default
@@ -161,11 +161,11 @@ class Utils {
             fatalError("\tMessage: \(error)")
         }
 
-        if !AVAssetExportSession.exportPresets(compatibleWith: expression).contains(AVAssetExportPresetAppleM4A) {
-            fatalError("\t[Error] Expected export preset value not compatible with expression")
+        if !AVAssetExportSession.exportPresets(compatibleWith: note).contains(AVAssetExportPresetAppleM4A) {
+            fatalError("\t[Error] Expected export preset value not compatible with note")
         }
 
-        guard let exporter = AVAssetExportSession(asset: expression, presetName: AVAssetExportPresetAppleM4A) else {
+        guard let exporter = AVAssetExportSession(asset: note, presetName: AVAssetExportPresetAppleM4A) else {
             fatalError("\t[Error] There was an problem instantiating exporter")
         }
         
@@ -182,12 +182,12 @@ class Utils {
 
         // Export audio
         exporter.exportAsynchronously() {
-            DispatchQueue.main.async {
+            DispatchQueue.global(qos: .userInitiated).async {
                 if exporter.status == AVAssetExportSession.Status.completed {
-                    print("===== Expression successfully exported: \(filename).m4a =====")
-                    onCompletionHandler()
+                    print("===== Note successfully exported: \(filename).m4a =====")
+                    onCompletionHandler?()
                 } else {
-                    print("===== [Error] Unable to export expression =====")
+                    print("===== [Error] Unable to export note =====")
                     if let error = exporter.error {
                         print("\tMessage: \(error.localizedDescription)")
                     }
@@ -197,9 +197,9 @@ class Utils {
         }
     }
     
-    public static func runPlayer(expression: Expression, startTime: CMTime, rate: Float, volume: Float, onStartHandler: (() -> Void)? = nil) -> AVPlayer? {
+    public static func runPlayer(note: Note, startTime: CMTime, rate: Float, volume: Float, onStartHandler: (() -> Void)? = nil) -> AVPlayer? {
         print("===== Run Player =====")
-        if expression.player.currentItem == nil, let snapshot = expression.copy() as? AVAsset {
+        if note.player.currentItem == nil, let snapshot = note.copy() as? AVAsset {
             print("\tInitiating AVPlayer...")
             let assetKeys = [
                    "playable",
@@ -209,7 +209,7 @@ class Utils {
             let playerItem = AVPlayerItem(asset: snapshot, automaticallyLoadedAssetKeys: assetKeys)
 
             playerItem.addObserver(
-                expression,
+                note,
                 forKeyPath: #keyPath(AVPlayerItem.status),
                 options: [.old, .new],
                 context: nil
@@ -221,7 +221,7 @@ class Utils {
             Utils.setPlayerVolume(player: player, volume: volume)
             
             return player
-        } else if expression.player.status != .readyToPlay {
+        } else if note.player.status != .readyToPlay {
             // just wait for item to be ready
             print("\tWaiting for AVPlayerItem to be ready...\n")
         } else {
@@ -229,50 +229,50 @@ class Utils {
             let timeScale = CMTimeScale(NSEC_PER_SEC)
             let time = CMTime(seconds: 1, preferredTimescale: timeScale)
 
-            expression.timerObserverToken = expression.player.addPeriodicTimeObserver(forInterval: time, queue: .main) {time in
-                expression.handlePeriodicTimeObserver()
+            note.timerObserverToken = note.player.addPeriodicTimeObserver(forInterval: time, queue: .main) {time in
+                note.handlePeriodicTimeObserver()
             }
 
             var times = [NSValue]()
-            for segment in expression.expressionTracks[0] {
+            for segment in note.noteTracks[0] {
                 times.append(NSValue(time: segment.timeMapping.target.start))
             }
             
-            if expression.expressionTracks.count == 2 {
-                for segment in expression.expressionTracks[1] {
+            if note.noteTracks.count == 2 {
+                for segment in note.noteTracks[1] {
                     times.append(NSValue(time: segment.timeMapping.target.start))
                 }
             }
 
-            expression.boundaryObserverToken = expression.player.addBoundaryTimeObserver(forTimes: times, queue: .main) {
-                expression.handleBoundaryTimeObserver()
+            note.boundaryObserverToken = note.player.addBoundaryTimeObserver(forTimes: times, queue: .main) {
+                note.handleBoundaryTimeObserver()
             }
             
-            expression.completionObserverToken = expression.player.addBoundaryTimeObserver(forTimes: [NSValue(time: expression.stopPlaybackAt!)], queue: .main) {
-                expression.handleCompletionObserver()
+            note.completionObserverToken = note.player.addBoundaryTimeObserver(forTimes: [NSValue(time: note.stopPlaybackAt!)], queue: .main) {
+                note.handleCompletionObserver()
             }
             
-            expression.player.play()
+            note.player.play()
 
-            let rateWasSet = Utils.setPlayerRate(player: expression.player, rate: rate)
+            let rateWasSet = Utils.setPlayerRate(player: note.player, rate: rate)
             if rateWasSet {
                 print("\tPlayer rate was successfully set...")
             } else {
                 print("\t[Error] There was a problem setting player rate. Player had not been started yet.")
             }
             
-            if startTime == expression.startTime {
+            if startTime == note.startTime {
                 print("\tPlaying from start of recording...")
                 // Check to see if there is a silence at the start we need to skip
-                expression.handleBoundaryTimeObserver(start: true)
+                note.handleBoundaryTimeObserver(start: true)
             } else {
                 print("\tPlaying from \(startTime.seconds) seconds ...")
-                expression.player.seek(to: startTime)
+                note.player.seek(to: startTime)
             }
 
             onStartHandler?()
             
-            return expression.player
+            return note.player
         }
         
         return nil
@@ -290,24 +290,24 @@ class Utils {
         // Set Rate
         if rate > 1.0 {
             // Play fast forward
-            print("\tWill play expression in fast forward at rate: \(rate)")
+            print("\tWill play note in fast forward at rate: \(rate)")
             player.rate = rate
         } else if rate > 0.0 && rate < 1.0 {
             // Play slow forward
-            print("\tWill play expression in slow forward at rate: \(rate)")
+            print("\tWill play note in slow forward at rate: \(rate)")
             player.rate = rate
         } else if rate < 0.0 && rate > -1.0 {
             // Play slow reverse
-            print("\tWill play expression in slow reverse at rate: \(rate)")
+            print("\tWill play note in slow reverse at rate: \(rate)")
             player.rate = rate
         } else if rate < -1.0 {
             // Play fast reverse
-            print("\tWill play expression in fast reverse at rate: \(rate)")
+            print("\tWill play note in fast reverse at rate: \(rate)")
             player.rate = rate
         } else {
             // Play as normal if rate = 1.0
             // Stop if rate = 0.0
-            print("\tWill play expression at rate: \(rate)")
+            print("\tWill play note at rate: \(rate)")
             player.rate = rate
         }
         
@@ -318,7 +318,7 @@ class Utils {
         // print("===== Set Player Volume =====")
         
         // Set volume
-        // print("\tWill play expression at volume: \(volume)")
+        // print("\tWill play note at volume: \(volume)")
         player.volume = volume
     }
     

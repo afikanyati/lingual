@@ -17,14 +17,14 @@ let NEW_SENTENCE_PAUSE_DURATION_MULTIPLIER: Double = 4
 let NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER: Double = 6 // Very nice
 let MAX_SEMANTICALLY_SIMILAR_WORDS = 5
 
-class ExpressionSegment: AVCompositionTrackSegment {
-    /// Reference to it's parent expression
-    weak private(set) var expression: Expression?
-    /// Index of segment in expression track
+class NoteSegment: AVCompositionTrackSegment {
+    /// Reference to it's parent note
+    weak private(set) var note: Note?
+    /// Index of segment in note track
     private var index: Int = Int(Utils.UNKNOWN)
     /// Index of segment track
     private var trackIndex: Int
-    /// A textual representation of expression segment.
+    /// A textual representation of note segment.
     internal var word : String
     /// An array of similarly sounding words.
     private var phoneticallySimilarWords : [String]
@@ -42,14 +42,14 @@ class ExpressionSegment: AVCompositionTrackSegment {
     private var backgroundNoise: Double = Double.infinity
     /// The sound intensity of utterance at the time of recording.
     private var power: Double = Double.infinity
-    private var avgExpressionPower: Double {
-        if let expr = self.expression {
+    private var avgNotePower: Double {
+        if let expr = self.note {
             return expr.getPower()
         }
         
         return Double.infinity
     }
-    /// Specifies information related to the sentence of the expression segment is a member of.
+    /// Specifies information related to the sentence of the note segment is a member of.
     private var sentence = Sentence(number: Int(Utils.UNKNOWN), text: "", timeRange: CMTimeRange.zero)
     /// Scores text as positive, negative, or neutral based on its sentiment polarity.
     private var sentimentScore: [ScaleUnitType:Float] = [
@@ -65,14 +65,14 @@ class ExpressionSegment: AVCompositionTrackSegment {
     private var speakingRate: Double = Double(Utils.UNKNOWN)
     private var voiceCommandWord: Bool
     
-    /// Initializes the ExpressionSegment class instance
+    /// Initializes the NoteSegment class instance
     ///
     /// - Parameters:
-    ///     - expression: Reference to it's parent expression
-    ///     - word: Supplies a textual representation of expression segment.
+    ///     - note: Reference to it's parent note
+    ///     - word: Supplies a textual representation of note segment.
     ///     - trackURL: The container file of the media presented by the track segment.
     ///     - trackID: The track ID of the container file of the media presented by the track segment.
-    ///     - trackIndex: The track index in which the segment currently resides in the expression.
+    ///     - trackIndex: The track index in which the segment currently resides in the note.
     ///     - phoneticallySimilarWords: Supplies an array of similarly sounding words.
     ///     - timeRange: The time range of the track of the container file of the media presented by the segment.
     ///     - tokenType: Classifies token according to its broad type: word, punctuation, or whitespace.
@@ -81,7 +81,7 @@ class ExpressionSegment: AVCompositionTrackSegment {
     ///     - lemma: Supplies a stem form of a word token, if known.
     ///     - sentimentScore: Scores text as positive, negative, or neutral based on its sentiment polarity.
     init(
-        expression: Expression? = nil,
+        note: Note? = nil,
         word: String,
         trackURL: URL, // Cannot be replaced. Read Only
         trackID: CMPersistentTrackID,
@@ -105,8 +105,8 @@ class ExpressionSegment: AVCompositionTrackSegment {
         self.voiceCommandWord = voiceCommandWord
         self.trackIndex = trackIndex
         
-        if let expression = expression {
-            self.expression = expression
+        if let note = note {
+            self.note = note
         }
         
         if let sentimentScore = sentimentScore {
@@ -131,75 +131,63 @@ class ExpressionSegment: AVCompositionTrackSegment {
             targetTimeRange: targetTimeRange
         )
         
-        var previousWordIsSentenceTerminator = false
-        var previousWordIsValidLastSentenceWord = false
-        var i = 1
-        if let expression = self.expression, self.index != Int(Utils.UNKNOWN) && self.index > 0 && expression.expressionTracks[self.trackIndex].count > self.index {
-            while self.index - i >= 0 {
-                let previousSegment = expression.expressionTracks[self.trackIndex][self.index - i]
-                if previousSegment.isSilence() {
-                    i += 1
-                } else {
-                    previousWordIsSentenceTerminator = previousSegment.isSentenceTerminator()
-                    previousWordIsValidLastSentenceWord = previousSegment.isValidSentenceLastWord()
-                    break
-                }
-            }
-        }
-        
-        if let expression = self.expression, AVAudioSession.isHeadphonesConnected && utterPunctuationSuggestion && !previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord && self.isSilence() && self.suggestsNewParagraph() {
+        if let note = self.note, AVAudioSession.isHeadphonesConnected && utterPunctuationSuggestion && self.isSilence() && self.suggestsNewParagraph() {
             // Received newline punctuation suggestion
             // Headphones are connected
             
             // Give auditory feedback
             let rate: Float = 0.52
-            let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
+            let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
 
             let synthesizerItem = SynthesizerItem(
-                synthesizer: expression.speechSynthesizer,
+                synthesizer: note.speechSynthesizer,
                 text: "New line.",
                 voice: voice,
                 rate: rate,
-                volume: expression.playbackVolume
+                volume: note.playbackVolume
             )
-            expression.synthesizerQueue.enqueue(synthesizerItem)
+            note.synthesizerQueue.enqueue(synthesizerItem)
             
             // Give haptic feedback
             hapticEngine.mediumImpact()
-        } else if let expression = self.expression, !AVAudioSession.isHeadphonesConnected && utterPunctuationSuggestion && !previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord && self.isSilence() && self.suggestsNewParagraph() {
+        } else if let note = self.note, !AVAudioSession.isHeadphonesConnected && utterPunctuationSuggestion && self.isSilence() && self.suggestsNewParagraph() {
             // Received newline punctuation suggestion
             // Headphones are connected
             
             // Give visual feedback
-            expression.vc!.registerAppNotification(text: "New line suggestion.")
+            DispatchQueue.main.async {
+                note.vc!.registerAppNotification(text: "New line suggestion.")
+            }
             
             // Give haptic feedback
             hapticEngine.lightImpact()
-        } else if let expression = self.expression, AVAudioSession.isHeadphonesConnected && expression.withPunctuationSuggestions && utterPunctuationSuggestion && !previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord && self.isSilence() && self.suggestsNewSentence() {
+        } else if let note = self.note, AVAudioSession.isHeadphonesConnected && note.withPunctuationSuggestions && self.isSilence() && self.suggestsNewSentence() {
             // Received new sentence punctuation suggestion
             // Headphones are connected
             
             // Give auditory feedback
             let rate: Float = 0.52
-            let voice = Utils.getSynthesizerVoice(withGender: .female, vc: expression.vc)
+            let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
 
             let synthesizerItem = SynthesizerItem(
-                synthesizer: expression.speechSynthesizer,
+                synthesizer: note.speechSynthesizer,
                 text: "New sentence.",
                 voice: voice,
                 rate: rate,
-                volume: expression.playbackVolume
+                volume: note.playbackVolume
             )
-            expression.synthesizerQueue.enqueue(synthesizerItem)
+            note.synthesizerQueue.enqueue(synthesizerItem)
             
             // Give haptic feedback
             hapticEngine.mediumImpact()
-        } else if let expression = self.expression, !AVAudioSession.isHeadphonesConnected && expression.withPunctuationSuggestions && utterPunctuationSuggestion && !previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord && self.isSilence() && self.suggestsNewSentence() {
+        } else if let note = self.note, !AVAudioSession.isHeadphonesConnected && note.withPunctuationSuggestions && utterPunctuationSuggestion && self.isSilence() && self.suggestsNewSentence() {
             // Received new sentence punctuation suggestion
             // Headphones are connected
             
             // Give visual feedback
-            expression.vc!.registerAppNotification(text: "New sentence suggestion.")
+            DispatchQueue.main.async {
+                note.vc!.registerAppNotification(text: "New sentence suggestion.")
+            }
             
             // Give haptic feedback
             hapticEngine.heavyImpact()
@@ -210,10 +198,10 @@ class ExpressionSegment: AVCompositionTrackSegment {
     
     // update for new properties
     override var description: String {
-        return "ExpressionSegment {\n\trawWord: '\(self.word)' \n\tdisplayedWord: '\(self.getText(withTemporalSuggestions: self.expression?.withTemporalSuggestions ?? false, withPunctuationSuggestions: self.expression?.withPunctuationSuggestions ?? false, withFormattingSuggestions: self.expression?.withFormattingSuggestions ?? false, strictlyAsWord: self.expression?.withTextStrictlyAsWords ?? false, withSpacePrefix: true))' \n\tsourceURL: \(self.sourceURL!.lastPathComponent) \n\tpitch: \(self.pitch?.note.string ?? "nil") \n\tsourceTimeRange: (\n\t\tstart: \(self.timeMapping.source.start.seconds),\n\t\tend: \(self.timeMapping.source.end.seconds),\n\t\tduration: \(self.timeMapping.source.duration.seconds)\n\t) \n\ttargetTimeRange: (\n\t\tstart: \(self.timeMapping.target.start.seconds),\n\t\tend: \(self.timeMapping.target.end.seconds),\n\t\tduration: \(self.timeMapping.target.duration.seconds)\n\t) \n\ttrackIndex: \(self.trackIndex) \n\tindex: \(self.index) \n\tphoneticallySimilarWords: \(String(describing: self.phoneticallySimilarWords)) \n\ttokenType: \(self.tokenType ?? NLTag(rawValue: "nil")) \n\tlexicalClass: \(self.lexicalClass ?? NLTag(rawValue: "nil")) \n\tnameType: \(self.nameType ?? NLTag(rawValue: "nil")) \n\tlemma: \(self.lemma ?? NLTag(rawValue: "nil")) \n\tbackgroundNoise: \(self.backgroundNoise) \n\tpower: \(self.power) \n\tavgExpressionPower: \(self.avgExpressionPower) \n\tsentence: \(String(describing: self.sentence)) \n\tsentimentScore: \(String(describing: self.sentimentScore)) \n\tisSilence: \(self.isSilence()) \n\tisPunctuation: \(self.isPunctuation()) \n\tisEmphasized: \(self.isEmphasized()) \n\tisNumber: \(self.isNumber()) \n\tisHomophone: \(self.isHomophone()) \n\tisSentenceTerminator: \(self.isSentenceTerminator()) \n\tisVoiceCommandWord: \(self.voiceCommandWord) \n\tavgPauseDuration: \(self.avgPauseDuration) \n\tspeakingRate: \(self.speakingRate)\n}"
+        return "NoteSegment {\n\trawWord: '\(self.word)' \n\tdisplayedWord: '\(self.getText(withTemporalSuggestions: self.note?.withTemporalSuggestions ?? false, withPunctuationSuggestions: self.note?.withPunctuationSuggestions ?? false, withFormattingSuggestions: self.note?.withFormattingSuggestions ?? false, strictlyAsWord: self.note?.withTextStrictlyAsWords ?? false, withSpacePrefix: true))' \n\tsourceURL: \(self.sourceURL!.lastPathComponent) \n\tpitch: \(self.pitch?.note.string ?? "nil") \n\tsourceTimeRange: (\n\t\tstart: \(self.timeMapping.source.start.seconds),\n\t\tend: \(self.timeMapping.source.end.seconds),\n\t\tduration: \(self.timeMapping.source.duration.seconds)\n\t) \n\ttargetTimeRange: (\n\t\tstart: \(self.timeMapping.target.start.seconds),\n\t\tend: \(self.timeMapping.target.end.seconds),\n\t\tduration: \(self.timeMapping.target.duration.seconds)\n\t) \n\ttrackIndex: \(self.trackIndex) \n\tindex: \(self.index) \n\tphoneticallySimilarWords: \(String(describing: self.phoneticallySimilarWords)) \n\ttokenType: \(self.tokenType ?? NLTag(rawValue: "nil")) \n\tlexicalClass: \(self.lexicalClass ?? NLTag(rawValue: "nil")) \n\tnameType: \(self.nameType ?? NLTag(rawValue: "nil")) \n\tlemma: \(self.lemma ?? NLTag(rawValue: "nil")) \n\tbackgroundNoise: \(self.backgroundNoise) \n\tpower: \(self.power) \n\tavgNotePower: \(self.avgNotePower) \n\tsentence: \(String(describing: self.sentence)) \n\tsentimentScore: \(String(describing: self.sentimentScore)) \n\tisSilence: \(self.isSilence()) \n\tisPunctuation: \(self.isPunctuation()) \n\tisEmphasized: \(self.isEmphasized()) \n\tisNumber: \(self.isNumber()) \n\tisHomophone: \(self.isHomophone()) \n\tisSentenceTerminator: \(self.isSentenceTerminator()) \n\tisVoiceCommandWord: \(self.voiceCommandWord) \n\tavgPauseDuration: \(self.avgPauseDuration) \n\tspeakingRate: \(self.speakingRate)\n}"
     }
     
-    static func ==(_ firstSegment: ExpressionSegment, _ secondSegment: ExpressionSegment) -> Bool {
+    static func ==(_ firstSegment: NoteSegment, _ secondSegment: NoteSegment) -> Bool {
         return firstSegment.sourceURL == secondSegment.sourceURL &&
             firstSegment.sourceTrackID == secondSegment.sourceTrackID &&
             firstSegment.getTrackIndex() == secondSegment.getTrackIndex() &&
@@ -280,15 +268,18 @@ class ExpressionSegment: AVCompositionTrackSegment {
         var previousWordIsValidLastSentenceWord = false
         var previousSegmentIsVoiceCommand = false // If previous segment is voice command, don't use punctuation suggestion for silence
         var i = 1
-        if let expression = self.expression, self.index != Int(Utils.UNKNOWN) && self.index > 0 && expression.expressionTracks[self.trackIndex].count > self.index {
+        if let note = self.note, self.index != Int(Utils.UNKNOWN) && self.index > 0 && note.noteTracks[self.trackIndex].count > self.index {
             while self.index - i >= 0 {
-                let previousSegment = expression.expressionTracks[self.trackIndex][self.index - i]
+                let previousSegment = note.noteTracks[self.trackIndex][self.index - i]
                 if previousSegment.isSilence() || previousSegment.isVoiceCommandWord() {
                     i += 1
-                    capitalizeWord = previousSegment.isSentenceTerminator() && withPunctuationSuggestions // we include withPunctuationSuggestions here to override value in isSentenceTerminator that comes from the expression and not the getText argument
+                    capitalizeWord = previousSegment.isSentenceTerminator() && withPunctuationSuggestions // we include withPunctuationSuggestions here to override value in isSentenceTerminator that comes from the note and not the getText argument
                     previousSegmentIsVoiceCommand = previousSegment.isVoiceCommandWord()
-                    removeLeadingSpace = withPunctuationSuggestions && previousSegment.suggestsNewParagraph() // Should only be determined on spaces
                     previousWordIsSentenceTerminator = previousSegment.isSentenceTerminator()
+                    
+                    if !previousSegment.isVoiceCommandWord() {
+                        removeLeadingSpace = withPunctuationSuggestions && previousSegment.suggestsNewParagraph() // Should only be determined on spaces
+                    }
                 } else {
                     previousWordIsSentenceTerminator = previousSegment.isSentenceTerminator()
                     previousWordIsValidLastSentenceWord = previousSegment.isValidSentenceLastWord()
@@ -303,14 +294,14 @@ class ExpressionSegment: AVCompositionTrackSegment {
         var nextSegmentIsVoiceCommand = false // If next segment is punctuation, it is not a sentence terminator
         var j = 1
         var existsWordsAfterVoiceCommand = false // If there are no words after the voice command, we want to have a sentence terminator
-        if let expression = self.expression, self.index != Int(Utils.UNKNOWN) && self.index + 1 < expression.expressionTracks[self.trackIndex].count  {
-            let nextSegment = expression.expressionTracks[self.trackIndex][self.index + 1]
+        if let note = self.note, self.index != Int(Utils.UNKNOWN) && self.index + 1 < note.noteTracks[self.trackIndex].count  {
+            let nextSegment = note.noteTracks[self.trackIndex][self.index + 1]
             nextWordIsConjunction = nextSegment.getLexicalClass() == .conjunction
             nextSegmentIsPunctuation = nextSegment.isPunctuation()
             nextSegmentIsVoiceCommand = nextSegment.isVoiceCommandWord()
             
-            while self.index + j < expression.expressionTracks[self.trackIndex].count {
-                let nextSegment = expression.expressionTracks[self.trackIndex][self.index + j]
+            while self.index + j < note.noteTracks[self.trackIndex].count {
+                let nextSegment = note.noteTracks[self.trackIndex][self.index + j]
                 if !nextSegment.isVoiceCommandWord() {
                     existsWordsAfterVoiceCommand = true
                     break
@@ -326,11 +317,11 @@ class ExpressionSegment: AVCompositionTrackSegment {
             // its the empty string for silence
             if previousWordIsSentenceTerminator && suggestsNewParagraph() {
                 text += "\n\n"
-            } else if !previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord && !nextSegmentIsPunctuation && (!nextSegmentIsVoiceCommand || !existsWordsAfterVoiceCommand) && suggestsNewParagraph() {
+            } else if ((!previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord) || (self.trackIndex == 1 && self.index == 0)) && !nextSegmentIsPunctuation && (!nextSegmentIsVoiceCommand || !existsWordsAfterVoiceCommand) && suggestsNewParagraph() {
                 let terminator = self.sentence.text.count > 0 && Utils.isQuestion(sentence: self.sentence.text) ? "?" : "."
                 let exclaimedTerminator = self.sentence.text.count > 0 && Utils.isQuestion(sentence: self.sentence.text) ? "?!" : "!"
                 text += "\(exclaimWord ? exclaimedTerminator : terminator)\n\n"
-            } else if !previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord && !nextSegmentIsPunctuation && (!nextSegmentIsVoiceCommand || !existsWordsAfterVoiceCommand) && suggestsNewSentence() {
+            } else if ((!previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord) || (self.trackIndex == 1 && self.index == 0)) && !nextSegmentIsPunctuation && (!nextSegmentIsVoiceCommand || !existsWordsAfterVoiceCommand) && suggestsNewSentence() {
                 let terminator = Utils.isQuestion(sentence: self.sentence.text) ? "?" : "."
                 let exclaimedTerminator = Utils.isQuestion(sentence: self.sentence.text) ? "?!" : "!"
                 text += "\(exclaimWord ? exclaimedTerminator : terminator)"
@@ -395,8 +386,8 @@ class ExpressionSegment: AVCompositionTrackSegment {
     }
     
     func isEmphasized() -> Bool {
-        if self.power != Double.infinity && self.avgExpressionPower != Double.infinity && !isSilence() && !isVoiceCommandWord() {
-            return self.power > self.avgExpressionPower + Utils.EMPHASIS_POWER_DELTA
+        if self.power != Double.infinity && self.avgNotePower != Double.infinity && !isSilence() && !isVoiceCommandWord() {
+            return self.power > self.avgNotePower + Utils.EMPHASIS_POWER_DELTA
         }
         
         return false
@@ -422,9 +413,9 @@ class ExpressionSegment: AVCompositionTrackSegment {
         var previousWordLexicalClass: NLTag?
         var previousWord = ""
         var i = 1
-        if let expression = self.expression, self.index != Int(Utils.UNKNOWN) && self.index > 0 && expression.expressionTracks[self.trackIndex].count > self.index {
+        if let note = self.note, self.index != Int(Utils.UNKNOWN) && self.index > 0 && note.noteTracks[self.trackIndex].count > self.index {
             while self.index - i >= 0 {
-                let previousSegment = expression.expressionTracks[self.trackIndex][self.index - i]
+                let previousSegment = note.noteTracks[self.trackIndex][self.index - i]
                 if previousSegment.isSilence() || previousSegment.isVoiceCommandWord() {
                     i += 1
                 } else {
@@ -464,16 +455,16 @@ class ExpressionSegment: AVCompositionTrackSegment {
     
     func isSentenceTerminator() -> Bool {
         var withPunctuationSuggestions = false
-        if let expression = self.expression {
-            withPunctuationSuggestions = expression.withPunctuationSuggestions
+        if let note = self.note {
+            withPunctuationSuggestions = note.withPunctuationSuggestions
         }
 
         var previousWordIsValidLastSentenceWord = false
         var previousWordIsSentenceTerminator = false
         var i = 1
-        if let expression = self.expression, self.index != Int(Utils.UNKNOWN) && self.index > 0 && expression.expressionTracks[self.trackIndex].count > self.index {
+        if let note = self.note, self.index != Int(Utils.UNKNOWN) && self.index > 0 && note.noteTracks[self.trackIndex].count > self.index {
             while self.index - i >= 0 {
-                let previousSegment = expression.expressionTracks[self.trackIndex][self.index - i]
+                let previousSegment = note.noteTracks[self.trackIndex][self.index - i]
                 if previousSegment.isSilence() || previousSegment.isVoiceCommandWord() {
                     i += 1
                     previousWordIsSentenceTerminator = previousSegment.isSentenceTerminator()
@@ -489,13 +480,13 @@ class ExpressionSegment: AVCompositionTrackSegment {
         var nextSegmentIsVoiceCommand = false // If next segment is punctuation, it is not a sentence terminator
         var j = 1
         var existsWordsAfterVoiceCommand = false
-        if let expression = self.expression, self.index != Int(Utils.UNKNOWN) && self.index + 1 < expression.expressionTracks[self.trackIndex].count  {
-            let nextSegment = expression.expressionTracks[self.trackIndex][self.index + 1]
+        if let note = self.note, self.index != Int(Utils.UNKNOWN) && self.index + 1 < note.noteTracks[self.trackIndex].count  {
+            let nextSegment = note.noteTracks[self.trackIndex][self.index + 1]
             nextSegmentIsPunctuation = nextSegment.isPunctuation()
             nextSegmentIsVoiceCommand = nextSegment.isVoiceCommandWord()
             
-            while self.index + j < expression.expressionTracks[self.trackIndex].count {
-                let nextSegment = expression.expressionTracks[self.trackIndex][self.index + j]
+            while self.index + j < note.noteTracks[self.trackIndex].count {
+                let nextSegment = note.noteTracks[self.trackIndex][self.index + j]
                 if !nextSegment.isVoiceCommandWord() {
                     existsWordsAfterVoiceCommand = true
                     break
@@ -625,8 +616,8 @@ class ExpressionSegment: AVCompositionTrackSegment {
         return nil
     }
     
-    func setExpression(expression: Expression) {
-        self.expression = expression
+    func setNote(note: Note) {
+        self.note = note
         
         checkRep()
     }
@@ -649,11 +640,11 @@ class ExpressionSegment: AVCompositionTrackSegment {
     
     // MARK: - Mutating Methods
     
-    func duplicate(newExpression: Expression? = nil, index: Int, trackIndex: Int? = nil, timeRange: CMTimeRange? = nil) -> ExpressionSegment {
-        let duplicateSegment = ExpressionSegment(
+    func duplicate(newNote: Note? = nil, index: Int, trackIndex: Int? = nil, timeRange: CMTimeRange? = nil) -> NoteSegment {
+        let duplicateSegment = NoteSegment(
             word: self.word,
             trackURL: self.sourceURL!,
-            trackID: newExpression != nil ? newExpression!.tracks[0].trackID : self.sourceTrackID,
+            trackID: newNote != nil ? newNote!.tracks[0].trackID : self.sourceTrackID,
             trackIndex: trackIndex != nil ? trackIndex! : self.trackIndex,
             phoneticallySimilarWords: self.getPhoneticallySimilarWords(),
             sourceTimeRange: self.timeMapping.source,
@@ -665,8 +656,8 @@ class ExpressionSegment: AVCompositionTrackSegment {
             sentimentScore: self.sentimentScore
         )
         
-        // Set Expression
-        duplicateSegment.setExpression(expression: newExpression != nil ? newExpression! : self.expression!)
+        // Set Note
+        duplicateSegment.setNote(note: newNote != nil ? newNote! : self.note!)
         
         // Set segment index
         duplicateSegment.setIndex(index: self.index)
@@ -698,12 +689,12 @@ class ExpressionSegment: AVCompositionTrackSegment {
         return duplicateSegment
     }
     
-    // creates new sentence expression object
-    func createSentenceExpression(onCompletionHandler: @escaping (_ sentence: Expression?) -> Void) {
-        if let expression = self.expression {
+    // creates new sentence note object
+    func createSentenceNote(onCompletionHandler: @escaping (_ sentence: Note?) -> Void) {
+        if let note = self.note {
             let range = self.sentence.timeRange
-            Utils.trimExpression(expression: expression, keeping: range, permanent: true) { expression in
-                onCompletionHandler(expression)
+            Utils.trimNote(note: note, keeping: range, permanent: true) { note in
+                onCompletionHandler(note)
             }
         }
     }
@@ -737,7 +728,8 @@ class ExpressionSegment: AVCompositionTrackSegment {
     }
     
     func suggestsNewComma(includingFirstSegment: Bool = false) -> Bool {
-        if self.isSilence() && avgPauseDuration != Utils.UNKNOWN {
+//        if self.isSilence() && avgPauseDuration != Utils.UNKNOWN {
+        if self.isSilence() {
             let duration = self.timeMapping.target.duration.seconds
             let isFirstSegment = self.timeMapping.target.start == CMTime.zero
             if duration > COMMA_PAUSE_DURATION_MULTIPLIER && (includingFirstSegment || !isFirstSegment) {

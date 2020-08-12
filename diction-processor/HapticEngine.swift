@@ -25,48 +25,46 @@ public final class HapticEngine: NSObject {
     private override init() {
         // lets you generate feedback based on three system events: error, success, and warning
         notificationFeedbackGenerator = UINotificationFeedbackGenerator()
+        notificationFeedbackGenerator!.prepare()
         
         // lets you generate light, medium, and heavy effects that Apple says provide a "physical metaphor that complements the visual experience."
         lightImpactFeedbackGenerator = UIImpactFeedbackGenerator(style: .light)
         mediumImpactFeedbackGenerator = UIImpactFeedbackGenerator(style: .medium)
         heavyImpactFeedbackGenerator = UIImpactFeedbackGenerator(style: .heavy)
+        lightImpactFeedbackGenerator!.prepare()
+        mediumImpactFeedbackGenerator!.prepare()
+        heavyImpactFeedbackGenerator!.prepare()
         
         // generates feedback that should be triggered when the user is changing their selection on screen, e.g. moving through a picker wheel.
         selectionFeedbackGenerator = UISelectionFeedbackGenerator()
+        selectionFeedbackGenerator!.prepare()
     }
     
     func error() {
-        notificationFeedbackGenerator!.prepare()
         notificationFeedbackGenerator!.notificationOccurred(.error)
     }
     
     func success() {
-        notificationFeedbackGenerator!.prepare()
         notificationFeedbackGenerator!.notificationOccurred(.success)
     }
     
     func warning() {
-        notificationFeedbackGenerator!.prepare()
         notificationFeedbackGenerator!.notificationOccurred(.warning)
     }
     
     func lightImpact() {
-        lightImpactFeedbackGenerator!.prepare()
         lightImpactFeedbackGenerator!.impactOccurred()
     }
     
     func mediumImpact() {
-        lightImpactFeedbackGenerator!.prepare()
-        lightImpactFeedbackGenerator!.impactOccurred()
+        mediumImpactFeedbackGenerator!.impactOccurred()
     }
     
     func heavyImpact() {
-        lightImpactFeedbackGenerator!.prepare()
-        lightImpactFeedbackGenerator!.impactOccurred()
+        heavyImpactFeedbackGenerator!.impactOccurred()
     }
     
     func selection() {
-        selectionFeedbackGenerator!.prepare()
         selectionFeedbackGenerator!.selectionChanged()
     }
 }

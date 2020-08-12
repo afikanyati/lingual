@@ -1,4 +1,4 @@
-public struct Note {
+public struct MusicNote {
   public enum Letter: String {
     case C = "C"
     case CSharp = "C#"
@@ -67,11 +67,11 @@ public struct Note {
 
   // MARK: - Closest Notes
 
-  public func lower() throws -> Note {
-    return try Note(index: index - 1)
+  public func lower() throws -> MusicNote {
+    return try MusicNote(index: index - 1)
   }
 
-  public func higher() throws -> Note {
-    return try Note(index: index + 1)
+  public func higher() throws -> MusicNote {
+    return try MusicNote(index: index + 1)
   }
 }

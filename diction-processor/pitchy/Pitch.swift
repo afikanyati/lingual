@@ -1,6 +1,6 @@
 public struct Pitch {
   public typealias Offset = (
-    note: Note,
+    note: MusicNote,
     frequency: Double,
     percentage: Double,
     cents: Double
@@ -28,7 +28,7 @@ public struct Pitch {
   public let wave: AcousticWave
   public let offsets: Offsets
 
-  public var note: Note {
+  public var note: MusicNote {
     return offsets.closest.note
   }
 

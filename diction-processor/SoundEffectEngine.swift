@@ -24,7 +24,7 @@ public final class SoundEffectEngine: NSObject {
     var processingPlayer: AVQueuePlayer? = nil
     var processingLooper: AVPlayerLooper? = nil
     var repeatPlayer: AVAudioPlayer? = nil
-    var saveExpressionPlayer: AVAudioPlayer? = nil
+    var saveNotePlayer: AVAudioPlayer? = nil
     var startListeningPlayer: AVAudioPlayer? = nil
     var stopListeningPlayer: AVAudioPlayer? = nil
     var voiceCommandAcceptPlayer: AVAudioPlayer? = nil
@@ -99,14 +99,14 @@ public final class SoundEffectEngine: NSObject {
             print("===== [Error] There was a problem importing 'Repeat' sound =====")
         }
         
-        // Save Expression
-        let saveExpressionPath = Bundle.main.path(forResource: "save-expression", ofType: "wav")!
-        let saveExpressionURL = URL(fileURLWithPath: saveExpressionPath)
+        // Save Note
+        let saveNotePath = Bundle.main.path(forResource: "save", ofType: "wav")!
+        let saveNoteURL = URL(fileURLWithPath: saveNotePath)
 
         do {
-            saveExpressionPlayer = try AVAudioPlayer(contentsOf: saveExpressionURL)
+            saveNotePlayer = try AVAudioPlayer(contentsOf: saveNoteURL)
         } catch {
-            print("===== [Error] There was a problem importing 'Save Expression' sound =====")
+            print("===== [Error] There was a problem importing 'Save Note' sound =====")
         }
         
         // Start Listening
@@ -158,7 +158,7 @@ public final class SoundEffectEngine: NSObject {
     func startProcessing() { processingPlayer?.play() }
     func stopProcessing() { processingPlayer?.stop() }
     func repeatSegment() { repeatPlayer?.play() }
-    func saveExpression() { saveExpressionPlayer?.play() }
+    func saveNote() { saveNotePlayer?.play() }
     func startListening() { startListeningPlayer?.play() }
     func stopListening() { stopListeningPlayer?.play() }
     func voiceCommandAccept() { voiceCommandAcceptPlayer?.play() }
