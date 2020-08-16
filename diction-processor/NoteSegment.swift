@@ -239,7 +239,7 @@ class NoteSegment: AVCompositionTrackSegment {
 
         if !result {
             print("sourceTimeRange and targetTimeRange should have the same duration: ", self.timeMapping.source.duration.seconds, self.timeMapping.target.duration.seconds)
-            fatalError("===== [Error] Representation Invariants were broken =====")
+            fatalError("===== [Error] NoteSegment Representation Invariants were broken =====")
         }
     }
     

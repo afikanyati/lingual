@@ -21,7 +21,7 @@ let AVATAR_URL = "https://firebasestorage.googleapis.com/v0/b/afika-nyati-websit
 
 class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEngineDelegate {
     
-    // MARK: - Outlets
+    // MARK: - Outlets and Views
     @IBOutlet weak var wakePhraseLabel: UILabel!
     @IBOutlet weak var wakePhraseSubtitleLabel: UILabel!
     @IBOutlet weak var transcriptionText: UITextView!
@@ -29,12 +29,14 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     @IBOutlet weak var playTextToSpeechButton: UIButton!
     @IBOutlet weak var recordingButton: UIButton!
     @IBOutlet weak var soundIntensityIndicatorHeight: NSLayoutConstraint!
+    var cursorView: UIView?
     
     // MARK: - General Properties
     var appActivated = false
     var useOnDeviceRecognition = DEFAULT_USE_ON_DEVICE_RECOGNITION
     var numAppSessions = 0
     let wakePhrase = "rise and shine"
+    let font = UIFont.systemFont(ofSize: 18.0)
     var isListeningForVolume = false
     var UITimer: Timer?
     var appNotificationTimer: Timer?
@@ -109,6 +111,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         
         // Start listening for wake word
         configureListeningForWakePhrase()
+        
+        // Set textContainer font size
+        self.transcriptionText.font = self.font
         
         session.addObserver(
             self, forKeyPath: #keyPath(AVAudioSession.outputVolume),
@@ -473,6 +478,53 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         )
     }
     
+    func setCursorVisibility(as visible: Bool) {
+        // manage cursor view
+        if visible {
+            // compute x and y positions
+            let textContainerPadding = transcriptionText.textContainer.lineFragmentPadding
+            let xPos = transcriptionText.frame.minX + textContainerPadding
+            let yPos = transcriptionText.frame.minY + textContainerPadding + ((self.font.lineHeight - self.font.pointSize) / 2)
+            let width = Utils.CURSOR_WIDTH
+            
+
+            // Create a CGRect object which is used to render a rectangle.
+            let cursor: CGRect = CGRect(
+                x: xPos,
+                y: yPos,
+                width: CGFloat(width),
+                height: CGFloat(self.font.lineHeight)
+            )
+            
+            // Create a UIView object which use above CGRect object.
+            self.cursorView = UIView(frame: cursor)
+            
+            // Set UIView background color
+            self.cursorView!.backgroundColor = UIColor.systemBlue
+            
+            // Create corner radius
+            self.cursorView!.layer.cornerRadius = CGFloat(width / 2)
+            
+            // Add above UIView object as the main view's subview.
+            self.view.addSubview(self.cursorView!)
+        } else if let cursorView = self.cursorView {
+            // remove cursor
+            cursorView.removeFromSuperview()
+            self.cursorView = nil
+        }
+        
+        // manage cursor model
+        if visible {
+            selectionCursor.setTextView(textView: self.transcriptionText)
+            selectionCursor.setCursorView(cursorView: self.cursorView!)
+            selectionCursor.setNote(note: self.note)
+        } else {
+            selectionCursor.setTextView(textView: nil)
+            selectionCursor.setCursorView(cursorView: nil)
+            selectionCursor.setNote(note: nil)
+        }
+    }
+    
     func createNewNote() -> Note {
         Note(
             vc: self,
@@ -735,6 +787,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         recordingButton.isEnabled = visible
         wakePhraseSubtitleLabel.isHidden = visible
         wakePhraseLabel.isHidden = visible
+        setCursorVisibility(as: visible)
         
         if !visible {
             playAudioButton.isHidden = true
@@ -756,12 +809,15 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             mutableAttributedString.addAttribute(.foregroundColor, value: UIColor.white, range: range)
             mutableAttributedString.addAttribute(.backgroundColor, value: UIColor.red, range: range)
             transcriptionText.attributedText = mutableAttributedString
-            transcriptionText.font = UIFont.systemFont(ofSize: 18.0)
+            transcriptionText.font = self.font
         } else {
             let mutableAttributedString = NSMutableAttributedString(string: text)
             transcriptionText.attributedText = mutableAttributedString
-            transcriptionText.font = UIFont.systemFont(ofSize: 18.0)
+            transcriptionText.font = self.font
         }
+        
+        // Notify of text change
+        selectionCursor.textViewDidChange(self.transcriptionText)
     }
     
     /**

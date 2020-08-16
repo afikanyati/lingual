@@ -532,7 +532,7 @@ class Note: AVMutableComposition {
 //        print("current result: ", result)
 
         if !result {
-            fatalError("===== [Error] Representation Invariants were broken =====")
+            fatalError("===== [Error] Note Representation Invariants were broken =====")
         }
     }
     
@@ -1283,7 +1283,7 @@ class Note: AVMutableComposition {
         var wordSentimentScore: NLTag?
         var sentenceSentimentScore: NLTag?
         var paragraphSentimentScore: NLTag?
-        let range = findSegmentRange(segments: self.noteTracks[self.activeTrack], wholeText: wholeText, segmentText: segmentText, index: index)
+        let range = findSegmentRange(segments: self.noteTracks[self.activeTrack], wholeText: wholeText, rangeText: segmentText, index: index)
         let rangeStartIndex: Int = wholeText.distance(from: wholeText.startIndex, to: range.lowerBound)
         let stringIndex = wholeText.index(wholeText.startIndex, offsetBy: rangeStartIndex)
         (nameType, _) = tagger.tag(at: stringIndex, unit: .word, scheme: .nameType)
@@ -1330,16 +1330,20 @@ class Note: AVMutableComposition {
     }
     
     // Can't handle empty strings for segmentText
-    func findSegmentRange(segments: [NoteSegment], wholeText: String, segmentText: String, index: Int) -> Range<String.Index> {
+    func findSegmentRange(segments: [NoteSegment], wholeText: String, rangeText: String, index: Int? = nil) -> Range<String.Index> {
         // figure out how many words are before it
         // compute number of processedChar
         var lowerText: String
-        if index >= segments.count && index - segments.count <= 1 {
+        if let index = index, index >= segments.count && index - segments.count <= 1 {
             // new segment
             lowerText = self.getText(segments: segments)
-        } else if index < segments.count && index > 0 {
+        } else if let index = index, index < segments.count && index > 0 {
             // is in in noteSegments
             let lowerBoundarySegment = segments[index - 1]
+            lowerText = self.getText(until: lowerBoundarySegment.timeMapping.target.start, segments: segments) // We assume that this is only called when source == target, so using either is fine
+        } else if index == nil {
+            // is in in noteSegments
+            let lowerBoundarySegment = segments[segments.count - 1]
             lowerText = self.getText(until: lowerBoundarySegment.timeMapping.target.start, segments: segments) // We assume that this is only called when source == target, so using either is fine
         } else if index == 0 && segments.count == 0 {
             // is first segment
@@ -1348,11 +1352,11 @@ class Note: AVMutableComposition {
             fatalError("\t[Error] There was a problem analyzing the index of segment in findSegmentRange")
         }
         
-        let lowerIndex = segmentText.count == 1 && segmentText.first!.isPunctuation ?
+        let lowerIndex = rangeText.count == 1 && rangeText.first!.isPunctuation ?
             wholeText.index(wholeText.startIndex, offsetBy: lowerText.count)
         :
             wholeText.index(wholeText.startIndex, offsetBy: lowerText.count + 1)
-        let upperIndex = wholeText.index(lowerIndex, offsetBy: segmentText.count - 1)
+        let upperIndex = wholeText.index(lowerIndex, offsetBy: rangeText.count - 1)
         let segmentRange = lowerIndex..<upperIndex
         
         return segmentRange
@@ -1387,6 +1391,11 @@ class Note: AVMutableComposition {
     // MARK: - Text Methods
     
     func getText(from fromTime: CMTime = CMTime.zero, until untilTime: CMTime? = nil, segments: [NoteSegment]? = nil, forEcho: Bool = false) -> String {
+        
+        guard untilTime == nil || fromTime <= untilTime!  else {
+            fatalError("===== [Error] There was a problem computing text. untilTime is greater than fromTime =====")
+        }
+        
         var text = ""
         
         var noteSegments: [NoteSegment]? = nil
@@ -1434,7 +1443,7 @@ class Note: AVMutableComposition {
         text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         
         // make sure first letter is capitalized
-        // not capitalized when we're dealing with expresssions that come from chopped up notes
+        // not capitalized when we're dealing with expresssions that come from chopped up notesRange
         text = text.capitalizeFirstLetter()
 
         return text
@@ -2816,10 +2825,12 @@ class Note: AVMutableComposition {
     
     // MARK: - Key-Value Observer
     
-    override func observeValue(forKeyPath keyPath: String?,
-                               of object: Any?,
-                               change: [NSKeyValueChangeKey : Any]?,
-                               context: UnsafeMutableRawPointer?) {
+    override func observeValue(
+        forKeyPath keyPath: String?,
+        of object: Any?,
+        change: [NSKeyValueChangeKey : Any]?,
+        context: UnsafeMutableRawPointer?
+    ){
         if keyPath == #keyPath(AVPlayerItem.status) {
             let status: AVPlayerItem.Status
             
@@ -3166,7 +3177,6 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                         let firstCommandWord = command.components(separatedBy: " ").first!
                         var lowestCommandIndex: Int?
                         for (index, segment) in self.noteTracks[self.activeTrack].reversed().enumerated() {
-                            print("get voice word: ", firstCommandWord.lowercased(), segment.getText().lowercased())
                             if segment.getText().lowercased() == firstCommandWord.lowercased() {
                                 lowestCommandIndex = self.noteTracks[self.activeTrack].count - index - 1
                                 break
@@ -3271,7 +3281,6 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                         let firstCommandWord = command.components(separatedBy: " ").first!
                         var lowestCommandIndex: Int?
                         for (index, segment) in self.noteTracks[self.activeTrack].reversed().enumerated() {
-                            print("get voice word: ", firstCommandWord.lowercased(), segment.getText().lowercased())
                             if segment.getText().lowercased() == firstCommandWord.lowercased() {
                                 lowestCommandIndex = self.noteTracks[self.activeTrack].count - index - 1
                                 break
