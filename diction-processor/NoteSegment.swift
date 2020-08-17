@@ -152,12 +152,10 @@ class NoteSegment: AVCompositionTrackSegment {
             hapticEngine.mediumImpact()
         } else if let note = self.note, !AVAudioSession.isHeadphonesConnected && utterPunctuationSuggestion && self.isSilence() && self.suggestsNewParagraph() {
             // Received newline punctuation suggestion
-            // Headphones are connected
+            // Headphones not are connected
             
             // Give visual feedback
-            DispatchQueue.main.async {
-                note.vc!.registerAppNotification(text: "New line suggestion.")
-            }
+            note.vc!.addNotification(text: "New line suggestion.")
             
             // Give haptic feedback
             hapticEngine.lightImpact()
@@ -182,12 +180,10 @@ class NoteSegment: AVCompositionTrackSegment {
             hapticEngine.mediumImpact()
         } else if let note = self.note, !AVAudioSession.isHeadphonesConnected && note.withPunctuationSuggestions && utterPunctuationSuggestion && self.isSilence() && self.suggestsNewSentence() {
             // Received new sentence punctuation suggestion
-            // Headphones are connected
+            // Headphones not are connected
             
             // Give visual feedback
-            DispatchQueue.main.async {
-                note.vc!.registerAppNotification(text: "New sentence suggestion.")
-            }
+            note.vc!.addNotification(text: "New sentence suggestion.")
             
             // Give haptic feedback
             hapticEngine.heavyImpact()

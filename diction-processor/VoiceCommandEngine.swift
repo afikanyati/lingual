@@ -435,18 +435,7 @@ public final class VoiceCommandEngine: NSObject {
     func stopListeningForSpeech(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Stop Listening For Speech")
         note.stopListeningForSpeech() {
-            note.startListeningForVoiceCommands(
-                soundIntensityHandler: { power in
-                    if let power = power {
-                        DispatchQueue.main.async {
-                            let height = CGFloat(Utils.normalizedPower(power: power, minPower: note.minPower)) * note.vc!.view.safeAreaLayoutGuide.layoutFrame.height
-                            let soundIntensityHeight: CGFloat = CGFloat(min(height, note.vc!.view.safeAreaLayoutGuide.layoutFrame.height))
-                            note.vc!.soundIntensityIndicatorHeight.constant = soundIntensityHeight
-                        }
-                    }
-                },
-                onStartHandler: handler
-            )
+            handler?()
         }
     }
     

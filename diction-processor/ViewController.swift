@@ -38,6 +38,8 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     let wakePhrase = "rise and shine"
     let font = UIFont.systemFont(ofSize: 18.0)
     var isListeningForVolume = false
+    var notificationQueue = Queue<NotificationItem>()
+    private(set) var isExhaustingNotificationQueue = false
     var UITimer: Timer?
     var appNotificationTimer: Timer?
     var volumeListeningRateTimer: Timer?
@@ -336,7 +338,8 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 
             DispatchQueue.main.async {
                 self?.stopRecordingUITimer()
-                self?.registerAppNotification(text: "Saved!", type: .success) // we must have stopped recording ui timer before calling this
+                self?.addNotification(text: "Saved!", type: .success) // we must have stopped recording ui timer before calling this
+                self?.exhaustNotificationQueue()
                 self?.soundIntensityIndicatorHeight.constant = 0
                 self?.navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Reset", style: .plain, target: self, action: #selector(self?.resetSession))
             }
@@ -480,7 +483,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     
     func setCursorVisibility(as visible: Bool) {
         // manage cursor view
-        if visible {
+        if visible && self.transcriptionText.attributedText.length == 0 {
             // compute x and y positions
             let textContainerPadding = transcriptionText.textContainer.lineFragmentPadding
             let xPos = transcriptionText.frame.minX + textContainerPadding
@@ -507,7 +510,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             
             // Add above UIView object as the main view's subview.
             self.view.addSubview(self.cursorView!)
-        } else if let cursorView = self.cursorView {
+        } else if visible && self.transcriptionText.attributedText.length > 0 {
+            // keep cursor where it last was
+        } else if let cursorView = self.cursorView, !visible {
             // remove cursor
             cursorView.removeFromSuperview()
             self.cursorView = nil
@@ -544,28 +549,51 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         )
     }
     
-    func registerAppNotification(text: String, type: NotificationType? = nil) {
+    func addNotification(text: String, type: NotificationType? = nil) {
+        let notificationItem = NotificationItem(
+            text: text,
+            type: type
+        )
+        self.notificationQueue.enqueue(notificationItem)
+    }
+    
+    func exhaustNotificationQueue() {
+        let item = self.notificationQueue.dequeue()
+        self.isExhaustingNotificationQueue = !self.notificationQueue.isEmpty
+        
+        if let item = item {
+            self.runNotification(item: item)
+        }
+    }
+    
+    func runNotification(item: NotificationItem) {
         // Stop UI Timer if we receive app notification while recording
-        if self.note.isListeningForSpeech {
+        if self.note.isListeningForSpeech && self.UITimer != nil {
             self.stopRecordingUITimer()
         }
         
-        self.navigationItem.title = text
+        self.navigationItem.title = item.text
         self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.red]
         
         self.appNotificationTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) {[weak self] timer in
             // Restart UI Timer is we received app notification while receiving
-            if self!.note.isListeningForSpeech {
+            if self!.isExhaustingNotificationQueue {
+                self?.navigationItem.title = ""
+                self?.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
+
+                self!.exhaustNotificationQueue()
+            } else if self!.note.isListeningForSpeech {
+                self?.navigationItem.title = ""
+                self?.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
+
                 DispatchQueue.main.async {
                     self!.startRecordingUITimer(recording: true)
                 }
             }
-            self?.navigationItem.title = ""
-            self?.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
         }
         
         // Give haptic feedback
-        if let type = type {
+        if let type = item.type {
             switch (type) {
             case .error:
                 hapticEngine.error()
@@ -667,17 +695,6 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 print("===== Stop Recording =====")
                 note.stopListeningForSpeech() {[weak self] in
                     self?.onNoteListenStop!()
-                    self?.note.startListeningForVoiceCommands(
-                        soundIntensityHandler: { power in
-                            if let power = power {
-                                DispatchQueue.main.async {
-                                    let height = CGFloat(Utils.normalizedPower(power: power, minPower: self!.minPower)) * self!.view.safeAreaLayoutGuide.layoutFrame.height
-                                    let soundIntensityHeight: CGFloat = CGFloat(min(height, self!.view.safeAreaLayoutGuide.layoutFrame.height))
-                                    self?.soundIntensityIndicatorHeight.constant = soundIntensityHeight
-                                }
-                            }
-                        }
-                    )
                 }
                 
                 // Give haptic feedback
@@ -843,6 +860,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
         self.navigationItem.title = ""
         self.UITimer?.invalidate()
+        self.UITimer = nil
     }
     
     func activateListeningIndicator() {

@@ -37,4 +37,9 @@ extension String {
     func capitalizeFirstLetter() -> String {
         return prefix(1).capitalized + dropFirst()
     }
+    
+    func replace(_ target: String, with: String) -> String
+    {
+        return self.replacingOccurrences(of: target, with: with, options: NSString.CompareOptions.literal, range: nil)
+    }
 }

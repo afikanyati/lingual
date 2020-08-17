@@ -12,7 +12,7 @@ import AVFoundation
 import NaturalLanguage
 
 let DIFFERENCE = 0.01
-let DEFAULT_SEGMENT_DURATION: Double = 1000
+let DEFAULT_SEGMENT_DURATION: Double = 100000 // Must be high enough such that no user will record a note of this duration
 let TRANSCRIPTION_LATENCY_DURATION: Double = 0.3
 let SOUND_INTENSITY_SIG_FIG_COUNT = 4
 let DEFAULT_FIG_COUNT = 2
@@ -143,6 +143,8 @@ class Note: AVMutableComposition {
     }()
     /// Stores a stream of pitch values received throughout the process of listening
     private var pitchStream = [PitchDatum]()
+    /// Stores note segments that are/were part of last listening buffer
+    private var listeningBufferLowestIndex: Int = -1
     /// Stores a handler to be executed when a new listening buffer is received and processed
     private(set) var onListenUpdate: (() -> Void)?
     /// Stores a handler to be executed when listening has stopped
@@ -822,18 +824,12 @@ class Note: AVMutableComposition {
     }
     
     func performTranscriptionUpdate(_ transcription: SFTranscription, finalTranscript: Bool = false) {
-        // Find staged segments lower index
-        var stagedSegmentsLowestIndex: Int = -1
-        for (index, segment) in self.noteTracks[self.activeTrack].enumerated() {
-            if segment.timeMapping.target.duration.seconds == DEFAULT_SEGMENT_DURATION {
-                stagedSegmentsLowestIndex = index
-                break
-            }
-        }
+        // updates buffered segments lower index
+        self.updateListeningBuffer()
 
         if finalTranscript {
             var segments = self.noteTracks[self.activeTrack]
-            segments.removeSubrange(stagedSegmentsLowestIndex..<segments.count)
+            segments.removeSubrange(self.listeningBufferLowestIndex..<segments.count)
             // Don't ship to setSegments(segments: [NoteSegment])
             // It's not normalized yet
             self.noteTracks[self.activeTrack] = segments
@@ -843,29 +839,27 @@ class Note: AVMutableComposition {
             processTranscriptSegment(
                 segment: segment,
                 transcriptionIndex: index,
-                stagedSegmentsLowestIndex: stagedSegmentsLowestIndex,
                 transcription: transcription
             )
         }
     }
     
-    func processTranscriptSegment(segment: SFTranscriptionSegment, transcriptionIndex: Int, stagedSegmentsLowestIndex: Int, transcription: SFTranscription) {
+    func processTranscriptSegment(segment: SFTranscriptionSegment, transcriptionIndex: Int, transcription: SFTranscription) {
         // get existing segments
         var segments = self.noteTracks[self.activeTrack]
         
         // Manage NLP
         var segmentTags: [String : NLTag?]
         var sentiment: [ScaleUnitType: Float]?
-        if stagedSegmentsLowestIndex == -1 || transcriptionIndex >= (segments.count - stagedSegmentsLowestIndex) {
+        if self.listeningBufferLowestIndex == -1 || transcriptionIndex >= (segments.count - self.listeningBufferLowestIndex) {
              // New segment, compute values
             (segmentTags, sentiment) = computeSegmentTags(
                 transcription: transcription,
-                stagedSegmentsLowestIndex: stagedSegmentsLowestIndex,
                 transcriptionIndex: transcriptionIndex
             )
-        } else if transcriptionIndex < (segments.count - stagedSegmentsLowestIndex) {
+        } else if transcriptionIndex < (segments.count - self.listeningBufferLowestIndex) {
             // existing segment, get values
-            let existingSegment = self.noteTracks[self.activeTrack][stagedSegmentsLowestIndex + transcriptionIndex]
+            let existingSegment = self.noteTracks[self.activeTrack][self.listeningBufferLowestIndex + transcriptionIndex]
             segmentTags = [
                 "nameType": existingSegment.getNameType(),
                 "lemma": existingSegment.getLemma(),
@@ -894,16 +888,16 @@ class Note: AVMutableComposition {
         if segment.duration <= 0 {
             // temporary segment
             // give it default temporary values
-            if stagedSegmentsLowestIndex == -1 {
+            if self.listeningBufferLowestIndex == -1 {
                 // First temporary segment
                 
                 // Set source timestamp
-                sourceTimestamp = 0
+                sourceTimestamp = DEFAULT_SEGMENT_DURATION
                 
                 // Set duration
                 duration = floor(Note.defaultSegmentTimescale * DEFAULT_SEGMENT_DURATION)
             } else {
-                let processedSeconds: Double = segments[stagedSegmentsLowestIndex].timeMapping.target.start.seconds
+                let processedSeconds: Double = segments[self.listeningBufferLowestIndex].timeMapping.target.start.seconds
                 // Set source timestamp
                 sourceTimestamp = floor(Note.defaultSegmentTimescale * (
                         processedSeconds +
@@ -951,16 +945,16 @@ class Note: AVMutableComposition {
             sentimentScore: sentiment ?? nil
         )
         
-        if stagedSegmentsLowestIndex == -1 || transcriptionIndex >= (segments.count - stagedSegmentsLowestIndex) {
+        if self.listeningBufferLowestIndex == -1 || transcriptionIndex >= (segments.count - self.listeningBufferLowestIndex) {
             // New segment, append to speechSegments
             segments.append(noteSegment)
             self.noteTracks[self.activeTrack] = segments
-        } else if transcriptionIndex <= (segments.count - stagedSegmentsLowestIndex) {
+        } else if transcriptionIndex <= (segments.count - self.listeningBufferLowestIndex) {
             // Existing segment, overwrite old copy
             // This assumes the new version is a better approximation of user speech
-            let oldSegment = segments[stagedSegmentsLowestIndex + transcriptionIndex]
+            let oldSegment = segments[self.listeningBufferLowestIndex + transcriptionIndex]
             if oldSegment != noteSegment {
-                segments[stagedSegmentsLowestIndex + transcriptionIndex] = noteSegment
+                segments[self.listeningBufferLowestIndex + transcriptionIndex] = noteSegment
                 self.noteTracks[self.activeTrack] = segments
             } else {
                 // Existing segment without changes encountered.
@@ -1254,18 +1248,18 @@ class Note: AVMutableComposition {
     
     // MARK: - Listening Method Helpers
     
-    func computeSegmentTags(transcription: SFTranscription, stagedSegmentsLowestIndex: Int, transcriptionIndex: Int) -> ([String : NLTag?], [ScaleUnitType: Float]) {
+    func computeSegmentTags(transcription: SFTranscription, transcriptionIndex: Int) -> ([String : NLTag?], [ScaleUnitType: Float]) {
         let tagger = NLTagger(tagSchemes: [.nameType, .lexicalClass, .tokenType, .sentimentScore, .lemma])
         let segmentText = transcription.segments[transcriptionIndex].substring
         
         var index: Int
-        if stagedSegmentsLowestIndex == -1 || transcriptionIndex > (self.noteTracks[self.activeTrack].count - stagedSegmentsLowestIndex) {
+        if self.listeningBufferLowestIndex == -1 || transcriptionIndex > (self.noteTracks[self.activeTrack].count - self.listeningBufferLowestIndex) {
             // New segment, append to speechSegments
             index = self.noteTracks[self.activeTrack].count
-        } else if transcriptionIndex <= (self.noteTracks[self.activeTrack].count - stagedSegmentsLowestIndex) {
+        } else if transcriptionIndex <= (self.noteTracks[self.activeTrack].count - self.listeningBufferLowestIndex) {
             // Existing segment, overwrite old copy
             // This assumes the new version is a better approximation of user speech
-            index = stagedSegmentsLowestIndex + transcriptionIndex
+            index = self.listeningBufferLowestIndex + transcriptionIndex
         } else {
             fatalError("\t[Error] There was a problem computing segment index in computeSegmentTags")
         }
@@ -1330,6 +1324,7 @@ class Note: AVMutableComposition {
     }
     
     // Can't handle empty strings for segmentText
+    // rangeText and index must accurate for a given segment in the segments array argument
     func findSegmentRange(segments: [NoteSegment], wholeText: String, rangeText: String, index: Int? = nil) -> Range<String.Index> {
         // figure out how many words are before it
         // compute number of processedChar
@@ -1388,6 +1383,19 @@ class Note: AVMutableComposition {
         return pitch
     }
     
+    func updateListeningBuffer() {
+        // Find staged segments lower index
+        var lowestIndex: Int = -1
+        for (index, segment) in self.noteTracks[self.activeTrack].enumerated() {
+            if segment.timeMapping.target.duration.seconds == DEFAULT_SEGMENT_DURATION {
+                lowestIndex = index
+                break
+            }
+        }
+        
+        self.listeningBufferLowestIndex = lowestIndex
+    }
+    
     // MARK: - Text Methods
     
     func getText(from fromTime: CMTime = CMTime.zero, until untilTime: CMTime? = nil, segments: [NoteSegment]? = nil, forEcho: Bool = false) -> String {
@@ -1405,7 +1413,7 @@ class Note: AVMutableComposition {
         
         // Compute text on multi segment tracks
         if segments == nil && noteTracks.count == 2 && self.noteTracks[0].count > 0 && self.noteTracks[1].count > 0  {
-            text = "\(self.getText(segments: self.noteTracks[0])) \(self.getText(segments: self.noteTracks[1]))"
+            text = "\(self.getText(from: fromTime, until: untilTime, segments: self.noteTracks[0], forEcho: forEcho)) \(self.getText(from: fromTime, until: untilTime, segments: self.noteTracks[1], forEcho: forEcho))"
         } else {
             if noteSegments == nil {
                 noteSegments = self.noteTracks[0]
@@ -1413,7 +1421,7 @@ class Note: AVMutableComposition {
             
             // We have been given a specific set of segments to compute on vs. multi segment tracks
             for segment in noteSegments!  {
-                if let untilTime = untilTime, segment.timeMapping.target.start <= untilTime && !segment.isVoiceCommandWord() {
+                if let untilTime = untilTime, segment.timeMapping.target.end <= untilTime && !segment.isVoiceCommandWord() {
                     let word = segment.getText(
                         withTemporalSuggestions: self.withTemporalSuggestions,
                         withPunctuationSuggestions: self.withPunctuationSuggestions,
@@ -2696,7 +2704,7 @@ class Note: AVMutableComposition {
             strictlyAsWord: self.withTextStrictlyAsWords
         ).lowercased()
         let text = self.getText().lowercased()
-        if word.count > 0 && segment.timeMapping.target.start.seconds == 0 {
+        if word.count > 0 && segment.timeMapping.target.start.seconds == 0 && segment.getTrackIndex() == 0 {
             characterRange = NSRange(location: 0, length: word.count)
         } else if word.count > 0 {
             let numProcessedChar = text.count - self.getText(from: segment.timeMapping.target.start).lowercased().count
@@ -3148,10 +3156,13 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                     // to soon affects normalization, which rquires recordStartDate to date PitchDatum and SoundIntensityDatum
                     self.accumulatedDuration = TimeInterval(0)
                     self.recordStartDate = nil
+                    // Start voice commands
+                    DispatchQueue.main.async {
+                        self.startListeningForVoiceCommands(soundIntensityHandler: self.soundIntensityHandler)
+                    }
                 }
             )
         }
-        
     }
     
     func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didHypothesizeTranscription transcription: SFTranscription) {
@@ -3246,6 +3257,44 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                     self?.performTranscriptionUpdate(result.bestTranscription, finalTranscript: true)
                     self?.normalizeSegments()
                     
+                    if !AVAudioSession.isHeadphonesConnected {
+                        // Give visual feedback
+                        DispatchQueue.main.async {
+                            var firstBufferWord: String?
+                            var lastBufferWord: String?
+                            
+                            // Determine correct track to look into for buffer
+                            let trackIndex = self!.noteTracks.count > 1 && self!.noteTracks[1].count > 0 ? 1 : 0
+                            
+                            // Find first buffer word
+                            for i in self!.listeningBufferLowestIndex..<self!.noteTracks[trackIndex].count {
+                                let segment = self!.noteTracks[trackIndex][i]
+                                if !segment.isVoiceCommandWord() && !segment.isSilence() && firstBufferWord == nil {
+                                    firstBufferWord = segment.getText()
+                                    break
+                                }
+                            }
+                            
+                            // Find last buffer word
+                            for (_, segment) in self!.noteTracks[trackIndex].reversed().enumerated() {
+                                if !segment.isVoiceCommandWord() && !segment.isSilence() && lastBufferWord == nil{
+                                    lastBufferWord = segment.getText()
+                                    break
+                                }
+                            }
+                            
+                            if let firstBufferWord = firstBufferWord, let lastBufferWord = lastBufferWord {
+                                self?.vc!.addNotification(text: "\"\(firstBufferWord)...\(lastBufferWord)\" committed!")
+                                self?.vc!.exhaustNotificationQueue()
+                            } else {
+                                fatalError("===== [Error] There was a problem finding the first and last words of buffer =====")
+                            }
+                        }
+                        
+                        // Give haptic feedback
+                        hapticEngine.lightImpact()
+                    }
+                    
                     // execute listen update handler
                     self?.onListenUpdate?()
 
@@ -3263,6 +3312,42 @@ extension Note: SFSpeechRecognitionTaskDelegate {
 
                 self.performTranscriptionUpdate(result.bestTranscription, finalTranscript: true)
                 self.normalizeSegments()
+                
+                if !AVAudioSession.isHeadphonesConnected {
+                    // Give visual feedback
+                    var firstBufferWord: String?
+                    var lastBufferWord: String?
+                    
+                    // Determine correct track to look into for buffer
+                    let trackIndex = self.noteTracks.count > 1 && self.noteTracks[1].count > 0 ? 1 : 0
+                    
+                    // Find first buffer word
+                    for i in self.listeningBufferLowestIndex..<self.noteTracks[trackIndex].count {
+                        let segment = self.noteTracks[trackIndex][i]
+                        if !segment.isVoiceCommandWord() && !segment.isSilence() && firstBufferWord == nil {
+                            firstBufferWord = segment.getText()
+                            break
+                        }
+                    }
+                    
+                    // Find last buffer word
+                    for (_, segment) in self.noteTracks[trackIndex].reversed().enumerated() {
+                        if !segment.isVoiceCommandWord() && !segment.isSilence() && lastBufferWord == nil{
+                            lastBufferWord = segment.getText()
+                            break
+                        }
+                    }
+                    
+                    if let firstBufferWord = firstBufferWord, let lastBufferWord = lastBufferWord {
+                        self.vc!.addNotification(text: "\"\(firstBufferWord)...\(lastBufferWord)\" committed!")
+                        self.vc!.exhaustNotificationQueue()
+                    } else {
+                        fatalError("===== [Error] There was a problem finding the first and last words of buffer =====")
+                    }
+                    
+                    // Give haptic feedback
+                    hapticEngine.lightImpact()
+                }
                 
                 // execute listen update handler
                 self.onListenUpdate?()
