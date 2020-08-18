@@ -16,7 +16,7 @@
 		8B669B5F24B0127E00D5996B /* Date+Subtract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B5E24B0127E00D5996B /* Date+Subtract.swift */; };
 		8B669B6124B012A900D5996B /* AVAudioSession+Headphones.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B6024B012A900D5996B /* AVAudioSession+Headphones.swift */; };
 		8B669B6324B012F500D5996B /* AVPlayer+Playback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B6224B012F500D5996B /* AVPlayer+Playback.swift */; };
-		8B669B6524B0136500D5996B /* String+Substring+Replace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B6424B0136500D5996B /* String+Substring+Replace.swift */; };
+		8B669B6524B0136500D5996B /* String+Substring+Replace+TrimTrailingPunctuation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B6424B0136500D5996B /* String+Substring+Replace+TrimTrailingPunctuation.swift */; };
 		8B669B6724B013F200D5996B /* TimeConstant+Minute+Hour.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B6624B013F200D5996B /* TimeConstant+Minute+Hour.swift */; };
 		8B669B6924B01AF600D5996B /* Utils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B6824B01AF600D5996B /* Utils.swift */; };
 		8B669B6B24B2C3DD00D5996B /* PitchDatum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B6A24B2C3DD00D5996B /* PitchDatum.swift */; };
@@ -131,7 +131,7 @@
 		8B669B5E24B0127E00D5996B /* Date+Subtract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Subtract.swift"; sourceTree = "<group>"; };
 		8B669B6024B012A900D5996B /* AVAudioSession+Headphones.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AVAudioSession+Headphones.swift"; sourceTree = "<group>"; };
 		8B669B6224B012F500D5996B /* AVPlayer+Playback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AVPlayer+Playback.swift"; sourceTree = "<group>"; };
-		8B669B6424B0136500D5996B /* String+Substring+Replace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Substring+Replace.swift"; sourceTree = "<group>"; };
+		8B669B6424B0136500D5996B /* String+Substring+Replace+TrimTrailingPunctuation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Substring+Replace+TrimTrailingPunctuation.swift"; sourceTree = "<group>"; };
 		8B669B6624B013F200D5996B /* TimeConstant+Minute+Hour.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TimeConstant+Minute+Hour.swift"; sourceTree = "<group>"; };
 		8B669B6824B01AF600D5996B /* Utils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utils.swift; sourceTree = "<group>"; };
 		8B669B6A24B2C3DD00D5996B /* PitchDatum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitchDatum.swift; sourceTree = "<group>"; };
@@ -355,7 +355,7 @@
 			children = (
 				8B669B6624B013F200D5996B /* TimeConstant+Minute+Hour.swift */,
 				8BB685A324E8E04400F3285B /* NSRange+toTextRange.swift */,
-				8B669B6424B0136500D5996B /* String+Substring+Replace.swift */,
+				8B669B6424B0136500D5996B /* String+Substring+Replace+TrimTrailingPunctuation.swift */,
 				8BA3056224D0FB450056E4DF /* Collection+distance.swift */,
 				8BA3056424D0FB660056E4DF /* StringIndex+distance.swift */,
 				8BA3056624D0FB7C0056E4DF /* StringProtocol+distance.swift */,
@@ -643,7 +643,7 @@
 				8B766F4A24AC2AB200D41A13 /* YINUtil.swift in Sources */,
 				8B766F5324AC2AB200D41A13 /* OutputSignalTracker.swift in Sources */,
 				8BA3052C24C24C240056E4DF /* Sequence+containsAnyOf.swift in Sources */,
-				8B669B6524B0136500D5996B /* String+Substring+Replace.swift in Sources */,
+				8B669B6524B0136500D5996B /* String+Substring+Replace+TrimTrailingPunctuation.swift in Sources */,
 				8B766F5E24AC2AB200D41A13 /* BarycentricEstimator.swift in Sources */,
 				8B766F4624AC2AB200D41A13 /* YINEstimator.swift in Sources */,
 				8B766F5124AC2AB200D41A13 /* EstimationStrategy.swift in Sources */,

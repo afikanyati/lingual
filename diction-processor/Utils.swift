@@ -15,6 +15,7 @@ class Utils {
     static let UNKNOWN: Double = -1
     static let SILENCE_SKIP_THRESHOLD = 0.1
     static let CURSOR_WIDTH = 2
+    static let EMPTY_NSRANGE = NSRange(location: 0, length: 0)
     static var TALKING_POWER_DELTA: Double {
         if AVAudioSession.isHeadphonesConnected {
             // With headphones, in a relatively empty, small room, near the window, using AirPods Pro mic

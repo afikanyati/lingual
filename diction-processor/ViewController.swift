@@ -122,6 +122,10 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             options: [.old, .new],
             context: nil
         )
+        
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+        tap.numberOfTapsRequired = 1
+        self.transcriptionText.addGestureRecognizer(tap)
     }
     
     // MARK: - Inactive
@@ -1324,6 +1328,23 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 
     public func pitchEngineWentBelowLevelThreshold(_ pitchEngine: PitchEngine) {
         // print("===== Pitch Engine below level threshold =====")
+    }
+    
+    // MARK: - Touch Events
+    
+    @objc func handleTap(touch: UITapGestureRecognizer) {
+        if self.appActivated {
+            let touchPoint = touch.location(in: self.transcriptionText)
+            let textPosition = self.transcriptionText.closestPosition(to: touchPoint)
+            
+            if self.transcriptionText.selectedRange != Utils.EMPTY_NSRANGE {
+                self.transcriptionText.selectedRange = NSRange(location: 0, length: 0)
+            }
+            
+            if let textPosition = textPosition {
+                selectionCursor.moveCursor(textPosition: textPosition)
+            }
+        }
     }
 }
 

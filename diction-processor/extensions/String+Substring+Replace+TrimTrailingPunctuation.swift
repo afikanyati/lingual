@@ -42,4 +42,8 @@ extension String {
     {
         return self.replacingOccurrences(of: target, with: with, options: NSString.CompareOptions.literal, range: nil)
     }
+    
+    func trimTrailingPunctuation() -> String {
+        return self.trimmingCharacters(in: .punctuationCharacters)
+    }
 }

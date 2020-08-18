@@ -144,19 +144,20 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     //
     // moves as a cursor
     func moveCursor(time: CMTime) {
+        guard let note = self.note, let segment = note.getSegment(forTrackTime: time) else { return }
+        
+        // collapse current selection
         self.collapse()
         
-        if let note = note, let segment = note.getSegment(forTrackTime: time) {
-            // update model
-            self.setAnchor(segment: segment)
-            self.focus = nil
-            
-            // update view
-            if let selectionRange = self.selectionRange, let textView = self.textView {
-                self.moveCaretView(textPosition: selectionRange.toTextRange(textInput: textView)!.end)
-            } else {
-                fatalError("===== [Error] There was a problem updating SelectionCursor =====")
-            }
+        // update model
+        self.setAnchor(segment: segment)
+        self.focus = nil
+        
+        // update view
+        if let selectionRange = self.selectionRange, let textView = self.textView {
+            self.moveCaretView(textPosition: selectionRange.toTextRange(textInput: textView)!.end)
+        } else {
+            fatalError("===== [Error] There was a problem updating SelectionCursor =====")
         }
         
         checkRep()
@@ -166,20 +167,92 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     //
     // moves as a cursor
     func moveCursor(trackIndex: Int, segmentIndex: Int) {
+        guard let note = self.note else { return }
+        
+        // collapse current selection
         self.collapse()
         
-        if let note = note {
-            // update model
-            let segment = note.noteTracks[trackIndex][segmentIndex]
-            self.setAnchor(segment: segment)
-            self.focus = nil
-            
-            // update view
-            if let selectionRange = self.selectionRange, let textView = self.textView {
-                self.moveCaretView(textPosition: selectionRange.toTextRange(textInput: textView)!.end)
-            } else {
-                fatalError("===== [Error] There was a problem updating SelectionCursor =====")
+        // update model
+        let segment = note.noteTracks[trackIndex][segmentIndex]
+        self.setAnchor(segment: segment)
+        self.focus = nil
+        
+        // update view
+        if let selectionRange = self.selectionRange, let textView = self.textView {
+            self.moveCaretView(textPosition: selectionRange.toTextRange(textInput: textView)!.end)
+        } else {
+            fatalError("===== [Error] There was a problem updating SelectionCursor =====")
+        }
+        
+        checkRep()
+    }
+    
+    func moveCursor(textPosition: UITextPosition) {
+        guard let note = self.note else { return }
+        
+        // collapse current selection
+        self.collapse()
+        
+        // update model
+        let cursorLocation = self.textView!.offset(from: self.textView!.beginningOfDocument, to: textPosition)
+        let noteText = note.getText()
+        var cursorIndex = noteText.index(noteText.startIndex, offsetBy: Int(cursorLocation))
+        var beforeCursorText = String(noteText[noteText.startIndex..<cursorIndex]).replace("\n\n", with: " ")
+        var afterCursorText = String(noteText[cursorIndex..<noteText.endIndex]).replace("\n\n", with: " ")
+        
+        var numLowerWords = beforeCursorText.split(separator: " ").count
+        // first character of rangeText should be a space
+        var i = 0
+        while afterCursorText.count > 0 && beforeCursorText.last != " " && afterCursorText.first != " "  {
+            i += 1
+            cursorIndex = noteText.index(noteText.startIndex, offsetBy: Int(cursorLocation) + i)
+            beforeCursorText = String(noteText[noteText.startIndex..<cursorIndex]).replace("\n\n", with: " ")
+            afterCursorText = String(noteText[cursorIndex..<noteText.endIndex]).replace("\n\n", with: " ")
+            numLowerWords = beforeCursorText.split(separator: " ").count
+        }
+
+        var numProcessedWords: Int = 0
+        var anchor: NoteSegment?
+        let lowerWords = beforeCursorText.split(separator: " ")
+        for i in 0..<note.noteTracks[0].count {
+            let segment = note.noteTracks[0][i]
+            if !segment.isVoiceCommandWord() && !segment.isSilence() {
+                numProcessedWords += 1
             }
+            
+            if !segment.isVoiceCommandWord() && !segment.isSilence() && segment.getText().lowercased().trimTrailingPunctuation() == lowerWords.last!.lowercased().trimTrailingPunctuation() && numProcessedWords == numLowerWords {
+                anchor = segment
+                break
+            }
+        }
+        
+        if note.noteTracks.count == 2 {
+            for i in 0..<note.noteTracks[1].count {
+                let segment = note.noteTracks[1][i]
+                if !segment.isVoiceCommandWord() && !segment.isSilence() {
+                    numProcessedWords += 1
+                }
+                
+                if !segment.isVoiceCommandWord() && !segment.isSilence() && segment.getText().lowercased().trimTrailingPunctuation() == lowerWords.last!.lowercased().trimTrailingPunctuation() && numProcessedWords == numLowerWords {
+                    anchor = segment
+                    break
+                }
+            }
+        }
+        
+        if let anchor = anchor {
+            // Set
+            self.setAnchor(segment: anchor)
+            self.focus = nil
+            print("anchor: ", anchor)
+        } else {
+            fatalError("===== [Error] There was a problem finding cursor note segment =====")
+        }
+        
+        // update view
+        let updatedTextPosition = self.textView!.position(from: textPosition, offset: i)
+        if let updatedTextPosition = updatedTextPosition {
+            self.moveCaretView(textPosition: updatedTextPosition)
         }
         
         checkRep()
@@ -309,38 +382,37 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         
         func shiftFocusSegment(shiftDirection: SelectionShiftDirection, by count: Int = 1) {
             // prevent illegal moves
-            if let note = note, let anchor = self.anchor, let focus = self.focus {
-                let numSegments = note.noteTracks[0].count
-
-                var nextFocusIndex: Int?
-                if shiftDirection == .next && self.direction == .forwards {
-                    // next
-                    // forwards
-                    let shiftLength = focus.getIndex() + count >= numSegments ? (numSegments - 1) - focus.getIndex() : count
-                    nextFocusIndex = focus.getIndex() + shiftLength
-                } else if shiftDirection == .next && self.direction == .backwards {
-                    // next
-                    // backwards
-                    let shiftLength = anchor.getIndex() + count >= numSegments ? (numSegments - 1) - anchor.getIndex() : count
-                    nextFocusIndex = focus.getIndex() + shiftLength
-                } else if shiftDirection == .previous && self.direction == .forwards {
-                    // previous
-                    // forwards
-                    let shiftLength = anchor.getIndex() - count < 0 ? anchor.getIndex() : count
-                    nextFocusIndex = focus.getIndex() - shiftLength
-                } else if shiftDirection == .previous && self.direction == .backwards {
-                    // previous
-                    // backwards
-                    let shiftLength = focus.getIndex() - count < 0 ? focus.getIndex() : count
-                    nextFocusIndex = focus.getIndex() - shiftLength
-                }
-                
-                if let nextFocusIndex = nextFocusIndex {
-                    let nextFocus = note.noteTracks[0][nextFocusIndex]
-                    self.setFocus(segment: nextFocus)
-                } else {
-                    fatalError("===== [Error] There was a problem computing new focus segment index =====")
-                }
+            guard let note = self.note, let anchor = self.anchor, let focus = self.focus else { return }
+            
+            let numSegments = note.noteTracks[0].count
+            var nextFocusIndex: Int?
+            if shiftDirection == .next && self.direction == .forwards {
+                // next
+                // forwards
+                let shiftLength = focus.getIndex() + count >= numSegments ? (numSegments - 1) - focus.getIndex() : count
+                nextFocusIndex = focus.getIndex() + shiftLength
+            } else if shiftDirection == .next && self.direction == .backwards {
+                // next
+                // backwards
+                let shiftLength = anchor.getIndex() + count >= numSegments ? (numSegments - 1) - anchor.getIndex() : count
+                nextFocusIndex = focus.getIndex() + shiftLength
+            } else if shiftDirection == .previous && self.direction == .forwards {
+                // previous
+                // forwards
+                let shiftLength = anchor.getIndex() - count < 0 ? anchor.getIndex() : count
+                nextFocusIndex = focus.getIndex() - shiftLength
+            } else if shiftDirection == .previous && self.direction == .backwards {
+                // previous
+                // backwards
+                let shiftLength = focus.getIndex() - count < 0 ? focus.getIndex() : count
+                nextFocusIndex = focus.getIndex() - shiftLength
+            }
+            
+            if let nextFocusIndex = nextFocusIndex {
+                let nextFocus = note.noteTracks[0][nextFocusIndex]
+                self.setFocus(segment: nextFocus)
+            } else {
+                fatalError("===== [Error] There was a problem computing new focus segment index =====")
             }
             
             checkRep()
@@ -348,38 +420,37 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         
         func shiftAnchorSegment(shiftDirection: SelectionShiftDirection, by count: Int = 1) {
             // prevent illegal moves
-            if let note = note, let anchor = self.anchor, let focus = self.focus {
-                let numSegments = note.noteTracks[0].count
-                
-                var nextAnchorIndex: Int?
-                if shiftDirection == .next && self.direction == .forwards {
-                    // next
-                    // forwards
-                    let shiftLength = focus.getIndex() + count >= numSegments ? (numSegments - 1) - focus.getIndex() : count
-                    nextAnchorIndex = anchor.getIndex() + shiftLength
-                } else if shiftDirection == .next && self.direction == .backwards {
-                    // next
-                    // backwards
-                    let shiftLength = anchor.getIndex() + count >= numSegments ? (numSegments - 1) - anchor.getIndex() : count
-                    nextAnchorIndex = anchor.getIndex() + shiftLength
-                } else if shiftDirection == .previous && self.direction == .forwards {
-                    // previous
-                    // forwards
-                    let shiftLength = anchor.getIndex() - count < 0 ? anchor.getIndex() : count
-                    nextAnchorIndex = anchor.getIndex() - shiftLength
-                } else if shiftDirection == .previous && self.direction == .backwards {
-                    // previous
-                    // backwards
-                    let shiftLength = focus.getIndex() - count < 0 ? focus.getIndex() : count
-                    nextAnchorIndex = anchor.getIndex() - shiftLength
-                }
-                
-                if let nextAnchorIndex = nextAnchorIndex {
-                    let nextAnchor = note.noteTracks[0][nextAnchorIndex]
-                    self.setAnchor(segment: nextAnchor)
-                } else {
-                    fatalError("===== [Error] There was a problem computing new anchor segment index =====")
-                }
+            guard let note = self.note, let anchor = self.anchor, let focus = self.focus else { return }
+
+            let numSegments = note.noteTracks[0].count
+            var nextAnchorIndex: Int?
+            if shiftDirection == .next && self.direction == .forwards {
+                // next
+                // forwards
+                let shiftLength = focus.getIndex() + count >= numSegments ? (numSegments - 1) - focus.getIndex() : count
+                nextAnchorIndex = anchor.getIndex() + shiftLength
+            } else if shiftDirection == .next && self.direction == .backwards {
+                // next
+                // backwards
+                let shiftLength = anchor.getIndex() + count >= numSegments ? (numSegments - 1) - anchor.getIndex() : count
+                nextAnchorIndex = anchor.getIndex() + shiftLength
+            } else if shiftDirection == .previous && self.direction == .forwards {
+                // previous
+                // forwards
+                let shiftLength = anchor.getIndex() - count < 0 ? anchor.getIndex() : count
+                nextAnchorIndex = anchor.getIndex() - shiftLength
+            } else if shiftDirection == .previous && self.direction == .backwards {
+                // previous
+                // backwards
+                let shiftLength = focus.getIndex() - count < 0 ? focus.getIndex() : count
+                nextAnchorIndex = anchor.getIndex() - shiftLength
+            }
+            
+            if let nextAnchorIndex = nextAnchorIndex {
+                let nextAnchor = note.noteTracks[0][nextAnchorIndex]
+                self.setAnchor(segment: nextAnchor)
+            } else {
+                fatalError("===== [Error] There was a problem computing new anchor segment index =====")
             }
             
             checkRep()
@@ -404,39 +475,41 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         }
         
         func delete() {
-            if let note = note, let selectionTimeRange = self.selectionTimeRange {
-                // remove passage
-                note.removePassage(range: selectionTimeRange)
-                
-                // move cursor
-                self.moveCursor(time: selectionTimeRange.start)
-            }
+            // prevent illegal deletions
+            guard let note = self.note, let selectionTimeRange = self.selectionTimeRange else { return }
+            
+            // remove passage
+            note.removePassage(range: selectionTimeRange)
+            
+            // move cursor
+            self.moveCursor(time: selectionTimeRange.start)
 
             // play to hear difference
             checkRep()
         }
         
         func replace() {
-            if let note = note {
-                // delete selection
-                self.delete()
+            // prevent illegal replacing
+            guard let note = self.note else { return }
+            
+            // delete selection
+            self.delete()
 
-                // signal that we'll be replacing selection
-                self.isReplacingSelection = true
-                
-                // Start recording to replace segment
-                note.startListeningForSpeech(soundIntensityHandler: { power in
-                    if let power = power {
-                        DispatchQueue.main.async {
-                            let height = CGFloat(Utils.normalizedPower(power: power, minPower: note.minPower)) * note.vc!.view.safeAreaLayoutGuide.layoutFrame.height
-                            let soundIntensityHeight: CGFloat = CGFloat(min(height, note.vc!.view.safeAreaLayoutGuide.layoutFrame.height))
-                            note.vc!.soundIntensityIndicatorHeight.constant = soundIntensityHeight
-                        }
+            // signal that we'll be replacing selection
+            self.isReplacingSelection = true
+            
+            // Start recording to replace segment
+            note.startListeningForSpeech(soundIntensityHandler: { power in
+                if let power = power {
+                    DispatchQueue.main.async {
+                        let height = CGFloat(Utils.normalizedPower(power: power, minPower: note.minPower)) * note.vc!.view.safeAreaLayoutGuide.layoutFrame.height
+                        let soundIntensityHeight: CGFloat = CGFloat(min(height, note.vc!.view.safeAreaLayoutGuide.layoutFrame.height))
+                        note.vc!.soundIntensityIndicatorHeight.constant = soundIntensityHeight
                     }
-                }, onStartHandler: {
-                    note.vc!.startRecordingUITimer(recording: true)
-                })
-            }
+                }
+            }, onStartHandler: {
+                note.vc!.startRecordingUITimer(recording: true)
+            })
 
             // play to hear difference
             checkRep()
@@ -460,16 +533,17 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         }
         
         func export() {
+            // prevent illegal replacing
+            guard let note = self.note, let selectionTimeRange = self.selectionTimeRange else { return }
+
             let selectionFilename = "note-\(UUID().uuidString)"
-            if let note = self.note, let selectionTimeRange = self.selectionTimeRange {
-                Utils.exportNote(
-                    note: note,
-                    filename: selectionFilename,
-                    fileType: note.fileType,
-                    timeRange: selectionTimeRange
-                ) {
-                    // Handler
-                }
+            Utils.exportNote(
+                note: note,
+                filename: selectionFilename,
+                fileType: note.fileType,
+                timeRange: selectionTimeRange
+            ) {
+                // Handler
             }
 
             checkRep()
@@ -499,17 +573,17 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         var afterRangeText = String(noteText[upperIndex..<noteText.endIndex]).replace("\n\n", with: " ")
         
         var numLowerWords = beforeRangeText.split(separator: " ").count
-        var numberLowerSpaces = beforeRangeText.filter { $0 == " " }.count
+        var numLowerSpaces = beforeRangeText.filter { $0 == " " }.count
         // first character of rangeText should be a space
         var i = 0
-        while numLowerWords > numberLowerSpaces && beforeRangeText.count > 0 && beforeRangeText.last != " " {
+        while numLowerWords > numLowerSpaces && beforeRangeText.count > 0 && beforeRangeText.last != " " {
             i += 1
             lowerIndex = noteText.index(noteText.startIndex, offsetBy: Int(location - i))
             selectionRangeStringIndex = lowerIndex..<upperIndex
             rangeText = String(noteText[selectionRangeStringIndex]).replace("\n\n", with: " ")
             beforeRangeText = String(noteText[noteText.startIndex..<lowerIndex]).replace("\n\n", with: " ")
             numLowerWords = beforeRangeText.split(separator: " ").count
-            numberLowerSpaces = beforeRangeText.filter { $0 == " " }.count
+            numLowerSpaces = beforeRangeText.filter { $0 == " " }.count
         }
         
         var numRangeWords = rangeText.split(separator: " ").count
@@ -530,22 +604,32 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         var rangeSegments = [NoteSegment]()
         for i in 0..<note.noteTracks[0].count {
             let segment = note.noteTracks[0][i]
-            
-            if !segment.isVoiceCommandWord() && !segment.isSilence() && numProcessedWords >= numLowerWords && numProcessedWords < numLowerWords + numRangeWords - 1 {
-                rangeSegments.append(segment)
-            } else if !segment.isVoiceCommandWord() && !segment.isSilence() {
+            if !segment.isVoiceCommandWord() && !segment.isSilence() {
                 numProcessedWords += 1
+            }
+            
+            if !segment.isVoiceCommandWord() && !segment.isSilence() && numProcessedWords > numLowerWords && numProcessedWords < numLowerWords + numRangeWords + 1 {
+                rangeSegments.append(segment)
+            }
+            
+            if numProcessedWords > numLowerWords + numRangeWords {
+                break
             }
         }
         
         if note.noteTracks.count == 2 {
             for i in 0..<note.noteTracks[1].count {
                 let segment = note.noteTracks[1][i]
-                
-                if !segment.isVoiceCommandWord() && !segment.isSilence() && numProcessedWords >= numLowerWords && numProcessedWords < numLowerWords + numRangeWords - 1 {
-                    rangeSegments.append(segment)
-                } else if !segment.isVoiceCommandWord() && !segment.isSilence() {
+                if !segment.isVoiceCommandWord() && !segment.isSilence() {
                     numProcessedWords += 1
+                }
+                
+                if !segment.isVoiceCommandWord() && !segment.isSilence() && numProcessedWords > numLowerWords && numProcessedWords < numLowerWords + numRangeWords + 1 {
+                    rangeSegments.append(segment)
+                }
+                
+                if numProcessedWords > numLowerWords + numRangeWords {
+                    break
                 }
             }
         }
@@ -554,6 +638,9 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             // Set anchor and focus
             self.setAnchor(segment: rangeSegments.first!)
             self.setFocus(segment: rangeSegments.last!)
+            
+            print("anchor: ", rangeSegments.first!)
+            print("focus: ", rangeSegments.last!)
         } else {
             fatalError("===== [Error] There was a problem finding selection note segments =====")
         }
@@ -693,9 +780,10 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             width: CGFloat(width),
             height: CGFloat(self.textView!.font!.lineHeight)
         )
-        
+
         self.cursorView!.frame = frame
     }
+
     // MARK: - Key-Value Observer
         
     // Reference: https://stackoverflow.com/questions/8579400/whats-the-best-way-to-get-uitextfield-selection-changed-notifications
@@ -720,25 +808,25 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     // Reference: https://stackoverflow.com/questions/43166781/cursor-position-in-relation-to-self-view
     // Will not be called by programmatic changes: https://stackoverflow.com/questions/16115344/textviewdidchange-is-not-call-when-change-uitextview-inputview
     public func textViewDidChange(_ textView: UITextView) {
-        if let note = note {
-            var lastSegmentIndex: Int?
-            var trackIndex: Int = 0
-            if note.noteTracks.count == 2 && note.noteTracks[1].count > 0 {
-                trackIndex = 1
+        guard let note = self.note else { return }
+        
+        var lastSegmentIndex: Int?
+        var trackIndex: Int = 0
+        if note.noteTracks.count == 2 && note.noteTracks[1].count > 0 {
+            trackIndex = 1
+        }
+        
+        for (index, segment) in note.noteTracks[trackIndex].reversed().enumerated() {
+            if !segment.isVoiceCommandWord() && !segment.isSilence() && lastSegmentIndex == nil {
+                lastSegmentIndex = note.noteTracks[trackIndex].count - index - 1
+                break
             }
-            
-            for (index, segment) in note.noteTracks[trackIndex].reversed().enumerated() {
-                if !segment.isVoiceCommandWord() && !segment.isSilence() && lastSegmentIndex == nil {
-                    lastSegmentIndex = note.noteTracks[trackIndex].count - index - 1
-                    break
-                }
-            }
+        }
 
-            if let lastSegmentIndex = lastSegmentIndex {
-                self.moveCursor(trackIndex: trackIndex, segmentIndex: lastSegmentIndex)
-            } else {
-                fatalError("===== There was a problem finding last uttered word in SelectionCursor =====")
-            }
+        if let lastSegmentIndex = lastSegmentIndex {
+            self.moveCursor(trackIndex: trackIndex, segmentIndex: lastSegmentIndex)
+        } else {
+            fatalError("===== There was a problem finding last uttered word in SelectionCursor =====")
         }
     }
 }
