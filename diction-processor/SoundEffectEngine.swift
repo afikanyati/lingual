@@ -29,6 +29,7 @@ public final class SoundEffectEngine: NSObject {
     var stopListeningPlayer: AVAudioPlayer? = nil
     var voiceCommandAcceptPlayer: AVAudioPlayer? = nil
     var voiceCommandDenyPlayer: AVAudioPlayer? = nil
+    var deletePlayer: AVAudioPlayer? = nil
     
     private override init() {
         // Commit Buffer
@@ -148,6 +149,16 @@ public final class SoundEffectEngine: NSObject {
         } catch {
             print("===== [Error] There was a problem importing 'Voice Command Deny' sound =====")
         }
+        
+        // Delete
+        let deletePath = Bundle.main.path(forResource: "delete", ofType: "wav")!
+        let deleteURL = URL(fileURLWithPath: deletePath)
+
+        do {
+            deletePlayer = try AVAudioPlayer(contentsOf: deleteURL)
+        } catch {
+            print("===== [Error] There was a problem importing 'Delete' sound =====")
+        }
     }
     
     func commitBuffer() { commitBufferPlayer?.play() }
@@ -163,4 +174,5 @@ public final class SoundEffectEngine: NSObject {
     func stopListening() { stopListeningPlayer?.play() }
     func voiceCommandAccept() { voiceCommandAcceptPlayer?.play() }
     func voiceCommandDeny() { voiceCommandDenyPlayer?.play() }
+    func delete() { deletePlayer?.play() }
 }

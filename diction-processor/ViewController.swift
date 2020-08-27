@@ -117,8 +117,10 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         // Set textContainer font size
         self.transcriptionText.font = self.font
         
+        // add volume observer
         session.addObserver(
-            self, forKeyPath: #keyPath(AVAudioSession.outputVolume),
+            self,
+            forKeyPath: #keyPath(AVAudioSession.outputVolume),
             options: [.old, .new],
             context: nil
         )
@@ -126,6 +128,20 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         tap.numberOfTapsRequired = 1
         self.transcriptionText.addGestureRecognizer(tap)
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        
+        // remove volume observer
+        session.removeObserver(
+            self,
+            forKeyPath: #keyPath(AVAudioSession.outputVolume),
+            context: nil
+        )
+        
+        // remove notification observers
+        NotificationCenter.default.removeObserver(self)
     }
     
     // MARK: - Inactive
@@ -342,7 +358,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 
             DispatchQueue.main.async {
                 self?.stopRecordingUITimer()
-                self?.addNotification(text: "Saved!", type: .success) // we must have stopped recording ui timer before calling this
+                self?.scheduleNotification(text: "Saved!", type: .success) // we must have stopped recording ui timer before calling this
                 self?.exhaustNotificationQueue()
                 self?.soundIntensityIndicatorHeight.constant = 0
                 self?.navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Reset", style: .plain, target: self, action: #selector(self?.resetSession))
@@ -352,6 +368,8 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     
     @objc func resetSession() {
         print("===== Reset Session =====")
+        // Play sound
+        soundEngine.delete()
         
         // Give haptic feedback
         hapticEngine.selection()
@@ -366,8 +384,30 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             note.stop()
         }
         
-        if note.isListeningForCommands || note.isListeningForSpeech {
+        // Remove previous observer
+        self.note.removeObserver(
+            self,
+            forKeyPath: "isListeningForSpeech",
+            context: nil
+        )
+        
+        if note.isListeningForSpeech {
             note.stopListeningForSpeech() {
+                self.note = self.createNewNote()
+                self.note.startListeningForVoiceCommands(
+                    soundIntensityHandler: { power in
+                        if let power = power {
+                            DispatchQueue.main.async {
+                                let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
+                                let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
+                                self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+                            }
+                        }
+                    }
+                )
+            }
+        } else if note.isListeningForCommands {
+            note.stopListeningForVoiceCommands() {
                 self.note = self.createNewNote()
                 self.note.startListeningForVoiceCommands(
                     soundIntensityHandler: { power in
@@ -528,14 +568,13 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             selectionCursor.setCursorView(cursorView: self.cursorView!)
             selectionCursor.setNote(note: self.note)
         } else {
-            selectionCursor.setTextView(textView: nil)
-            selectionCursor.setCursorView(cursorView: nil)
-            selectionCursor.setNote(note: nil)
+            selectionCursor.reset()
         }
     }
     
     func createNewNote() -> Note {
-        Note(
+        // create new note
+        let note = Note(
             vc: self,
             filename: "note-\(UUID().uuidString)",
             speaker: Speaker(name: "Afika Nyati", avatarURL: URL(string: AVATAR_URL)!, vc: self),
@@ -551,9 +590,19 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             onEchoFinish: onNoteEchoFinish,
             onComplete: onNoteComplete
         )
+
+        // add observer to new note
+        note.addObserver(
+            self,
+            forKeyPath: "isListeningForSpeech",
+            options: [.old, .new],
+            context: nil
+        )
+        
+        return note
     }
     
-    func addNotification(text: String, type: NotificationType? = nil) {
+    func scheduleNotification(text: String, type: NotificationType? = nil) {
         let notificationItem = NotificationItem(
             text: text,
             type: type
@@ -578,7 +627,6 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         
         self.navigationItem.title = item.text
         self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.red]
-        
         self.appNotificationTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) {[weak self] timer in
             // Restart UI Timer is we received app notification while receiving
             if self!.isExhaustingNotificationQueue {
@@ -593,6 +641,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 DispatchQueue.main.async {
                     self!.startRecordingUITimer(recording: true)
                 }
+            } else {
+                self?.navigationItem.title = ""
+                self?.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
             }
         }
         
@@ -611,6 +662,10 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     
     func clearAppNotification() {
         self.appNotificationTimer?.invalidate()
+        
+        // Clear out UI artifacts
+        self.navigationItem.title = ""
+        self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
     }
     
     @objc func appGainsFocus() {
@@ -678,7 +733,6 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             if !note.isListeningForSpeech && !note.isExporting {
                 print("===== Start Recording =====")
                 recordingButton.setTitle(ViewController.STOP_NOTE_LABEL, for: .normal)
-                clearAppNotification()
                 note.startListeningForSpeech(soundIntensityHandler: { power in
                     if let power = power {
                         DispatchQueue.main.async {
@@ -808,7 +862,6 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         recordingButton.isEnabled = visible
         wakePhraseSubtitleLabel.isHidden = visible
         wakePhraseLabel.isHidden = visible
-        setCursorVisibility(as: visible)
         
         if !visible {
             playAudioButton.isHidden = true
@@ -1146,6 +1199,10 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 outputVolume = -1
                 print("\tnew volume: ", outputVolume, session.outputVolume)
             }
+        } else if keyPath == "isListeningForSpeech" {
+            if let isListeningForSpeech = change?[.newKey] as? Bool {
+                self.setCursorVisibility(as: isListeningForSpeech)
+            }
         }
     }
     
@@ -1283,7 +1340,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                     if note.speaker.pitch == nil {
                         print("===== Base vocal frequency detected =====")
                         // when uncommented, it stops system from hearing wake phrase
-//                        let rate: Float = 0.5
+//                        let rate: Float = 0.53
 //                        let volume = AVAudioSession.sharedInstance().outputVolume
 //                        let voice = Utils.getSynthesizerVoice(
 //                            withGender: pitch.note.octave >= 4 ? .female : .male,
@@ -1342,7 +1399,8 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             }
             
             if let textPosition = textPosition {
-                selectionCursor.moveCursor(textPosition: textPosition)
+                print("TAP IT")
+                selectionCursor.moveCursor(textPosition: textPosition, cache: true)
             }
         }
     }

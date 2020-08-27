@@ -20,6 +20,7 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     // MARK: - Composition Properties
     weak var focus: NoteSegment? = nil
     weak var anchor: NoteSegment? = nil
+    weak var cachedAnchor: NoteSegment? = nil
     weak var note: Note? = nil
     weak var textView: UITextView? = nil
     weak var cursorView: UIView? = nil
@@ -69,7 +70,9 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         
         return nil
     }
-    var selectionSegments: [NoteSegment] {
+    var selectionSegments: [NoteSegment]? {
+        guard let note = self.note, note.noteBuffer.count == 0 else { return nil }
+        
         var segments = [NoteSegment]()
         var startTime: CMTime?
         var endTime: CMTime?
@@ -81,9 +84,9 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             endTime = focus.timeMapping.target.end
         }
         
-        guard let note = self.note, startTime != nil && endTime != nil else { return segments }
+        guard startTime != nil && endTime != nil else { return nil }
         
-        for segment in note.noteTracks[0] {
+        for segment in note.noteSegments {
             if segment.timeMapping.target.start <= startTime! {
                 // add to array if before passage to be removed
                 segments.append(segment)
@@ -95,10 +98,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         
         return segments
     }
-    var clipboard: [NoteSegment]? = nil
-    var isCollapsed: Bool {
-        return focus == anchor || (focus == nil && anchor == nil)
-    }
     var direction: SelectionDirection {
         if let anchor = self.anchor, let focus = self.focus, focus.getIndex() >= anchor.getIndex() {
             return .forwards
@@ -106,11 +105,44 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         
         return .backwards
     }
+    var clipboard: [NoteSegment]? = nil
+    var isCollapsed: Bool {
+        return focus == anchor || (focus == nil && anchor == nil)
+    }
+    var isAtEndOfTextView: Bool {
+        let lastSegment = self.getNoteNthLastSegment(n: 0)
+        
+        if let _ = self.anchor, let focus = self.focus, let lastSegment = lastSegment {
+            // print("isAtEndOfTextView 1: ", focus == lastSegment, focus, lastSegment, note!.noteSegments, note!.noteBuffer)
+            // we have a selection
+            return focus == lastSegment
+        } else if let anchor = self.anchor, let lastSegment = lastSegment {
+            // we don't have a selection
+            // we have a cursor though
+            // print("isAtEndOfTextView 2: ", anchor == lastSegment, anchor, lastSegment, note!.noteSegments, note!.noteBuffer)
+            return anchor == lastSegment
+        } else if let note = note, note.noteSegments.count == 0 && note.noteBuffer.count == 0 {
+            // we have not captured and speech yet
+            // print("isAtEndOfTextView 3: ", true, note.noteSegments, note.noteBuffer)
+            return true
+        }
+
+        // print("isAtEndOfTextView 4: ", false, note!.noteSegments, note!.noteBuffer)
+        return false
+    }
     var isReplacingSelection = false
     
     // MARK: - Initializer
 
     private override init() {}
+
+    deinit {
+        self.textView?.removeObserver(
+            self,
+            forKeyPath: "selectedTextRange",
+            context: nil
+        )
+    }
     
     // MARK: - Methods
     
@@ -124,6 +156,10 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         if !result {
             fatalError("===== [Error] SelectionCursor Representation Invariants were broken =====")
         }
+    }
+    
+    public override var description: String {
+        return "SelectionCursor {\n\tfocus: \(String(describing: self.focus)) \n\tanchor: \(String(describing: self.anchor)) \n\tnote: \(String(describing: self.note)) \t\nselectionTimeRange: \(String(describing: self.selectionTimeRange)) \n\tselectionRange: \(String(describing: self.selectionRange)) \n\tselectionText: \(String(describing: self.selectionText)) \n\tselectionSegments: \(String(describing: self.selectionSegments)) \n\tdirection: \(self.direction) \n\tclipboard: \(String(describing: self.clipboard)) \n\tisCollapsed: \(self.isCollapsed) \n\tisAtEndOfView: \(self.isAtEndOfTextView) \n\tisReplacingSelection: \(self.isReplacingSelection)\n}"
     }
     
     // MARK: - Action Methods
@@ -143,7 +179,7 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     // ballistic movement
     //
     // moves as a cursor
-    func moveCursor(time: CMTime) {
+    func moveCursor(time: CMTime, cache: Bool = false) {
         guard let note = self.note, let segment = note.getSegment(forTrackTime: time) else { return }
         
         // collapse current selection
@@ -151,7 +187,13 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         
         // update model
         self.setAnchor(segment: segment)
-        self.focus = nil
+        self.setFocus()
+        
+        // Used when we want to insert a buffer into the committed segments
+        // allows us to determine segment of interest
+        if cache {
+            self.cachedAnchor = anchor
+        }
         
         // update view
         if let selectionRange = self.selectionRange, let textView = self.textView {
@@ -166,28 +208,40 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     // ballistic movement
     //
     // moves as a cursor
-    func moveCursor(trackIndex: Int, segmentIndex: Int) {
+    func moveCursor(trackType: NoteTrackType, segmentIndex: Int, cache: Bool = false) {
         guard let note = self.note else { return }
         
+        // update model
+        var segment: NoteSegment?
+        if trackType == .committed {
+            segment = note.noteSegments[segmentIndex]
+        } else if trackType == .buffer {
+            segment = note.noteBuffer[segmentIndex]
+        }
+
         // collapse current selection
         self.collapse()
+        // set new selection
+        self.setAnchor(segment: segment!)
+        self.setFocus()
         
-        // update model
-        let segment = note.noteTracks[trackIndex][segmentIndex]
-        self.setAnchor(segment: segment)
-        self.focus = nil
-        
-        // update view
-        if let selectionRange = self.selectionRange, let textView = self.textView {
-            self.moveCaretView(textPosition: selectionRange.toTextRange(textInput: textView)!.end)
-        } else {
-            fatalError("===== [Error] There was a problem updating SelectionCursor =====")
+        // Used when we want to insert a buffer into the committed segments
+        // allows us to determine segment of interest
+        if cache && !(note.noteBuffer.count > 0 && note.noteBuffer.last! == anchor) && !(note.noteBuffer.count == 0 && note.noteSegments.last! == anchor) {
+            self.cachedAnchor = anchor
         }
         
+        // update view
+        if let selectionRange = self.selectionRange, let textView = self.textView, let textPosition = selectionRange.toTextRange(textInput: textView) {
+            self.moveCaretView(textPosition: textPosition.end)
+        } else {
+            print("===== [Error] There was a problem updating SelectionCursor =====")
+        }
+
         checkRep()
     }
     
-    func moveCursor(textPosition: UITextPosition) {
+    func moveCursor(textPosition: UITextPosition, cache: Bool = false) {
         guard let note = self.note else { return }
         
         // collapse current selection
@@ -210,12 +264,27 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             afterCursorText = String(noteText[cursorIndex..<noteText.endIndex]).replace("\n\n", with: " ")
             numLowerWords = beforeCursorText.split(separator: " ").count
         }
-
+        
+        var noteSegments: [NoteSegment]? = nil
+        if let anchor = selectionCursor.anchor, noteSegments == nil {
+            // insert buffer at the correct place based on cursor position
+            noteSegments = note.noteSegments
+            let anchorIndex = anchor.getIndex()
+            if anchorIndex != Int(Utils.UNKNOWN) {
+                noteSegments!.insert(contentsOf: note.noteBuffer, at: anchorIndex)
+            } else {
+                noteSegments! += note.noteBuffer
+            }
+        } else if noteSegments == nil {
+            // insert buffer at the end of segments
+            noteSegments = note.noteSegments + note.noteBuffer
+        }
+        
         var numProcessedWords: Int = 0
         var anchor: NoteSegment?
         let lowerWords = beforeCursorText.split(separator: " ")
-        for i in 0..<note.noteTracks[0].count {
-            let segment = note.noteTracks[0][i]
+        for i in 0..<noteSegments!.count {
+            let segment = noteSegments![i]
             if !segment.isVoiceCommandWord() && !segment.isSilence() {
                 numProcessedWords += 1
             }
@@ -226,25 +295,16 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             }
         }
         
-        if note.noteTracks.count == 2 {
-            for i in 0..<note.noteTracks[1].count {
-                let segment = note.noteTracks[1][i]
-                if !segment.isVoiceCommandWord() && !segment.isSilence() {
-                    numProcessedWords += 1
-                }
-                
-                if !segment.isVoiceCommandWord() && !segment.isSilence() && segment.getText().lowercased().trimTrailingPunctuation() == lowerWords.last!.lowercased().trimTrailingPunctuation() && numProcessedWords == numLowerWords {
-                    anchor = segment
-                    break
-                }
-            }
-        }
-        
         if let anchor = anchor {
-            // Set
+            // Set anchor
             self.setAnchor(segment: anchor)
-            self.focus = nil
-            print("anchor: ", anchor)
+            self.setFocus()
+            
+            // Used when we want to insert a buffer into the committed segments
+            // allows us to determine segment of interest
+            if cache && !(note.noteBuffer.count > 0 && note.noteBuffer.last! == anchor) && !(note.noteBuffer.count == 0 && note.noteSegments.last! == anchor) {
+                self.cachedAnchor = anchor
+            }
         } else {
             fatalError("===== [Error] There was a problem finding cursor note segment =====")
         }
@@ -382,9 +442,9 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         
         func shiftFocusSegment(shiftDirection: SelectionShiftDirection, by count: Int = 1) {
             // prevent illegal moves
-            guard let note = self.note, let anchor = self.anchor, let focus = self.focus else { return }
+            guard let note = self.note, let anchor = self.anchor, let focus = self.focus, note.noteBuffer.count == 0 else { return }
             
-            let numSegments = note.noteTracks[0].count
+            let numSegments = note.noteSegments.count
             var nextFocusIndex: Int?
             if shiftDirection == .next && self.direction == .forwards {
                 // next
@@ -409,7 +469,7 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             }
             
             if let nextFocusIndex = nextFocusIndex {
-                let nextFocus = note.noteTracks[0][nextFocusIndex]
+                let nextFocus = note.noteSegments[nextFocusIndex]
                 self.setFocus(segment: nextFocus)
             } else {
                 fatalError("===== [Error] There was a problem computing new focus segment index =====")
@@ -420,9 +480,9 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         
         func shiftAnchorSegment(shiftDirection: SelectionShiftDirection, by count: Int = 1) {
             // prevent illegal moves
-            guard let note = self.note, let anchor = self.anchor, let focus = self.focus else { return }
+            guard let note = self.note, let anchor = self.anchor, let focus = self.focus, note.noteBuffer.count == 0 else { return }
 
-            let numSegments = note.noteTracks[0].count
+            let numSegments = note.noteSegments.count
             var nextAnchorIndex: Int?
             if shiftDirection == .next && self.direction == .forwards {
                 // next
@@ -447,7 +507,7 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             }
             
             if let nextAnchorIndex = nextAnchorIndex {
-                let nextAnchor = note.noteTracks[0][nextAnchorIndex]
+                let nextAnchor = note.noteSegments[nextAnchorIndex]
                 self.setAnchor(segment: nextAnchor)
             } else {
                 fatalError("===== [Error] There was a problem computing new anchor segment index =====")
@@ -600,10 +660,25 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             numRangeSpaces = rangeText.filter { $0 == " " }.count
         }
         
+        var noteSegments: [NoteSegment]? = nil
+        if let anchor = selectionCursor.anchor, noteSegments == nil {
+            // insert buffer at the correct place based on cursor position
+            noteSegments = note.noteSegments
+            let anchorIndex = anchor.getIndex()
+            if anchorIndex != Int(Utils.UNKNOWN) {
+                noteSegments!.insert(contentsOf: note.noteBuffer, at: anchorIndex)
+            } else {
+                noteSegments! += note.noteBuffer
+            }
+        } else if noteSegments == nil {
+            // insert buffer at the end of segments
+            noteSegments = note.noteSegments + note.noteBuffer
+        }
+        
         var numProcessedWords: Int = 0
         var rangeSegments = [NoteSegment]()
-        for i in 0..<note.noteTracks[0].count {
-            let segment = note.noteTracks[0][i]
+        for i in 0..<noteSegments!.count {
+            let segment = noteSegments![i]
             if !segment.isVoiceCommandWord() && !segment.isSilence() {
                 numProcessedWords += 1
             }
@@ -614,23 +689,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             
             if numProcessedWords > numLowerWords + numRangeWords {
                 break
-            }
-        }
-        
-        if note.noteTracks.count == 2 {
-            for i in 0..<note.noteTracks[1].count {
-                let segment = note.noteTracks[1][i]
-                if !segment.isVoiceCommandWord() && !segment.isSilence() {
-                    numProcessedWords += 1
-                }
-                
-                if !segment.isVoiceCommandWord() && !segment.isSilence() && numProcessedWords > numLowerWords && numProcessedWords < numLowerWords + numRangeWords + 1 {
-                    rangeSegments.append(segment)
-                }
-                
-                if numProcessedWords > numLowerWords + numRangeWords {
-                    break
-                }
             }
         }
         
@@ -718,16 +776,45 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         }
     }
     
-    func setAnchor(segment: NoteSegment) {
-        self.anchor = segment
+    func setAnchor(segment: NoteSegment? = nil) {
+        if let segment = segment {
+            self.anchor = segment
+        } else {
+            self.anchor = nil
+        }
         
         checkRep()
     }
     
-    func setFocus(segment: NoteSegment) {
-        self.focus = segment
+    func setFocus(segment: NoteSegment? = nil) {
+        if let segment = segment {
+            self.focus = segment
+        } else {
+            self.focus = nil
+        }
         
         checkRep()
+    }
+    
+    func setCachedAnchor(segment: NoteSegment? = nil) {
+        if let segment = segment {
+            self.cachedAnchor = segment
+        } else {
+            self.cachedAnchor = nil
+        }
+        
+        checkRep()
+    }
+    
+    func reset() {
+        self.setAnchor()
+        self.setFocus()
+        self.setCachedAnchor()
+        self.note = nil
+        self.textView = nil
+        self.cursorView = nil
+        self.clipboard = nil
+        self.isReplacingSelection = false
     }
     
     // MARK: - Getters
@@ -744,9 +831,9 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             endTime = focus.getSentence().timeRange.end
         }
         
-        guard let note = self.note, startTime != nil && endTime != nil else { return neighborhood }
+        guard let note = self.note, startTime != nil && endTime != nil, note.noteBuffer.count == 0 else { return neighborhood }
         
-        for segment in note.noteTracks[0] {
+        for segment in note.noteSegments {
             if segment.timeMapping.target.start <= startTime! {
                 // add to array if before passage to be removed
                 neighborhood.append(segment)
@@ -783,6 +870,78 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
 
         self.cursorView!.frame = frame
     }
+    
+    // MARK: - Helper Functions
+    
+    func getLastUsedTrack() -> NoteTrackType? {
+        guard let note = self.note else { return nil }
+
+        var trackType: NoteTrackType = .committed
+        if note.noteBuffer.count > 0 {
+            trackType = .buffer
+        }
+        
+        return trackType
+    }
+    
+    func getNoteNthLastSegmentIndex(n: Int) -> (NoteTrackType?, Int?) {
+        guard let note = self.note else { return (nil, nil) }
+
+        var lastSegmentIndex: Int?
+        var trackType: NoteTrackType?
+        if note.noteBuffer.count == 0 {
+            trackType = .committed
+            var i = 0
+            for (index, segment) in note.noteSegments.reversed().enumerated() {
+                if !segment.isVoiceCommandWord() && !segment.isSilence() && lastSegmentIndex == nil && i == n {
+                    lastSegmentIndex = note.noteSegments.count - index - 1
+                    break
+                } else if !segment.isVoiceCommandWord() && !segment.isSilence() && lastSegmentIndex == nil {
+                    i += 1
+                }
+            }
+        } else {
+            trackType = .buffer
+            var i = 0
+            for (index, segment) in note.noteBuffer.reversed().enumerated() {
+                if !segment.isVoiceCommandWord() && !segment.isSilence() && lastSegmentIndex == nil && i == n {
+                    lastSegmentIndex = note.noteBuffer.count - index - 1
+                    break
+                } else if !segment.isVoiceCommandWord() && !segment.isSilence() && lastSegmentIndex == nil {
+                    i += 1
+                }
+            }
+            
+            // if hasn't been found, check committed segments
+            var j = note.noteBuffer.count
+            if lastSegmentIndex == nil && note.noteSegments.count > n - note.noteBuffer.count {
+                for (index, segment) in note.noteSegments.reversed().enumerated() {
+                    if !segment.isVoiceCommandWord() && !segment.isSilence() && lastSegmentIndex == nil && j == n {
+                        lastSegmentIndex = note.noteSegments.count - index - 1
+                        trackType = .committed
+                        break
+                    } else if !segment.isVoiceCommandWord() && !segment.isSilence() && lastSegmentIndex == nil {
+                        j += 1
+                    }
+                }
+            }
+        }
+        
+        return (trackType, lastSegmentIndex)
+    }
+    
+    func getNoteNthLastSegment(n: Int) -> NoteSegment? {
+        guard let note = self.note else { return nil }
+
+        let lastSegmentTuple = self.getNoteNthLastSegmentIndex(n: n)
+        if let trackType = lastSegmentTuple.0, let lastSegmentIndex = lastSegmentTuple.1, trackType == .committed {
+            return note.noteSegments[lastSegmentIndex]
+        } else if let trackType = lastSegmentTuple.0, let lastSegmentIndex = lastSegmentTuple.1, trackType == .buffer {
+            return note.noteBuffer[lastSegmentIndex]
+        }
+        
+        return nil
+    }
 
     // MARK: - Key-Value Observer
         
@@ -795,6 +954,7 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     ) {
         if keyPath == "selectedTextRange" {
             if let newSelectionRange = change?[.newKey] as? UITextRange {
+                print("SET SELECTION")
                 self.setSelection(textRange: newSelectionRange)
             }
         }
@@ -809,24 +969,24 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     // Will not be called by programmatic changes: https://stackoverflow.com/questions/16115344/textviewdidchange-is-not-call-when-change-uitextview-inputview
     public func textViewDidChange(_ textView: UITextView) {
         guard let note = self.note else { return }
-        
-        var lastSegmentIndex: Int?
-        var trackIndex: Int = 0
-        if note.noteTracks.count == 2 && note.noteTracks[1].count > 0 {
-            trackIndex = 1
-        }
-        
-        for (index, segment) in note.noteTracks[trackIndex].reversed().enumerated() {
-            if !segment.isVoiceCommandWord() && !segment.isSilence() && lastSegmentIndex == nil {
-                lastSegmentIndex = note.noteTracks[trackIndex].count - index - 1
-                break
-            }
-        }
+        let lastSegmentTuple = self.getNoteNthLastSegmentIndex(n: 0)
+        let secondLastSegment = self.getNoteNthLastSegment(n: 1)
+        let lastSegment = self.getNoteNthLastSegment(n: 0)
 
-        if let lastSegmentIndex = lastSegmentIndex {
-            self.moveCursor(trackIndex: trackIndex, segmentIndex: lastSegmentIndex)
-        } else {
-            fatalError("===== There was a problem finding last uttered word in SelectionCursor =====")
+        if self.cachedAnchor != nil && note.noteBuffer.count > 0, let newAnchor = note.noteBuffer.last, let (anchorTrackType, anchorIndex) = note.getSegmentLocation(segment: newAnchor) {
+            // Moves the cursor to the last segment in the buffer if we have a cached anchor and non-empty buffer
+            self.moveCursor(trackType: anchorTrackType, segmentIndex: anchorIndex)
+        } else if self.cachedAnchor != nil && note.noteBuffer.count == 0, let (anchorTrackType, anchorIndex) = note.getSegmentLocation(segment: self.cachedAnchor!) {
+            // Moves the cursor to the cached anchor if it exists and if the buffer is empty
+            // This occurs after a buffer is committed while we have a cached anchor
+            // The cached anchor is updated to be the last segment of the recently committed buffer
+            self.moveCursor(trackType: anchorTrackType, segmentIndex: anchorIndex)
+        } else if note.noteBuffer.count > 0 && ((secondLastSegment != nil && self.anchor == secondLastSegment) || (lastSegment != nil && self.anchor != lastSegment) || (self.anchor == nil)), let trackType = lastSegmentTuple.0, let lastSegmentIndex = lastSegmentTuple.1 {
+            // Moves cursor to the end of the note if there is no cached anchor and one of the following cases:
+            // 1) The second last segment in the non-empty buffer is the current anchor, but we have a new buffer segment
+            // 2) The current anchor is the same as the last segment in the non-empty buffer
+            // 3) We have no anchor
+            self.moveCursor(trackType: trackType, segmentIndex: lastSegmentIndex)
         }
     }
 }

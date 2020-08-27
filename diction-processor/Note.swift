@@ -44,8 +44,12 @@ class Note: AVMutableComposition {
     }
     /// Stores information about the speaker
     private(set) var speaker: Speaker
-    /// Stores a list of note tracks that contain a list of the high-level representation of note segments
-    private(set) var noteTracks: [[NoteSegment]] = [[]]
+    /// Stores a list of high-level representation of note segments
+    private(set) var noteSegments: [NoteSegment] = [NoteSegment]()
+    /// Stores a list of high-level representation of note segments in staging (before committed to noteSegments)
+    private(set) var noteBuffer: [NoteSegment] = [NoteSegment]()
+    /// Range of last committed buffer of note segments
+    private(set) var lastBufferRange: Range<Int>? = nil
     /// Stores the starting time of the note
     private(set) var startTime: CMTime = CMTime.zero // When we remove or add we change this
     /// Stores the ending time of the note
@@ -58,22 +62,18 @@ class Note: AVMutableComposition {
     private(set) var isExporting = false
     /// Stores the number of sentences in the note
     public var numSentences: Int {
-        var sentenceCount = 0
-        for track in self.noteTracks {
-            if let lastSegment = track.last {
-                sentenceCount = lastSegment.getSentence().number
-            }
+        var sentenceCount = Int(Utils.UNKNOWN)
+        if let lastSegment = self.noteBuffer.last, self.noteBuffer.count > 0 && lastSegment.getSentence().number != Int(Utils.UNKNOWN) {
+            sentenceCount = lastSegment.getSentence().number + 1
+        } else if let lastSegment = self.noteSegments.last, self.noteSegments.count > 0 && lastSegment.getSentence().number != Int(Utils.UNKNOWN) {
+            sentenceCount = lastSegment.getSentence().number + 1
         }
         
-        return sentenceCount + 1
+        return sentenceCount
     }
     /// The language of the note
     public var language: NLLanguage? {
-        if self.noteTracks[0].count == 0 {
-            return nil
-        }
-
-        if let firstSegment = self.noteTracks[0].first, let language = NLLanguageRecognizer.dominantLanguage(for: firstSegment.getText()) {
+        if let firstSegment = self.noteSegments.first, let language = NLLanguageRecognizer.dominantLanguage(for: firstSegment.getText()) {
             return language
         }
         
@@ -81,17 +81,27 @@ class Note: AVMutableComposition {
     }
     /// The average number of words spoken per minute.
     public var avgSpeakingRate: Double {
-        var speakingRate: Double = 0
-        var segmentCount = 0
         // Can be used to vary speed relative to WPM
-        for track in self.noteTracks {
-            segmentCount += track.count
-            for segment in track {
+        var speakingRate: Double = 0
+        var segmentCount = self.noteSegments.count
+        
+        // note segments
+        for segment in self.noteSegments {
+            speakingRate += segment.getSpeakingRate()
+        }
+        
+        // note buffer
+        if self.noteBuffer.count > 0 {
+            segmentCount += self.noteBuffer.count
+            for segment in self.noteBuffer {
                 speakingRate += segment.getSpeakingRate()
             }
         }
-
-        speakingRate /= Double(segmentCount)
+        
+        // prevent divide by zero
+        if segmentCount > 0 {
+            speakingRate /= Double(segmentCount)
+        }
 
         return speakingRate
     }
@@ -115,8 +125,6 @@ class Note: AVMutableComposition {
     let recordBus = 0
     /// Stores whether note is authorized to listen for speech. This is typically false when then source filetype is .m4a vs. .caf, which happens on note export
     private(set) var authorizedToListenForSpeech = false
-    /// Stores the currently active recording track
-    var activeTrack: Int = 0
     /// Stores a count of the number of unique clips that have been recording throughout note (factors recording breaks due to voice commands)
     private(set) var clipCount: Int = 0
     /// Stores a reference to the shared audio session object
@@ -143,8 +151,6 @@ class Note: AVMutableComposition {
     }()
     /// Stores a stream of pitch values received throughout the process of listening
     private var pitchStream = [PitchDatum]()
-    /// Stores note segments that are/were part of last listening buffer
-    private var listeningBufferLowestIndex: Int = -1
     /// Stores a handler to be executed when a new listening buffer is received and processed
     private(set) var onListenUpdate: (() -> Void)?
     /// Stores a handler to be executed when listening has stopped
@@ -164,11 +170,13 @@ class Note: AVMutableComposition {
     /// Stores the type of recognition last executed e.g. speech or voice command
     private var lastRecognitionTask: RecognitionTask?
     /// Specifies whether note is currently listening for speech
-    private(set) var isListeningForSpeech = false
+    @objc dynamic private(set) var isListeningForSpeech = false
     /// Specifies whether note has paused listening for speech (active, but paused vs. inactive)
     private(set) var pausedListeningForSpeech = false
     /// Specifies whether note is currently listening for voice commands
     private(set) var isListeningForCommands = false
+    /// Specifies whether note has paused listening for commands (active, but paused vs. inactive)
+    private(set) var pausedListeningForCommands = false
     /// Stores a handler to be executed when listening starts
     private var onListeningStartHandler: (() -> Void)?
     
@@ -180,7 +188,7 @@ class Note: AVMutableComposition {
     /// Specifies whether note has been instructed to clear out contents of synthesizer queue
     private(set) var isExhaustingSynthesizerQueue = false
     /// Specifies whether passive echo should execute when headphones are connected
-    public var withPassiveEcho = true
+    private(set) var withPassiveEcho = true
     /// Specifies whether echo is currently playing
     public var isPlayingEcho: Bool {
         return speechSynthesizer.isSpeaking
@@ -189,6 +197,8 @@ class Note: AVMutableComposition {
     public var echoIsPaused: Bool {
         return speechSynthesizer.isPaused
     }
+    /// Stores the rate of the speech synthesis speech
+    private(set) var echoRate: Float = 0.53
     /// Stores a handler to be executed when echo is complete (always executes)
     private(set) var onEchoFinish: (() -> Void)?
     /// Stores a temporary handler to be executed when echo is complete (executes on-demand)
@@ -339,6 +349,12 @@ class Note: AVMutableComposition {
         checkRep()
     }
     
+    deinit {}
+    
+    public override var description: String {
+        return "Note {\n\tfilename: \(self.filename) \n\tfileType: \(self.fileType) \n\tspeaker: \(self.speaker) \n\tnoteSegments: \(self.noteSegments) \n\tnoteBuffer: \(self.noteBuffer) \n\tlastBufferRange: \(String(describing: self.lastBufferRange)) \n\tstartTime: \(self.startTime) \n\tendTime: \(self.endTime) \n\tduration: \(self.duration) \n\tisExporting: \(self.isExporting) \n\tnumSentences: \(self.numSentences) \n\tlanguage: \(String(describing: self.language)) \n\tavgSpeakingRate: \(self.avgSpeakingRate) \n\twithTemporalSuggestions: \(self.withTemporalSuggestions) \n\twithPunctuationSuggestions: \(self.withPunctuationSuggestions) \n\twithFormattingSuggestions: \(self.withFormattingSuggestions) \n\twithTextStrictlyAsWords: \(self.withTextStrictlyAsWords) \n\tauthorizedToListenForSpeech: \(self.authorizedToListenForSpeech) \n\tclipCount: \(self.clipCount) \n\trecordStartDate: \(String(describing: self.recordStartDate)) \n\taccumulatedDuration: \(self.accumulatedDuration) \n\tsoundIntensityStream: \(self.soundIntensityStream) \n\tminPower: \(self.minPower) \n\tpitchStream: \(self.pitchStream) \n\tuseOnDeviceRecognition: \(self.useOnDeviceRecognition) \n\tisListeningForSpeech: \(self.isListeningForSpeech) \n\tpausedListeningForSpeech: \(self.pausedListeningForSpeech) \n\tisListeningForCommands: \(self.isListeningForCommands) \n\tpausedListeningForCommands: \(self.pausedListeningForCommands) \n\tisExhaustingSynthesizerQueue: \(self.isExhaustingSynthesizerQueue) \n\twithPassiveEcho: \(self.withPassiveEcho) \n\tisPlayingEcho: \(self.isPlayingEcho) \n\techoIsPaused: \(self.echoIsPaused) \n\tplaybackRate: \(self.playbackRate) \n\tpreviousBoundarySegment: \(String(describing: self.previousBoundarySegment)) \n\tisPlayingNote: \(self.isPlayingNote) \n\tskipPunctuation: \(self.skipPunctuation) \n\tskipSilence: \(self.skipSilence) \n\tstartPlaybackAt: \(String(describing: self.startPlaybackAt)) \n\tstopPlaybackAt: \(String(describing: self.stopPlaybackAt))\n}"
+    }
+    
     // MARK: - Configuration Methods
     
     func requestPermissions() {
@@ -455,83 +471,43 @@ class Note: AVMutableComposition {
 //        print("current result: ", result)
 
         // start of note segments should be the same as startTime
-        if let firstSegment = self.noteTracks[0].first {
+        if let firstSegment = self.noteSegments.first {
             result = result && firstSegment.timeMapping.target.start == self.startTime
 //            print("start of note segments should be the same as startTime: ", firstSegment.timeMapping.target.start == self.startTime, firstSegment.timeMapping.target.start.seconds, self.startTime.seconds)
 //            print("current result: ", result)
         }
 
-        // never have more than two tracks
-        result = result && self.noteTracks.count <= 2
-//        print("never have more than two tracks: ", self.noteTracks.count)
-//        print("current result: ", result)
-
         // end of note segments should be the same as endTime
-        if self.noteTracks.count == 2, let lastSegment = self.noteTracks[1].last {
-            result = result && self.endTime == CMTimeAdd(self.noteTracks[0].last!.timeMapping.target.end, lastSegment.timeMapping.target.end)
-//            print("[With two tracks] end of note segments should be the same as endTime: ", self.endTime == CMTimeAdd(self.noteTracks[0].last!.timeMapping.target.end, lastSegment.timeMapping.target.end), self.endTime.seconds, CMTimeAdd(self.noteTracks[0].last!.timeMapping.target.end, lastSegment.timeMapping.target.end))
-//            print("current result: ", result)
-        } else if let lastSegment = self.noteTracks[0].last {
+        if let lastSegment = self.noteSegments.last {
             result = result && self.endTime == lastSegment.timeMapping.target.end
-//            print("[With one track] end of note segments should be the same as endTime: ", self.endTime == lastSegment.timeMapping.target.end, self.endTime.seconds, lastSegment.timeMapping.target.end.seconds)
+//            print("end of note segments should be the same as endTime: ", self.endTime == lastSegment.timeMapping.target.end, self.endTime.seconds, lastSegment.timeMapping.target.end.seconds)
 //            print("current result: ", result)
         }
 
         // internal durations should be the same
-        if self.noteTracks.count == 2, let firstSegment = self.noteTracks[0].first, let lastSegment = self.noteTracks[1].last {
-            result = result && CMTimeSubtract(self.endTime, self.startTime) ==
-            CMTimeSubtract(
-                CMTimeAdd(
-                    self.noteTracks[0].last!.timeMapping.target.end,
-                    lastSegment.timeMapping.target.end
-                ),
-                firstSegment.timeMapping.target.start
-            )
-//            print(
-//                "[With two tracks] internal durations should be the same: ",
-//                CMTimeSubtract(self.endTime, self.startTime) ==
-//                CMTimeSubtract(
-//                    CMTimeAdd(
-//                        self.noteTracks[0].last!.timeMapping.target.end,
-//                        lastSegment.timeMapping.target.end
-//                    ),
-//                    firstSegment.timeMapping.target.start
-//                ),
-//                CMTimeSubtract(self.endTime, self.startTime).seconds,
-//                CMTimeSubtract(
-//                    CMTimeAdd(
-//                        self.noteTracks[0].last!.timeMapping.target.end,
-//                        lastSegment.timeMapping.target.end
-//                    ),
-//                    firstSegment.timeMapping.target.start
-//                ).seconds
-//            )
-//            print("current result: ", result)
-        } else if let firstSegment = self.noteTracks[0].first, let lastSegment = self.noteTracks[0].last {
+        if let firstSegment = self.noteSegments.first, let lastSegment = self.noteSegments.last {
             result = result && CMTimeSubtract(self.endTime, self.startTime) == CMTimeSubtract(lastSegment.timeMapping.target.end, firstSegment.timeMapping.target.start)
-//            print("[With one track] internal durations should be the same: ", CMTimeSubtract(self.endTime, self.startTime) == CMTimeSubtract(lastSegment.timeMapping.target.end, firstSegment.timeMapping.target.start), CMTimeSubtract(self.endTime, self.startTime).seconds, CMTimeSubtract(lastSegment.timeMapping.target.end, firstSegment.timeMapping.target.start).seconds)
+//            print("internal durations should be the same: ", CMTimeSubtract(self.endTime, self.startTime) == CMTimeSubtract(lastSegment.timeMapping.target.end, firstSegment.timeMapping.target.start), CMTimeSubtract(self.endTime, self.startTime).seconds, CMTimeSubtract(lastSegment.timeMapping.target.end, firstSegment.timeMapping.target.start).seconds)
 //            print("current result: ", result)
         }
 
-        // duration of first track should be the same as underlying track segments
+        // duration of segments should be the same as underlying track segments
         // we only check is we have two note tracks because that's when we're guaranteed to have saved note segments to lower level track representation
-        if self.noteTracks.count == 2, let firstSegment = self.tracks[0].segments.first, let lastSegment = self.tracks[0].segments.last {
-            result = result && CMTimeSubtract(self.noteTracks[0].last!.timeMapping.target.end, self.noteTracks[0].first!.timeMapping.target.start) == CMTimeSubtract(lastSegment.timeMapping.target.end, firstSegment.timeMapping.target.start)
-//            print("duration of first track should be the same as underlying track segments: ", CMTimeSubtract(self.noteTracks[0].last!.timeMapping.target.end, self.noteTracks[0].first!.timeMapping.target.start) == CMTimeSubtract(lastSegment.timeMapping.target.end, firstSegment.timeMapping.target.start), CMTimeSubtract(self.noteTracks[0].last!.timeMapping.target.end, self.noteTracks[0].first!.timeMapping.target.end).seconds, CMTimeSubtract(lastSegment.timeMapping.target.end, firstSegment.timeMapping.target.start).seconds)
+        if self.noteSegments.count > 0, let firstSegment = self.tracks[0].segments.first, let lastSegment = self.tracks[0].segments.last {
+            result = result && CMTimeSubtract(self.noteSegments.last!.timeMapping.target.end, self.noteSegments.first!.timeMapping.target.start) == CMTimeSubtract(lastSegment.timeMapping.target.end, firstSegment.timeMapping.target.start)
+//            print("duration of first track should be the same as underlying track segments: ", CMTimeSubtract(self.noteSegments.last!.timeMapping.target.end, self.noteSegments.first!.timeMapping.target.start) == CMTimeSubtract(lastSegment.timeMapping.target.end, firstSegment.timeMapping.target.start), CMTimeSubtract(self.noteSegments.last!.timeMapping.target.end, self.noteSegments.first!.timeMapping.target.start).seconds, CMTimeSubtract(lastSegment.timeMapping.target.end, firstSegment.timeMapping.target.start).seconds)
 //            print("current result: ", result)
         }
-        
-        // make sure that second track is active track if it exists
-        if self.noteTracks.count == 2 {
-            result = result && self.activeTrack == 1
-//            print("[With two tracks] make sure that second track is active track if it exists: ", self.activeTrack == 1, self.activeTrack)
-//            print("current result: ", result)
-        }
-        
-        // make sure paused listening for speech  only occurs if listening for speech
+
+        // make sure paused listening for speech only occurs if listening for speech
         result = result && (self.isListeningForSpeech || (!self.isListeningForSpeech && !self.pausedListeningForSpeech))
 //        print("make sure paused listening for speech  only occurs if listening for speech: ", (self.isListeningForSpeech || (!self.isListeningForSpeech && !self.pausedListeningForSpeech)))
 //        print("current result: ", result)
+        
+        // make sure paused listening for commands only occurs if listening for commands
+        result = result && (self.isListeningForCommands || (!self.isListeningForCommands && !self.pausedListeningForCommands))
+        //        print("make sure paused listening for speech  only occurs if listening for commands: ", (self.isListeningForCommands || (!self.isListeningForCommands && !self.pausedListeningForCommands)))
+        //        print("current result: ", result)
 
         if !result {
             fatalError("===== [Error] Note Representation Invariants were broken =====")
@@ -551,15 +527,17 @@ class Note: AVMutableComposition {
         } else if self.isListeningForSpeech && !self.pausedListeningForSpeech {
             // Play Sound
             soundEngine.error()
+            
+            // Give haptic feedback
+            hapticEngine.error()
 
             Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {[weak self] timer in
-                let rate: Float = 0.52
                 let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self!.vc)
                 let synthesizerItem = SynthesizerItem(
                     synthesizer: self!.speechSynthesizer,
                     text: "Note already started.",
                     voice: voice,
-                    rate: rate,
+                    rate: self!.echoRate,
                     volume: self!.playbackVolume
                 )
                 
@@ -593,19 +571,7 @@ class Note: AVMutableComposition {
         // if we have segments in first track, it implies this is n > 1
         // recording session
         // We must prepare a new track if it's not there
-        if !forVoiceCommands && self.noteTracks[0].count > 0 && self.noteTracks.count == 1 {
-            print("\tAdding new track to note...")
-            print("\tIncrementing note clip count from \(self.clipCount) to \(self.clipCount + 1)...")
-            // Increment clip count used to create unique track URLs to write audio into
-            self.clipCount += 1
-
-            // Configure Audio Write File
-            self.configureAudioWriteFile()
-            
-            // Add new note track
-            addNewTrack()
-        } else if (!forVoiceCommands && self.noteTracks[0].count > 0 && self.noteTracks.count > 1) ||
-            (!forVoiceCommands && self.noteTracks[0].count == 0 && self.noteTracks.count == 1) {
+        if !forVoiceCommands {
             print("\tIncrementing note clip count from \(self.clipCount) to \(self.clipCount + 1)...")
             // Increment clip count used to create unique track URLs to write audio into
             self.clipCount += 1
@@ -661,12 +627,13 @@ class Note: AVMutableComposition {
             DispatchQueue.main.async {
                 if self.audioEngine.isRunning &&
                     (!self.isListeningForSpeech || self.pausedListeningForSpeech) &&
-                    !self.isListeningForCommands {
+                    (!self.isListeningForCommands || self.pausedListeningForCommands) {
                     // A transcription can be in progress before call to startSpeechRecognition if
                     // Apple servers ended dictation session
                     // It cannot be if after a continguous clause was completed while on-device recognition
                     if forVoiceCommands {
                         self.isListeningForCommands = true
+                        self.pausedListeningForCommands = false
                         self.lastRecognitionTask = RecognitionTask.VOICE_COMMAND
                     } else {
                         self.isListeningForSpeech = true
@@ -744,13 +711,12 @@ class Note: AVMutableComposition {
             
             // Delay error message to allow error earcon to complete
             Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {[weak self] timer in
-                let rate: Float = 0.52
                 let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self!.vc)
                 let synthesizerItem = SynthesizerItem(
                     synthesizer: self!.speechSynthesizer,
                     text: "Note not started.",
                     voice: voice,
-                    rate: rate,
+                    rate: self!.echoRate,
                     volume: self!.playbackVolume
                 )
                 
@@ -772,8 +738,11 @@ class Note: AVMutableComposition {
             isListeningForSpeech = false
             isListeningForCommands = false
             pausedListeningForSpeech = false
-        } else if pause {
+            pausedListeningForCommands = false
+        } else if pause && !forVoiceCommands {
             pausedListeningForSpeech = true
+        } else if pause && forVoiceCommands {
+            pausedListeningForCommands = true
         }
 
         if !forVoiceCommands {
@@ -814,27 +783,7 @@ class Note: AVMutableComposition {
         stopListeningForSpeech(pause: pause, forVoiceCommands: true, onStopHandler: onStopHandler)
     }
     
-    func addNewTrack() {
-        print("===== Add new track =====")
-        // Add new track to note data structure
-        self.noteTracks.append([])
-        
-        // update active track
-        self.activeTrack = 1
-    }
-    
-    func performTranscriptionUpdate(_ transcription: SFTranscription, finalTranscript: Bool = false) {
-        // updates buffered segments lower index
-        self.updateListeningBuffer()
-
-        if finalTranscript {
-            var segments = self.noteTracks[self.activeTrack]
-            segments.removeSubrange(self.listeningBufferLowestIndex..<segments.count)
-            // Don't ship to setSegments(segments: [NoteSegment])
-            // It's not normalized yet
-            self.noteTracks[self.activeTrack] = segments
-        }
-        
+    func performTranscriptionUpdate(_ transcription: SFTranscription) {
         for (index, segment) in transcription.segments.enumerated() {
             processTranscriptSegment(
                 segment: segment,
@@ -846,20 +795,20 @@ class Note: AVMutableComposition {
     
     func processTranscriptSegment(segment: SFTranscriptionSegment, transcriptionIndex: Int, transcription: SFTranscription) {
         // get existing segments
-        var segments = self.noteTracks[self.activeTrack]
+        var segments = self.noteBuffer
         
         // Manage NLP
         var segmentTags: [String : NLTag?]
         var sentiment: [ScaleUnitType: Float]?
-        if self.listeningBufferLowestIndex == -1 || transcriptionIndex >= (segments.count - self.listeningBufferLowestIndex) {
+        if self.noteBuffer.count == 0 || transcriptionIndex >= self.noteBuffer.count {
              // New segment, compute values
             (segmentTags, sentiment) = computeSegmentTags(
                 transcription: transcription,
                 transcriptionIndex: transcriptionIndex
             )
-        } else if transcriptionIndex < (segments.count - self.listeningBufferLowestIndex) {
+        } else if transcriptionIndex < self.noteBuffer.count {
             // existing segment, get values
-            let existingSegment = self.noteTracks[self.activeTrack][self.listeningBufferLowestIndex + transcriptionIndex]
+            let existingSegment = self.noteBuffer[transcriptionIndex]
             segmentTags = [
                 "nameType": existingSegment.getNameType(),
                 "lemma": existingSegment.getLemma(),
@@ -888,7 +837,7 @@ class Note: AVMutableComposition {
         if segment.duration <= 0 {
             // temporary segment
             // give it default temporary values
-            if self.listeningBufferLowestIndex == -1 {
+            if self.noteBuffer.count == 0 {
                 // First temporary segment
                 
                 // Set source timestamp
@@ -897,7 +846,7 @@ class Note: AVMutableComposition {
                 // Set duration
                 duration = floor(Note.defaultSegmentTimescale * DEFAULT_SEGMENT_DURATION)
             } else {
-                let processedSeconds: Double = segments[self.listeningBufferLowestIndex].timeMapping.target.start.seconds
+                let processedSeconds: Double = self.noteBuffer[0].timeMapping.target.start.seconds
                 // Set source timestamp
                 sourceTimestamp = floor(Note.defaultSegmentTimescale * (
                         processedSeconds +
@@ -928,7 +877,6 @@ class Note: AVMutableComposition {
             word: word,
             trackURL: Utils.getTempFileURL(of: "\(self.filename)-\(self.clipCount)\(self.fileType)"),
             trackID: self.tracks[0].trackID,
-            trackIndex: self.activeTrack,
             phoneticallySimilarWords: phoneticallySimilarWords,
             sourceTimeRange: CMTimeRangeMake(
                 start: CMTimeMake(value: Int64(sourceTimestamp), timescale: Int32(Note.defaultSegmentTimescale)),
@@ -945,17 +893,31 @@ class Note: AVMutableComposition {
             sentimentScore: sentiment ?? nil
         )
         
-        if self.listeningBufferLowestIndex == -1 || transcriptionIndex >= (segments.count - self.listeningBufferLowestIndex) {
+        
+        if self.noteBuffer.count == 0 || transcriptionIndex >= segments.count {
             // New segment, append to speechSegments
             segments.append(noteSegment)
-            self.noteTracks[self.activeTrack] = segments
-        } else if transcriptionIndex <= (segments.count - self.listeningBufferLowestIndex) {
+            self.noteBuffer = segments
+        } else if transcriptionIndex < segments.count {
             // Existing segment, overwrite old copy
             // This assumes the new version is a better approximation of user speech
-            let oldSegment = segments[self.listeningBufferLowestIndex + transcriptionIndex]
+            let oldSegment = segments[transcriptionIndex]
             if oldSegment != noteSegment {
-                segments[self.listeningBufferLowestIndex + transcriptionIndex] = noteSegment
-                self.noteTracks[self.activeTrack] = segments
+                // existing segment with changes encountered
+                if oldSegment == selectionCursor.anchor {
+                    selectionCursor.setAnchor(segment: noteSegment)
+                }
+                
+                if oldSegment == selectionCursor.focus {
+                    selectionCursor.setFocus(segment: noteSegment)
+                }
+                
+                if oldSegment == selectionCursor.cachedAnchor {
+                    selectionCursor.setCachedAnchor(segment: noteSegment)
+                }
+
+                segments[transcriptionIndex] = noteSegment
+                self.noteBuffer = segments
             } else {
                 // Existing segment without changes encountered.
                 // print("Existing segment without changes encountered.")
@@ -973,29 +935,43 @@ class Note: AVMutableComposition {
         segments: [NoteSegment]? = nil,
         normalizeType: TimeNormalizerType = .source,
         replaceNoteDetails: Bool = false,
+        omitLeadingSilence: Bool = false,
+        saveSegments: Bool = false,
         saveToLowLevelRepr: Bool = false,
-        saveToTrack: Int = Int(Utils.UNKNOWN)
-    ) {
+        returnSegments: Bool = false
+    ) -> [NoteSegment]? {
         print("===== Normalizing Segments =====")
         var lastEnd = CMTime.zero
         var normalizedSegments = [NoteSegment]()
         var silenceIndices = [Int]()
         
-        var segs = self.noteTracks[self.activeTrack]
+        var segs = self.noteBuffer.count > 0 ? self.noteBuffer : self.noteSegments
         if let segments = segments {
+            print("\tReceived custom segments. Setting as normalization contents...")
             segs = segments
         }
         
-        for segment in segs {
+        for (index, segment) in segs.enumerated() {
             if segment.timeMapping[normalizeType].start.seconds != lastEnd.seconds {
                 if segment.timeMapping[normalizeType].start.seconds > lastEnd.seconds && !segment.isSilence() {
+                    let trackURL = Utils.getTempFileURL(of: "\(self.filename)-\(self.clipCount)\(self.fileType)")
+
+                    if let lastCommittedSegment = self.noteSegments.last, index == 0 && segments != nil && segments!.first! != self.noteSegments.first! && self.noteSegments.count > 0 && normalizeType == .source && lastCommittedSegment.sourceURL!.absoluteString == trackURL.absoluteString {
+                        // first segment is silence
+                        // we are normalizing source
+                        // noteSegments is not empty
+                        // we are on the same source url as the last segment in noteSegments
+                        // we are passed in segments
+                        // the first segment of noteSegments and passed in segments are not the same
+                        lastEnd = lastCommittedSegment.timeMapping.source.end
+                    }
+
                     // Add a silent segment in front of current segment to account for early time
                     let silentSegment = NoteSegment(
                         note: self,
                         word: "",
-                        trackURL: Utils.getTempFileURL(of: "\(self.filename)-\(self.clipCount)\(self.fileType)"),
+                        trackURL: trackURL,
                         trackID: self.tracks[0].trackID,
-                        trackIndex: saveToTrack != Int(Utils.UNKNOWN) ? saveToTrack : self.activeTrack,
                         phoneticallySimilarWords: [],
                         // If we're normalizing target, this might be wrong
                         sourceTimeRange: CMTimeRangeMake(
@@ -1059,21 +1035,24 @@ class Note: AVMutableComposition {
                     lastEnd = segment.timeMapping[normalizeType].end
                 } else if segment.timeMapping[normalizeType].start.seconds > lastEnd.seconds && segment.isSilence() {
                     // Modify silent segment in front of current segment to account for early time
+                    let newDuration = normalizeType == .source ? CMTimeSubtract(segment.timeMapping.source.end, lastEnd) : CMTimeSubtract(segment.timeMapping.target.end, lastEnd)
+                    let sourceTimeRange = normalizeType == .source ?
+                    CMTimeRangeMake(start: lastEnd, duration: newDuration)
+                    :
+                    CMTimeRangeMake(start: segment.timeMapping.source.start, duration: newDuration)
+                    
+                    let targetTimeRange = normalizeType == .target ?
+                    CMTimeRangeMake(start: lastEnd, duration: newDuration)
+                    :
+                    CMTimeRangeMake(start: segment.timeMapping.target.start, duration: newDuration)
                     let modifiedSegment = NoteSegment(
                         note: self,
                         word: segment.getText(),
                         trackURL: segment.sourceURL!,
                         trackID: segment.sourceTrackID,
-                        trackIndex: saveToTrack != Int(Utils.UNKNOWN) ? saveToTrack : segment.getTrackIndex(),
                         phoneticallySimilarWords: segment.getPhoneticallySimilarWords(),
-                        sourceTimeRange: normalizeType == .source ?
-                            CMTimeRangeFromTimeToTime(start: lastEnd, end: segment.timeMapping.source.end)
-                            :
-                            segment.timeMapping.source,
-                        targetTimeRange: normalizeType == .target ?
-                            CMTimeRangeFromTimeToTime(start: lastEnd, end: segment.timeMapping.target.end)
-                            :
-                            segment.timeMapping.target,
+                        sourceTimeRange: sourceTimeRange,
+                        targetTimeRange: targetTimeRange,
                         tokenType: segment.getTokenType(),
                         lexicalClass: segment.getLexicalClass(),
                         nameType: segment.getNameType(),
@@ -1114,7 +1093,6 @@ class Note: AVMutableComposition {
                         word: segment.getText(),
                         trackURL: segment.sourceURL!,
                         trackID: segment.sourceTrackID,
-                        trackIndex: saveToTrack != Int(Utils.UNKNOWN) ? saveToTrack : segment.getTrackIndex(),
                         phoneticallySimilarWords: segment.getPhoneticallySimilarWords(),
                         sourceTimeRange: normalizeType == .source ?
                             CMTimeRangeMake(
@@ -1165,35 +1143,11 @@ class Note: AVMutableComposition {
 
                     // Add to segments array
                     normalizedSegments.append(normalizedSegment)
-                    // print("Normalized time of segment: \(normalizedSegment.getText())")
                     
                     // Update last end value
                     lastEnd = CMTimeAdd(lastEnd, segment.timeMapping[normalizeType].duration)
                 }
             } else {
-                let middleOfSegmentDuration: Double = segment.timeMapping[normalizeType].start.seconds
-
-                // Sound Intensity
-                if segment.getPower() != Double.infinity {
-                    // Import sound intensity
-                    let power = segment.getPower()
-                    segment.setPower(power: power)
-                } else if self.soundIntensityStream.count > 0 {
-                    // Add sound intensities
-                    let datum = getRecordingSoundIntensityDatum(timestamp: middleOfSegmentDuration)
-                    segment.setPower(power: datum.power.rounded(toPlaces: SOUND_INTENSITY_SIG_FIG_COUNT))
-                }
-                
-                // Pitch
-                if let pitch = segment.getPitch() {
-                    // Import pitch
-                    segment.setPitch(pitch: pitch)
-                } else if self.pitchStream.count > 0 {
-                    // Add pitch
-                    let pitch = getRecordingPitch(timestamp: middleOfSegmentDuration)
-                    segment.setPitch(pitch: pitch.pitch)
-                }
-                
                 // Save silence index
                 if segment.isSilence() {
                     silenceIndices.append(normalizedSegments.count)
@@ -1221,7 +1175,15 @@ class Note: AVMutableComposition {
         }) / Double(self.duration.seconds / Double(TimeConstant.secsPerMin))
         speakingRate = speakingRate.rounded(toPlaces: DEFAULT_FIG_COUNT)
         
+        var initialSilenceDuration: CMTime?
+        if omitLeadingSilence && normalizedSegments.first!.isSilence() {
+            print("\tOmitting leading silence...")
+            initialSilenceDuration = normalizedSegments.first!.timeMapping.target.end
+            normalizedSegments.removeFirst()
+        }
+        
         // Update Index, Background Noise, AvgPauseDuration, SpeakingRate
+        var fullyNormalizedSegments = [NoteSegment]()
         for (index, segment) in normalizedSegments.enumerated() {
             // Set segment index
             segment.setIndex(index: index)
@@ -1234,16 +1196,206 @@ class Note: AVMutableComposition {
             
             // Set speakingRate
             segment.setSpeakingRate(rate: speakingRate)
+            
+            if omitLeadingSilence, let initialSilenceDuration = initialSilenceDuration {
+                // segment overlaps with previous segment, shift it forwards
+                let shiftedSegment = NoteSegment(
+                    note: self,
+                    word: segment.getText(),
+                    trackURL: segment.sourceURL!,
+                    trackID: segment.sourceTrackID,
+                    phoneticallySimilarWords: segment.getPhoneticallySimilarWords(),
+                    sourceTimeRange: segment.timeMapping.source,
+                    targetTimeRange: CMTimeRangeMake(
+                        start: segment.timeMapping.target.start - initialSilenceDuration,
+                        duration: segment.timeMapping.target.duration
+                    ),
+                    tokenType: segment.getTokenType(),
+                    lexicalClass: segment.getLexicalClass(),
+                    nameType: segment.getNameType(),
+                    lemma: segment.getLemma(),
+                    sentimentScore: segment.getSentiment()
+                )
+                
+                let startOfSegmentDuration: Double = lastEnd.seconds
+                
+                // Sound Intensity
+                if segment.getPower() != Double.infinity {
+                    // Import sound intensity
+                    let power = segment.getPower()
+                    shiftedSegment.setPower(power: power)
+                } else if self.soundIntensityStream.count > 0 {
+                    // Add sound intensities
+                    let datum = getRecordingSoundIntensityDatum(timestamp: startOfSegmentDuration)
+                    segment.setPower(power: datum.power.rounded(toPlaces: SOUND_INTENSITY_SIG_FIG_COUNT))
+                }
+                
+                // Pitch
+                if let pitch = segment.getPitch() {
+                    // Import pitch
+                    shiftedSegment.setPitch(pitch: pitch)
+                } else if self.pitchStream.count > 0 {
+                    // Add pitch
+                    let pitch = getRecordingPitch(timestamp: startOfSegmentDuration)
+                    segment.setPitch(pitch: pitch.pitch)
+                }
+                
+                // Is Voice Command
+                shiftedSegment.setIsVoiceCommandWord(to: segment.isVoiceCommandWord())
+                
+                // add to array
+                fullyNormalizedSegments.append(shiftedSegment)
+            } else {
+                fullyNormalizedSegments.append(segment)
+            }
         }
         
-        self.setSegments(
-            segments: normalizedSegments,
-            replaceNoteDetails: replaceNoteDetails,
-            saveToLowLevelRepr: saveToLowLevelRepr,
-            saveToTrack: saveToTrack
+        if saveSegments {
+            print("\tSaving segments...")
+            self.setSegments(
+                segments: fullyNormalizedSegments,
+                replaceNoteDetails: replaceNoteDetails,
+                saveToLowLevelRepr: saveToLowLevelRepr
+            )
+            checkRep()
+        }
+            
+        if returnSegments {
+            print("\tReturning segments...")
+            return fullyNormalizedSegments
+        }
+        
+        return nil
+    }
+    
+    func commitBuffer() {
+        guard self.noteBuffer.count > 0 else { return }
+        print("===== Commit Buffer =====")
+        // duplicate note tracks
+        var segments = [NoteSegment]()
+        for segment in self.noteBuffer {
+            let duplicate = segment.duplicate()
+            if segment == selectionCursor.anchor {
+                selectionCursor.setAnchor(segment: duplicate)
+            }
+            
+            if segment == selectionCursor.focus {
+                selectionCursor.setFocus(segment: duplicate)
+            }
+            
+            if segment == selectionCursor.cachedAnchor {
+                selectionCursor.setCachedAnchor(segment: duplicate)
+            }
+
+            segments.append(duplicate)
+        }
+        print("\tDuplicating buffer segments...")
+        
+        // Clear buffer segments
+        print("\tClearing note buffer...")
+        self.noteBuffer = []
+        
+        print("\tIdentifying insert time...")
+        var insertTime: CMTime
+        var updateCachedAnchor = false
+        var cachedAnchorIndex = Int(Utils.UNKNOWN)
+        var numSegmentsBehindCursorBeforeInsertion: Int
+        var numSegmentsAheadCursorBeforeInsertion: Int
+        if let cachedAnchor = selectionCursor.cachedAnchor {
+            print("\tInsert time identified to be at cached anchor...")
+            // Get cached anchor
+            cachedAnchorIndex = cachedAnchor.getIndex()
+            
+            // Activate update cached anchor flag
+            updateCachedAnchor = true
+            
+            // Find insert time
+            insertTime = cachedAnchor.timeMapping.target.end
+            
+            // cache count of segments before insert to set last buffer range
+            numSegmentsBehindCursorBeforeInsertion = cachedAnchor.getIndex() + 1
+            numSegmentsAheadCursorBeforeInsertion = self.noteSegments.count - numSegmentsBehindCursorBeforeInsertion
+        } else {
+            print("\tInsert time identified to be at end of note...")
+            // Find insert time
+            insertTime = self.noteSegments.count > 0 ? self.noteSegments.last!.timeMapping.target.end : CMTime.zero
+            
+            // cache count of segments before insert to set last buffer range
+            numSegmentsBehindCursorBeforeInsertion = selectionCursor.anchor != nil ? selectionCursor.anchor!.getIndex() + 1 : self.noteSegments.count
+            numSegmentsAheadCursorBeforeInsertion = self.noteSegments.count - numSegmentsBehindCursorBeforeInsertion
+        }
+        
+        var oldAnchor: NoteSegment?
+        if let anchor = selectionCursor.anchor {
+            print("\tSelection anchor identified...")
+            oldAnchor = anchor.duplicate()
+        }
+        
+        var oldFocus: NoteSegment?
+        if let focus = selectionCursor.focus {
+            print("\tSelection focus identified...")
+            oldFocus = focus.duplicate()
+        }
+        
+        // normalize segments
+        print("\tNormalizing buffer segments...")
+        let normalizedSegments = self.normalizeSegments(
+            segments: segments,
+            omitLeadingSilence: updateCachedAnchor, // remove leading space so that we don't erroneously treat it as a long silence in the event that we are inserting new speech
+            returnSegments: true
         )
         
-        checkRep()
+        var lastBufferWordIndex = Int(Utils.UNKNOWN)
+        for (index, segment) in normalizedSegments!.reversed().enumerated() {
+            if !segment.isSilence() {
+                lastBufferWordIndex = normalizedSegments!.count - index
+                print("lastBufferWordIndex: ", lastBufferWordIndex)
+                break
+            }
+        }
+        
+        self.insertPassage(
+            segments: normalizedSegments!,
+            at: insertTime
+        )
+        
+        if updateCachedAnchor {
+            let lastNormalizedWord = self.noteSegments[cachedAnchorIndex + lastBufferWordIndex]
+            for segment in self.noteSegments {
+                if segment.isEqual(lastNormalizedWord) {
+                    // update cached anchor
+                    print("\tUpdating cached anchor...")
+                    selectionCursor.setCachedAnchor(segment: segment)
+                }
+            }
+        }
+
+        if let oldAnchor = oldAnchor, oldAnchor.getIndex() == Int(Utils.UNKNOWN) {
+            print("\tUpdating anchor...")
+            for segment in self.noteSegments {
+                if segment.isEqual(oldAnchor) {
+                    // update anchor
+                    print("\tUpdated anchor segment in selection cursor.")
+                    selectionCursor.setAnchor(segment: segment)
+                }
+            }
+        }
+        
+        if let oldFocus = oldFocus, oldFocus.getIndex() == Int(Utils.UNKNOWN) {
+            print("\tUpdating focus...")
+            for segment in self.noteSegments {
+                if segment.isEqual(oldFocus) {
+                    // update focus
+                    print("\tUpdated focus segment in selection cursor.")
+                    selectionCursor.setAnchor(segment: segment)
+                }
+            }
+        }
+        
+        // Set range of last buffer
+        print("\tSet last buffer range in note properties...")
+        let numNormalizedBufferSegments = self.noteSegments.count - (numSegmentsBehindCursorBeforeInsertion + numSegmentsAheadCursorBeforeInsertion)
+        self.lastBufferRange = numSegmentsBehindCursorBeforeInsertion..<(numSegmentsBehindCursorBeforeInsertion + numNormalizedBufferSegments)
     }
     
     // MARK: - Listening Method Helpers
@@ -1251,24 +1403,30 @@ class Note: AVMutableComposition {
     func computeSegmentTags(transcription: SFTranscription, transcriptionIndex: Int) -> ([String : NLTag?], [ScaleUnitType: Float]) {
         let tagger = NLTagger(tagSchemes: [.nameType, .lexicalClass, .tokenType, .sentimentScore, .lemma])
         let segmentText = transcription.segments[transcriptionIndex].substring
-        
-        var index: Int
-        if self.listeningBufferLowestIndex == -1 || transcriptionIndex > (self.noteTracks[self.activeTrack].count - self.listeningBufferLowestIndex) {
-            // New segment, append to speechSegments
-            index = self.noteTracks[self.activeTrack].count
-        } else if transcriptionIndex <= (self.noteTracks[self.activeTrack].count - self.listeningBufferLowestIndex) {
-            // Existing segment, overwrite old copy
-            // This assumes the new version is a better approximation of user speech
-            index = self.listeningBufferLowestIndex + transcriptionIndex
-        } else {
-            fatalError("\t[Error] There was a problem computing segment index in computeSegmentTags")
-        }
-        
+
+        // Determine note string
         let wholeText = segmentText.count == 1 && segmentText.first!.isPunctuation ?
-            self.getText(segments: self.noteTracks[self.activeTrack]) + segmentText
+            self.getText() + segmentText
         :
-            self.getText(segments: self.noteTracks[self.activeTrack]) + " \(segmentText)"
+            self.getText() + " \(segmentText)"
+        
+        // Set string for NLTagger
         tagger.string = wholeText
+
+        // Compute noteSegments array
+        var noteSegments: [NoteSegment]? = nil
+        var index: Int?
+        if let anchor = selectionCursor.anchor, anchor.getIndex() != Int(Utils.UNKNOWN) {
+            // insert buffer at the correct place based on cursor position
+            noteSegments = self.noteSegments
+            let anchorIndex = anchor.getIndex()
+            noteSegments!.insert(contentsOf: self.noteBuffer, at: anchorIndex)
+            index = anchorIndex + transcriptionIndex
+        } else {
+            // insert buffer at the end of segments
+            noteSegments = self.noteSegments + self.noteBuffer
+            index = self.noteSegments.count + transcriptionIndex
+        }
 
         var nameType: NLTag?
         var lemma: NLTag?
@@ -1277,17 +1435,21 @@ class Note: AVMutableComposition {
         var wordSentimentScore: NLTag?
         var sentenceSentimentScore: NLTag?
         var paragraphSentimentScore: NLTag?
-        let range = findSegmentRange(segments: self.noteTracks[self.activeTrack], wholeText: wholeText, rangeText: segmentText, index: index)
-        let rangeStartIndex: Int = wholeText.distance(from: wholeText.startIndex, to: range.lowerBound)
-        let stringIndex = wholeText.index(wholeText.startIndex, offsetBy: rangeStartIndex)
-        (nameType, _) = tagger.tag(at: stringIndex, unit: .word, scheme: .nameType)
-        (lemma, _) = tagger.tag(at: stringIndex, unit: .word, scheme: .lemma)
-        (lexicalClass, _) = tagger.tag(at: stringIndex, unit: .word, scheme: .lexicalClass)
-        (tokenType, _) = tagger.tag(at: stringIndex, unit: .word, scheme: .tokenType)
-        (nameType, _) = tagger.tag(at: stringIndex, unit: .word, scheme: .nameType)
-        (wordSentimentScore, _) = tagger.tag(at: stringIndex, unit: .word, scheme: .sentimentScore)
-        (sentenceSentimentScore, _) = tagger.tag(at: stringIndex, unit: .sentence, scheme: .sentimentScore)
-        (paragraphSentimentScore, _) = tagger.tag(at: stringIndex, unit: .paragraph, scheme: .sentimentScore)
+        let range = findSegmentRange(
+            segments: noteSegments!,
+            wholeText: wholeText,
+            rangeText: segmentText,
+            index: index!
+        )
+
+        (nameType, _) = tagger.tag(at: range.lowerBound, unit: .word, scheme: .nameType)
+        (lemma, _) = tagger.tag(at: range.lowerBound, unit: .word, scheme: .lemma)
+        (lexicalClass, _) = tagger.tag(at: range.lowerBound, unit: .word, scheme: .lexicalClass)
+        (tokenType, _) = tagger.tag(at: range.lowerBound, unit: .word, scheme: .tokenType)
+        (nameType, _) = tagger.tag(at: range.lowerBound, unit: .word, scheme: .nameType)
+        (wordSentimentScore, _) = tagger.tag(at: range.lowerBound, unit: .word, scheme: .sentimentScore)
+        (sentenceSentimentScore, _) = tagger.tag(at: range.lowerBound, unit: .sentence, scheme: .sentimentScore)
+        (paragraphSentimentScore, _) = tagger.tag(at: range.lowerBound, unit: .paragraph, scheme: .sentimentScore)
         
         let sentiment: [ScaleUnitType: Float] = [
             .word: Float(wordSentimentScore?.rawValue ?? "0") ?? 0,
@@ -1351,7 +1513,7 @@ class Note: AVMutableComposition {
             wholeText.index(wholeText.startIndex, offsetBy: lowerText.count)
         :
             wholeText.index(wholeText.startIndex, offsetBy: lowerText.count + 1)
-        let upperIndex = wholeText.index(lowerIndex, offsetBy: rangeText.count - 1)
+        let upperIndex = wholeText.index(lowerIndex, offsetBy: rangeText.count)
         let segmentRange = lowerIndex..<upperIndex
         
         return segmentRange
@@ -1383,19 +1545,6 @@ class Note: AVMutableComposition {
         return pitch
     }
     
-    func updateListeningBuffer() {
-        // Find staged segments lower index
-        var lowestIndex: Int = -1
-        for (index, segment) in self.noteTracks[self.activeTrack].enumerated() {
-            if segment.timeMapping.target.duration.seconds == DEFAULT_SEGMENT_DURATION {
-                lowestIndex = index
-                break
-            }
-        }
-        
-        self.listeningBufferLowestIndex = lowestIndex
-    }
-    
     // MARK: - Text Methods
     
     func getText(from fromTime: CMTime = CMTime.zero, until untilTime: CMTime? = nil, segments: [NoteSegment]? = nil, forEcho: Bool = false) -> String {
@@ -1411,28 +1560,39 @@ class Note: AVMutableComposition {
             noteSegments = segments
         }
         
-        // Compute text on multi segment tracks
-        if segments == nil && noteTracks.count == 2 && self.noteTracks[0].count > 0 && self.noteTracks[1].count > 0  {
-            text = "\(self.getText(from: fromTime, until: untilTime, segments: self.noteTracks[0], forEcho: forEcho)) \(self.getText(from: fromTime, until: untilTime, segments: self.noteTracks[1], forEcho: forEcho))"
-        } else {
-            if noteSegments == nil {
-                noteSegments = self.noteTracks[0]
-            }
-            
-            // We have been given a specific set of segments to compute on vs. multi segment tracks
-            for segment in noteSegments!  {
-                if let untilTime = untilTime, segment.timeMapping.target.end <= untilTime && !segment.isVoiceCommandWord() {
-                    let word = segment.getText(
-                        withTemporalSuggestions: self.withTemporalSuggestions,
-                        withPunctuationSuggestions: self.withPunctuationSuggestions,
-                        withFormattingSuggestions: self.withFormattingSuggestions,
-                        strictlyAsWord: self.withTextStrictlyAsWords,
-                        withSpacePrefix: true,
-                        forEcho: forEcho
-                    )
-                    
-                    text += word
-                } else if segment.timeMapping.target.start >= fromTime && !segment.isVoiceCommandWord() {
+        if let cachedAnchor = selectionCursor.cachedAnchor, noteSegments == nil && cachedAnchor.getIndex() != Int(Utils.UNKNOWN) {
+            // insert buffer at the correct place based on cursor position
+            noteSegments = self.noteSegments
+            // By default, insert(contentsOf:, at:) inserts the new elements before the anchor
+            // We add one to insert them after the ancher
+            let cachedAnchorIndex = cachedAnchor.getIndex()
+            noteSegments!.insert(contentsOf: self.noteBuffer, at: cachedAnchorIndex + 1)
+        } else if noteSegments == nil {
+            // insert buffer at the end of segments
+            noteSegments = self.noteSegments + self.noteBuffer
+        }
+        
+        // We have been given a specific set of segments to compute on vs. multi segment tracks
+        var fromTimeSegmentIndex: Int?
+//        print("segments: ", noteSegments!)
+        for (index, segment) in noteSegments!.enumerated()  {
+            if let untilTime = untilTime, segment.timeMapping.target.end <= untilTime && !segment.isVoiceCommandWord() {
+                let word = segment.getText(
+                    withTemporalSuggestions: self.withTemporalSuggestions,
+                    withPunctuationSuggestions: self.withPunctuationSuggestions,
+                    withFormattingSuggestions: self.withFormattingSuggestions,
+                    strictlyAsWord: self.withTextStrictlyAsWords,
+                    withSpacePrefix: true,
+                    forEcho: forEcho
+                )
+                
+                text += word
+            } else if (segment.timeMapping.target.start >= fromTime || fromTimeSegmentIndex != nil) && !segment.isVoiceCommandWord() {
+                if fromTimeSegmentIndex == nil && segment.timeMapping.target.start >= fromTime  {
+                    fromTimeSegmentIndex = index
+                }
+
+                if fromTimeSegmentIndex != nil {
                     let word = segment.getText(
                         withTemporalSuggestions: self.withTemporalSuggestions,
                         withPunctuationSuggestions: self.withPunctuationSuggestions,
@@ -1473,15 +1633,17 @@ class Note: AVMutableComposition {
             // havent recorded anything
             // Play Sound
             soundEngine.error()
+            
+            // Give haptic feedback
+            hapticEngine.error()
 
             Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {[weak self] timer in
-                let rate: Float = 0.52
                 let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self!.vc)
                 let synthesizerItem = SynthesizerItem(
                     synthesizer: self!.speechSynthesizer,
                     text: "Note is empty.",
                     voice: voice,
-                    rate: rate,
+                    rate: self!.echoRate,
                     volume: self!.playbackVolume
                 )
                 
@@ -1491,6 +1653,10 @@ class Note: AVMutableComposition {
             // Execute start Handler
             onStartHandler?()
             return
+        }
+        
+        if self.isListeningForCommands && !AVAudioSession.isHeadphonesConnected {
+            self.stopListeningForVoiceCommands(pause: true)
         }
         
         // Play Sound
@@ -1551,14 +1717,16 @@ class Note: AVMutableComposition {
             // Play Sound
             soundEngine.error()
 
+            // Give haptic feedback
+            hapticEngine.error()
+
             Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {[weak self] timer in
-                let rate: Float = 0.52
                 let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self!.vc)
                 let synthesizerItem = SynthesizerItem(
                     synthesizer: self!.speechSynthesizer,
                     text: "Note is empty.",
                     voice: voice,
-                    rate: rate,
+                    rate: self!.echoRate,
                     volume: self!.playbackVolume
                 )
                 
@@ -1628,15 +1796,17 @@ class Note: AVMutableComposition {
             // havent recorded anything
             // Play Sound
             soundEngine.error()
+            
+            // Give haptic feedback
+            hapticEngine.error()
 
             Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {[weak self] timer in
-                let rate: Float = 0.52
                 let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self!.vc)
                 let synthesizerItem = SynthesizerItem(
                     synthesizer: self!.speechSynthesizer,
                     text: "Note is empty.",
                     voice: voice,
-                    rate: rate,
+                    rate: self!.echoRate,
                     volume: self!.playbackVolume
                 )
                 
@@ -1723,6 +1893,21 @@ class Note: AVMutableComposition {
         player.seek(to: self.startTime)
         self.startPlaybackAt = nil
         self.startPlaybackAt = nil
+        let playerItem = player.currentItem
+        
+        if let playerItem = playerItem {
+            // remove observer
+            playerItem.removeObserver(
+                self,
+                forKeyPath: #keyPath(AVPlayerItem.status),
+                context: nil
+            )
+        }
+        
+        if self.pausedListeningForCommands && !AVAudioSession.isHeadphonesConnected {
+            self.startListeningForVoiceCommands(soundIntensityHandler: self.soundIntensityHandler)
+        }
+
         handler?()
     }
     
@@ -1737,6 +1922,10 @@ class Note: AVMutableComposition {
             self.stop()
         }
         
+        if self.isListeningForCommands && !AVAudioSession.isHeadphonesConnected {
+            self.stopListeningForVoiceCommands(pause: true)
+        }
+        
         // Play Sound
         soundEngine.play()
         
@@ -1749,12 +1938,11 @@ class Note: AVMutableComposition {
             print("===== Start Echo =====")
             print("\tInitiate new speech synthesizer utterance")
             let noteText = self.getText() // make forEcho true when we're doing voice only
-            let rate: Float = 0.52
             let synthesizerItem = SynthesizerItem(
                 synthesizer: self.speechSynthesizer,
                 text: noteText,
                 voice: speaker.playbackVoice,
-                rate: rate,
+                rate: self.echoRate,
                 volume: self.playbackVolume
             )
             
@@ -1812,13 +2000,12 @@ class Note: AVMutableComposition {
             }
         }
         echoText = echoText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let rate: Float = 0.52
         
         let synthesizerItem = SynthesizerItem(
             synthesizer: self.speechSynthesizer,
             text: echoText,
             voice: speaker.playbackVoice,
-            rate: rate,
+            rate: self.echoRate,
             volume: self.playbackVolume
         )
         
@@ -1841,8 +2028,8 @@ class Note: AVMutableComposition {
     func trim(keeping: CMTimeRange, permanent: Bool = false, overwrite: Bool = false, onCompletionHandler: (() -> Void)? = nil) {
         let keepRange = keeping
         print("===== Trim Note keeping section starting: \(keepRange.start.seconds) until: \(keepRange.end.seconds) =====")
-        if self.noteTracks.count == 2 {
-            fatalError("===== There was a problem trimming note. Note tracks were not collapsed =====")
+        if self.noteBuffer.count > 0 {
+            fatalError("===== There was a problem trimming note. Note buffer was not committed =====")
         }
         
         var newNoteSegments = [NoteSegment]()
@@ -1870,9 +2057,17 @@ class Note: AVMutableComposition {
                 if keepRange.start == CMTime.zero {
                     print("\tNote Segments don't require time-shifting...")
                     // requires no time-shifting if on the left side of range
-                    for (index, seg) in self.noteTracks[0].enumerated() {
+                    for seg in self.noteSegments {
                         if keepRange.containsTimeRange(seg.timeMapping.target) {
-                            let segment = seg.duplicate(index: index)
+                            let segment = seg.duplicate()
+                            
+                            if segment == selectionCursor.anchor {
+                                selectionCursor.setAnchor(segment: segment)
+                            }
+                            
+                            if segment == selectionCursor.focus {
+                                selectionCursor.setFocus(segment: segment)
+                            }
                             
                             // Save silence index
                             if segment.isSilence() {
@@ -1889,15 +2084,26 @@ class Note: AVMutableComposition {
                 } else {
                     print("\tNote Segments require time-shifting...")
                     // requires time-shifting if on the right side of range
-                    for (index, seg) in self.noteTracks[0].enumerated() {
+                    for seg in self.noteSegments {
                         if keepRange.containsTimeRange(seg.timeMapping.target) {
                             let shiftedSegment = seg.duplicate(
-                                index: index,
                                 timeRange: CMTimeRangeMake(
                                     start: lastEnd,
                                     duration: seg.timeMapping.target.duration
                                 )
                             )
+                            
+                            if shiftedSegment == selectionCursor.anchor {
+                                selectionCursor.setAnchor(segment: shiftedSegment)
+                            }
+                            
+                            if shiftedSegment == selectionCursor.focus {
+                                selectionCursor.setFocus(segment: shiftedSegment)
+                            }
+                            
+                            if shiftedSegment == selectionCursor.cachedAnchor {
+                                selectionCursor.setCachedAnchor(segment: shiftedSegment)
+                            }
 
                             // Save silence index
                             if shiftedSegment.isSilence() {
@@ -1954,10 +2160,11 @@ class Note: AVMutableComposition {
                 // Correct any time-related errors
                 // Normalize Segments will setSegments
                 // Make sure we update segments to reflect new track URL
-                self.normalizeSegments(
+                let _ = self.normalizeSegments(
                     segments: newNoteSegments,
                     normalizeType: .target,
-                    replaceNoteDetails: true
+                    replaceNoteDetails: true,
+                    saveSegments: true
                 )
 
                 // Check Representation Invariant
@@ -2005,9 +2212,21 @@ class Note: AVMutableComposition {
             if keepRange.start == CMTime.zero {
                 print("\tNote Segments don't require time-shifting...")
                 // requires no time-shifting if on the left side of range
-                for (index, seg) in self.noteTracks[0].enumerated() {
+                for seg in self.noteSegments {
                     if keepRange.containsTimeRange(seg.timeMapping.target) {
-                        let segment = seg.duplicate(index: index)
+                        let segment = seg.duplicate()
+                        
+                        if segment == selectionCursor.anchor {
+                            selectionCursor.setAnchor(segment: segment)
+                        }
+                        
+                        if segment == selectionCursor.focus {
+                            selectionCursor.setFocus(segment: segment)
+                        }
+                        
+                        if segment == selectionCursor.cachedAnchor {
+                            selectionCursor.setCachedAnchor(segment: segment)
+                        }
                         
                         // Save silence index
                         if segment.isSilence() {
@@ -2024,15 +2243,26 @@ class Note: AVMutableComposition {
             } else {
                 print("\tNote Segments require time-shifting...")
                 // requires time-shifting if on the right side of range
-                for (index, seg) in self.noteTracks[0].enumerated() {
+                for seg in self.noteSegments {
                     if keepRange.containsTimeRange(seg.timeMapping.target) {
                         let shiftedSegment = seg.duplicate(
-                            index: index,
                             timeRange: CMTimeRangeMake(
                                 start: lastEnd,
                                 duration: seg.timeMapping.target.duration
                             )
                         )
+                        
+                        if shiftedSegment == selectionCursor.anchor {
+                            selectionCursor.setAnchor(segment: shiftedSegment)
+                        }
+                        
+                        if shiftedSegment == selectionCursor.focus {
+                            selectionCursor.setFocus(segment: shiftedSegment)
+                        }
+                        
+                        if shiftedSegment == selectionCursor.cachedAnchor {
+                            selectionCursor.setCachedAnchor(segment: shiftedSegment)
+                        }
 
                         // Save silence index
                         if shiftedSegment.isSilence() {
@@ -2083,9 +2313,9 @@ class Note: AVMutableComposition {
             print("\tUpdate Note Segments...")
             // Update Segments
             // We cannot go through setSegments method because these note segments might not be normalized
-            self.noteTracks[0] = newNoteSegments
             // Compute segment sentences
-            updateSegmentSentences(segments: self.noteTracks[0])
+            let segmentsWithUpdatedSentences = updateSegmentSentences(segments: newNoteSegments)
+            self.noteSegments = segmentsWithUpdatedSentences.count == newNoteSegments.count ? segmentsWithUpdatedSentences : newNoteSegments
 
             // Check Representation Invariant
             self.checkRep()
@@ -2096,7 +2326,7 @@ class Note: AVMutableComposition {
     }
     
     // Mutates Segments
-    func updateSegmentSentences(segments: [NoteSegment]) {
+    func updateSegmentSentences(segments: [NoteSegment]) -> [NoteSegment] {
         print("===== Update Segment Sentences =====")
         var currentSentenceNumber = 0
         var sentenceText = ""
@@ -2220,52 +2450,70 @@ class Note: AVMutableComposition {
                 }
             }
         }
+        
+        return segments
     }
     
     // time must be at a segment boundary to make everything work correctly
+    // assumes buffer is empty
     func insertPassage(segments: [NoteSegment], at time: CMTime) {
         print("===== Inserting Passage =====")
-        print("\tMerging note track two segments into note track one")
+        guard self.noteBuffer.count == 0 else {
+            fatalError("\t[Error] There was a problem inserting passage. Buffer was not empty")
+        }
+        print("\tMerging argument segments into committed segments...")
         var updatedSegments = [NoteSegment]()
         var insertedSegments = false
-
-        for segment in self.noteTracks[0] {
-            if segment.timeMapping.target.end < time {
-                // add to array if before insert time
-                updatedSegments.append(segment)
-            } else if segment.timeMapping.target.end >= time && !insertedSegments {
-                // encountered first segment that occurs after insert time
-                // add segment array here
-                insertedSegments = true
-                updatedSegments.append(segment)
-                updatedSegments = updatedSegments + segments
-            } else if segment.timeMapping.target.end >= time {
-                // place remaining segments after inserted segments
-                updatedSegments.append(segment)
+        
+        if self.noteSegments.count > 0 {
+            // if we have segments
+            // find out where to insert passage
+            for segment in self.noteSegments {
+                if segment.timeMapping.target.end < time {
+                    // add to array if before insert time
+                    updatedSegments.append(segment)
+                } else if segment.timeMapping.target.end >= time && !insertedSegments {
+                    // encountered first segment that occurs after insert time
+                    // add segment array here
+                    insertedSegments = true
+                    updatedSegments.append(segment)
+                    updatedSegments = updatedSegments + segments
+                } else if segment.timeMapping.target.end >= time {
+                    // place remaining segments after inserted segments
+                    updatedSegments.append(segment)
+                }
             }
+        } else {
+            // we do not have segments yet
+            // set passage as new segments
+            updatedSegments = segments
         }
 
-        self.normalizeSegments(
+        let _ = self.normalizeSegments(
             segments: updatedSegments,
             normalizeType: .target,
             replaceNoteDetails: true,
-            saveToLowLevelRepr: true,
-            saveToTrack: 0
+            saveSegments: true,
+            saveToLowLevelRepr: true
         )
-
+        
         print("\tSuccessfully inserted passage into note!")
     }
     
     // time must be at a segment boundary to make everything work correctly
+    // assumes buffer is empty
     func removePassage(range: CMTimeRange) {
         print("===== Removing Passage =====")
+        guard self.noteBuffer.count == 0 else {
+            fatalError("\t[Error] There was a problem inserting passage. Buffer was not empty")
+        }
         print("\tFiltering out passage segments...")
         var updatedSegments = [NoteSegment]()
         
         let beforeTime = range.start
         let afterTime = range.end
 
-        for segment in self.noteTracks[0] {
+        for segment in self.noteSegments {
             if segment.timeMapping.target.start <= beforeTime {
                 // add to array if before passage to be removed
                 updatedSegments.append(segment)
@@ -2275,12 +2523,12 @@ class Note: AVMutableComposition {
             }
         }
 
-        self.normalizeSegments(
+        let _ = self.normalizeSegments(
             segments: updatedSegments,
             normalizeType: .target,
             replaceNoteDetails: true,
-            saveToLowLevelRepr: true,
-            saveToTrack: 0
+            saveSegments: true,
+            saveToLowLevelRepr: true
         )
 
         print("\tSuccessfully removed passage from note!")
@@ -2291,7 +2539,7 @@ class Note: AVMutableComposition {
         print("\tRemoving current passsage from note...")
         self.removePassage(range: range)
         print("\tAdding new passage to note...")
-        self.insertPassage(segments: segments, at: range.start)
+        let _ = self.insertPassage(segments: segments, at: range.start)
         print("\tSuccessfully updated passage in note!")
     }
     
@@ -2408,23 +2656,35 @@ class Note: AVMutableComposition {
     // we have to duplicate segments to reset these
     // thus is a costly computation
     // TODO: Confirm that source and target don't affect setting segments to low-level representation
-    func setSegments(segments: [NoteSegment], replaceNoteDetails: Bool = false, saveToLowLevelRepr: Bool = false, saveToTrack: Int = Int(Utils.UNKNOWN)) {
+    func setSegments(segments: [NoteSegment], replaceNoteDetails: Bool = false, saveToLowLevelRepr: Bool = false) {
         print("===== Set Segments =====")
         var setSegmentNote = false
         // set note reference in segments
         if segments.count > 0 && segments[0].note == nil {
+            print("\tSegments have no note reference. Turning on flag to set reference with currrent note...")
             setSegmentNote = true
         }
         
         var updatedSegments = [NoteSegment]()
         if replaceNoteDetails {
-            for (index, segment) in segments.enumerated() {
+            print("\tReplacing note details...")
+            for segment in segments {
                 var seg: NoteSegment
                 seg = segment.duplicate(
-                    newNote: self,
-                    index: index,
-                    trackIndex: 0
+                    newNote: self
                 )
+                
+                if seg == selectionCursor.anchor {
+                    selectionCursor.setAnchor(segment: seg)
+                }
+                
+                if seg == selectionCursor.focus {
+                    selectionCursor.setFocus(segment: seg)
+                }
+                
+                if seg == selectionCursor.cachedAnchor {
+                    selectionCursor.setCachedAnchor(segment: seg)
+                }
 
                 // Add segment to array
                 updatedSegments.append(seg)
@@ -2438,32 +2698,24 @@ class Note: AVMutableComposition {
             }
         }
         
-        let finalSegments = replaceNoteDetails ? updatedSegments : segments
-        
-        // In insertTimeRange we seek to update track zero even if we're on active on track 1
-        let track = saveToTrack != Int(Utils.UNKNOWN) ? saveToTrack : self.activeTrack
+        var finalSegments = replaceNoteDetails ? updatedSegments : segments
 
         // attempt to replace segments
         do {
-            self.noteTracks[track] = finalSegments
+            // Compute segment sentences
+            let segmentsWithUpdatedSentences = updateSegmentSentences(segments: finalSegments)
+            finalSegments = segmentsWithUpdatedSentences.count == finalSegments.count ? segmentsWithUpdatedSentences : finalSegments
+            
+            self.noteSegments = finalSegments
+
             if saveToLowLevelRepr {
                 // only save to mutable track if we're on first take or explicit flag is set
                 print("\tUpdating lower level track representation...")
                 try self.tracks[0].validateSegments(finalSegments)
                 self.tracks[0].segments = finalSegments
             }
-            // Compute segment sentences
-            updateSegmentSentences(segments: finalSegments)
             
-            var endTime = CMTime.zero
-            
-            for track in self.noteTracks {
-                if let lastSegment = track.last {
-                    print("\tnew endTime: ", CMTimeAdd(endTime, lastSegment.timeMapping.target.end).seconds)
-                    endTime = CMTimeAdd(endTime, lastSegment.timeMapping.target.end)
-                }
-            }
-            self.endTime = endTime
+            self.endTime = self.noteSegments.last!.timeMapping.target.end
 
             print("\tSuccessfully updated note segments!")
         } catch {
@@ -2482,8 +2734,8 @@ class Note: AVMutableComposition {
     // MUST HAVE A SINGLE COLLAPSED TRACK
     func duplicate(onCompletionHandler: @escaping (_ note: Note?) -> Void) {
         print("===== Duplicate Note =====")
-        if self.noteTracks.count == 2 {
-            fatalError("===== There was a problem trimming note. Note tracks were not collapsed =====")
+        guard self.noteBuffer.count == 0 else {
+            fatalError("\t[Error] There was a problem inserting passage. Buffer was not empty")
         }
 
         // Export Note
@@ -2500,7 +2752,7 @@ class Note: AVMutableComposition {
                 fileType: .m4a,
                 speaker: self.speaker,
                 minPower: self.minPower,
-                segments: self.noteTracks[0], // Will copy segments so there are not multiple pointers to a single segment
+                segments: self.noteSegments, // Will copy segments so there are not multiple pointers to a single segment
                 withOnDeviceRecognition: self.useOnDeviceRecognition,
                 withTemporalSuggestions: self.withTemporalSuggestions,
                 withPunctuationSuggestions: self.withPunctuationSuggestions,
@@ -2511,17 +2763,14 @@ class Note: AVMutableComposition {
     }
     
     func getSentenceDetails(number: Int) -> Sentence? {
-        for segment in self.noteTracks[0] {
+        print("===== Get Sentence Details =====")
+        guard self.noteBuffer.count == 0 else {
+            fatalError("\t[Error] There was a problem inserting passage. Buffer was not empty")
+        }
+
+        for segment in self.noteSegments {
             if segment.getSentence().number == number {
                 return segment.getSentence()
-            }
-        }
-        
-        if self.noteTracks.count == 2 {
-            for segment in self.noteTracks[1] {
-                if segment.getSentence().number == number {
-                    return segment.getSentence()
-                }
             }
         }
         
@@ -2529,17 +2778,14 @@ class Note: AVMutableComposition {
     }
 
     func getSentenceDetails(forTrackTime: CMTime) -> Sentence? {
-        for segment in self.noteTracks[0] {
+        print("===== Get Sentence Details =====")
+        guard self.noteBuffer.count == 0 else {
+            fatalError("\t[Error] There was a problem inserting passage. Buffer was not empty")
+        }
+
+        for segment in self.noteSegments {
             if segment.getSentence().timeRange.containsTime(forTrackTime) {
                 return segment.getSentence()
-            }
-        }
-        
-        if self.noteTracks.count == 2 {
-            for segment in self.noteTracks[1] {
-                if segment.getSentence().timeRange.containsTime(forTrackTime) {
-                    return segment.getSentence()
-                }
             }
         }
         
@@ -2547,7 +2793,12 @@ class Note: AVMutableComposition {
     }
     
     func extractSentence(number: Int, onCompletionHandler: @escaping (_ sentence: Note?) -> Void) {
-        for segment in self.noteTracks[0] {
+        print("===== Extract Sentence =====")
+        guard self.noteBuffer.count == 0 else {
+            fatalError("\t[Error] There was a problem inserting passage. Buffer was not empty")
+        }
+
+        for segment in self.noteSegments {
             if segment.getSentence().number == number {
                 segment.createSentenceNote() { sentence in
                     onCompletionHandler(sentence)
@@ -2555,37 +2806,20 @@ class Note: AVMutableComposition {
                 return
             }
         }
-        
-        if self.noteTracks.count == 2 {
-            for segment in self.noteTracks[1] {
-                if segment.getSentence().number == number {
-                    segment.createSentenceNote() { sentence in
-                        onCompletionHandler(sentence)
-                    }
-                    return
-                }
-            }
-        }
     }
     
     func extractSentence(forTrackTime: CMTime, onCompletionHandler: @escaping (_ sentence: Note?) -> Void) {
-        for segment in self.noteTracks[0] {
+        print("===== Extract Sentence =====")
+        guard self.noteBuffer.count == 0 else {
+            fatalError("\t[Error] There was a problem inserting passage. Buffer was not empty")
+        }
+
+        for segment in self.noteSegments {
             if segment.getSentence().timeRange.containsTime(forTrackTime) {
                 segment.createSentenceNote() { sentence in
                     onCompletionHandler(sentence)
                 }
                 break
-            }
-        }
-        
-        if self.noteTracks.count == 2 {
-            for segment in self.noteTracks[1] {
-                if segment.getSentence().timeRange.containsTime(forTrackTime) {
-                    segment.createSentenceNote() { sentence in
-                        onCompletionHandler(sentence)
-                    }
-                    return
-                }
             }
         }
     }
@@ -2622,8 +2856,13 @@ class Note: AVMutableComposition {
         
     }
     
-    func getSegment(type: SegmentPosition) -> NoteSegment? {
-        let currentTime = player.currentTime()
+    func getSegment(segment: NoteSegment? = nil, type: SegmentPosition) -> NoteSegment? {
+        var currentTime: CMTime
+        if let segment = segment {
+            currentTime = segment.timeMapping.target.start
+        } else {
+            currentTime = player.currentTime()
+        }
         let currentSegment = self.getSegment(forTrackTime: currentTime)
         var result: NoteSegment?
         if let segment = currentSegment {
@@ -2632,13 +2871,25 @@ class Note: AVMutableComposition {
                 result = segment
                 break
             case .previous:
-                if let (currentSegmentTrack, currentSegmentIndex) = getSegmentLocation(segment: segment), currentSegmentTrack < self.noteTracks.count, currentSegmentIndex > 0 {
-                    result = noteTracks[currentSegmentTrack][currentSegmentIndex - 1]
+                if let (currentNoteTrackType, currentSegmentIndex) = getSegmentLocation(segment: segment), currentSegmentIndex > 0 {
+                    if currentNoteTrackType == .committed {
+                        // committed
+                        result = self.noteSegments[currentSegmentIndex - 1]
+                    } else {
+                        // buffer
+                        result = self.noteBuffer[currentSegmentIndex - 1]
+                    }
                 }
                 break
             case .next:
-                if let (currentSegmentTrack, currentSegmentIndex) = getSegmentLocation(segment: segment), currentSegmentTrack < self.noteTracks.count, currentSegmentIndex + 1 < noteTracks[currentSegmentTrack].count {
-                    result = noteTracks[currentSegmentTrack][currentSegmentIndex + 1]
+                if let (currentNoteTrackType, currentSegmentIndex) = getSegmentLocation(segment: segment), currentSegmentIndex + 1 < self.noteSegments.count {
+                    if currentNoteTrackType == .committed {
+                        // committed
+                        result = self.noteSegments[currentSegmentIndex + 1]
+                    } else {
+                        // buffer
+                        result = self.noteBuffer[currentSegmentIndex + 1]
+                    }
                 }
                 break
             }
@@ -2649,43 +2900,43 @@ class Note: AVMutableComposition {
     
     func getSegment(forTrackTime: CMTime) -> NoteSegment? {
         var segment: NoteSegment?
-        for seg in self.noteTracks[0] {
+        // check committed segments
+        for seg in self.noteSegments {
             if seg.timeMapping.target.containsTime(forTrackTime) {
                 segment = seg
                 return segment
             }
         }
         
-        if self.noteTracks.count == 2 {
-            for seg in self.noteTracks[1] {
-                let trackOneLastSegment = self.noteTracks[0].last!
-                // We subtract because segments in track two do not factor time from track one
-                if seg.timeMapping.target.containsTime(CMTimeSubtract(forTrackTime, trackOneLastSegment.timeMapping.target.end)) {
-                    segment = seg
-                    return segment
-                }
+        let committedTrackLastSegment = self.noteSegments.last
+        // check buffer segments
+        for seg in self.noteBuffer {
+            // We subtract because segments in track two do not factor time from track one
+            if let committedTrackLastSegment = committedTrackLastSegment, seg.timeMapping.target.containsTime(CMTimeSubtract(forTrackTime, committedTrackLastSegment.timeMapping.target.end)) {
+                segment = seg
+                return segment
             }
         }
         
         return nil
     }
     
-    private func getSegmentLocation(segment: NoteSegment) -> (Int, Int)? {
-        if segment.getIndex() != Int(Utils.UNKNOWN) {
-            return (segment.getTrackIndex(), segment.getIndex())
+    func getSegmentLocation(segment: NoteSegment) -> (NoteTrackType, Int)? {
+        if segment.isCommitted() {
+            // only committed segments have an index
+            return (.committed, segment.getIndex())
         } else {
-            for (index, s) in self.noteTracks[0].enumerated() {
+            // check commmitted
+            for (index, s) in self.noteSegments.enumerated() {
                 if (s == segment) {
-                    return (segment.getTrackIndex(), index)
+                    return (.committed, index)
                 }
             }
             
-            if self.noteTracks.count == 2 {
-                for (index, s) in self.noteTracks[1].enumerated() {
-                    if (s == segment) {
-                        // WARNING: this is not an index that factors track one
-                        return (segment.getTrackIndex(), index)
-                    }
+            // check buffer
+            for (index, s) in self.noteBuffer.enumerated() {
+                if (s == segment) {
+                    return (.buffer, index)
                 }
             }
         }
@@ -2704,7 +2955,7 @@ class Note: AVMutableComposition {
             strictlyAsWord: self.withTextStrictlyAsWords
         ).lowercased()
         let text = self.getText().lowercased()
-        if word.count > 0 && segment.timeMapping.target.start.seconds == 0 && segment.getTrackIndex() == 0 {
+        if word.count > 0 && segment.timeMapping.target.start.seconds == 0 && segment.isCommitted() {
             characterRange = NSRange(location: 0, length: word.count)
         } else if word.count > 0 {
             let numProcessedChar = text.count - self.getText(from: segment.timeMapping.target.start).lowercased().count
@@ -2743,7 +2994,8 @@ class Note: AVMutableComposition {
         
         switch type {
         case .all:
-            for segment in self.noteTracks[0] {
+            // add committed
+            for segment in self.noteSegments {
                 let power = segment.getPower()
                 if power != Double.infinity {
                     powerSum += power
@@ -2751,24 +3003,25 @@ class Note: AVMutableComposition {
                 }
             }
             
-            if self.noteTracks.count == 2 {
-                for segment in self.noteTracks[1] {
-                    let power = segment.getPower()
-                    if power != Double.infinity {
-                        powerSum += power
-                        numSegments += 1
-                    }
+            // add buffer
+            for segment in self.noteBuffer {
+                let power = segment.getPower()
+                if power != Double.infinity {
+                    powerSum += power
+                    numSegments += 1
                 }
             }
             
             if numSegments > 0 {
+                // prevent divide by zero
                 return (powerSum / numSegments).rounded(toPlaces: SOUND_INTENSITY_SIG_FIG_COUNT)
             }
             
             return Double.infinity
         case .sentence:
             if let sentenceNumber = sentenceNumber {
-                for segment in self.noteTracks[0] {
+                // add committed
+                for segment in self.noteSegments {
                     if segment.getSentence().number == sentenceNumber {
                         let power = segment.getPower()
                         if power != Double.infinity {
@@ -2778,14 +3031,13 @@ class Note: AVMutableComposition {
                     }
                 }
                 
-                if self.noteTracks.count == 2 {
-                    for segment in self.noteTracks[1] {
-                        if segment.getSentence().number == sentenceNumber {
-                            let power = segment.getPower()
-                            if power != Double.infinity {
-                                powerSum += power
-                                numSegments += 1
-                            }
+                // add buffer
+                for segment in self.noteBuffer {
+                    if segment.getSentence().number == sentenceNumber {
+                        let power = segment.getPower()
+                        if power != Double.infinity {
+                            powerSum += power
+                            numSegments += 1
                         }
                     }
                 }
@@ -2819,7 +3071,7 @@ class Note: AVMutableComposition {
     func getDurationListening() -> Float {
         // print("===== Get Duration Listening =====")
         if self.clipCount > 1 && self.recordStartDate != nil {
-            return Float(self.noteTracks[0].last!.timeMapping.target.end.seconds) + Float(Date().timeIntervalSince(self.recordStartDate!))
+            return Float(self.noteSegments.last!.timeMapping.target.end.seconds) + Float(Date().timeIntervalSince(self.recordStartDate!))
         } else if self.recordStartDate != nil {
             return Float(Date().timeIntervalSince(self.recordStartDate!))
         }
@@ -2831,6 +3083,129 @@ class Note: AVMutableComposition {
     //
     //    }
     
+    // MARK: - Helper Methods
+    
+    func triggerBufferCommitNotification() {
+        // Give visual feedback
+        DispatchQueue.main.async {
+            var firstBufferSegment: NoteSegment?
+            var lastBufferSegment: NoteSegment?
+            if self.noteBuffer.count > 0 {
+                // Find first buffer word
+                for segment in self.noteBuffer {
+                    if !segment.isVoiceCommandWord() && !segment.isSilence() && firstBufferSegment == nil {
+                        firstBufferSegment = segment
+                        break
+                    }
+                }
+
+                // Find last buffer word
+                for segment in self.noteBuffer.reversed() {
+                    if !segment.isVoiceCommandWord() && !segment.isSilence() && lastBufferSegment == nil {
+                        lastBufferSegment = segment
+                        break
+                    }
+                }
+            } else if let lastBufferRange = self.lastBufferRange {
+                let lastBuffer = self.noteSegments[lastBufferRange]
+                // Find first buffer word
+                for segment in lastBuffer {
+                    if !segment.isVoiceCommandWord() && !segment.isSilence() && firstBufferSegment == nil {
+                        firstBufferSegment = segment
+                        break
+                    }
+                }
+
+                // Find last buffer word
+                for segment in lastBuffer.reversed() {
+                    if !segment.isVoiceCommandWord() && !segment.isSilence() && lastBufferSegment == nil {
+                        lastBufferSegment = segment
+                        break
+                    }
+                }
+            }
+            
+            if let firstBufferSegment = firstBufferSegment, let lastBufferSegment = lastBufferSegment, firstBufferSegment != lastBufferSegment {
+                self.vc!.scheduleNotification(text: "\"\(firstBufferSegment.getText())...\(lastBufferSegment.getText())\" committed!")
+                self.vc!.exhaustNotificationQueue()
+            } else if let firstBufferSegment = firstBufferSegment, let lastBufferSegment = lastBufferSegment, firstBufferSegment == lastBufferSegment {
+                self.vc!.scheduleNotification(text: "\"\(firstBufferSegment.getText())\" committed!")
+                self.vc!.exhaustNotificationQueue()
+            } else {
+                print("===== [Error] There was a problem finding the first and last words of buffer =====")
+            }
+        }
+        
+        // Give haptic feedback
+        hapticEngine.lightImpact()
+    }
+    
+    func prepareVoiceCommandHandler(command: String) {
+        // We put it in a handler so we can run it when we receive final transcript
+        self.tempVoiceCommandHandler = {
+            let firstCommandWord = command.components(separatedBy: " ").first!
+            var lowestCommandIndex: Int?
+
+            if self.noteBuffer.count == 0 {
+                for (index, segment) in self.noteSegments.reversed().enumerated() {
+                    if segment.getText().lowercased() == firstCommandWord.lowercased() {
+                        lowestCommandIndex = self.noteSegments.count - index - 1
+                        break
+                    }
+                }
+
+                for index in lowestCommandIndex!..<self.noteSegments.count {
+                    if let lowestCommandIndex = lowestCommandIndex, index >= lowestCommandIndex  {
+                        let duplicateSegment = self.noteSegments[index].duplicate()
+                        if duplicateSegment == selectionCursor.anchor {
+                            selectionCursor.setAnchor(segment: duplicateSegment)
+                        }
+                        
+                        if duplicateSegment == selectionCursor.focus {
+                            selectionCursor.setFocus(segment: duplicateSegment)
+                        }
+                        if duplicateSegment == selectionCursor.cachedAnchor {
+                            selectionCursor.setCachedAnchor(segment: duplicateSegment)
+                        }
+                        duplicateSegment.setIsVoiceCommandWord(to: true)
+                        self.noteSegments[index] = duplicateSegment
+                    }
+                }
+            } else {
+                for (index, segment) in self.noteBuffer.reversed().enumerated() {
+                    if segment.getText().lowercased() == firstCommandWord.lowercased() {
+                        lowestCommandIndex = self.noteBuffer.count - index - 1
+                        break
+                    }
+                }
+
+                for index in lowestCommandIndex!..<self.noteBuffer.count {
+                    if let lowestCommandIndex = lowestCommandIndex, index >= lowestCommandIndex  {
+                        let duplicateSegment = self.noteSegments[index].duplicate()
+                        if duplicateSegment == selectionCursor.anchor {
+                            selectionCursor.setAnchor(segment: duplicateSegment)
+                        }
+                        
+                        if duplicateSegment == selectionCursor.focus {
+                            selectionCursor.setFocus(segment: duplicateSegment)
+                        }
+                        
+                        if duplicateSegment == selectionCursor.cachedAnchor {
+                            selectionCursor.setCachedAnchor(segment: duplicateSegment)
+                        }
+                        duplicateSegment.setIsVoiceCommandWord(to: true)
+                        self.noteBuffer[index] = duplicateSegment
+                    }
+                }
+            }
+
+            self.onListenUpdate?()
+            
+            // Handle voice command
+            self.handleVoiceCommand(command: command)
+        }
+    }
+    
     // MARK: - Key-Value Observer
     
     override func observeValue(
@@ -2839,6 +3214,10 @@ class Note: AVMutableComposition {
         change: [NSKeyValueChangeKey : Any]?,
         context: UnsafeMutableRawPointer?
     ){
+        guard self.noteBuffer.count == 0 else {
+            fatalError("===== [Error] There was a problem inserting passage. Buffer was not empty =====")
+        }
+
         if keyPath == #keyPath(AVPlayerItem.status) {
             let status: AVPlayerItem.Status
             
@@ -2860,18 +3239,12 @@ class Note: AVMutableComposition {
                     self.handlePeriodicTimeObserver()
                 }
 
-                var times = [NSValue]()
-                for segment in self.noteTracks[0] {
-                    times.append(NSValue(time: segment.timeMapping.target.start))
-                }
-                
-                if self.noteTracks.count == 2 {
-                    for segment in self.noteTracks[1] {
-                        times.append(NSValue(time: segment.timeMapping.target.start))
-                    }
+                var boundaryTimes = [NSValue]()
+                for segment in self.noteSegments {
+                    boundaryTimes.append(NSValue(time: segment.timeMapping.target.start))
                 }
 
-                boundaryObserverToken = player.addBoundaryTimeObserver(forTimes: times, queue: .main) {
+                boundaryObserverToken = player.addBoundaryTimeObserver(forTimes: boundaryTimes, queue: .main) {
                     self.handleBoundaryTimeObserver()
                 }
                 
@@ -2911,6 +3284,9 @@ class Note: AVMutableComposition {
                 // Play Sound
                 soundEngine.error()
                 
+                // Give haptic feedback
+                hapticEngine.error()
+                
                 // wait for sound
                 Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
                     fatalError()
@@ -2920,6 +3296,9 @@ class Note: AVMutableComposition {
                 // Play Sound
                 soundEngine.error()
                 
+                // Give haptic feedback
+                hapticEngine.error()
+                
                 // wait for sound
                 Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
                     fatalError("\t[Error] Player not ready")
@@ -2928,6 +3307,9 @@ class Note: AVMutableComposition {
             @unknown default:
                 // Play Sound
                 soundEngine.error()
+                
+                // Give haptic feedback
+                hapticEngine.error()
                 
                 // wait for sound
                 Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
@@ -2949,7 +3331,7 @@ class Note: AVMutableComposition {
         let currentSegment = self.getSegment(type: .current)
 
         if start {
-            let segment = self.noteTracks[0][0]
+            let segment = self.noteSegments[0]
             if (
                 (self.skipPunctuation && segment.isPunctuation()) ||
                 (self.skipSilence && segment.isSilence() && segment.timeMapping.target.duration.seconds > Utils.SILENCE_SKIP_THRESHOLD) ||
@@ -2975,7 +3357,7 @@ class Note: AVMutableComposition {
             }
             
             self.observerContext["segmentBoundaryHandler"]?()
-        } else if let segment = currentSegment, segment == self.noteTracks[0].last! {
+        } else if let segment = currentSegment, segment == self.noteSegments.last! {
             // last segment of note
             // We want to put it just before end
             let END_BUFFER_DURATION = 0.05 // makes sure we don't seek to the exact end which causes the completion observer not to run
@@ -3122,6 +3504,9 @@ extension Note: SFSpeechRecognitionTaskDelegate {
         
         // Play sound
         soundEngine.error()
+        
+        // Give haptic feedback
+        hapticEngine.error()
     }
     
     func speechRecognitionTaskWasCancelled(_ task: SFSpeechRecognitionTask) {
@@ -3129,6 +3514,9 @@ extension Note: SFSpeechRecognitionTaskDelegate {
         
         // Play sound
         soundEngine.error()
+        
+        // Give haptic feedback
+        hapticEngine.error()
     }
     
     func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didFinishSuccessfully successfully: Bool) {
@@ -3141,8 +3529,12 @@ extension Note: SFSpeechRecognitionTaskDelegate {
             // Completion of speech recognition section
             
             self.onComplete?()
-            self.normalizeSegments(normalizeType: .target, saveToLowLevelRepr: true)
-            
+            let _ = self.normalizeSegments(
+                normalizeType: .target,
+                saveSegments: true,
+                saveToLowLevelRepr: true
+            )
+            print("final segments: ", self.noteSegments)
             // Export completed note
             self.isExporting = true
             Utils.exportNote(
@@ -3182,63 +3574,8 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                 if let command = voiceCommandEngine.includesCommand(passage: transcription.formattedString) {
                     print("\tCommand Recognized!")
                     self.stopListeningForSpeech(pause: true)
-
-                    // We put it in a handler so we can run it when we receive final transcript
-                    self.tempVoiceCommandHandler = {
-                        let firstCommandWord = command.components(separatedBy: " ").first!
-                        var lowestCommandIndex: Int?
-                        for (index, segment) in self.noteTracks[self.activeTrack].reversed().enumerated() {
-                            if segment.getText().lowercased() == firstCommandWord.lowercased() {
-                                lowestCommandIndex = self.noteTracks[self.activeTrack].count - index - 1
-                                break
-                            }
-                        }
-
-                        var updatedSegments = [NoteSegment]()
-                        for (index, segment) in self.noteTracks[self.activeTrack].enumerated() {
-                            if let lowestCommandIndex = lowestCommandIndex, index >= lowestCommandIndex  {
-                                let duplicateSegment = segment.duplicate(index: index)
-                                duplicateSegment.setIsVoiceCommandWord(to: true)
-                                updatedSegments.append(duplicateSegment)
-                            } else {
-                                updatedSegments.append(segment)
-                            }
-                        }
-
-                        // no need to put through setSegments because we don't need to change underlying segments
-                        self.noteTracks[self.activeTrack] = updatedSegments
-                       
-                        
-                        // Merge tracks
-                        if self.noteTracks.count == 2 {
-                            // duplicate note tracks
-                            var segments = [NoteSegment]()
-                            for (index, segment) in self.noteTracks[1].enumerated() {
-                                let duplicate = segment.duplicate(index: index)
-                                segments.append(duplicate)
-                            }
-                            
-                            // Clear track 1 segments
-                            // This is done so the normalize process that occurs in insertPassage
-                            // does not factor in segments
-                            self.noteTracks[1] = []
-                            
-                            self.insertPassage(
-                                segments: segments,
-                                at: self.noteTracks[0].last!.timeMapping.target.end
-                            )
-                            
-                            // set active track
-                            self.activeTrack = 1
-                        } else {
-                            self.normalizeSegments(normalizeType: .source)
-                            self.normalizeSegments(normalizeType: .target, saveToLowLevelRepr: true)
-                            self.onListenUpdate?()
-                        }
-                        
-                        // Handle voice command
-                        self.handleVoiceCommand(command: command)
-                    }
+                    // prepare voice command handler
+                    self.prepareVoiceCommandHandler(command: command)
                 }
             }
         }
@@ -3253,47 +3590,17 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                 self.stopListeningForSpeech(pause: true) {[weak self] in
                     // Play Sound
                     soundEngine.commitBuffer()
-
-                    self?.performTranscriptionUpdate(result.bestTranscription, finalTranscript: true)
-                    self?.normalizeSegments()
+                    // update segments
+                    self?.performTranscriptionUpdate(result.bestTranscription)
                     
+                    // trigger commit notification
+                    // must happen before committing so we still have the segments in the buffer
                     if !AVAudioSession.isHeadphonesConnected {
-                        // Give visual feedback
-                        DispatchQueue.main.async {
-                            var firstBufferWord: String?
-                            var lastBufferWord: String?
-                            
-                            // Determine correct track to look into for buffer
-                            let trackIndex = self!.noteTracks.count > 1 && self!.noteTracks[1].count > 0 ? 1 : 0
-                            
-                            // Find first buffer word
-                            for i in self!.listeningBufferLowestIndex..<self!.noteTracks[trackIndex].count {
-                                let segment = self!.noteTracks[trackIndex][i]
-                                if !segment.isVoiceCommandWord() && !segment.isSilence() && firstBufferWord == nil {
-                                    firstBufferWord = segment.getText()
-                                    break
-                                }
-                            }
-                            
-                            // Find last buffer word
-                            for (_, segment) in self!.noteTracks[trackIndex].reversed().enumerated() {
-                                if !segment.isVoiceCommandWord() && !segment.isSilence() && lastBufferWord == nil{
-                                    lastBufferWord = segment.getText()
-                                    break
-                                }
-                            }
-                            
-                            if let firstBufferWord = firstBufferWord, let lastBufferWord = lastBufferWord {
-                                self?.vc!.addNotification(text: "\"\(firstBufferWord)...\(lastBufferWord)\" committed!")
-                                self?.vc!.exhaustNotificationQueue()
-                            } else {
-                                fatalError("===== [Error] There was a problem finding the first and last words of buffer =====")
-                            }
-                        }
-                        
-                        // Give haptic feedback
-                        hapticEngine.lightImpact()
+                        self?.triggerBufferCommitNotification()
                     }
+                    
+                    // commit buffer
+                    self?.commitBuffer()
                     
                     // execute listen update handler
                     self?.onListenUpdate?()
@@ -3310,44 +3617,16 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                 // Play Sound
                 soundEngine.commitBuffer()
 
-                self.performTranscriptionUpdate(result.bestTranscription, finalTranscript: true)
-                self.normalizeSegments()
+                // update segments
+                self.performTranscriptionUpdate(result.bestTranscription)
                 
+                // trigger commit notification
                 if !AVAudioSession.isHeadphonesConnected {
-                    // Give visual feedback
-                    var firstBufferWord: String?
-                    var lastBufferWord: String?
-                    
-                    // Determine correct track to look into for buffer
-                    let trackIndex = self.noteTracks.count > 1 && self.noteTracks[1].count > 0 ? 1 : 0
-                    
-                    // Find first buffer word
-                    for i in self.listeningBufferLowestIndex..<self.noteTracks[trackIndex].count {
-                        let segment = self.noteTracks[trackIndex][i]
-                        if !segment.isVoiceCommandWord() && !segment.isSilence() && firstBufferWord == nil {
-                            firstBufferWord = segment.getText()
-                            break
-                        }
-                    }
-                    
-                    // Find last buffer word
-                    for (_, segment) in self.noteTracks[trackIndex].reversed().enumerated() {
-                        if !segment.isVoiceCommandWord() && !segment.isSilence() && lastBufferWord == nil{
-                            lastBufferWord = segment.getText()
-                            break
-                        }
-                    }
-                    
-                    if let firstBufferWord = firstBufferWord, let lastBufferWord = lastBufferWord {
-                        self.vc!.addNotification(text: "\"\(firstBufferWord)...\(lastBufferWord)\" committed!")
-                        self.vc!.exhaustNotificationQueue()
-                    } else {
-                        fatalError("===== [Error] There was a problem finding the first and last words of buffer =====")
-                    }
-                    
-                    // Give haptic feedback
-                    hapticEngine.lightImpact()
+                    self.triggerBufferCommitNotification()
                 }
+                
+                // commit buffer
+                self.commitBuffer()
                 
                 // execute listen update handler
                 self.onListenUpdate?()
@@ -3360,73 +3639,21 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                 if let command = voiceCommandEngine.includesCommand(passage: result.bestTranscription.formattedString) {
                     print("\tCommand Recognized!")
                     self.stopListeningForSpeech(pause: true)
-                    
-                    // We put it in a handler so we can run it when we receive final transcript
-                    self.tempVoiceCommandHandler = {
-                        let firstCommandWord = command.components(separatedBy: " ").first!
-                        var lowestCommandIndex: Int?
-                        for (index, segment) in self.noteTracks[self.activeTrack].reversed().enumerated() {
-                            if segment.getText().lowercased() == firstCommandWord.lowercased() {
-                                lowestCommandIndex = self.noteTracks[self.activeTrack].count - index - 1
-                                break
-                            }
-                        }
-
-                        var updatedSegments = [NoteSegment]()
-                        for (index, segment) in self.noteTracks[self.activeTrack].enumerated() {
-                            if let lowestCommandIndex = lowestCommandIndex, index >= lowestCommandIndex  {
-                                let duplicateSegment = segment.duplicate(index: index)
-                                duplicateSegment.setIsVoiceCommandWord(to: true)
-                                updatedSegments.append(duplicateSegment)
-                            } else {
-                                updatedSegments.append(segment)
-                            }
-                        }
-
-                        // no need to put through setSegments because we don't need to change underlying segments
-                        self.noteTracks[self.activeTrack] = updatedSegments
-
-                        // Merge tracks
-                        if self.noteTracks.count == 2 {
-                            // duplicate note tracks
-                            var segments = [NoteSegment]()
-                            for (index, segment) in self.noteTracks[1].enumerated() {
-                                let duplicate = segment.duplicate(index: index)
-                                segments.append(duplicate)
-                            }
-                            
-                            // Clear track 1 segments
-                            // This is done so the normalize process that occurs in insertPassage
-                            // does not factor in segments
-                            self.noteTracks[1] = []
-                            
-                            self.insertPassage(
-                                segments: segments,
-                                at: self.noteTracks[0].last!.timeMapping.target.end
-                            )
-                            
-                            // set active track
-                            self.activeTrack = 1
-                        } else {
-                            self.normalizeSegments(normalizeType: .source)
-                            self.normalizeSegments(normalizeType: .target, saveToLowLevelRepr: true)
-                            self.onListenUpdate?()
-                        }
-                        
-                        // Handle voice command
-                        self.handleVoiceCommand(command: command)
-                    }
+                    // prepare voice command handler
+                    self.prepareVoiceCommandHandler(command: command)
                 } else if self.withPassiveEcho && AVAudioSession.isHeadphonesConnected {
                     // Echo formatted String
                     self.echoText(text: result.bestTranscription.formattedString)
-                    
                     // Give haptic feedback
                     hapticEngine.lightImpact()
                 }
             } else if self.isListeningForSpeech && self.pausedListeningForSpeech && self.request!.requiresOnDeviceRecognition {
                 // Only the on-server recognition should go here in theory
-                self.performTranscriptionUpdate(result.bestTranscription, finalTranscript: true)
-                self.normalizeSegments()
+                
+                self.performTranscriptionUpdate(result.bestTranscription)
+                
+                // commit buffer
+                self.commitBuffer()
                 
                 // execute listen update handler
                 self.onListenUpdate?()
@@ -3465,6 +3692,10 @@ extension Note: AVSpeechSynthesizerDelegate {
             self.tempOnEchoFinish?()
             self.onEchoFinish?()
             self.tempOnEchoFinish = nil
+        }
+        
+        if self.pausedListeningForCommands && !AVAudioSession.isHeadphonesConnected {
+            self.startListeningForVoiceCommands(soundIntensityHandler: self.soundIntensityHandler)
         }
     }
     

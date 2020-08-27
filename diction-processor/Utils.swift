@@ -124,7 +124,7 @@ class Utils {
         "F8": 5588,
         "G8": 6272
     ]
-    
+
     // MARK: - Factory Methods
     public static func trimNote(note: Note, keeping: CMTimeRange, permanent: Bool = false, onCompletionHandler: @escaping (_ note: Note?) -> Void) {
         print("===== Trim Note Factory Method =====")
@@ -235,18 +235,12 @@ class Utils {
                 note.handlePeriodicTimeObserver()
             }
 
-            var times = [NSValue]()
-            for segment in note.noteTracks[0] {
-                times.append(NSValue(time: segment.timeMapping.target.start))
-            }
-            
-            if note.noteTracks.count == 2 {
-                for segment in note.noteTracks[1] {
-                    times.append(NSValue(time: segment.timeMapping.target.start))
-                }
+            var boundaryTimes = [NSValue]()
+            for segment in note.noteSegments {
+                boundaryTimes.append(NSValue(time: segment.timeMapping.target.start))
             }
 
-            note.boundaryObserverToken = note.player.addBoundaryTimeObserver(forTimes: times, queue: .main) {
+            note.boundaryObserverToken = note.player.addBoundaryTimeObserver(forTimes: boundaryTimes, queue: .main) {
                 note.handleBoundaryTimeObserver()
             }
             

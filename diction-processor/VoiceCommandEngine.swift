@@ -14,13 +14,20 @@ public final class VoiceCommandEngine: NSObject {
     static let shared = VoiceCommandEngine()
     private let voiceCommands: Set = [
         "play note",
+        "play not",
+        "play notes",
         "pause note",
+        "pause not",
+        "pause notes",
         "start note",
+        "start not",
         "start notes",
+        "stock note",
         "starting out",
         "start not",
         "stop note",
         "stop not",
+        "stop notes",
         "echo note",
         "ecko note",
         "play ecko",
@@ -112,25 +119,47 @@ public final class VoiceCommandEngine: NSObject {
         print("\tQuery: \"\(query)\"")
         
         switch (query) {
-        case "play note":
+        case "play note", "play not", "play notes":
             // Play Sound
             soundEngine.voiceCommandAccept()
 
             playNote(note: note, handler: handler)
             break
-        case "pause note":
+        case "pause note", "pause not", "pause notes":
             // Play Sound
             soundEngine.voiceCommandAccept()
 
             pauseNote(note: note, handler: handler)
             break
-        case "start note", "starting out", "start notes", "start not":
+        case "start note", "starting out", "start notes", "start not", "stock note":
             self.startListeningForSpeech(note: note, handler: handler)
             break
-        case "stop note", "stop not":
-            // Play Sound
-            soundEngine.voiceCommandAccept()
-            stopListeningForSpeech(note: note, handler: handler)
+        case "stop note", "stop not", "stop notes":
+            if note.isPlayingEcho {
+                // Play Sound
+                soundEngine.voiceCommandAccept()
+                
+                stopListeningForSpeech(note: note, handler: handler)
+            } else {
+                // Play Sound
+                soundEngine.error()
+                
+                // Give haptic feedback
+                hapticEngine.error()
+                
+                Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                    let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+                    let synthesizerItem = SynthesizerItem(
+                        synthesizer: note.speechSynthesizer,
+                        text: "Note not started.",
+                        voice: voice,
+                        rate: note.echoRate,
+                        volume: note.playbackVolume
+                    )
+                    
+                    Utils.runSpeechSynthesizer(item: synthesizerItem)
+                }
+            }
             break
         case "echo note", "ecko note", "play echo", "play ecko", "start echo", "start ecko":
             // Play Sound
@@ -142,14 +171,16 @@ public final class VoiceCommandEngine: NSObject {
                 // Play Sound
                 soundEngine.error()
                 
+                // Give haptic feedback
+                hapticEngine.error()
+                
                 Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
-                    let rate: Float = 0.52
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
                     let synthesizerItem = SynthesizerItem(
                         synthesizer: note.speechSynthesizer,
                         text: "Echo already in progress.",
                         voice: voice,
-                        rate: rate,
+                        rate: note.echoRate,
                         volume: note.playbackVolume
                     )
                     
@@ -167,14 +198,16 @@ public final class VoiceCommandEngine: NSObject {
                 // Play Sound
                 soundEngine.error()
                 
+                // Give haptic feedback
+                hapticEngine.error()
+                
                 Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
-                    let rate: Float = 0.52
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
                     let synthesizerItem = SynthesizerItem(
                         synthesizer: note.speechSynthesizer,
                         text: "Note not being echoed.",
                         voice: voice,
-                        rate: rate,
+                        rate: note.echoRate,
                         volume: note.playbackVolume
                     )
                     
@@ -192,14 +225,16 @@ public final class VoiceCommandEngine: NSObject {
                 // Play Sound
                 soundEngine.error()
                 
+                // Give haptic feedback
+                hapticEngine.error()
+                
                 Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
-                    let rate: Float = 0.52
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
                     let synthesizerItem = SynthesizerItem(
                         synthesizer: note.speechSynthesizer,
                         text: "Note not being echoed.",
                         voice: voice,
-                        rate: rate,
+                        rate: note.echoRate,
                         volume: note.playbackVolume
                     )
                     
@@ -284,13 +319,12 @@ public final class VoiceCommandEngine: NSObject {
             let currentVolume = note.playbackVolume
             if currentVolume < 1 {
                 setPlaybackVolume(to: min(currentVolume + Utils.DISCRETE_VOLUME_DELTA, 1)) {
-                    let rate: Float = 0.52
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
                     let synthesizerItem = SynthesizerItem(
                         synthesizer: note.speechSynthesizer,
                         text: "Volume increased.",
                         voice: voice,
-                        rate: rate,
+                        rate: note.echoRate,
                         volume: note.playbackVolume
                     )
                     
@@ -300,14 +334,16 @@ public final class VoiceCommandEngine: NSObject {
                 // Play Sound
                 soundEngine.error()
                 
+                // Give haptic feedback
+                hapticEngine.error()
+                
                 Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
-                    let rate: Float = 0.52
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
                     let synthesizerItem = SynthesizerItem(
                         synthesizer: note.speechSynthesizer,
                         text: "Volume already at maximum.",
                         voice: voice,
-                        rate: rate,
+                        rate: note.echoRate,
                         volume: note.playbackVolume
                     )
                     
@@ -321,13 +357,12 @@ public final class VoiceCommandEngine: NSObject {
             let currentVolume = note.playbackVolume
             if currentVolume > 0 {
                 setPlaybackVolume(to: max(currentVolume - Utils.DISCRETE_VOLUME_DELTA, 0.1)) {
-                    let rate: Float = 0.52
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
                     let synthesizerItem = SynthesizerItem(
                         synthesizer: note.speechSynthesizer,
                         text: "Volume decreased.",
                         voice: voice,
-                        rate: rate,
+                        rate: note.echoRate,
                         volume: note.playbackVolume
                     )
                     
@@ -337,14 +372,16 @@ public final class VoiceCommandEngine: NSObject {
                 // Play Sound
                 soundEngine.error()
                 
+                // Give haptic feedback
+                hapticEngine.error()
+                
                 Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
-                    let rate: Float = 0.52
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
                     let synthesizerItem = SynthesizerItem(
                         synthesizer: note.speechSynthesizer,
                         text: "Volume already at minimum.",
                         voice: voice,
-                        rate: rate,
+                        rate: note.echoRate,
                         volume: note.playbackVolume
                     )
                     
@@ -551,7 +588,6 @@ public final class VoiceCommandEngine: NSObject {
         } else if note.isListeningForCommands {
             note.stopListeningForVoiceCommands() {
                 note.vc!.startListeningForVolume()
-                
             }
         }
     }
