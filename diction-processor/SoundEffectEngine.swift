@@ -30,6 +30,7 @@ public final class SoundEffectEngine: NSObject {
     var voiceCommandAcceptPlayer: AVAudioPlayer? = nil
     var voiceCommandDenyPlayer: AVAudioPlayer? = nil
     var deletePlayer: AVAudioPlayer? = nil
+    var isProcessing = false
     
     private override init() {
         // Commit Buffer
@@ -88,6 +89,7 @@ public final class SoundEffectEngine: NSObject {
         let asset = AVAsset(url: processingURL)
         let item = AVPlayerItem(asset: asset)
         processingPlayer = AVQueuePlayer(playerItem: item)
+        processingPlayer?.volume = 0.02
         processingLooper = AVPlayerLooper(player: processingPlayer!, templateItem: item)
         
         // Repeat
@@ -166,8 +168,14 @@ public final class SoundEffectEngine: NSObject {
     func error() { errorPlayer?.play() }
     func incorrectWakePhrase() { incorrectWakePhrasePlayer?.play() }
     func play() { playPlayer?.play() }
-    func startProcessing() { processingPlayer?.play() }
-    func stopProcessing() { processingPlayer?.stop() }
+    func startProcessing() {
+        processingPlayer?.play()
+        self.isProcessing = true
+    }
+    func stopProcessing() {
+        processingPlayer?.stop()
+        self.isProcessing = false
+    }
     func repeatSegment() { repeatPlayer?.play() }
     func saveNote() { saveNotePlayer?.play() }
     func startListening() { startListeningPlayer?.play() }

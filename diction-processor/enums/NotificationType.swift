@@ -12,4 +12,5 @@ enum NotificationType {
     case success
     case error
     case warning
+    case standard
 }

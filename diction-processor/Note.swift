@@ -211,6 +211,8 @@ class Note: AVMutableComposition {
     // MARK: - Audio Playback Properties
     /// Stores a reference to the note's player object
     private(set) var player = AVPlayer()
+    /// Stores a reference to a timer that begins next iteration of looping player
+    private var playerLoopTimer: Timer?
     /// Stores a reference to the bus used for audio playback
     private let playbackBus = 1
     /// Stores the current playback rate of note playback
@@ -1547,7 +1549,12 @@ class Note: AVMutableComposition {
     
     // MARK: - Text Methods
     
-    func getText(from fromTime: CMTime = CMTime.zero, until untilTime: CMTime? = nil, segments: [NoteSegment]? = nil, forEcho: Bool = false) -> String {
+    func getText(
+        from fromTime: CMTime = CMTime.zero,
+        until untilTime: CMTime? = nil,
+        segments: [NoteSegment]? = nil,
+        forEcho: Bool = false
+    ) -> String {
         
         guard untilTime == nil || fromTime <= untilTime!  else {
             fatalError("===== [Error] There was a problem computing text. untilTime is greater than fromTime =====")
@@ -1619,15 +1626,15 @@ class Note: AVMutableComposition {
     
     // MARK: - Player Methods
     
-    func play(from: CMTime? = nil, to: CMTime? = nil, onStartHandler: (() -> Void)? = nil, secondElapseHandler: (() -> Void)? = nil, segmentBoundaryHandler: (() -> Void)? = nil, onFinishHandler: (() -> Void)? = nil) {
+    func play(
+        from: CMTime? = nil,
+        to: CMTime? = nil,
+        onStartHandler: (() -> Void)? = nil,
+        secondElapseHandler: (() -> Void)? = nil,
+        segmentBoundaryHandler: (() -> Void)? = nil,
+        onFinishHandler: (() -> Void)? = nil
+    ) {
         print("===== Play Note =====")
-        
-        // Get current time
-        let currentTime = player.currentTime()
-        if currentTime.seconds > CMTime.zero.seconds {
-            player.play()
-            return
-        }
         
         if self.tracks[0].segments.count == 0 {
             // havent recorded anything
@@ -1703,7 +1710,13 @@ class Note: AVMutableComposition {
         }
     }
     
-    func playSentence(number: Int, onStartHandler: (() -> Void)? = nil, secondElapseHandler: (() -> Void)? = nil, segmentBoundaryHandler: (() -> Void)? = nil, onFinishHandler: (() -> Void)? = nil) {
+    func playSentence(
+        number: Int,
+        onStartHandler: (() -> Void)? = nil,
+        secondElapseHandler: (() -> Void)? = nil,
+        segmentBoundaryHandler: (() -> Void)? = nil,
+        onFinishHandler: (() -> Void)? = nil
+    ) {
         
         // Get current time
         let currentTime = player.currentTime()
@@ -1783,7 +1796,13 @@ class Note: AVMutableComposition {
         }
     }
 
-    func playSentence(forTrackTime: CMTime, onStartHandler: (() -> Void)? = nil, secondElapseHandler: (() -> Void)? = nil, segmentBoundaryHandler: (() -> Void)? = nil, onFinishHandler: (() -> Void)? = nil) {
+    func playSentence(
+        forTrackTime: CMTime,
+        onStartHandler: (() -> Void)? = nil,
+        secondElapseHandler: (() -> Void)? = nil,
+        segmentBoundaryHandler: (() -> Void)? = nil,
+        onFinishHandler: (() -> Void)? = nil
+    ) {
         
         // Get current time
         let currentTime = player.currentTime()
@@ -1893,19 +1912,13 @@ class Note: AVMutableComposition {
         player.seek(to: self.startTime)
         self.startPlaybackAt = nil
         self.startPlaybackAt = nil
-        let playerItem = player.currentItem
-        
-        if let playerItem = playerItem {
-            // remove observer
-            playerItem.removeObserver(
-                self,
-                forKeyPath: #keyPath(AVPlayerItem.status),
-                context: nil
-            )
-        }
         
         if self.pausedListeningForCommands && !AVAudioSession.isHeadphonesConnected {
             self.startListeningForVoiceCommands(soundIntensityHandler: self.soundIntensityHandler)
+        }
+        
+        if self.playerLoopTimer != nil {
+            self.playerLoopTimer?.invalidate()
         }
 
         handler?()
@@ -3238,14 +3251,17 @@ class Note: AVMutableComposition {
                 timerObserverToken = player.addPeriodicTimeObserver(forInterval: time, queue: .main) {time in
                     self.handlePeriodicTimeObserver()
                 }
-
-                var boundaryTimes = [NSValue]()
-                for segment in self.noteSegments {
-                    boundaryTimes.append(NSValue(time: segment.timeMapping.target.start))
-                }
-
-                boundaryObserverToken = player.addBoundaryTimeObserver(forTimes: boundaryTimes, queue: .main) {
-                    self.handleBoundaryTimeObserver()
+                
+                if !selectionCursor.isLoopingSelection {
+                    // if we have a selection, animating through each word removes it
+                    var boundaryTimes = [NSValue]()
+                    for segment in self.noteSegments {
+                        boundaryTimes.append(NSValue(time: segment.timeMapping.target.start))
+                    }
+                    
+                    boundaryObserverToken = player.addBoundaryTimeObserver(forTimes: boundaryTimes, queue: .main) {
+                        self.handleBoundaryTimeObserver()
+                    }
                 }
                 
                 completionObserverToken = player.addBoundaryTimeObserver(forTimes: [NSValue(time: self.stopPlaybackAt!)], queue: .main) {
@@ -3424,12 +3440,25 @@ class Note: AVMutableComposition {
     
     func handleCompletionObserver() {
         print("===== Completed Playing Note =====")
-        // Stop Playing
-        self.stop()
-        
-        // Play Finish Handler if present
-        self.observerContext["onFinishHandler"]?()
-        
+
+        if selectionCursor.isLoopingSelection {
+            print("\tPause playback.")
+            player.pause()
+            print("\tLoop selection.")
+            // loop again
+            self.playerLoopTimer?.invalidate()
+            self.playerLoopTimer = Timer.scheduledTimer(withTimeInterval: CMTimeSubtract(self.stopPlaybackAt!, self.startPlaybackAt!).seconds + 1, repeats: false) { timer in
+                selectionCursor.playSelection(loop: true)
+            }
+        } else {
+            print("\tStop note.")
+            // Stop Playing
+            self.stop()
+            
+            // Play Finish Handler if present
+            self.observerContext["onFinishHandler"]?()
+        }
+
         if let boundaryObserverToken = self.boundaryObserverToken {
             self.player.removeTimeObserver(boundaryObserverToken)
             self.boundaryObserverToken = nil
@@ -3527,6 +3556,10 @@ extension Note: SFSpeechRecognitionTaskDelegate {
         } else if let lastRecognitionTask = self.lastRecognitionTask, !self.isListeningForSpeech && self.useOnDeviceRecognition && lastRecognitionTask == RecognitionTask.SPEECH {
             print("===== Note successfully finished listening for new speech =====")
             // Completion of speech recognition section
+            if soundEngine.isProcessing {
+                print("\tSound Engine playing 'Processing Sound'. Turning off..")
+                soundEngine.stopProcessing()
+            }
             
             self.onComplete?()
             let _ = self.normalizeSegments(

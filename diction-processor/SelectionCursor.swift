@@ -18,8 +18,8 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     static let shared = SelectionCursor()
     
     // MARK: - Composition Properties
-    weak var focus: NoteSegment? = nil
-    weak var anchor: NoteSegment? = nil
+    @objc dynamic weak var focus: NoteSegment? = nil
+    @objc dynamic weak var anchor: NoteSegment? = nil
     weak var cachedAnchor: NoteSegment? = nil
     weak var note: Note? = nil
     weak var textView: UITextView? = nil
@@ -107,7 +107,10 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     }
     var clipboard: [NoteSegment]? = nil
     var isCollapsed: Bool {
-        return focus == anchor || (focus == nil && anchor == nil)
+        return (self.anchor != nil && self.focus == nil) || (self.anchor == nil && self.focus != nil)
+    }
+    var hasSelection: Bool {
+        return self.focus != nil && self.anchor != nil && !self.isCollapsed
     }
     var isAtEndOfTextView: Bool {
         let lastSegment = self.getNoteNthLastSegment(n: 0)
@@ -131,15 +134,49 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         return false
     }
     var isReplacingSelection = false
+    var isLoopingSelection = false
     
     // MARK: - Initializer
 
-    private override init() {}
+    private override init() {
+        super.init()
+
+        // add observer to anchor
+        self.addObserver(
+            self,
+            forKeyPath: "anchor",
+            options: [.old, .new],
+            context: nil
+        )
+        
+        // add observer to focus
+        self.addObserver(
+            self,
+            forKeyPath: "focus",
+            options: [.old, .new],
+            context: nil
+        )
+    }
 
     deinit {
+        // remove observer from text view
         self.textView?.removeObserver(
             self,
             forKeyPath: "selectedTextRange",
+            context: nil
+        )
+        
+        // remove observer from anchor
+        self.addObserver(
+            self,
+            forKeyPath: "anchor",
+            context: nil
+        )
+        
+        // remove observer from focus
+        self.addObserver(
+            self,
+            forKeyPath: "focus",
             context: nil
         )
     }
@@ -181,6 +218,24 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     // moves as a cursor
     func moveCursor(time: CMTime, cache: Bool = false) {
         guard let note = self.note, let segment = note.getSegment(forTrackTime: time) else { return }
+        print("===== Move Selection Cursor: Time =====")
+        
+        if let note = self.note, AVAudioSession.isHeadphonesConnected {
+            if note.isPlayingNote {
+                print("\tNote is playing. Turning off...")
+                self.stopPlayingSelection()
+            }
+            
+            if soundEngine.isProcessing {
+                print("\tSound Engine playing 'Processing Sound'. Turning off..")
+                soundEngine.stopProcessing()
+            }
+            
+            if self.isLoopingSelection {
+                print("\tisLoopingSelection activate. Turning off...")
+                self.isLoopingSelection = false
+            }
+        }
         
         // collapse current selection
         self.collapse()
@@ -191,8 +246,10 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         
         // Used when we want to insert a buffer into the committed segments
         // allows us to determine segment of interest
-        if cache {
-            self.cachedAnchor = anchor
+        if cache && !self.isAtEndOfTextView {
+            self.cachedAnchor = self.anchor
+        } else if self.isAtEndOfTextView {
+            self.cachedAnchor = nil
         }
         
         // update view
@@ -210,6 +267,24 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     // moves as a cursor
     func moveCursor(trackType: NoteTrackType, segmentIndex: Int, cache: Bool = false) {
         guard let note = self.note else { return }
+        print("===== Move Selection Cursor: Track and Index =====")
+        
+        if let note = self.note, AVAudioSession.isHeadphonesConnected {
+            if note.isPlayingNote {
+                print("\tNote is playing. Turning off...")
+                self.stopPlayingSelection()
+            }
+            
+            if soundEngine.isProcessing {
+                print("\tSound Engine playing 'Processing Sound'. Turning off..")
+                soundEngine.stopProcessing()
+            }
+            
+            if self.isLoopingSelection {
+                print("\tisLoopingSelection activate. Turning off...")
+                self.isLoopingSelection = false
+            }
+        }
         
         // update model
         var segment: NoteSegment?
@@ -227,8 +302,10 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         
         // Used when we want to insert a buffer into the committed segments
         // allows us to determine segment of interest
-        if cache && !(note.noteBuffer.count > 0 && note.noteBuffer.last! == anchor) && !(note.noteBuffer.count == 0 && note.noteSegments.last! == anchor) {
+        if cache && !self.isAtEndOfTextView {
             self.cachedAnchor = anchor
+        } else if self.isAtEndOfTextView {
+            self.cachedAnchor = nil
         }
         
         // update view
@@ -243,6 +320,7 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     
     func moveCursor(textPosition: UITextPosition, cache: Bool = false) {
         guard let note = self.note else { return }
+        print("===== Move Selection Cursor: TextPosition =====")
         
         // collapse current selection
         self.collapse()
@@ -302,8 +380,10 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             
             // Used when we want to insert a buffer into the committed segments
             // allows us to determine segment of interest
-            if cache && !(note.noteBuffer.count > 0 && note.noteBuffer.last! == anchor) && !(note.noteBuffer.count == 0 && note.noteSegments.last! == anchor) {
+            if cache && !self.isAtEndOfTextView {
                 self.cachedAnchor = anchor
+            } else if self.isAtEndOfTextView {
+                self.cachedAnchor = nil
             }
         } else {
             fatalError("===== [Error] There was a problem finding cursor note segment =====")
@@ -330,106 +410,113 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         return false
     }
     
-    func playNeighborhood() {
+    func playNeighborhood(loop: Bool = false) {
             var startTime: CMTime?
             var endTime: CMTime?
             if let focus = self.focus, let anchor = self.anchor, self.direction == .backwards {
+                print("\tSelection has backwards direction.")
+                print("\tSelection start and end times retreived.")
                 startTime = focus.getSentence().timeRange.start
                 endTime = anchor.getSentence().timeRange.end
             } else if let focus = self.focus, let anchor = self.anchor {
+                print("\tSelection has forward direction.")
+                print("\tSelection start and end times retreived.")
                 startTime = anchor.getSentence().timeRange.start
                 endTime = focus.getSentence().timeRange.end
             }
             
             if let note = self.note, let startTime = startTime, let endTime = endTime {
+                print("\tPreparing to play selection.")
+                if loop {
+                    print("\tActivated looping selection.")
+                    self.isLoopingSelection = true
+                } else {
+                    print("\tDeactivated looping selection.")
+                    self.isLoopingSelection = false
+                }
+
                 note.play(
                     from: startTime,
-                    to: endTime,
-                    onStartHandler: {
-                        DispatchQueue.main.async {
-                            if !note.isListeningForSpeech {
-                                note.vc!.playAudioButton.setTitle(ViewController.PAUSE_NOTE_LABEL, for: .normal)
-                            }
-                        }
-                    },
-                    secondElapseHandler: {
-                        DispatchQueue.main.async {
-                            if !note.isListeningForSpeech {
-                                note.vc!.navigationItem.title = "\(Utils.formattedTime(time: Float((note.player.currentTime().seconds))))/\(note.duration.seconds)"
-                            }
-                        }
-                    },
-                    segmentBoundaryHandler: {
-                        DispatchQueue.main.async {
-                            if let segment = note.vc!.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = note.vc!.note.getSegmentTextRange(of: segment) {
-                                note.vc!.updateUIText(range: range)
-                            }
-                        }
-                    }, onFinishHandler: {
-                        DispatchQueue.main.async {
-                            note.vc!.updateUIText()
-                            note.vc!.note.player.replaceCurrentItem(with: nil)
-                            if !note.isListeningForSpeech {
-                                note.vc!.navigationItem.title = ""
-                                note.vc!.playAudioButton.setTitle(ViewController.PLAY_NOTE_LABEL, for: .normal)
-                            }
-                        }
-                    }
+                    to: endTime
                 )
+            } else if let note = self.note, AVAudioSession.isHeadphonesConnected {
+                print("\tNo selection start and end times found. Retreat method.")
+                if note.isPlayingNote {
+                    print("\tNote is playing. Turning off...")
+                    self.stopPlayingSelection()
+                }
+
+                if soundEngine.isProcessing {
+                    print("\tSound Engine playing 'Processing Sound'. Turning off..")
+                    soundEngine.stopProcessing()
+                }
+
+                if self.isLoopingSelection {
+                    print("\tisLoopingSelection activate. Turning off...")
+                    self.isLoopingSelection = false
+                }
             }
             
             checkRep()
         }
         
-        func playSelection() {
+        func playSelection(loop: Bool = false) {
+            print("===== Start playing Selection Loop =====")
             var startTime: CMTime?
             var endTime: CMTime?
             if let focus = self.focus, let anchor = self.anchor, self.direction == .backwards {
+                print("\tSelection has backwards direction.")
+                print("\tSelection start and end times retreived.")
                 startTime = focus.timeMapping.target.start
                 endTime = anchor.timeMapping.target.end
             } else if let focus = self.focus, let anchor = self.anchor {
+                print("\tSelection has forward direction.")
+                print("\tSelection start and end times retreived.")
                 startTime = anchor.timeMapping.target.start
                 endTime = focus.timeMapping.target.end
             }
-            
+
             if let note = self.note, let startTime = startTime, let endTime = endTime {
+                print("\tPreparing to play selection.")
+                if loop {
+                    print("\tActivated looping selection.")
+                    self.isLoopingSelection = true
+                } else {
+                    print("\tDeactivated looping selection.")
+                    self.isLoopingSelection = false
+                }
+
                 note.play(
                     from: startTime,
-                    to: endTime,
-                    onStartHandler: {
-                        DispatchQueue.main.async {
-                            if !note.isListeningForSpeech {
-                                note.vc!.playAudioButton.setTitle(ViewController.PAUSE_NOTE_LABEL, for: .normal)
-                            }
-                        }
-                    },
-                    secondElapseHandler: {
-                        DispatchQueue.main.async {
-                            if !note.isListeningForSpeech {
-                                note.vc!.navigationItem.title = "\(Utils.formattedTime(time: Float((note.player.currentTime().seconds))))/\(note.duration.seconds)"
-                            }
-                        }
-                    },
-                    segmentBoundaryHandler: {
-                        DispatchQueue.main.async {
-                            if let segment = note.vc!.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = note.vc!.note.getSegmentTextRange(of: segment) {
-                                note.vc!.updateUIText(range: range)
-                            }
-                        }
-                    }, onFinishHandler: {
-                        DispatchQueue.main.async {
-                            note.vc!.updateUIText()
-                            note.vc!.note.player.replaceCurrentItem(with: nil)
-                            if !note.isListeningForSpeech {
-                                note.vc!.navigationItem.title = ""
-                                note.vc!.playAudioButton.setTitle(ViewController.PLAY_NOTE_LABEL, for: .normal)
-                            }
-                        }
-                    }
+                    to: endTime
                 )
+            } else if let note = self.note, AVAudioSession.isHeadphonesConnected {
+                print("\tNo selection start and end times found. Retreat method.")
+                if note.isPlayingNote {
+                    print("\tNote is playing. Turning off...")
+                    self.stopPlayingSelection()
+                }
+                
+                if soundEngine.isProcessing {
+                    print("\tSound Engine playing 'Processing Sound'. Turning off..")
+                    soundEngine.stopProcessing()
+                }
+                
+                if self.isLoopingSelection {
+                    print("\tisLoopingSelection activate. Turning off...")
+                    self.isLoopingSelection = false
+                }
             }
 
             checkRep()
+        }
+        
+        func stopPlayingSelection() {
+            print("===== Stop playing Selection Loop =====")
+            if self.isLoopingSelection, let note = self.note {
+                self.isLoopingSelection = false
+                note.stop()
+            }
         }
         
         // micro-movement
@@ -622,6 +709,8 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     // Used when a user selects text from screen
     func setSelection(textRange: UITextRange) {
         guard let note = self.note else { return }
+        print("===== Set Selection: TextRange =====")
+
         let location = self.textView!.offset(from: self.textView!.beginningOfDocument, to: textRange.start)
         let length = self.textView!.offset(from: textRange.start, to: textRange.end)
         let noteText = note.getText()
@@ -697,8 +786,8 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             self.setAnchor(segment: rangeSegments.first!)
             self.setFocus(segment: rangeSegments.last!)
             
-            print("anchor: ", rangeSegments.first!)
-            print("focus: ", rangeSegments.last!)
+            print("Selection Anchor: ", rangeSegments.first!.getText())
+            print("Selection Focus: ", rangeSegments.last!.getText())
         } else {
             fatalError("===== [Error] There was a problem finding selection note segments =====")
         }
@@ -709,8 +798,12 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     }
     
     func setSelection(anchor: NoteSegment, focus: NoteSegment) {
-        self.anchor = anchor
-        self.focus = focus
+        print("===== Set Selection: Anchor and Focus =====")
+        // Set anchor and focus
+        self.setAnchor(segment: anchor)
+        self.setFocus(segment: focus)
+        print("Selection Anchor: ", anchor.getText())
+        print("Selection Focus: ", focus.getText())
         
         if let selectionRange = self.selectionRange, let textView = self.textView {
             self.moveCaretView(textPosition: selectionRange.toTextRange(textInput: textView)!.end, includeXPosBuffer: false)
@@ -722,9 +815,12 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     }
     
     func setNote(note: Note?) {
+        print("===== Set Note =====")
         if let note = note {
+            print("\tSet note.")
             self.note = note
         } else {
+            print("\tClear note.")
             self.note = nil
         }
         
@@ -732,18 +828,23 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     }
     
     func setTextView(textView: UITextView?) {
+        print("===== Set Text View =====")
         // store text view
         if let textView = textView {
+            print("\tMethod passed text view argument...")
             // remove any previous textview
             if let oldTextView = self.textView {
+                print("\tOld Text View detected. Removing observer from old text view...")
                 oldTextView.removeObserver(self, forKeyPath: "selectedTextRange")
                 oldTextView.delegate = nil
             }
             
             // Add new one
+            print("\tSet new ntext view.")
             self.textView = textView
             
             // Add Selection Observer
+            print("\tAdd observer to new text view")
             self.textView!.addObserver(
                 self,
                 forKeyPath: "selectedTextRange",
@@ -754,52 +855,84 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             // Assign as text change delegate
             textView.delegate = self
         } else {
+            print("\tMethod not passed text view argument...")
             // remove any previous textview
             if let oldTextView = self.textView {
+                print("\tOld Text View detected. Removing observer from old text view...")
                 oldTextView.removeObserver(self, forKeyPath: "selectedTextRange")
                 oldTextView.delegate = nil
             }
             
             // clear text view
+            print("\tReset text view property.")
             self.textView = nil
         }
     }
     
     func setCursorView(cursorView: UIView?) {
+        print("===== Set Cursor View =====")
         // store cursor view
         if let cursorView = cursorView {
             // Add new one
+            print("\tSet cursor view.")
             self.cursorView = cursorView
         } else {
             // clear text view
+            print("\tClear cursor view.")
             self.cursorView = nil
         }
     }
     
     func setAnchor(segment: NoteSegment? = nil) {
-        if let segment = segment {
+        print("===== Set Selection Anchor =====")
+        if let segment = segment, segment != self.anchor {
+            print("\tNew anchor: \(segment.getText())")
+            self.willChangeValue(forKey: "anchor")
             self.anchor = segment
-        } else {
+            self.didChangeValue(forKey: "anchor")
+        } else if let _ = self.anchor, segment == nil {
+            print("\tClear anchor.")
+            self.willChangeValue(forKey: "anchor")
             self.anchor = nil
+            self.didChangeValue(forKey: "anchor")
+        } else if let segment = segment, let anchor = self.anchor, segment == anchor {
+            print("\tAnchor argument is the same as current anchor: \(self.anchor!.getText())")
+        } else if self.anchor == nil && segment == nil {
+            print("\tAnchor argument is empty and current anchor is already empty.")
         }
         
         checkRep()
     }
     
     func setFocus(segment: NoteSegment? = nil) {
-        if let segment = segment {
+        print("===== Set Selection Focus =====")
+        if let segment = segment, segment != self.focus {
+            print("\tNew focus: \(segment.getText())")
+            self.willChangeValue(forKey: "focus")
             self.focus = segment
-        } else {
+            self.didChangeValue(forKey: "focus")
+        } else if let _ = self.focus, segment == nil {
+            print("\tClear focus.")
+            self.willChangeValue(forKey: "focus")
             self.focus = nil
+            self.didChangeValue(forKey: "focus")
+        } else if let segment = segment, let focus = self.focus, segment == focus {
+            print("\tFocus argument is the same as current focus: \(self.focus!.getText())")
+            
+        } else if self.focus == nil && segment == nil {
+            print("\tFocus argument is empty and current focus is already empty.")
         }
         
         checkRep()
     }
     
     func setCachedAnchor(segment: NoteSegment? = nil) {
+        print("===== Set Cached Anchor =====")
         if let segment = segment {
+            print("\tSet cached anchor.")
             self.cachedAnchor = segment
         } else {
+            print("\tClear cached anchor.")
             self.cachedAnchor = nil
         }
         
@@ -807,6 +940,7 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     }
     
     func reset() {
+        print("===== Reset Selection Cursor =====")
         self.setAnchor()
         self.setFocus()
         self.setCachedAnchor()
@@ -902,13 +1036,15 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             }
         } else {
             trackType = .buffer
-            var i = 0
-            for (index, segment) in note.noteBuffer.reversed().enumerated() {
-                if !segment.isVoiceCommandWord() && !segment.isSilence() && lastSegmentIndex == nil && i == n {
-                    lastSegmentIndex = note.noteBuffer.count - index - 1
-                    break
-                } else if !segment.isVoiceCommandWord() && !segment.isSilence() && lastSegmentIndex == nil {
-                    i += 1
+            if self.cachedAnchor == nil {
+                var i = 0
+                for (index, segment) in note.noteBuffer.reversed().enumerated() {
+                    if !segment.isVoiceCommandWord() && !segment.isSilence() && lastSegmentIndex == nil && i == n {
+                        lastSegmentIndex = note.noteBuffer.count - index - 1
+                        break
+                    } else if !segment.isVoiceCommandWord() && !segment.isSilence() && lastSegmentIndex == nil {
+                        i += 1
+                    }
                 }
             }
             
@@ -942,6 +1078,60 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         
         return nil
     }
+    
+    func executeSelectionUpdates(type: SelectionChangeType) {
+        print("===== Execute Selection Updates =====")
+        if type == .view {
+            print("\tProcessing changes to screen via touch...")
+            // changes to screen via touch
+            if let selectionRange = self.textView?.selectedTextRange {
+                print("\tScreen has selected text range.")
+                // set selection in model
+                print("\tSyncing up selection in model with selection on screen...")
+                self.setSelection(textRange: selectionRange)
+                
+                // loop selection audio
+                // turn on processing sound
+                if AVAudioSession.isHeadphonesConnected {
+                    print("\t[Headphones connected] Play Selection Audio.")
+                    self.playSelection(loop: true)
+                    print("\t[Headphones connected] Play Processing Sound Effect.")
+                    soundEngine.startProcessing()
+                }
+            } else {
+                print("\tScreen doesn't have selected text range.")
+                print("\tClear model anchor and focus properties...")
+                // remove selection in model
+                self.setAnchor()
+                self.setFocus()
+            }
+        } else {
+            print("\tProcessing changes to model via voice...")
+            // changes to model via voice
+            if let _ = self.focus, let _ = self.anchor, let selectionRange = self.selectionRange, let textView = self.textView {
+                print("\tModel has selected text range.")
+                // set selection on screen
+                print("\tSyncing up selection on screen with selection in model...")
+                self.textView?.selectedTextRange = selectionRange.toTextRange(textInput: textView)
+                
+                // begin looping selection audio
+                // turn on processing sound
+                if AVAudioSession.isHeadphonesConnected {
+                    print("\t[Headphones connected] Play Selection Audio.")
+                    self.playSelection(loop: true)
+                    print("\t[Headphones connected] Play Processing Sound Effect.")
+                    soundEngine.startProcessing()
+                }
+            } else {
+                print("\tModel doesn't have selection range")
+                print("\tClear screen selected text range")
+                // remove selection on screen
+                self.textView?.selectedTextRange = nil
+            }
+        }
+        
+        checkRep()
+    }
 
     // MARK: - Key-Value Observer
         
@@ -954,12 +1144,32 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     ) {
         if keyPath == "selectedTextRange" {
             if let newSelectionRange = change?[.newKey] as? UITextRange {
-                print("SET SELECTION")
-                self.setSelection(textRange: newSelectionRange)
+                print("New Observation Value (selectionTextRange): ", newSelectionRange)
+                self.executeSelectionUpdates(type: .view)
+            }
+        } else if keyPath == "anchor" {
+            if let newAnchor = change?[.newKey] as? NoteSegment, let oldAnchor = change?[.oldKey] as? NoteSegment, let note = self.note {
+                print("New Observation Value (Anchor):\n\tnew: '\(newAnchor.getText())'\n\told: '\(oldAnchor.getText())'")
+                if note.isListeningForSpeech {
+                    self.executeSelectionUpdates(type: .model)
+                }
+            }
+        } else if keyPath == "focus" {
+            if let newFocus = change?[.newKey] as? NoteSegment, let oldFocus = change?[.oldKey] as? NoteSegment {
+                print("New Observation Value (Focus):\n\tnew: '\(newFocus.getText())'\n\told: '\(oldFocus.getText())'")
+                self.executeSelectionUpdates(type: .model)
             }
         }
-        
-        // snap to end of word
+    }
+    
+    public override class func automaticallyNotifiesObservers(forKey key: String) -> Bool {
+        if key == "anchor" {
+            return false
+        } else if key == "focus" {
+            return false
+        } else {
+            return super.automaticallyNotifiesObservers(forKey: key)
+        }
     }
     
     // MARK: - Delegates
@@ -969,6 +1179,7 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     // Will not be called by programmatic changes: https://stackoverflow.com/questions/16115344/textviewdidchange-is-not-call-when-change-uitextview-inputview
     public func textViewDidChange(_ textView: UITextView) {
         guard let note = self.note else { return }
+
         let lastSegmentTuple = self.getNoteNthLastSegmentIndex(n: 0)
         let secondLastSegment = self.getNoteNthLastSegment(n: 1)
         let lastSegment = self.getNoteNthLastSegment(n: 0)

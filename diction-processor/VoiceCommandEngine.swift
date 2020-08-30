@@ -454,7 +454,7 @@ public final class VoiceCommandEngine: NSObject {
     func startListeningForSpeech(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Start Listening For Speech")
         note.vc!.recordingButton.setTitle("Stop Note", for: .normal)
-        note.vc!.clearAppNotification()
+        note.vc!.clearTimedNotification()
         note.startListeningForSpeech(soundIntensityHandler: { power in
             if let power = power {
                 DispatchQueue.main.async {

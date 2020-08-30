@@ -125,9 +125,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             context: nil
         )
         
-        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
-        tap.numberOfTapsRequired = 1
-        self.transcriptionText.addGestureRecognizer(tap)
+        let singleTap = UITapGestureRecognizer(target: self, action: #selector(handleSingleTap))
+        singleTap.numberOfTapsRequired = 1
+        self.transcriptionText.addGestureRecognizer(singleTap)
     }
     
     override func viewWillDisappear(_ animated: Bool) {
@@ -374,7 +374,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         // Give haptic feedback
         hapticEngine.selection()
 
-        clearAppNotification()
+        clearTimedNotification()
         
         if note.isPlayingEcho {
             note.stopEcho(handler: onNoteEchoFinish)
@@ -615,11 +615,11 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         self.isExhaustingNotificationQueue = !self.notificationQueue.isEmpty
         
         if let item = item {
-            self.runNotification(item: item)
+            self.runTimedNotification(item: item)
         }
     }
     
-    func runNotification(item: NotificationItem) {
+    func runTimedNotification(item: NotificationItem, duration: TimeInterval = 5) {
         // Stop UI Timer if we receive app notification while recording
         if self.note.isListeningForSpeech && self.UITimer != nil {
             self.stopRecordingUITimer()
@@ -627,7 +627,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         
         self.navigationItem.title = item.text
         self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.red]
-        self.appNotificationTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) {[weak self] timer in
+        self.appNotificationTimer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) {[weak self] timer in
             // Restart UI Timer is we received app notification while receiving
             if self!.isExhaustingNotificationQueue {
                 self?.navigationItem.title = ""
@@ -660,12 +660,46 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         }
     }
     
-    func clearAppNotification() {
+    func clearTimedNotification() {
         self.appNotificationTimer?.invalidate()
+        self.appNotificationTimer = nil
         
         // Clear out UI artifacts
         self.navigationItem.title = ""
         self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
+    }
+    
+    func presentIndefiniteNotification(item: NotificationItem) {
+        // Remove any timed notification
+        if self.appNotificationTimer != nil {
+            clearTimedNotification()
+        }
+        
+        // Stop UI Timer if recording
+        if self.note.isListeningForSpeech && self.UITimer != nil {
+            self.stopRecordingUITimer()
+        }
+        
+        self.navigationItem.title = item.text
+        if self.note.isListeningForSpeech {
+            self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.red]
+        } else {
+            self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
+        }
+    }
+    
+    func removeIndefiniteNotification() {
+        if self.note.isListeningForSpeech {
+            self.navigationItem.title = ""
+            self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
+
+            DispatchQueue.main.async {
+                self.startRecordingUITimer(recording: true)
+            }
+        } else {
+            self.navigationItem.title = ""
+            self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
+        }
     }
     
     @objc func appGainsFocus() {
@@ -904,9 +938,36 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.red]
         }
         
-        self.navigationItem.title = Utils.formattedTime(time: self.note.getDurationListening())
+        if selectionCursor.hasSelection && selectionCursor.direction == .forwards {
+            // we have selection in forwards direction
+            // visually present the time range of selection
+            self.navigationItem.title = "\(Utils.formattedTime(time: self.note.getDurationListening()))\(" [\(Utils.formattedTime(time: Float(selectionCursor.anchor!.timeMapping.target.start.seconds))) - \(Utils.formattedTime(time: Float(selectionCursor.focus!.timeMapping.target.end.seconds)))]")"
+        } else if selectionCursor.hasSelection && selectionCursor.direction == .backwards {
+            // we have selection in backwards direction
+            // visually present the time range of selection
+            self.navigationItem.title = "\(Utils.formattedTime(time: self.note.getDurationListening()))\(" [\(Utils.formattedTime(time: Float(selectionCursor.focus!.timeMapping.target.start.seconds))) - \(Utils.formattedTime(time: Float(selectionCursor.anchor!.timeMapping.target.end.seconds)))]")"
+        } else {
+            // we don't have a selection
+            // we might have a cursor placed mid-sentence however
+            // present time of cursor
+            self.navigationItem.title = "\(Utils.formattedTime(time: self.note.getDurationListening()))\(selectionCursor.cachedAnchor != nil ? " [\(Utils.formattedTime(time: Float(selectionCursor.cachedAnchor!.timeMapping.target.end.seconds)))]" : "")"
+        }
+        
         self.UITimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) {[weak self] timer in
-            self?.navigationItem.title = Utils.formattedTime(time: self!.note.getDurationListening())
+            if selectionCursor.hasSelection && selectionCursor.direction == .forwards {
+                // we have selection in forwards direction
+                // visually present the time range of selection
+                self?.navigationItem.title = "\(Utils.formattedTime(time: self!.note.getDurationListening()))\(" [\(Utils.formattedTime(time: Float(selectionCursor.anchor!.timeMapping.target.start.seconds))) - \(Utils.formattedTime(time: Float(selectionCursor.focus!.timeMapping.target.end.seconds)))]")"
+            } else if selectionCursor.hasSelection && selectionCursor.direction == .backwards {
+                // we have selection in backwards direction
+                // visually present the time range of selection
+                self?.navigationItem.title = "\(Utils.formattedTime(time: self!.note.getDurationListening()))\(" [\(Utils.formattedTime(time: Float(selectionCursor.focus!.timeMapping.target.start.seconds))) - \(Utils.formattedTime(time: Float(selectionCursor.anchor!.timeMapping.target.end.seconds)))]")"
+            } else {
+                // we don't have a selection
+                // we might have a cursor placed mid-sentence however
+                // present time of cursor
+                self?.navigationItem.title = "\(Utils.formattedTime(time: self!.note.getDurationListening()))\(selectionCursor.cachedAnchor != nil ? " [\(Utils.formattedTime(time: Float(selectionCursor.cachedAnchor!.timeMapping.target.end.seconds)))]" : "")"
+            }
         }
     }
     
@@ -914,10 +975,10 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         Removes timer from view.
     */
     func stopRecordingUITimer() {
-        self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
-        self.navigationItem.title = ""
         self.UITimer?.invalidate()
         self.UITimer = nil
+        self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
+        self.navigationItem.title = ""
     }
     
     func activateListeningIndicator() {
@@ -1389,7 +1450,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     
     // MARK: - Touch Events
     
-    @objc func handleTap(touch: UITapGestureRecognizer) {
+    @objc func handleSingleTap(touch: UITapGestureRecognizer) {
         if self.appActivated {
             let touchPoint = touch.location(in: self.transcriptionText)
             let textPosition = self.transcriptionText.closestPosition(to: touchPoint)
@@ -1399,7 +1460,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             }
             
             if let textPosition = textPosition {
-                print("TAP IT")
+                print("SINGLE TAP IT")
                 selectionCursor.moveCursor(textPosition: textPosition, cache: true)
             }
         }
@@ -1537,7 +1598,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 //            // print("Successfully executed playback secondT elapsed handler")
 //            DispatchQueue.main.async {
 //                if !self!.note.isListeningForSpeech {
-//                    self?.navigationItem.title = "\(Utils.formattedTime(time: Float((self!.note.player.currentTime().seconds))))/\(self!.note.duration.seconds)"
+//                    self?.navigationItem.title = "\(Utils.formattedTime(time: Float(self!.note.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.note.duration.seconds)))"
 //                }
 //            }
 //        },
@@ -1579,7 +1640,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 //            // print("Successfully executed playback secondT elapsed handler")
 //            DispatchQueue.main.async {
 //                if !self!.note.isListeningForSpeech {
-//                    self?.navigationItem.title = "\(Utils.formattedTime(time: Float((self!.note.player.currentTime().seconds))))/\(self!.note.duration.seconds)"
+//                    self?.navigationItem.title = "\(Utils.formattedTime(time: Float(self!.note.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.note.duration.seconds)))"
 //                }
 //            }
 //        },

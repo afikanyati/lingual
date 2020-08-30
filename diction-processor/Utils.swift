@@ -199,7 +199,13 @@ class Utils {
         }
     }
     
-    public static func runPlayer(note: Note, startTime: CMTime, rate: Float, volume: Float, onStartHandler: (() -> Void)? = nil) -> AVPlayer? {
+    public static func runPlayer(
+        note: Note,
+        startTime: CMTime,
+        rate: Float,
+        volume: Float,
+        onStartHandler: (() -> Void)? = nil
+    ) -> AVPlayer? {
         print("===== Run Player =====")
         if note.player.currentItem == nil, let snapshot = note.copy() as? AVAsset {
             print("\tInitiating AVPlayer...")
@@ -216,12 +222,12 @@ class Utils {
                 options: [.old, .new],
                 context: nil
             )
-
-            let player = AVPlayer(playerItem: playerItem)
             
+            let player = AVPlayer(playerItem: playerItem)
+
             // Set Volume
             Utils.setPlayerVolume(player: player, volume: volume)
-            
+
             return player
         } else if note.player.status != .readyToPlay {
             // just wait for item to be ready
@@ -234,27 +240,21 @@ class Utils {
             note.timerObserverToken = note.player.addPeriodicTimeObserver(forInterval: time, queue: .main) {time in
                 note.handlePeriodicTimeObserver()
             }
+            
+            if !selectionCursor.isLoopingSelection {
+                // if we have a selection, animating through each word removes it
+                var boundaryTimes = [NSValue]()
+                for segment in note.noteSegments {
+                    boundaryTimes.append(NSValue(time: segment.timeMapping.target.start))
+                }
 
-            var boundaryTimes = [NSValue]()
-            for segment in note.noteSegments {
-                boundaryTimes.append(NSValue(time: segment.timeMapping.target.start))
-            }
-
-            note.boundaryObserverToken = note.player.addBoundaryTimeObserver(forTimes: boundaryTimes, queue: .main) {
-                note.handleBoundaryTimeObserver()
+                note.boundaryObserverToken = note.player.addBoundaryTimeObserver(forTimes: boundaryTimes, queue: .main) {
+                    note.handleBoundaryTimeObserver()
+                }
             }
             
             note.completionObserverToken = note.player.addBoundaryTimeObserver(forTimes: [NSValue(time: note.stopPlaybackAt!)], queue: .main) {
                 note.handleCompletionObserver()
-            }
-            
-            note.player.play()
-
-            let rateWasSet = Utils.setPlayerRate(player: note.player, rate: rate)
-            if rateWasSet {
-                print("\tPlayer rate was successfully set...")
-            } else {
-                print("\t[Error] There was a problem setting player rate. Player had not been started yet.")
             }
             
             if startTime == note.startTime {
@@ -264,6 +264,15 @@ class Utils {
             } else {
                 print("\tPlaying from \(startTime.seconds) seconds ...")
                 note.player.seek(to: startTime)
+            }
+            
+            note.player.play()
+            
+            let rateWasSet = Utils.setPlayerRate(player: note.player, rate: rate)
+            if rateWasSet {
+                print("\tPlayer rate was successfully set...")
+            } else {
+                print("\t[Error] There was a problem setting player rate. Player had not been started yet.")
             }
 
             onStartHandler?()

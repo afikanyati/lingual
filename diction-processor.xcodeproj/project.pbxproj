@@ -14,6 +14,7 @@
 		8B24440724DCE50D0050C959 /* TimeNormalizerType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B24440624DCE50D0050C959 /* TimeNormalizerType.swift */; };
 		8B27A3DC24B6A839001E5F06 /* Double+Rounded.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B27A3DB24B6A839001E5F06 /* Double+Rounded.swift */; };
 		8B27A3DE24B6A8E9001E5F06 /* Float+Rounded.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B27A3DD24B6A8E9001E5F06 /* Float+Rounded.swift */; };
+		8B3BC5BF24F882F9004FCD7B /* SelectionChangeType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B3BC5BE24F882F9004FCD7B /* SelectionChangeType.swift */; };
 		8B669B5F24B0127E00D5996B /* Date+Subtract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B5E24B0127E00D5996B /* Date+Subtract.swift */; };
 		8B669B6124B012A900D5996B /* AVAudioSession+Headphones.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B6024B012A900D5996B /* AVAudioSession+Headphones.swift */; };
 		8B669B6324B012F500D5996B /* AVPlayer+Playback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B6224B012F500D5996B /* AVPlayer+Playback.swift */; };
@@ -131,6 +132,7 @@
 		8B24440624DCE50D0050C959 /* TimeNormalizerType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeNormalizerType.swift; sourceTree = "<group>"; };
 		8B27A3DB24B6A839001E5F06 /* Double+Rounded.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Double+Rounded.swift"; sourceTree = "<group>"; };
 		8B27A3DD24B6A8E9001E5F06 /* Float+Rounded.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Float+Rounded.swift"; sourceTree = "<group>"; };
+		8B3BC5BE24F882F9004FCD7B /* SelectionChangeType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionChangeType.swift; sourceTree = "<group>"; };
 		8B669B5E24B0127E00D5996B /* Date+Subtract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Subtract.swift"; sourceTree = "<group>"; };
 		8B669B6024B012A900D5996B /* AVAudioSession+Headphones.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AVAudioSession+Headphones.swift"; sourceTree = "<group>"; };
 		8B669B6224B012F500D5996B /* AVPlayer+Playback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AVPlayer+Playback.swift"; sourceTree = "<group>"; };
@@ -266,6 +268,7 @@
 				8BCA1B0224A43DB70068BABB /* Gender.swift */,
 				8BB6859F24E6139D00F3285B /* SelectionShiftDirection.swift */,
 				8BB685A124E618C300F3285B /* SelectionDirection.swift */,
+				8B3BC5BE24F882F9004FCD7B /* SelectionChangeType.swift */,
 				8B86B50624EF56C600568CDD /* NoteTrackType.swift */,
 			);
 			path = enums;
@@ -589,6 +592,7 @@
 			files = (
 				8B86B50724EF56C600568CDD /* NoteTrackType.swift in Sources */,
 				8B27A3DE24B6A8E9001E5F06 /* Float+Rounded.swift in Sources */,
+				8B3BC5BF24F882F9004FCD7B /* SelectionChangeType.swift in Sources */,
 				8B766F2824AC2AA300D41A13 /* NoteCalculator.swift in Sources */,
 				8B766F4B24AC2AB200D41A13 /* Array+Extensions.swift in Sources */,
 				8BEC136C24906FF30056E767 /* ViewController.swift in Sources */,
