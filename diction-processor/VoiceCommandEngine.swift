@@ -135,7 +135,7 @@ public final class VoiceCommandEngine: NSObject {
             self.startListeningForSpeech(note: note, handler: handler)
             break
         case "stop note", "stop not", "stop notes":
-            if note.isPlayingEcho {
+            if note.isListeningForSpeech {
                 // Play Sound
                 soundEngine.voiceCommandAccept()
                 
@@ -420,7 +420,11 @@ public final class VoiceCommandEngine: NSObject {
                 segmentBoundaryHandler: {
                     DispatchQueue.main.async {
                         if let segment = note.vc!.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = note.vc!.note.getSegmentTextRange(of: segment) {
+                            // update text
                             note.vc!.updateUIText(range: range)
+                            
+                            // update pitch
+                            note.vc!.pitchLabel.text = segment.getPitch()?.note.string
                         }
                     }
                 }, onFinishHandler: {
@@ -455,18 +459,29 @@ public final class VoiceCommandEngine: NSObject {
         print("\tVoice Command: Start Listening For Speech")
         note.vc!.recordingButton.setTitle("Stop Note", for: .normal)
         note.vc!.clearTimedNotification()
-        note.startListeningForSpeech(soundIntensityHandler: { power in
-            if let power = power {
-                DispatchQueue.main.async {
-                    let height = CGFloat(Utils.normalizedPower(power: power, minPower: note.minPower)) * note.vc!.view.safeAreaLayoutGuide.layoutFrame.height
-                    let soundIntensityHeight: CGFloat = CGFloat(min(height, note.vc!.view.safeAreaLayoutGuide.layoutFrame.height))
-                    note.vc!.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+        note.startListeningForSpeech(
+            soundIntensityHandler: { power in
+                if let power = power {
+                    DispatchQueue.main.async {
+                        let height = CGFloat(Utils.normalizedPower(power: power, minPower: note.minPower)) * note.vc!.view.safeAreaLayoutGuide.layoutFrame.height
+                        let soundIntensityHeight: CGFloat = CGFloat(min(height, note.vc!.view.safeAreaLayoutGuide.layoutFrame.height))
+                        note.vc!.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+                    }
                 }
+            },
+            pitchHandler: { pitchDatum in
+                if let pitchDatum = pitchDatum {
+                    DispatchQueue.main.async {
+                        let pitch = pitchDatum.pitch.note.string
+                        note.vc!.pitchLabel.text = pitch
+                    }
+                }
+            },
+            onStartHandler: {
+                note.vc!.startRecordingUITimer(recording: true)
+                handler?()
             }
-        }, onStartHandler: {
-            note.vc!.startRecordingUITimer(recording: true)
-            handler?()
-        })
+        )
     }
     
     func stopListeningForSpeech(note: Note, handler: (() -> Void)? = nil) {

@@ -155,6 +155,10 @@ class Note: AVMutableComposition {
     private(set) var onListenUpdate: (() -> Void)?
     /// Stores a handler to be executed when listening has stopped
     private(set) var onListenStop: (() -> Void)?
+    /// Stores a UI handler to be executed when new sound intensity data is received
+    private var soundIntensityHandler: ((_ power: Double?) -> Void)?
+    /// Stores a UI handler to be executed when new pitch data is received
+    private var pitchHandler: ((_ pitchDatum: PitchDatum?) -> Void)?
     
     // MARK: - Speech Recognition Properties
     /// Specifies whether speech recognition should use on-device compute or cloud compute
@@ -237,8 +241,6 @@ class Note: AVMutableComposition {
     private(set) var skipPunctuation = true
     /// Specifies whether segments corresponding to silences should be skipped
     private(set) var skipSilence = true
-    /// Stores a UI handler to be executed when new sound intensity data is received
-    private var soundIntensityHandler: ((_ power: Double?) -> Void)?
     /// Specifies the time value at which note playback should begin
     private(set) var startPlaybackAt: CMTime?
     /// Specifies the time value at which note playback should end
@@ -432,6 +434,7 @@ class Note: AVMutableComposition {
                     self.stop() {[weak self] in
                         self?.startListeningForSpeech(
                             soundIntensityHandler: self?.soundIntensityHandler,
+                            pitchHandler: self?.pitchHandler,
                             onStartHandler: self?.onListeningStartHandler
                         )
                     }
@@ -448,6 +451,7 @@ class Note: AVMutableComposition {
                     self.stop() {[weak self] in
                         self?.startListeningForSpeech(
                             soundIntensityHandler: self?.soundIntensityHandler,
+                            pitchHandler: self?.pitchHandler,
                             onStartHandler: self?.onListeningStartHandler
                         )
                     }
@@ -518,11 +522,21 @@ class Note: AVMutableComposition {
     
     // MARK: - Speech Listening Methods
     
-    func startListeningForSpeech(soundIntensityHandler: ((_ power: Double?) -> Void)? = nil, forVoiceCommands: Bool = false, onStartHandler: (() -> Void)? = nil) {
+    func startListeningForSpeech(
+        soundIntensityHandler: ((_ power: Double?) -> Void)? = nil,
+        pitchHandler: ((_ pitchDatum: PitchDatum?) -> Void)? = nil,
+        forVoiceCommands: Bool = false,
+        onStartHandler: (() -> Void)? = nil
+    ) {
         // Make sure we're not listening for voice commands or speech already
         if self.isListeningForCommands {
             self.stopListeningForVoiceCommands() {
-                self.startListeningForSpeech(soundIntensityHandler: soundIntensityHandler, forVoiceCommands: forVoiceCommands, onStartHandler: onStartHandler)
+                self.startListeningForSpeech(
+                    soundIntensityHandler: soundIntensityHandler,
+                    pitchHandler: pitchHandler,
+                    forVoiceCommands: forVoiceCommands,
+                    onStartHandler: onStartHandler
+                )
             }
             
             return
@@ -595,6 +609,11 @@ class Note: AVMutableComposition {
             self.soundIntensityHandler = soundIntensityHandler
         }
         
+        // Set pitch handler
+        if let pitchHandler = pitchHandler {
+            self.pitchHandler = pitchHandler
+        }
+        
         // Set listening handler
         if let onListeningStartHandler = onStartHandler {
             self.onListeningStartHandler = onListeningStartHandler
@@ -648,15 +667,19 @@ class Note: AVMutableComposition {
                 }
             }
             
-            // Handle sound intensity information
+            // Handle sound intensity and pitch information
             DispatchQueue.main.async {
+                // Sound Intensity
                 let power = Utils.computeSoundIntensity(buffer: buffer)
                 if let power = power {
                     let datum = SoundIntensityDatum(date: Date(), power: power)
-                    if !forVoiceCommands {
-                        self.soundIntensityStream.append(datum)
-                    }
+                    self.soundIntensityStream.append(datum)
                     soundIntensityHandler?(power)
+                }
+                
+                // Pitch
+                if let lastPitchDatum = self.pitchStream.last {
+                    pitchHandler?(lastPitchDatum)
                 }
             }
             
@@ -777,8 +800,17 @@ class Note: AVMutableComposition {
         }
     }
     
-    func startListeningForVoiceCommands(soundIntensityHandler: ((_ power: Double?) -> Void)? = nil, onStartHandler: (() -> Void)? = nil) {
-        startListeningForSpeech(soundIntensityHandler: soundIntensityHandler, forVoiceCommands: true, onStartHandler: onStartHandler)
+    func startListeningForVoiceCommands(
+        soundIntensityHandler: ((_ power: Double?) -> Void)? = nil,
+        pitchHandler: ((_ pitchDatum: PitchDatum?) -> Void)? = nil,
+        onStartHandler: (() -> Void)? = nil
+    ) {
+        startListeningForSpeech(
+            soundIntensityHandler: soundIntensityHandler,
+            pitchHandler: pitchHandler,
+            forVoiceCommands: true,
+            onStartHandler: onStartHandler
+        )
     }
     
     func stopListeningForVoiceCommands(pause: Bool = false, onStopHandler: (() -> Void)? = nil) {
@@ -1914,7 +1946,10 @@ class Note: AVMutableComposition {
         self.startPlaybackAt = nil
         
         if self.pausedListeningForCommands && !AVAudioSession.isHeadphonesConnected {
-            self.startListeningForVoiceCommands(soundIntensityHandler: self.soundIntensityHandler)
+            self.startListeningForVoiceCommands(
+                soundIntensityHandler: self.soundIntensityHandler,
+                pitchHandler: self.pitchHandler
+            )
         }
         
         if self.playerLoopTimer != nil {
@@ -3167,21 +3202,23 @@ class Note: AVMutableComposition {
                     }
                 }
 
-                for index in lowestCommandIndex!..<self.noteSegments.count {
-                    if let lowestCommandIndex = lowestCommandIndex, index >= lowestCommandIndex  {
-                        let duplicateSegment = self.noteSegments[index].duplicate()
-                        if duplicateSegment == selectionCursor.anchor {
-                            selectionCursor.setAnchor(segment: duplicateSegment)
+                if let lowestCommandIndex = lowestCommandIndex {
+                    for index in lowestCommandIndex..<self.noteSegments.count {
+                        if index >= lowestCommandIndex  {
+                            let duplicateSegment = self.noteSegments[index].duplicate()
+                            if duplicateSegment == selectionCursor.anchor {
+                                selectionCursor.setAnchor(segment: duplicateSegment)
+                            }
+                            
+                            if duplicateSegment == selectionCursor.focus {
+                                selectionCursor.setFocus(segment: duplicateSegment)
+                            }
+                            if duplicateSegment == selectionCursor.cachedAnchor {
+                                selectionCursor.setCachedAnchor(segment: duplicateSegment)
+                            }
+                            duplicateSegment.setIsVoiceCommandWord(to: true)
+                            self.noteSegments[index] = duplicateSegment
                         }
-                        
-                        if duplicateSegment == selectionCursor.focus {
-                            selectionCursor.setFocus(segment: duplicateSegment)
-                        }
-                        if duplicateSegment == selectionCursor.cachedAnchor {
-                            selectionCursor.setCachedAnchor(segment: duplicateSegment)
-                        }
-                        duplicateSegment.setIsVoiceCommandWord(to: true)
-                        self.noteSegments[index] = duplicateSegment
                     }
                 }
             } else {
@@ -3503,6 +3540,7 @@ class Note: AVMutableComposition {
                     // It won't be paused if the processed voice command was 'stop note'
                     self.startListeningForSpeech(
                         soundIntensityHandler: self.soundIntensityHandler,
+                        pitchHandler: self.pitchHandler,
                         onStartHandler: self.onListeningStartHandler
                     )
                 }
@@ -3518,6 +3556,7 @@ class Note: AVMutableComposition {
                 // It won't be paused if the processed voice command was 'stop note'
                 self.startListeningForSpeech(
                     soundIntensityHandler: self.soundIntensityHandler,
+                    pitchHandler: self.pitchHandler,
                     onStartHandler: self.onListeningStartHandler
                 )
             }
@@ -3583,7 +3622,10 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                     self.recordStartDate = nil
                     // Start voice commands
                     DispatchQueue.main.async {
-                        self.startListeningForVoiceCommands(soundIntensityHandler: self.soundIntensityHandler)
+                        self.startListeningForVoiceCommands(
+                            soundIntensityHandler: self.soundIntensityHandler,
+                            pitchHandler: self.pitchHandler
+                        )
                     }
                 }
             )
@@ -3643,6 +3685,7 @@ extension Note: SFSpeechRecognitionTaskDelegate {
 
                     self?.startListeningForSpeech(
                         soundIntensityHandler: self?.soundIntensityHandler,
+                        pitchHandler: self?.pitchHandler,
                         onStartHandler: self?.onListeningStartHandler
                     )
                 }
@@ -3728,7 +3771,10 @@ extension Note: AVSpeechSynthesizerDelegate {
         }
         
         if self.pausedListeningForCommands && !AVAudioSession.isHeadphonesConnected {
-            self.startListeningForVoiceCommands(soundIntensityHandler: self.soundIntensityHandler)
+            self.startListeningForVoiceCommands(
+                soundIntensityHandler: self.soundIntensityHandler,
+                pitchHandler: self.pitchHandler
+            )
         }
     }
     

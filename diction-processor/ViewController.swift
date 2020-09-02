@@ -29,6 +29,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     @IBOutlet weak var playTextToSpeechButton: UIButton!
     @IBOutlet weak var recordingButton: UIButton!
     @IBOutlet weak var soundIntensityIndicatorHeight: NSLayoutConstraint!
+    @IBOutlet weak var pitchLabel: UILabel!
     var cursorView: UIView?
     
     // MARK: - General Properties
@@ -161,6 +162,14 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                         let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
                         let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
                         self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+                    }
+                }
+            },
+            pitchHandler: { pitchDatum in
+                if let pitchDatum = pitchDatum {
+                    DispatchQueue.main.async {
+                        let pitch = pitchDatum.pitch.note.string
+                        self.pitchLabel.text = pitch
                     }
                 }
             }
@@ -403,6 +412,14 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                                 self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
                             }
                         }
+                    },
+                    pitchHandler: { pitchDatum in
+                        if let pitchDatum = pitchDatum {
+                            DispatchQueue.main.async {
+                                let pitch = pitchDatum.pitch.note.string
+                                self.pitchLabel.text = pitch
+                            }
+                        }
                     }
                 )
             }
@@ -416,6 +433,14 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                                 let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
                                 let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
                                 self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+                            }
+                        }
+                    },
+                    pitchHandler: { pitchDatum in
+                        if let pitchDatum = pitchDatum {
+                            DispatchQueue.main.async {
+                                let pitch = pitchDatum.pitch.note.string
+                                self.pitchLabel.text = pitch
                             }
                         }
                     }
@@ -767,19 +792,30 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             if !note.isListeningForSpeech && !note.isExporting {
                 print("===== Start Recording =====")
                 recordingButton.setTitle(ViewController.STOP_NOTE_LABEL, for: .normal)
-                note.startListeningForSpeech(soundIntensityHandler: { power in
-                    if let power = power {
+                note.startListeningForSpeech(
+                    soundIntensityHandler: { power in
+                        if let power = power {
+                            DispatchQueue.main.async {
+                                let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
+                                let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
+                                self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+                            }
+                        }
+                    },
+                    pitchHandler: { pitchDatum in
+                        if let pitchDatum = pitchDatum {
+                            DispatchQueue.main.async {
+                                let pitch = pitchDatum.pitch.note.string
+                                self.pitchLabel.text = pitch
+                            }
+                        }
+                    },
+                    onStartHandler: {
                         DispatchQueue.main.async {
-                            let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
-                            let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
-                            self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+                            self.startRecordingUITimer(recording: true)
                         }
                     }
-                }, onStartHandler: {
-                    DispatchQueue.main.async {
-                        self.startRecordingUITimer(recording: true)
-                    }
-                })
+                )
                 
                 // Give haptic feedback
                 hapticEngine.selection()
@@ -825,7 +861,11 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                     // print("Successfully executed playback on segment boundary handler")
                     DispatchQueue.main.async {
                         if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = self?.note.getSegmentTextRange(of: segment) {
+                            // update text
                             self?.updateUIText(range: range)
+                            
+                            // update pitch
+                            self?.pitchLabel.text = segment.getPitch()?.note.string
                         }
                     }
                 }, onFinishHandler: { [weak self] in
@@ -894,6 +934,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         transcriptionText.isHidden = !visible
         recordingButton.isHidden = !visible
         recordingButton.isEnabled = visible
+        pitchLabel.isHidden = !visible
         wakePhraseSubtitleLabel.isHidden = visible
         wakePhraseLabel.isHidden = visible
         
@@ -1023,14 +1064,20 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         
         node.installTap(onBus: recordBus, bufferSize: 1024, format: recordingFormat) { [unowned self] (buffer, _) in
             self.request!.append(buffer)
-            
+
+            // Handle sound intensity and pitch information
             DispatchQueue.main.async {
+                // Sound Intensity
                 let power = Utils.computeSoundIntensity(buffer: buffer)
                 if let power = power {
                     let soundIntensityDatum = SoundIntensityDatum(date: Date(), power: power)
                     self.soundIntensityStream.append(soundIntensityDatum)
                     let soundIntensityHeight = CGFloat(min((CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height), self.view.safeAreaLayoutGuide.layoutFrame.height))
                     self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+                }
+                // Pitch
+                if let lastPitchDatum = self.pitchStream.last {
+                    self.pitchLabel.text = lastPitchDatum.pitch.note.string
                 }
             }
         }
@@ -1079,6 +1126,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         // which prevents us from receiving the final transcription.
         DispatchQueue.main.async {
             self.soundIntensityIndicatorHeight.constant = 0
+            self.pitchLabel.text = ""
             self.recognitionTask!.finish() // don't wrap in if statement because it is sometimes not .running
             self.request!.endAudio() // don't add a request = nil because it results in request not being there sometimes.
             self.pitchEngine.stop()
@@ -1126,6 +1174,14 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                                             self?.soundIntensityIndicatorHeight.constant = soundIntensityHeight
                                         }
                                     }
+                                },
+                                pitchHandler: { pitchDatum in
+                                    if let pitchDatum = pitchDatum {
+                                        DispatchQueue.main.async {
+                                            let pitch = pitchDatum.pitch.note.string
+                                            self?.pitchLabel.text = pitch
+                                        }
+                                    }
                                 }
                             )
                         }
@@ -1152,6 +1208,14 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                                                     let height = CGFloat(Utils.normalizedPower(power: power, minPower: self!.minPower)) * self!.view.safeAreaLayoutGuide.layoutFrame.height
                                                     let soundIntensityHeight: CGFloat = CGFloat(min(height, self!.view.safeAreaLayoutGuide.layoutFrame.height))
                                                     self?.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+                                                }
+                                            }
+                                        },
+                                        pitchHandler: { pitchDatum in
+                                            if let pitchDatum = pitchDatum {
+                                                DispatchQueue.main.async {
+                                                    let pitch = pitchDatum.pitch.note.string
+                                                    self?.pitchLabel.text = pitch
                                                 }
                                             }
                                         }
@@ -1605,7 +1669,11 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 //        segmentBoundaryHandler: { [weak self] in
 //            // print("Successfully executed playback on segment boundary handler")
 //            if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = self?.note.getSegmentTextRange(of: segment) {
+//                // update text
 //                self?.updateUIText(range: range)
+//
+//                // update pitch
+//                self?.pitchLabel.text = segment.getPitch()?.note.string
 //            }
 //        }, onFinishHandler: { [weak self] in
 //            // print("Successfully executed playback on finish handler")
@@ -1647,7 +1715,11 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 //        segmentBoundaryHandler: { [weak self] in
 //            // print("Successfully executed playback on segment boundary handler")
 //            if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = self?.note.getSegmentTextRange(of: segment) {
+//                // update text
 //                self?.updateUIText(range: range)
+//
+//                // update pitch
+//                self?.pitchLabel.text = segment.getPitch()?.note.string
 //            }
 //        }, onFinishHandler: { [weak self] in
 //            // print("Successfully executed playback on finish handler")
