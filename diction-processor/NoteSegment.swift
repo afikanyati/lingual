@@ -169,8 +169,10 @@ class NoteSegment: AVCompositionTrackSegment {
             firstSegment.isEmphasized() == secondSegment.isEmphasized() &&
             firstSegment.isNumber() == secondSegment.isNumber() &&
             firstSegment.isHomophone() == secondSegment.isHomophone() &&
-            firstSegment.isSentenceTerminator() == secondSegment.isSentenceTerminator() &&
             firstSegment.isVoiceCommandWord() == secondSegment.isVoiceCommandWord() &&
+            firstSegment.isCommitted() == secondSegment.isCommitted() &&
+            firstSegment.isValidSentenceLastWord() == secondSegment.isValidSentenceLastWord() &&
+            firstSegment.isSentenceTerminator() == secondSegment.isSentenceTerminator() &&
             firstSegment.getTokenType() == secondSegment.getTokenType() &&
             firstSegment.getNameType() == secondSegment.getNameType() &&
             firstSegment.getLexicalClass() == secondSegment.getLexicalClass() &&
@@ -180,12 +182,28 @@ class NoteSegment: AVCompositionTrackSegment {
             firstSegment.getPower() == secondSegment.getPower() &&
             firstSegment.getSentence() == secondSegment.getSentence() &&
             firstSegment.getSpeakingRate() == secondSegment.getSpeakingRate() &&
-            firstSegment.getAvgPauseDuration() == secondSegment.getAvgPauseDuration()
+            firstSegment.getAvgPauseDuration() == secondSegment.getAvgPauseDuration() &&
+            firstSegment.getIndex() == secondSegment.getIndex() &&
+            firstSegment.getPitch() == secondSegment.getPitch() &&
+            firstSegment.getNote() == secondSegment.getNote()
     }
     
     // object equavalence
     // does note check for time equality
     func isEqual(_ segment: NoteSegment) -> Bool {
+        // We omit:
+        // sourceURL
+        // sourceTrackID
+        // timeMapping.target.start
+        // timeMapping.target.end
+        // isCommitted()
+        // isValidSentenceLastWord()
+        // getBackgroundNoise()
+        // getPower()
+        // getSentence()
+        // getSpeakingRate()
+        // getAvgPauseDuration()
+        // getIndex()
         return self.sourceURL == segment.sourceURL &&
         self.sourceTrackID == segment.sourceTrackID &&
         self.timeMapping.source.start == segment.timeMapping.source.start &&
@@ -197,18 +215,15 @@ class NoteSegment: AVCompositionTrackSegment {
         self.isEmphasized() == segment.isEmphasized() &&
         self.isNumber() == segment.isNumber() &&
         self.isHomophone() == segment.isHomophone() &&
-        self.isSentenceTerminator() == segment.isSentenceTerminator() &&
         self.isVoiceCommandWord() == segment.isVoiceCommandWord() &&
+        self.isSentenceTerminator() == segment.isSentenceTerminator() &&
         self.getTokenType() == segment.getTokenType() &&
         self.getNameType() == segment.getNameType() &&
         self.getLexicalClass() == segment.getLexicalClass() &&
         self.getLemma() == segment.getLemma() &&
         self.getSentiment() == segment.getSentiment() &&
-        self.getBackgroundNoise() == segment.getBackgroundNoise() &&
-        self.getPower() == segment.getPower() &&
-        self.getSentence() == segment.getSentence() &&
-        self.getSpeakingRate() == segment.getSpeakingRate() &&
-        self.getAvgPauseDuration() == segment.getAvgPauseDuration()
+        self.getPitch() == segment.getPitch() &&
+        self.getNote() == segment.getNote()
     }
     
     func checkRep() {
@@ -619,6 +634,10 @@ class NoteSegment: AVCompositionTrackSegment {
         self.note = note
         
         checkRep()
+    }
+    
+    func getNote() -> Note? {
+        return self.note
     }
     
     func setIsVoiceCommandWord(to value: Bool) {

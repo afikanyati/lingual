@@ -203,9 +203,14 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     
     func collapse(toAnchorSegment: Bool = false) {
         if toAnchorSegment {
-            focus = anchor
+            self.willChangeValue(forKey: "focus")
+            self.focus = self.anchor
+            self.didChangeValue(forKey: "focus")
+            
         } else {
-            anchor = focus
+            self.willChangeValue(forKey: "anchor")
+            self.anchor = self.focus
+            self.didChangeValue(forKey: "anchor")
         }
         
         checkRep()
@@ -237,10 +242,8 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             }
         }
         
-        // collapse current selection
-        self.collapse()
-        
         // update model
+        print("\tSetting carets...")
         self.setAnchor(segment: segment)
         self.setFocus()
         
@@ -253,8 +256,8 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         }
         
         // update view
-        if let selectionRange = self.selectionRange, let textView = self.textView {
-            self.moveCaretView(textPosition: selectionRange.toTextRange(textInput: textView)!.end)
+        if let selectionRange = self.selectionRange, let textView = self.textView, let caretViewRect = self.caretViewPositionRequiresUpdate(textPosition: selectionRange.toTextRange(textInput: textView)!.end) {
+            self.moveCaretView(to: caretViewRect)
         } else {
             fatalError("===== [Error] There was a problem updating SelectionCursor =====")
         }
@@ -289,14 +292,15 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         // update model
         var segment: NoteSegment?
         if trackType == .committed {
+            print("\tSegment is a commited segment...")
             segment = note.noteSegments[segmentIndex]
         } else if trackType == .buffer {
+            print("\tSegment is a buffer segment...")
             segment = note.noteBuffer[segmentIndex]
         }
 
-        // collapse current selection
-        self.collapse()
         // set new selection
+        print("\tSetting carets...")
         self.setAnchor(segment: segment!)
         self.setFocus()
         
@@ -309,8 +313,8 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         }
         
         // update view
-        if let selectionRange = self.selectionRange, let textView = self.textView, let textPosition = selectionRange.toTextRange(textInput: textView) {
-            self.moveCaretView(textPosition: textPosition.end)
+        if let selectionRange = self.selectionRange, let textView = self.textView, let textPosition = selectionRange.toTextRange(textInput: textView)?.end, let caretViewRect = self.caretViewPositionRequiresUpdate(textPosition: textPosition) {
+            self.moveCaretView(to: caretViewRect)
         } else {
             print("===== [Error] There was a problem updating SelectionCursor =====")
         }
@@ -321,9 +325,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     func moveCursor(textPosition: UITextPosition, cache: Bool = false) {
         guard let note = self.note else { return }
         print("===== Move Selection Cursor: TextPosition =====")
-        
-        // collapse current selection
-        self.collapse()
         
         // update model
         let cursorLocation = self.textView!.offset(from: self.textView!.beginningOfDocument, to: textPosition)
@@ -374,6 +375,7 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         }
         
         if let anchor = anchor {
+            print("\tSetting carets...")
             // Set anchor
             self.setAnchor(segment: anchor)
             self.setFocus()
@@ -391,8 +393,8 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         
         // update view
         let updatedTextPosition = self.textView!.position(from: textPosition, offset: i)
-        if let updatedTextPosition = updatedTextPosition {
-            self.moveCaretView(textPosition: updatedTextPosition)
+        if let updatedTextPosition = updatedTextPosition, let caretViewRect = self.caretViewPositionRequiresUpdate(textPosition: updatedTextPosition) {
+            self.moveCaretView(to: caretViewRect)
         }
         
         checkRep()
@@ -792,7 +794,9 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             fatalError("===== [Error] There was a problem finding selection note segments =====")
         }
         
-        self.moveCaretView(textPosition: textRange.end, includeXPosBuffer: false)
+        if let caretViewRect = self.caretViewPositionRequiresUpdate(textPosition: textRange.end, includeXPosBuffer: false) {
+            self.moveCaretView(to: caretViewRect)
+        }
         
         checkRep()
     }
@@ -805,8 +809,8 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         print("Selection Anchor: ", anchor.getText())
         print("Selection Focus: ", focus.getText())
         
-        if let selectionRange = self.selectionRange, let textView = self.textView {
-            self.moveCaretView(textPosition: selectionRange.toTextRange(textInput: textView)!.end, includeXPosBuffer: false)
+        if let selectionRange = self.selectionRange, let textView = self.textView, let caretViewRect = self.caretViewPositionRequiresUpdate(textPosition: selectionRange.toTextRange(textInput: textView)!.end, includeXPosBuffer: false) {
+            self.moveCaretView(to: caretViewRect)
         } else {
             fatalError("===== [Error] There was a problem updating SelectionCursor =====")
         }
@@ -840,7 +844,7 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             }
             
             // Add new one
-            print("\tSet new ntext view.")
+            print("\tSet new text view.")
             self.textView = textView
             
             // Add Selection Observer
@@ -885,7 +889,9 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     
     func setAnchor(segment: NoteSegment? = nil) {
         print("===== Set Selection Anchor =====")
-        if let segment = segment, segment != self.anchor {
+        print("\told: ", self.anchor?.getText() ?? "nil")
+        print("\tnew: ", segment?.getText() ?? "nil")
+        if let segment = segment, segment != self.anchor || Unmanaged.passUnretained(segment).toOpaque() != Unmanaged.passUnretained(self.anchor!).toOpaque() {
             print("\tNew anchor: \(segment.getText())")
             self.willChangeValue(forKey: "anchor")
             self.anchor = segment
@@ -906,7 +912,9 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     
     func setFocus(segment: NoteSegment? = nil) {
         print("===== Set Selection Focus =====")
-        if let segment = segment, segment != self.focus {
+        print("\told: ", self.anchor?.getText() ?? "nil")
+        print("\tnew: ", segment?.getText() ?? "nil")
+        if let segment = segment, segment != self.focus || Unmanaged.passUnretained(segment).toOpaque() != Unmanaged.passUnretained(self.focus!).toOpaque() {
             print("\tNew focus: \(segment.getText())")
             self.willChangeValue(forKey: "focus")
             self.focus = segment
@@ -982,26 +990,7 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     
     // MARK: - UI Methods
     
-    func moveCaretView(textPosition: UITextPosition, includeXPosBuffer: Bool = true) {
-        let caretRect = self.textView!.caretRect(for: textPosition)
-        let windowRect = self.textView!.convert(caretRect, to: nil)
-        
-        // compute x and y positions
-        var xPos = windowRect.minX
-        if includeXPosBuffer {
-            xPos += CURSOR_X_POS_BUFFER
-        }
-        let yPos = windowRect.minY + ((self.textView!.font!.lineHeight - self.textView!.font!.pointSize) / 2)
-        let width = Utils.CURSOR_WIDTH
-
-        // Create new cursor frame
-        let frame: CGRect = CGRect(
-            x: xPos,
-            y: yPos,
-            width: CGFloat(width),
-            height: CGFloat(self.textView!.font!.lineHeight)
-        )
-
+    func moveCaretView(to frame: CGRect) {
         self.cursorView!.frame = frame
     }
     
@@ -1126,11 +1115,40 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
                 print("\tModel doesn't have selection range")
                 print("\tClear screen selected text range")
                 // remove selection on screen
-                self.textView?.selectedTextRange = nil
+                if let _ = self.textView?.selectedTextRange {
+                    self.textView?.selectedTextRange = nil
+                }
             }
         }
         
         checkRep()
+    }
+    
+    func caretViewPositionRequiresUpdate(textPosition: UITextPosition, includeXPosBuffer: Bool = true) -> CGRect? {
+        let caretRect = self.textView!.caretRect(for: textPosition)
+        let windowRect = self.textView!.convert(caretRect, to: nil)
+        
+        // compute x and y positions
+        var xPos = windowRect.minX
+        if includeXPosBuffer {
+            xPos += CURSOR_X_POS_BUFFER
+        }
+        let yPos = windowRect.minY + ((self.textView!.font!.lineHeight - self.textView!.font!.pointSize) / 2)
+        let width = Utils.CURSOR_WIDTH
+
+        // Create new cursor frame
+        let frame: CGRect = CGRect(
+            x: xPos,
+            y: yPos,
+            width: CGFloat(width),
+            height: CGFloat(self.textView!.font!.lineHeight)
+        )
+        
+        if frame != self.cursorView?.frame {
+            return frame
+        }
+        
+        return nil
     }
 
     // MARK: - Key-Value Observer
@@ -1142,22 +1160,43 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         change: [NSKeyValueChangeKey : Any]?,
         context: UnsafeMutableRawPointer?
     ) {
+        print("===== Selection Cursor Observe Value =====")
+
         if keyPath == "selectedTextRange" {
+            print("\tRelates to 'selectionTextRange'")
             if let newSelectionRange = change?[.newKey] as? UITextRange {
-                print("New Observation Value (selectionTextRange): ", newSelectionRange)
+                print("\tNew Observation Value (selectionTextRange): ", newSelectionRange)
                 self.executeSelectionUpdates(type: .view)
+            } else {
+                print("\tselectionTextRange cleared...")
             }
         } else if keyPath == "anchor" {
+            print("\tRelates to 'anchor'")
             if let newAnchor = change?[.newKey] as? NoteSegment, let oldAnchor = change?[.oldKey] as? NoteSegment, let note = self.note {
-                print("New Observation Value (Anchor):\n\tnew: '\(newAnchor.getText())'\n\told: '\(oldAnchor.getText())'")
+                print("\tNew Observation Value (Anchor):\n\t\tnew: '\(newAnchor.getText())'\n\t\told: '\(oldAnchor.getText())'")
                 if note.isListeningForSpeech {
                     self.executeSelectionUpdates(type: .model)
                 }
+            } else if let newAnchor = change?[.newKey] as? NoteSegment, let note = self.note {
+                print("\tNew Observation Value (Anchor):\n\t\tnew: '\(newAnchor.getText())'\n\t\told: nil")
+                if note.isListeningForSpeech {
+                    self.executeSelectionUpdates(type: .model)
+                }
+            } else {
+                print("\tother anchor: ", self.anchor?.getText() ?? "nil", change ?? "nil")
             }
         } else if keyPath == "focus" {
+            print("\tRelates to 'focus'")
             if let newFocus = change?[.newKey] as? NoteSegment, let oldFocus = change?[.oldKey] as? NoteSegment {
-                print("New Observation Value (Focus):\n\tnew: '\(newFocus.getText())'\n\told: '\(oldFocus.getText())'")
+                print("New Observation Value (Focus):\n\t\tnew: '\(newFocus.getText())'\n\t\told: '\(oldFocus.getText())'")
                 self.executeSelectionUpdates(type: .model)
+            } else if let newFocus = change?[.newKey] as? NoteSegment, let note = self.note {
+                print("\tNew Observation Value (Focus):\n\t\tnew: '\(newFocus.getText())'\n\t\told: nil")
+                if note.isListeningForSpeech {
+                    self.executeSelectionUpdates(type: .model)
+                }
+            } else {
+                print("\tother focus: ", self.anchor?.getText() ?? "nil", change ?? "nil")
             }
         }
     }
@@ -1178,6 +1217,7 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     // Reference: https://stackoverflow.com/questions/43166781/cursor-position-in-relation-to-self-view
     // Will not be called by programmatic changes: https://stackoverflow.com/questions/16115344/textviewdidchange-is-not-call-when-change-uitextview-inputview
     public func textViewDidChange(_ textView: UITextView) {
+        // print("===== SelectionCursor: textViewDidChange =====")
         guard let note = self.note else { return }
 
         let lastSegmentTuple = self.getNoteNthLastSegmentIndex(n: 0)
@@ -1198,6 +1238,10 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             // 2) The current anchor is the same as the last segment in the non-empty buffer
             // 3) We have no anchor
             self.moveCursor(trackType: trackType, segmentIndex: lastSegmentIndex)
+        } else if let selectionRange = self.selectionRange, let caretViewRect = self.caretViewPositionRequiresUpdate(textPosition: selectionRange.toTextRange(textInput: textView)!.end)  {
+            self.moveCaretView(to: caretViewRect)
+        } else {
+            print("textViewDidChange - Unhandled Anchor: ", self.anchor?.getText() ?? "nil")
         }
     }
 }

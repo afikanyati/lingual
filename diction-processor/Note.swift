@@ -739,7 +739,7 @@ class Note: AVMutableComposition {
                 let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self!.vc)
                 let synthesizerItem = SynthesizerItem(
                     synthesizer: self!.speechSynthesizer,
-                    text: "Note not started.",
+                    text: "No ongoing note.",
                     voice: voice,
                     rate: self!.echoRate,
                     volume: self!.playbackVolume
@@ -937,21 +937,29 @@ class Note: AVMutableComposition {
             // This assumes the new version is a better approximation of user speech
             let oldSegment = segments[transcriptionIndex]
             if oldSegment != noteSegment {
-                // existing segment with changes encountered
-                if oldSegment == selectionCursor.anchor {
-                    selectionCursor.setAnchor(segment: noteSegment)
-                }
+                // determine if we need to replace selection values
+                let replaceSelectionAnchor = oldSegment == selectionCursor.anchor
+                let replaceSelectionFocus = oldSegment == selectionCursor.focus
+                let replaceSelectionCachedAnchor = oldSegment == selectionCursor.cachedAnchor
                 
-                if oldSegment == selectionCursor.focus {
-                    selectionCursor.setFocus(segment: noteSegment)
-                }
-                
-                if oldSegment == selectionCursor.cachedAnchor {
-                    selectionCursor.setCachedAnchor(segment: noteSegment)
-                }
-
+                // set updated segments
                 segments[transcriptionIndex] = noteSegment
                 self.noteBuffer = segments
+                
+                // update selection anchor
+                if replaceSelectionAnchor {
+                    selectionCursor.setAnchor(segment: self.noteBuffer[transcriptionIndex])
+                }
+                
+                // update selection focus
+                if replaceSelectionFocus {
+                    selectionCursor.setFocus(segment: self.noteBuffer[transcriptionIndex])
+                }
+                
+                // update selection cached anchor
+                if replaceSelectionCachedAnchor {
+                    selectionCursor.setCachedAnchor(segment: self.noteBuffer[transcriptionIndex])
+                }
             } else {
                 // Existing segment without changes encountered.
                 // print("Existing segment without changes encountered.")
@@ -1305,29 +1313,13 @@ class Note: AVMutableComposition {
     func commitBuffer() {
         guard self.noteBuffer.count > 0 else { return }
         print("===== Commit Buffer =====")
+
         // duplicate note tracks
+        print("\tDuplicating buffer segments...")
         var segments = [NoteSegment]()
         for segment in self.noteBuffer {
-            let duplicate = segment.duplicate()
-            if segment == selectionCursor.anchor {
-                selectionCursor.setAnchor(segment: duplicate)
-            }
-            
-            if segment == selectionCursor.focus {
-                selectionCursor.setFocus(segment: duplicate)
-            }
-            
-            if segment == selectionCursor.cachedAnchor {
-                selectionCursor.setCachedAnchor(segment: duplicate)
-            }
-
-            segments.append(duplicate)
+            segments.append(segment)
         }
-        print("\tDuplicating buffer segments...")
-        
-        // Clear buffer segments
-        print("\tClearing note buffer...")
-        self.noteBuffer = []
         
         print("\tIdentifying insert time...")
         var insertTime: CMTime
@@ -1371,6 +1363,10 @@ class Note: AVMutableComposition {
             oldFocus = focus.duplicate()
         }
         
+        // Clear buffer segments
+        print("\tClearing note buffer...")
+        self.noteBuffer = []
+        
         // normalize segments
         print("\tNormalizing buffer segments...")
         let normalizedSegments = self.normalizeSegments(
@@ -1383,7 +1379,6 @@ class Note: AVMutableComposition {
         for (index, segment) in normalizedSegments!.reversed().enumerated() {
             if !segment.isSilence() {
                 lastBufferWordIndex = normalizedSegments!.count - index
-                print("lastBufferWordIndex: ", lastBufferWordIndex)
                 break
             }
         }
@@ -1395,10 +1390,11 @@ class Note: AVMutableComposition {
         
         if updateCachedAnchor {
             let lastNormalizedWord = self.noteSegments[cachedAnchorIndex + lastBufferWordIndex]
+            print("\tUpdating cached anchor...")
             for segment in self.noteSegments {
                 if segment.isEqual(lastNormalizedWord) {
                     // update cached anchor
-                    print("\tUpdating cached anchor...")
+                    print("\tUpdating cached anchor in selection: ", segment.getText())
                     selectionCursor.setCachedAnchor(segment: segment)
                 }
             }
@@ -1409,7 +1405,7 @@ class Note: AVMutableComposition {
             for segment in self.noteSegments {
                 if segment.isEqual(oldAnchor) {
                     // update anchor
-                    print("\tUpdated anchor segment in selection cursor.")
+                    print("\tUpdated anchor segment in selection cursor: ", segment.getText())
                     selectionCursor.setAnchor(segment: segment)
                 }
             }
@@ -1420,7 +1416,7 @@ class Note: AVMutableComposition {
             for segment in self.noteSegments {
                 if segment.isEqual(oldFocus) {
                     // update focus
-                    print("\tUpdated focus segment in selection cursor.")
+                    print("\tUpdated focus segment in selection cursor: ", segment.getText())
                     selectionCursor.setAnchor(segment: segment)
                 }
             }
@@ -2017,7 +2013,7 @@ class Note: AVMutableComposition {
     }
     
     func echoText(text: String) {
-        print("==== Echo note text =====")
+        print("===== Echo note text =====")
         
         // Stop existing echo
         if speechSynthesizer.isSpeaking {
@@ -2109,14 +2105,6 @@ class Note: AVMutableComposition {
                         if keepRange.containsTimeRange(seg.timeMapping.target) {
                             let segment = seg.duplicate()
                             
-                            if segment == selectionCursor.anchor {
-                                selectionCursor.setAnchor(segment: segment)
-                            }
-                            
-                            if segment == selectionCursor.focus {
-                                selectionCursor.setFocus(segment: segment)
-                            }
-                            
                             // Save silence index
                             if segment.isSilence() {
                                 silenceIndices.append(newNoteSegments.count)
@@ -2140,18 +2128,6 @@ class Note: AVMutableComposition {
                                     duration: seg.timeMapping.target.duration
                                 )
                             )
-                            
-                            if shiftedSegment == selectionCursor.anchor {
-                                selectionCursor.setAnchor(segment: shiftedSegment)
-                            }
-                            
-                            if shiftedSegment == selectionCursor.focus {
-                                selectionCursor.setFocus(segment: shiftedSegment)
-                            }
-                            
-                            if shiftedSegment == selectionCursor.cachedAnchor {
-                                selectionCursor.setCachedAnchor(segment: shiftedSegment)
-                            }
 
                             // Save silence index
                             if shiftedSegment.isSilence() {
@@ -2264,18 +2240,6 @@ class Note: AVMutableComposition {
                     if keepRange.containsTimeRange(seg.timeMapping.target) {
                         let segment = seg.duplicate()
                         
-                        if segment == selectionCursor.anchor {
-                            selectionCursor.setAnchor(segment: segment)
-                        }
-                        
-                        if segment == selectionCursor.focus {
-                            selectionCursor.setFocus(segment: segment)
-                        }
-                        
-                        if segment == selectionCursor.cachedAnchor {
-                            selectionCursor.setCachedAnchor(segment: segment)
-                        }
-                        
                         // Save silence index
                         if segment.isSilence() {
                             silenceIndices.append(newNoteSegments.count)
@@ -2299,18 +2263,6 @@ class Note: AVMutableComposition {
                                 duration: seg.timeMapping.target.duration
                             )
                         )
-                        
-                        if shiftedSegment == selectionCursor.anchor {
-                            selectionCursor.setAnchor(segment: shiftedSegment)
-                        }
-                        
-                        if shiftedSegment == selectionCursor.focus {
-                            selectionCursor.setFocus(segment: shiftedSegment)
-                        }
-                        
-                        if shiftedSegment == selectionCursor.cachedAnchor {
-                            selectionCursor.setCachedAnchor(segment: shiftedSegment)
-                        }
 
                         // Save silence index
                         if shiftedSegment.isSilence() {
@@ -2342,7 +2294,10 @@ class Note: AVMutableComposition {
             }) / Double(self.duration.seconds / Double(TimeConstant.secsPerMin))
             speakingRate = speakingRate.rounded(toPlaces: DEFAULT_FIG_COUNT)
 
-            // Update Index, Background Noise, AvgPauseDuration, SpeakingRate
+            // Update Index, Background Noise, AvgPauseDuration, SpeakingRate, Selection Anchor, Selection Focus, Selection Cached Anchor
+            var replaceSelectionAnchor = false
+            var replaceSelectionFocus = false
+            var replaceSelectionCachedAnchor = false
             for (index, segment) in newNoteSegments.enumerated() {
                 // Set segment index
                 // We might need to update indices if we lost segments above
@@ -2356,6 +2311,27 @@ class Note: AVMutableComposition {
 
                 // Set speakingRate
                 segment.setSpeakingRate(rate: speakingRate)
+                
+                // determine if we need to update selection cursor anchor
+                // we need to get these values early before we replace segments
+                // so that selection cursor doesn't lose reference to its anchor
+                if segment == selectionCursor.anchor {
+                    replaceSelectionAnchor = true
+                }
+                
+                // determine if we need to update selection cursor focus
+                // we need to get these values early before we replace segments
+                // so that selection cursor doesn't lose reference to its focus
+                if segment == selectionCursor.focus {
+                    replaceSelectionFocus = true
+                }
+                
+                // determine if we need to update selection cursor cached anchor
+                // we need to get these values early before we replace segments
+                // so that selection cursor doesn't lose reference to its cached anchor
+                if segment == selectionCursor.cachedAnchor {
+                    replaceSelectionCachedAnchor = true
+                }
             }
             
             print("\tUpdate Note Segments...")
@@ -2364,6 +2340,24 @@ class Note: AVMutableComposition {
             // Compute segment sentences
             let segmentsWithUpdatedSentences = updateSegmentSentences(segments: newNoteSegments)
             self.noteSegments = segmentsWithUpdatedSentences.count == newNoteSegments.count ? segmentsWithUpdatedSentences : newNoteSegments
+            
+            // update selection properties
+            for seg in self.noteSegments {
+                // update selection anchor
+                if replaceSelectionAnchor && seg.isEqual(selectionCursor.anchor) {
+                    selectionCursor.setAnchor(segment: seg)
+                }
+                
+                // update selection focus
+                if replaceSelectionFocus && seg.isEqual(selectionCursor.focus) {
+                    selectionCursor.setFocus(segment: seg)
+                }
+                
+                // update selection cached anchor
+                if replaceSelectionCachedAnchor && seg.isEqual(selectionCursor.cachedAnchor) {
+                    selectionCursor.setCachedAnchor(segment: seg)
+                }
+            }
 
             // Check Representation Invariant
             self.checkRep()
@@ -2721,18 +2715,6 @@ class Note: AVMutableComposition {
                 seg = segment.duplicate(
                     newNote: self
                 )
-                
-                if seg == selectionCursor.anchor {
-                    selectionCursor.setAnchor(segment: seg)
-                }
-                
-                if seg == selectionCursor.focus {
-                    selectionCursor.setFocus(segment: seg)
-                }
-                
-                if seg == selectionCursor.cachedAnchor {
-                    selectionCursor.setCachedAnchor(segment: seg)
-                }
 
                 // Add segment to array
                 updatedSegments.append(seg)
@@ -2764,6 +2746,24 @@ class Note: AVMutableComposition {
             }
             
             self.endTime = self.noteSegments.last!.timeMapping.target.end
+            
+            // make sure to update selection objects
+            print("\tDeterming in updates need to be made to selection cursor properties...")
+            for segment in self.noteSegments {
+                if segment.isEqual(selectionCursor.anchor) {
+                    print("\tUpdating selection cursor anchor...")
+                    selectionCursor.setAnchor(segment: segment)
+                }
+                
+                if segment.isEqual(selectionCursor.focus) {
+                     print("\tUpdating selection cursor focus...")
+                    selectionCursor.setFocus(segment: segment)
+                }
+                if segment.isEqual(selectionCursor.cachedAnchor) {
+                     print("\tUpdating selection cursor cached anchor...")
+                    selectionCursor.setCachedAnchor(segment: segment)
+                }
+            }
 
             print("\tSuccessfully updated note segments!")
         } catch {
@@ -3205,19 +3205,34 @@ class Note: AVMutableComposition {
                 if let lowestCommandIndex = lowestCommandIndex {
                     for index in lowestCommandIndex..<self.noteSegments.count {
                         if index >= lowestCommandIndex  {
+                            // duplicate segment
                             let duplicateSegment = self.noteSegments[index].duplicate()
-                            if duplicateSegment == selectionCursor.anchor {
-                                selectionCursor.setAnchor(segment: duplicateSegment)
+                            
+                            // determine if we need to replace selection values
+                            let replaceSelectionAnchor = duplicateSegment == selectionCursor.anchor
+                            let replaceSelectionFocus = duplicateSegment == selectionCursor.focus
+                            let replaceSelectionCachedAnchor = duplicateSegment == selectionCursor.cachedAnchor
+                            
+                            // set duplicate segment as voice command word
+                            duplicateSegment.setIsVoiceCommandWord(to: true)
+                            
+                            // set duplicate segment
+                            self.noteSegments[index] = duplicateSegment
+                            
+                            // update selection anchor
+                            if replaceSelectionAnchor {
+                                selectionCursor.setAnchor(segment: self.noteSegments[index])
                             }
                             
-                            if duplicateSegment == selectionCursor.focus {
-                                selectionCursor.setFocus(segment: duplicateSegment)
+                            // update selection focus
+                            if replaceSelectionFocus {
+                                selectionCursor.setFocus(segment: self.noteSegments[index])
                             }
-                            if duplicateSegment == selectionCursor.cachedAnchor {
-                                selectionCursor.setCachedAnchor(segment: duplicateSegment)
+                            
+                            // update selection cached anchor
+                            if replaceSelectionCachedAnchor {
+                                selectionCursor.setCachedAnchor(segment: self.noteSegments[index])
                             }
-                            duplicateSegment.setIsVoiceCommandWord(to: true)
-                            self.noteSegments[index] = duplicateSegment
                         }
                     }
                 }
@@ -3231,20 +3246,34 @@ class Note: AVMutableComposition {
 
                 for index in lowestCommandIndex!..<self.noteBuffer.count {
                     if let lowestCommandIndex = lowestCommandIndex, index >= lowestCommandIndex  {
-                        let duplicateSegment = self.noteSegments[index].duplicate()
-                        if duplicateSegment == selectionCursor.anchor {
-                            selectionCursor.setAnchor(segment: duplicateSegment)
-                        }
+                        // duplicate segment
+                        let duplicateSegment = self.noteBuffer[index].duplicate()
                         
-                        if duplicateSegment == selectionCursor.focus {
-                            selectionCursor.setFocus(segment: duplicateSegment)
-                        }
+                        // determine if we need to replace selection values
+                        let replaceSelectionAnchor = duplicateSegment == selectionCursor.anchor
+                        let replaceSelectionFocus = duplicateSegment == selectionCursor.focus
+                        let replaceSelectionCachedAnchor = duplicateSegment == selectionCursor.cachedAnchor
                         
-                        if duplicateSegment == selectionCursor.cachedAnchor {
-                            selectionCursor.setCachedAnchor(segment: duplicateSegment)
-                        }
+                        // set duplicate segment as voice command word
                         duplicateSegment.setIsVoiceCommandWord(to: true)
+                        
+                        // set duplicate segment
                         self.noteBuffer[index] = duplicateSegment
+                        
+                        // update selection anchor
+                        if replaceSelectionAnchor {
+                            selectionCursor.setAnchor(segment: self.noteBuffer[index])
+                        }
+                        
+                        // update selection focus
+                        if replaceSelectionFocus {
+                            selectionCursor.setFocus(segment: self.noteBuffer[index])
+                        }
+                        
+                        // update selection cached anchor
+                        if replaceSelectionCachedAnchor {
+                            selectionCursor.setCachedAnchor(segment: self.noteBuffer[index])
+                        }
                     }
                 }
             }
@@ -3518,8 +3547,6 @@ class Note: AVMutableComposition {
     func handleVoiceCommand(command: String) {
         if command == "stop note" && AVAudioSession.isHeadphonesConnected {
             voiceCommandEngine.process(note: self, query: command)
-            
-            self.onListenUpdate?()
         } else if !AVAudioSession.isHeadphonesConnected && (
             command == "play note" ||
             command == "echo note" ||
@@ -3561,6 +3588,8 @@ class Note: AVMutableComposition {
                 )
             }
         }
+
+        self.onListenUpdate?()
     }
 }
 
@@ -3703,7 +3732,6 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                 
                 // commit buffer
                 self.commitBuffer()
-                
                 // execute listen update handler
                 self.onListenUpdate?()
                 
@@ -3720,6 +3748,7 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                 } else if self.withPassiveEcho && AVAudioSession.isHeadphonesConnected {
                     // Echo formatted String
                     self.echoText(text: result.bestTranscription.formattedString)
+                    
                     // Give haptic feedback
                     hapticEngine.lightImpact()
                 }
@@ -3771,6 +3800,8 @@ extension Note: AVSpeechSynthesizerDelegate {
         }
         
         if self.pausedListeningForCommands && !AVAudioSession.isHeadphonesConnected {
+            // when headphones are off we don't listen for voice commands while echoing
+            // but on completion we turn it back on
             self.startListeningForVoiceCommands(
                 soundIntensityHandler: self.soundIntensityHandler,
                 pitchHandler: self.pitchHandler

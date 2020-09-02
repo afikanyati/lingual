@@ -151,7 +151,7 @@ public final class VoiceCommandEngine: NSObject {
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
                     let synthesizerItem = SynthesizerItem(
                         synthesizer: note.speechSynthesizer,
-                        text: "Note not started.",
+                        text: "No ongoing note.",
                         voice: voice,
                         rate: note.echoRate,
                         volume: note.playbackVolume

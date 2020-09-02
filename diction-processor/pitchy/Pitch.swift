@@ -1,4 +1,4 @@
-public struct Pitch {
+public struct Pitch: Equatable {
   public typealias Offset = (
     note: MusicNote,
     frequency: Double,
@@ -35,6 +35,10 @@ public struct Pitch {
   public var closestOffset: Offset {
     return offsets.closest
   }
+    public static func ==(_ firstPitch: Pitch, _ secondPitch: Pitch) -> Bool {
+        return firstPitch.frequency == secondPitch.frequency &&
+        firstPitch.note == secondPitch.note
+    }
 
   // MARK: - Initialization
 
