@@ -46,7 +46,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     var appNotificationTimer: Timer?
     var volumeListeningRateTimer: Timer?
     var stopListeningForVolumeTimer: Timer?
-    var onNoteListenUpdate: (() -> Void)?
+    var onNoteListenUpdate: ((_ bufferRange: NSRange?) -> Void)?
     var onNoteEchoFinish: (() -> Void)?
     var onNoteEchoUpdate: ((_ range: NSRange) -> Void)?
     var onNoteListenStop: (() -> Void)?
@@ -324,9 +324,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     }
     
     func configureNoteHandlers() {
-        self.onNoteListenUpdate = {[weak self] in
+        self.onNoteListenUpdate = {[weak self] bufferRange in
             DispatchQueue.main.async {
-                self?.updateUIText()
+                self?.updateUIText(bufferRange: bufferRange)
             }
         }
         
@@ -343,9 +343,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             }
         }
         
-        self.onNoteEchoUpdate = {[weak self] range in
+        self.onNoteEchoUpdate = {[weak self] hightlightRange in
             DispatchQueue.main.async {
-                self?.updateUIText(range: range)
+                self?.updateUIText(highlightRange: hightlightRange)
             }
         }
         
@@ -886,9 +886,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 segmentBoundaryHandler: { [weak self] in
                     // print("Successfully executed playback on segment boundary handler")
                     DispatchQueue.main.async {
-                        if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = self?.note.getSegmentTextRange(of: segment) {
+                        if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let highlightRange = self?.note.getSegmentTextRange(of: segment) {
                             // update text
-                            self?.updateUIText(range: range)
+                            self?.updateUIText(highlightRange: highlightRange)
                         }
                         
                         if let segment = self?.note.getSegment(type: .current), let pitch = segment.getPitch() {
@@ -974,17 +974,22 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         }
     }
     
-    func updateUIText(range: NSRange? = nil) {
+    func updateUIText(highlightRange: NSRange? = nil, bufferRange: NSRange? = nil) {
         let text = note.getText()
         
         if text.count == 0 {
             return
         }
         
-        if let range = range {
+        if let highlightRange = highlightRange {
             let mutableAttributedString = NSMutableAttributedString(string: text)
-            mutableAttributedString.addAttribute(.foregroundColor, value: UIColor.white, range: range)
-            mutableAttributedString.addAttribute(.backgroundColor, value: UIColor.red, range: range)
+            mutableAttributedString.addAttribute(.foregroundColor, value: UIColor.white, range: highlightRange)
+            mutableAttributedString.addAttribute(.backgroundColor, value: UIColor.red, range: highlightRange)
+            transcriptionText.attributedText = mutableAttributedString
+            transcriptionText.font = self.font
+        } else if let bufferRange = bufferRange {
+            let mutableAttributedString = NSMutableAttributedString(string: text)
+            mutableAttributedString.addAttribute(.foregroundColor, value: UIColor.systemGray, range: bufferRange)
             transcriptionText.attributedText = mutableAttributedString
             transcriptionText.font = self.font
         } else {
@@ -1340,7 +1345,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                                change: [NSKeyValueChangeKey : Any]?,
                                context: UnsafeMutableRawPointer?) {
         if keyPath == #keyPath(AVAudioSession.outputVolume) {
-            print("Output Volume Changed!!!JSK!!!!! ")
+            print("Output  Volume Changed!!!JSK!!!!! ")
 
             var outputVolume: Float
             if let volume = change?[.oldKey] as? Float {
@@ -1463,7 +1468,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         print("===== Speech synthesis utterance successfully completed =====")
-        updateUIText()
+        self.updateUIText()
         if (!playTextToSpeechButton.isHidden) {
             playTextToSpeechButton.setTitle(ViewController.PLAY_ECHO_LABEL, for: .normal)
         }
@@ -1479,7 +1484,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, willSpeakRangeOfSpeechString characterRange: NSRange, utterance: AVSpeechUtterance) {
         if appActivated {
-            updateUIText(range: characterRange)
+            self.updateUIText(highlightRange: characterRange)
         }
     }
     
@@ -1703,9 +1708,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 //        segmentBoundaryHandler: { [weak self] in
 //            // print("Successfully executed playback on segment boundary handler")
 //            DispatchQueue.main.async {
-//                if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = self?.note.getSegmentTextRange(of: segment) {
+//                if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let highlightRange = self?.note.getSegmentTextRange(of: segment) {
 //                    // update text
-//                    self?.updateUIText(range: range)
+//                    self?.updateUIText(highlightRange: highlightRange)
 //                }
 //
 //                if let segment = self?.note.getSegment(type: .current), let pitch = segment.getPitch() {
@@ -1753,9 +1758,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 //        segmentBoundaryHandler: { [weak self] in
 //            // print("Successfully executed playback on segment boundary handler")
 //            DispatchQueue.main.async {
-//                if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = self?.note.getSegmentTextRange(of: segment) {
+//                if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let highlightRange = self?.note.getSegmentTextRange(of: segment) {
 //                    // update text
-//                    self?.updateUIText(range: range)
+//                    self?.updateUIText(highlightRange: highlightRange)
 //                }
 //
 //                if let segment = self?.note.getSegment(type: .current), let pitch = segment.getPitch() {

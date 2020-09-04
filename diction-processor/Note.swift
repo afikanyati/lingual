@@ -152,7 +152,7 @@ class Note: AVMutableComposition {
     /// Stores a stream of pitch values received throughout the process of listening
     private var pitchStream = [PitchDatum]()
     /// Stores a handler to be executed when a new listening buffer is received and processed
-    private(set) var onListenUpdate: (() -> Void)?
+    private(set) var onListenUpdate: ((_ bufferRange: NSRange?) -> Void)?
     /// Stores a handler to be executed when listening has stopped
     private(set) var onListenStop: (() -> Void)?
     /// Stores a UI handler to be executed when new sound intensity data is received
@@ -208,7 +208,7 @@ class Note: AVMutableComposition {
     /// Stores a temporary handler to be executed when echo is complete (executes on-demand)
     private(set) var tempOnEchoFinish: (() -> Void)?
     /// Stores a handler to be executed when a new echo range is received and processed
-    private(set) var onEchoUpdate: ((_ range: NSRange) -> Void)?
+    private(set) var onEchoUpdate: ((_ hightlightRange: NSRange) -> Void)?
     /// Stores a handler to be executed when note is complete
     private(set) var onComplete: (() -> Void)?
     
@@ -279,9 +279,9 @@ class Note: AVMutableComposition {
         withPunctuationSuggestions: Bool = false,
         withFormattingSuggestions: Bool = false,
         withTextStrictlyAsWords: Bool = false,
-        onListenUpdate: (() -> Void)? = nil,
+        onListenUpdate: ((_ bufferRange: NSRange?) -> Void)? = nil,
         onListenStop: (() -> Void)? = nil,
-        onEchoUpdate: ((_ range: NSRange) -> Void)? = nil,
+        onEchoUpdate: ((_ hightlightRange: NSRange) -> Void)? = nil,
         onEchoFinish: (() -> Void)? = nil,
         onComplete: (() -> Void)? = nil
     ) {
@@ -1368,7 +1368,7 @@ class Note: AVMutableComposition {
             insertTime = self.noteSegments.count > 0 ? self.noteSegments.last!.timeMapping.target.end : CMTime.zero
             
             // cache count of segments before insert to set last buffer range
-            numSegmentsBehindCursorBeforeInsertion = selectionCursor.anchor != nil ? selectionCursor.anchor!.getIndex() + 1 : self.noteSegments.count
+            numSegmentsBehindCursorBeforeInsertion = self.noteSegments.count
             numSegmentsAheadCursorBeforeInsertion = self.noteSegments.count - numSegmentsBehindCursorBeforeInsertion
         }
         
@@ -2674,7 +2674,7 @@ class Note: AVMutableComposition {
         }
         
         // Make sure new setting is reflecting visually
-        self.onListenUpdate?()
+        self.handleOnListenUpdate()
         
         checkRep()
     }
@@ -2690,7 +2690,7 @@ class Note: AVMutableComposition {
         }
         
         // Make sure new setting is reflecting visually
-        self.onListenUpdate?()
+        self.handleOnListenUpdate()
         
         checkRep()
     }
@@ -2700,7 +2700,7 @@ class Note: AVMutableComposition {
         self.withFormattingSuggestions = value
         
         // Make sure new setting is reflecting visually
-        self.onListenUpdate?()
+        self.handleOnListenUpdate()
         
         checkRep()
     }
@@ -2710,7 +2710,7 @@ class Note: AVMutableComposition {
         self.withTextStrictlyAsWords = value
         
         // Make sure new setting is reflecting visually
-        self.onListenUpdate?()
+        self.handleOnListenUpdate()
 
         checkRep()
     }
@@ -3269,7 +3269,7 @@ class Note: AVMutableComposition {
                 var lastBufferWordIndex = Int(Utils.UNKNOWN)
                 if selectionCursor.cachedAnchor != nil && self.noteBuffer.count > 0 && !selectionCursor.cachedAnchor!.isCommitted() {
                     print("\tBuffer non-empty and Cached Anchor detected to be buffer segment...")
-                    print("\tFind index of new anchor...")
+                    print("\tFind index of new anchor to use as new cached anchor value...")
                     var lastBufferWord: NoteSegment?
                     for (index, segment) in self.noteBuffer.reversed().enumerated() {
                         if !segment.isSilence() && !segment.isVoiceCommandWord() {
@@ -3285,7 +3285,7 @@ class Note: AVMutableComposition {
                     }
                 } else if selectionCursor.cachedAnchor != nil && self.noteBuffer.count == 0 {
                     print("\tBuffer is empty and Cached Anchor detected to be committed segment...")
-                    print("\tFind index of new anchor...")
+                    print("\tFind index of new anchor to use as new cached anchor value...")
                     let secondLastBufferRange = self.committedBufferRanges[self.committedBufferRanges.count - 2]
                     let lastWordsBuffer = self.noteSegments[secondLastBufferRange]
                     var lastBufferWord: NoteSegment?
@@ -3302,12 +3302,17 @@ class Note: AVMutableComposition {
                         print("\tIndex of new anchor not found. Abort updating selection cursor anchor...")
                     }
                 } else {
-                    print("\tFind index of new anchor...")
+                    print("\tFind index of new anchor to use as new cached anchor value...")
                     updateSelectionAnchor = selectionCursor.anchor != nil && self.noteSegments.last != nil && !selectionCursor.anchor!.isEqual(self.noteSegments.last!)
                     
                     if updateSelectionAnchor {
-                        lastBufferWordIndex = self.noteSegments.count - 1
-                        print("\tFound new anchor index: ", lastBufferWordIndex)
+                        for (index, segment) in self.noteSegments.reversed().enumerated() {
+                            if !segment.isSilence() && !segment.isVoiceCommandWord() {
+                                lastBufferWordIndex = self.noteSegments.count - index - 1
+                                print("\tFound new anchor index: ", lastBufferWordIndex)
+                                break
+                            }
+                        }
                     }
                 }
                 
@@ -3330,10 +3335,19 @@ class Note: AVMutableComposition {
                 }
             }
 
-            self.onListenUpdate?()
+            self.handleOnListenUpdate()
             
             // Handle voice command
             self.handleVoiceCommand(command: command)
+        }
+    }
+    
+    func handleOnListenUpdate() {
+        if self.noteBuffer.count > 0, let firstBufferSegment = self.noteBuffer.first, let lastBufferSegment = self.noteBuffer.last, let firstBufferSegmentTextRange = self.getSegmentTextRange(of: firstBufferSegment), let lastBufferSegmentTextRange = self.getSegmentTextRange(of: lastBufferSegment) {
+            let bufferTextRange = NSRange(location: firstBufferSegmentTextRange.location, length: (lastBufferSegmentTextRange.location - firstBufferSegmentTextRange.location) + lastBufferSegmentTextRange.length)
+            self.onListenUpdate?(bufferTextRange)
+        } else {
+            self.onListenUpdate?(nil)
         }
     }
     
@@ -3641,7 +3655,7 @@ class Note: AVMutableComposition {
             }
         }
 
-        self.onListenUpdate?()
+        self.handleOnListenUpdate()
     }
 }
 
@@ -3725,7 +3739,7 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                 self.performTranscriptionUpdate(transcription)
                 
                 // execute listen update handler
-                self.onListenUpdate?()
+                self.handleOnListenUpdate()
                 
                 if let command = voiceCommandEngine.includesCommand(passage: transcription.formattedString) {
                     print("\tCommand Recognized!")
@@ -3761,7 +3775,7 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                     self?.commitBuffer()
                     
                     // execute listen update handler
-                    self?.onListenUpdate?()
+                    self?.handleOnListenUpdate()
 
                     // Update duration
                     self?.accumulatedDuration = max(0, Date().timeIntervalSince(self!.recordStartDate!) - TRANSCRIPTION_LATENCY_DURATION)
@@ -3787,7 +3801,7 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                 // commit buffer
                 self.commitBuffer()
                 // execute listen update handler
-                self.onListenUpdate?()
+                self.handleOnListenUpdate()
                 
                 // Update duration
                 self.accumulatedDuration = max(0, Date().timeIntervalSince(self.recordStartDate!) - TRANSCRIPTION_LATENCY_DURATION)
@@ -3817,7 +3831,7 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                 self.commitBuffer()
                 
                 // execute listen update handler
-                self.onListenUpdate?()
+                self.handleOnListenUpdate()
                 
                 // print("===== Completed note: \(self.noteSegments)")
 

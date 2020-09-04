@@ -476,7 +476,7 @@ public final class VoiceCommandEngine: NSObject {
                     DispatchQueue.main.async {
                         if let segment = note.vc!.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = note.vc!.note.getSegmentTextRange(of: segment) {
                             // update text
-                            note.vc!.updateUIText(range: range)
+                            note.vc!.updateUIText(highlightRange: range)
                         }
                         
                         if let segment = note.vc!.note.getSegment(type: .current), let pitch = segment.getPitch() {
