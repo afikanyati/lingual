@@ -60,6 +60,8 @@ class Utils {
         return 10
     }
     static var DISCRETE_VOLUME_DELTA: Float = 0.2
+    static var DEFAULT_CURSOR_BLINK_RATE: TimeInterval = 0.53
+    static var DEFAULT_CURSOR_BLINK_TRANSITION_DURATION: TimeInterval = 0.1
     
     static let pitchToFrequencyMap: [String : Double] = [
         "C0": 16,
@@ -232,7 +234,7 @@ class Utils {
         } else if note.player.status != .readyToPlay {
             // just wait for item to be ready
             print("\tWaiting for AVPlayerItem to be ready...\n")
-        } else {
+        } else if note.player.currentItem != nil {
             print("\tImmediately Playing Item\n")
             let timeScale = CMTimeScale(NSEC_PER_SEC)
             let time = CMTime(seconds: 1, preferredTimescale: timeScale)
@@ -258,7 +260,7 @@ class Utils {
             }
             
             if startTime == note.startTime {
-                print("\tPlaying from start of recording...")
+                print("\tPlaying from start of recording: \(note.startTime.seconds)")
                 // Check to see if there is a silence at the start we need to skip
                 note.handleBoundaryTimeObserver(start: true)
             } else {

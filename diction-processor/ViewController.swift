@@ -42,6 +42,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     var notificationQueue = Queue<NotificationItem>()
     private(set) var isExhaustingNotificationQueue = false
     var UITimer: Timer?
+    var cursorBlinkTimer: Timer?
     var appNotificationTimer: Timer?
     var volumeListeningRateTimer: Timer?
     var stopListeningForVolumeTimer: Timer?
@@ -166,7 +167,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 }
             },
             pitchHandler: { pitchDatum in
-                if let pitchDatum = pitchDatum {
+                if let pitchDatum = pitchDatum, !self.note.isPlayingNote {
                     DispatchQueue.main.async {
                         let pitch = pitchDatum.pitch.note.string
                         self.pitchLabel.text = pitch
@@ -414,7 +415,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                         }
                     },
                     pitchHandler: { pitchDatum in
-                        if let pitchDatum = pitchDatum {
+                        if let pitchDatum = pitchDatum, !self.note.isPlayingNote {
                             DispatchQueue.main.async {
                                 let pitch = pitchDatum.pitch.note.string
                                 self.pitchLabel.text = pitch
@@ -437,7 +438,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                         }
                     },
                     pitchHandler: { pitchDatum in
-                        if let pitchDatum = pitchDatum {
+                        if let pitchDatum = pitchDatum, !self.note.isPlayingNote {
                             DispatchQueue.main.async {
                                 let pitch = pitchDatum.pitch.note.string
                                 self.pitchLabel.text = pitch
@@ -592,8 +593,33 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             selectionCursor.setTextView(textView: self.transcriptionText)
             selectionCursor.setCursorView(cursorView: self.cursorView!)
             selectionCursor.setNote(note: self.note)
+            
+            if self.cursorBlinkTimer != nil {
+                // Stopped cursor blinking that's already running
+                // To avoid two instances of blinking timers
+                self.cursorBlinkTimer?.invalidate()
+            }
+            
+            // start cursor blink
+            self.cursorBlinkTimer = Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_CURSOR_BLINK_RATE, repeats: true) { timer in
+                if let cursorView = self.cursorView, cursorView.alpha == 1 {
+                    UIView.animate(withDuration: Utils.DEFAULT_CURSOR_BLINK_TRANSITION_DURATION) {
+                        self.cursorView!.alpha = 0
+                    }
+                } else if let cursorView = self.cursorView, cursorView.alpha == 0 {
+                    UIView.animate(withDuration: Utils.DEFAULT_CURSOR_BLINK_TRANSITION_DURATION) {
+                        self.cursorView!.alpha = 1
+                    }
+                }
+            }
         } else {
             selectionCursor.reset()
+            
+            // stop cursor blink
+            if self.cursorBlinkTimer != nil {
+                self.cursorBlinkTimer?.invalidate()
+                self.cursorBlinkTimer = nil
+            }
         }
     }
     
@@ -803,7 +829,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                         }
                     },
                     pitchHandler: { pitchDatum in
-                        if let pitchDatum = pitchDatum {
+                        if let pitchDatum = pitchDatum, !self.note.isPlayingNote {
                             DispatchQueue.main.async {
                                 let pitch = pitchDatum.pitch.note.string
                                 self.pitchLabel.text = pitch
@@ -863,9 +889,11 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                         if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = self?.note.getSegmentTextRange(of: segment) {
                             // update text
                             self?.updateUIText(range: range)
-                            
+                        }
+                        
+                        if let segment = self?.note.getSegment(type: .current), let pitch = segment.getPitch() {
                             // update pitch
-                            self?.pitchLabel.text = segment.getPitch()?.note.string
+                            self?.pitchLabel.text = pitch.note.string
                         }
                     }
                 }, onFinishHandler: { [weak self] in
@@ -995,6 +1023,12 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         }
         
         self.UITimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) {[weak self] timer in
+            // Terminate timer if no longer recording
+            if !self!.note.isListeningForSpeech {
+                self!.UITimer?.invalidate()
+                self!.UITimer = nil
+            }
+
             if selectionCursor.hasSelection && selectionCursor.direction == .forwards {
                 // we have selection in forwards direction
                 // visually present the time range of selection
@@ -1003,7 +1037,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                 // we have selection in backwards direction
                 // visually present the time range of selection
                 self?.navigationItem.title = "\(Utils.formattedTime(time: self!.note.getDurationListening()))\(" [\(Utils.formattedTime(time: Float(selectionCursor.focus!.timeMapping.target.start.seconds))) - \(Utils.formattedTime(time: Float(selectionCursor.anchor!.timeMapping.target.end.seconds)))]")"
-            } else {
+            } else if self!.note.isListeningForSpeech {
                 // we don't have a selection
                 // we might have a cursor placed mid-sentence however
                 // present time of cursor
@@ -1076,7 +1110,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                     self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
                 }
                 // Pitch
-                if let lastPitchDatum = self.pitchStream.last {
+                if let lastPitchDatum = self.pitchStream.last, !self.note.isPlayingNote {
                     self.pitchLabel.text = lastPitchDatum.pitch.note.string
                 }
             }
@@ -1176,7 +1210,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                                     }
                                 },
                                 pitchHandler: { pitchDatum in
-                                    if let pitchDatum = pitchDatum {
+                                    if let pitchDatum = pitchDatum, !self!.note.isPlayingNote {
                                         DispatchQueue.main.async {
                                             let pitch = pitchDatum.pitch.note.string
                                             self?.pitchLabel.text = pitch
@@ -1212,7 +1246,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                                             }
                                         },
                                         pitchHandler: { pitchDatum in
-                                            if let pitchDatum = pitchDatum {
+                                            if let pitchDatum = pitchDatum, !self!.note.isPlayingNote {
                                                 DispatchQueue.main.async {
                                                     let pitch = pitchDatum.pitch.note.string
                                                     self?.pitchLabel.text = pitch
@@ -1515,7 +1549,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     // MARK: - Touch Events
     
     @objc func handleSingleTap(touch: UITapGestureRecognizer) {
-        if self.appActivated {
+        if self.appActivated && self.note.isListeningForSpeech {
             let touchPoint = touch.location(in: self.transcriptionText)
             let textPosition = self.transcriptionText.closestPosition(to: touchPoint)
             
@@ -1524,7 +1558,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             }
             
             if let textPosition = textPosition {
-                print("SINGLE TAP IT")
+                print("===== Touch Interaction: Single Tap =====")
                 selectionCursor.moveCursor(textPosition: textPosition, cache: true)
             }
         }
@@ -1668,12 +1702,16 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 //        },
 //        segmentBoundaryHandler: { [weak self] in
 //            // print("Successfully executed playback on segment boundary handler")
-//            if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = self?.note.getSegmentTextRange(of: segment) {
-//                // update text
-//                self?.updateUIText(range: range)
+//            DispatchQueue.main.async {
+//                if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = self?.note.getSegmentTextRange(of: segment) {
+//                    // update text
+//                    self?.updateUIText(range: range)
+//                }
 //
-//                // update pitch
-//                self?.pitchLabel.text = segment.getPitch()?.note.string
+//                if let segment = self?.note.getSegment(type: .current), let pitch = segment.getPitch() {
+//                    // update pitch
+//                    self?.pitchLabel.text = pitch.note.string
+//                }
 //            }
 //        }, onFinishHandler: { [weak self] in
 //            // print("Successfully executed playback on finish handler")
@@ -1714,12 +1752,16 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 //        },
 //        segmentBoundaryHandler: { [weak self] in
 //            // print("Successfully executed playback on segment boundary handler")
-//            if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = self?.note.getSegmentTextRange(of: segment) {
-//                // update text
-//                self?.updateUIText(range: range)
+//            DispatchQueue.main.async {
+//                if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = self?.note.getSegmentTextRange(of: segment) {
+//                    // update text
+//                    self?.updateUIText(range: range)
+//                }
 //
-//                // update pitch
-//                self?.pitchLabel.text = segment.getPitch()?.note.string
+//                if let segment = self?.note.getSegment(type: .current), let pitch = segment.getPitch() {
+//                    // update pitch
+//                    self?.pitchLabel.text = pitch.note.string
+//                }
 //            }
 //        }, onFinishHandler: { [weak self] in
 //            // print("Successfully executed playback on finish handler")

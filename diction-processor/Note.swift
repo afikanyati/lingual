@@ -49,7 +49,7 @@ class Note: AVMutableComposition {
     /// Stores a list of high-level representation of note segments in staging (before committed to noteSegments)
     private(set) var noteBuffer: [NoteSegment] = [NoteSegment]()
     /// Range of last committed buffer of note segments
-    private(set) var lastBufferRange: Range<Int>? = nil
+    private(set) var committedBufferRanges = [Range<Int>]()
     /// Stores the starting time of the note
     private(set) var startTime: CMTime = CMTime.zero // When we remove or add we change this
     /// Stores the ending time of the note
@@ -356,7 +356,7 @@ class Note: AVMutableComposition {
     deinit {}
     
     public override var description: String {
-        return "Note {\n\tfilename: \(self.filename) \n\tfileType: \(self.fileType) \n\tspeaker: \(self.speaker) \n\tnoteSegments: \(self.noteSegments) \n\tnoteBuffer: \(self.noteBuffer) \n\tlastBufferRange: \(String(describing: self.lastBufferRange)) \n\tstartTime: \(self.startTime) \n\tendTime: \(self.endTime) \n\tduration: \(self.duration) \n\tisExporting: \(self.isExporting) \n\tnumSentences: \(self.numSentences) \n\tlanguage: \(String(describing: self.language)) \n\tavgSpeakingRate: \(self.avgSpeakingRate) \n\twithTemporalSuggestions: \(self.withTemporalSuggestions) \n\twithPunctuationSuggestions: \(self.withPunctuationSuggestions) \n\twithFormattingSuggestions: \(self.withFormattingSuggestions) \n\twithTextStrictlyAsWords: \(self.withTextStrictlyAsWords) \n\tauthorizedToListenForSpeech: \(self.authorizedToListenForSpeech) \n\tclipCount: \(self.clipCount) \n\trecordStartDate: \(String(describing: self.recordStartDate)) \n\taccumulatedDuration: \(self.accumulatedDuration) \n\tsoundIntensityStream: \(self.soundIntensityStream) \n\tminPower: \(self.minPower) \n\tpitchStream: \(self.pitchStream) \n\tuseOnDeviceRecognition: \(self.useOnDeviceRecognition) \n\tisListeningForSpeech: \(self.isListeningForSpeech) \n\tpausedListeningForSpeech: \(self.pausedListeningForSpeech) \n\tisListeningForCommands: \(self.isListeningForCommands) \n\tpausedListeningForCommands: \(self.pausedListeningForCommands) \n\tisExhaustingSynthesizerQueue: \(self.isExhaustingSynthesizerQueue) \n\twithPassiveEcho: \(self.withPassiveEcho) \n\tisPlayingEcho: \(self.isPlayingEcho) \n\techoIsPaused: \(self.echoIsPaused) \n\tplaybackRate: \(self.playbackRate) \n\tpreviousBoundarySegment: \(String(describing: self.previousBoundarySegment)) \n\tisPlayingNote: \(self.isPlayingNote) \n\tskipPunctuation: \(self.skipPunctuation) \n\tskipSilence: \(self.skipSilence) \n\tstartPlaybackAt: \(String(describing: self.startPlaybackAt)) \n\tstopPlaybackAt: \(String(describing: self.stopPlaybackAt))\n}"
+        return "Note {\n\tfilename: \(self.filename) \n\tfileType: \(self.fileType) \n\tspeaker: \(self.speaker) \n\tnoteSegments: \(self.noteSegments) \n\tnoteBuffer: \(self.noteBuffer) \n\tcommittedBufferRanges: \(String(describing: self.committedBufferRanges)) \n\tstartTime: \(self.startTime) \n\tendTime: \(self.endTime) \n\tduration: \(self.duration) \n\tisExporting: \(self.isExporting) \n\tnumSentences: \(self.numSentences) \n\tlanguage: \(String(describing: self.language)) \n\tavgSpeakingRate: \(self.avgSpeakingRate) \n\twithTemporalSuggestions: \(self.withTemporalSuggestions) \n\twithPunctuationSuggestions: \(self.withPunctuationSuggestions) \n\twithFormattingSuggestions: \(self.withFormattingSuggestions) \n\twithTextStrictlyAsWords: \(self.withTextStrictlyAsWords) \n\tauthorizedToListenForSpeech: \(self.authorizedToListenForSpeech) \n\tclipCount: \(self.clipCount) \n\trecordStartDate: \(String(describing: self.recordStartDate)) \n\taccumulatedDuration: \(self.accumulatedDuration) \n\tsoundIntensityStream: \(self.soundIntensityStream) \n\tminPower: \(self.minPower) \n\tpitchStream: \(self.pitchStream) \n\tuseOnDeviceRecognition: \(self.useOnDeviceRecognition) \n\tisListeningForSpeech: \(self.isListeningForSpeech) \n\tpausedListeningForSpeech: \(self.pausedListeningForSpeech) \n\tisListeningForCommands: \(self.isListeningForCommands) \n\tpausedListeningForCommands: \(self.pausedListeningForCommands) \n\tisExhaustingSynthesizerQueue: \(self.isExhaustingSynthesizerQueue) \n\twithPassiveEcho: \(self.withPassiveEcho) \n\tisPlayingEcho: \(self.isPlayingEcho) \n\techoIsPaused: \(self.echoIsPaused) \n\tplaybackRate: \(self.playbackRate) \n\tpreviousBoundarySegment: \(String(describing: self.previousBoundarySegment)) \n\tisPlayingNote: \(self.isPlayingNote) \n\tskipPunctuation: \(self.skipPunctuation) \n\tskipSilence: \(self.skipSilence) \n\tstartPlaybackAt: \(String(describing: self.startPlaybackAt)) \n\tstopPlaybackAt: \(String(describing: self.stopPlaybackAt))\n}"
     }
     
     // MARK: - Configuration Methods
@@ -653,12 +653,21 @@ class Note: AVMutableComposition {
                     // Apple servers ended dictation session
                     // It cannot be if after a continguous clause was completed while on-device recognition
                     if forVoiceCommands {
-                        self.isListeningForCommands = true
-                        self.pausedListeningForCommands = false
+                        if !self.isListeningForCommands {
+                            self.isListeningForCommands = true
+                        }
+                        if self.pausedListeningForCommands {
+                            self.pausedListeningForCommands = false
+                        }
+                        
                         self.lastRecognitionTask = RecognitionTask.VOICE_COMMAND
                     } else {
-                        self.isListeningForSpeech = true
-                        self.pausedListeningForSpeech = false
+                        if !self.isListeningForSpeech {
+                            self.isListeningForSpeech = true
+                        }
+                        if self.pausedListeningForSpeech {
+                            self.pausedListeningForSpeech = false
+                        }
                         self.lastRecognitionTask = RecognitionTask.SPEECH
                         self.recordStartDate = Date()
                     }
@@ -678,7 +687,7 @@ class Note: AVMutableComposition {
                 }
                 
                 // Pitch
-                if let lastPitchDatum = self.pitchStream.last {
+                if let lastPitchDatum = self.pitchStream.last, !self.isPlayingNote {
                     pitchHandler?(lastPitchDatum)
                 }
             }
@@ -760,14 +769,26 @@ class Note: AVMutableComposition {
         }
         
         if (isListeningForSpeech || isListeningForCommands) && !pause {
-            isListeningForSpeech = false
-            isListeningForCommands = false
-            pausedListeningForSpeech = false
-            pausedListeningForCommands = false
+            if self.isListeningForSpeech {
+                self.isListeningForSpeech = false
+            }
+            if self.isListeningForCommands {
+                self.isListeningForCommands = false
+            }
+            if self.pausedListeningForSpeech {
+                self.pausedListeningForSpeech = false
+            }
+            if self.pausedListeningForCommands {
+                self.pausedListeningForCommands = false
+            }
         } else if pause && !forVoiceCommands {
-            pausedListeningForSpeech = true
+            if !self.pausedListeningForSpeech {
+                self.pausedListeningForSpeech = true
+            }
         } else if pause && forVoiceCommands {
-            pausedListeningForCommands = true
+            if !self.pausedListeningForCommands {
+                self.pausedListeningForCommands = true
+            }
         }
 
         if !forVoiceCommands {
@@ -1353,7 +1374,7 @@ class Note: AVMutableComposition {
         
         var oldAnchor: NoteSegment?
         if let anchor = selectionCursor.anchor {
-            print("\tSelection anchor identified...")
+            print("\tSelection anchor identified: ", anchor.getText())
             oldAnchor = anchor.duplicate()
         }
         
@@ -1377,7 +1398,7 @@ class Note: AVMutableComposition {
         
         var lastBufferWordIndex = Int(Utils.UNKNOWN)
         for (index, segment) in normalizedSegments!.reversed().enumerated() {
-            if !segment.isSilence() {
+            if !segment.isSilence() && !segment.isVoiceCommandWord() {
                 lastBufferWordIndex = normalizedSegments!.count - index
                 break
             }
@@ -1425,7 +1446,7 @@ class Note: AVMutableComposition {
         // Set range of last buffer
         print("\tSet last buffer range in note properties...")
         let numNormalizedBufferSegments = self.noteSegments.count - (numSegmentsBehindCursorBeforeInsertion + numSegmentsAheadCursorBeforeInsertion)
-        self.lastBufferRange = numSegmentsBehindCursorBeforeInsertion..<(numSegmentsBehindCursorBeforeInsertion + numNormalizedBufferSegments)
+        self.committedBufferRanges.append(numSegmentsBehindCursorBeforeInsertion..<(numSegmentsBehindCursorBeforeInsertion + numNormalizedBufferSegments))
     }
     
     // MARK: - Listening Method Helpers
@@ -1937,7 +1958,7 @@ class Note: AVMutableComposition {
     func stop(handler: (() -> Void)? = nil) {
         print("===== Stop Playing Note =====")
         player.pause()
-        player.seek(to: self.startTime)
+        player.replaceCurrentItem(with: nil)
         self.startPlaybackAt = nil
         self.startPlaybackAt = nil
         
@@ -3154,7 +3175,7 @@ class Note: AVMutableComposition {
                         break
                     }
                 }
-            } else if let lastBufferRange = self.lastBufferRange {
+            } else if let lastBufferRange = self.committedBufferRanges.last {
                 let lastBuffer = self.noteSegments[lastBufferRange]
                 // Find first buffer word
                 for segment in lastBuffer {
@@ -3191,90 +3212,121 @@ class Note: AVMutableComposition {
     func prepareVoiceCommandHandler(command: String) {
         // We put it in a handler so we can run it when we receive final transcript
         self.tempVoiceCommandHandler = {
+            print("===== Voice Command Handler =====")
             let firstCommandWord = command.components(separatedBy: " ").first!
             var lowestCommandIndex: Int?
 
-            if self.noteBuffer.count == 0 {
-                for (index, segment) in self.noteSegments.reversed().enumerated() {
-                    if segment.getText().lowercased() == firstCommandWord.lowercased() {
-                        lowestCommandIndex = self.noteSegments.count - index - 1
-                        break
-                    }
+            print("\tSeeking lowest voice command index...")
+            let lastBufferRange = self.committedBufferRanges[self.committedBufferRanges.count - 1]
+            let voiceCommandBuffer = self.noteSegments[lastBufferRange]
+            for (index, segment) in voiceCommandBuffer.reversed().enumerated() {
+                if segment.getText().lowercased() == firstCommandWord.lowercased() {
+                    lowestCommandIndex = self.noteSegments.distance(to: lastBufferRange.startIndex) + (voiceCommandBuffer.count - index - 1)
+                    print("\tFound lowest voice command index: \(lowestCommandIndex!) of \(self.noteSegments.count)")
+                    break
                 }
+            }
+            
+            if let lowestCommandIndex = lowestCommandIndex {
+                print("\tFlipping every segment after lowest voice command index to be voice command word...")
 
-                if let lowestCommandIndex = lowestCommandIndex {
-                    for index in lowestCommandIndex..<self.noteSegments.count {
-                        if index >= lowestCommandIndex  {
-                            // duplicate segment
-                            let duplicateSegment = self.noteSegments[index].duplicate()
-                            
-                            // determine if we need to replace selection values
-                            let replaceSelectionAnchor = duplicateSegment == selectionCursor.anchor
-                            let replaceSelectionFocus = duplicateSegment == selectionCursor.focus
-                            let replaceSelectionCachedAnchor = duplicateSegment == selectionCursor.cachedAnchor
-                            
-                            // set duplicate segment as voice command word
-                            duplicateSegment.setIsVoiceCommandWord(to: true)
-                            
-                            // set duplicate segment
-                            self.noteSegments[index] = duplicateSegment
-                            
-                            // update selection anchor
-                            if replaceSelectionAnchor {
-                                selectionCursor.setAnchor(segment: self.noteSegments[index])
-                            }
-                            
-                            // update selection focus
-                            if replaceSelectionFocus {
-                                selectionCursor.setFocus(segment: self.noteSegments[index])
-                            }
-                            
-                            // update selection cached anchor
-                            if replaceSelectionCachedAnchor {
-                                selectionCursor.setCachedAnchor(segment: self.noteSegments[index])
-                            }
-                        }
+                for index in lowestCommandIndex..<self.noteSegments.distance(to: lastBufferRange.endIndex) {
+                    // duplicate segment
+                    let duplicateSegment = self.noteSegments[index].duplicate()
+                    
+                    // determine if we need to replace selection values
+                    let replaceSelectionAnchor = duplicateSegment == selectionCursor.anchor
+                    let replaceSelectionFocus = duplicateSegment == selectionCursor.focus
+                    let replaceSelectionCachedAnchor = duplicateSegment == selectionCursor.cachedAnchor
+                    
+                    // set duplicate segment as voice command word
+                    duplicateSegment.setIsVoiceCommandWord(to: true)
+                    
+                    // set duplicate segment
+                    self.noteSegments[index] = duplicateSegment
+                    
+                    // update selection anchor
+                    if replaceSelectionAnchor {
+                        print("\tReplacing Selection Cursor Anchor with version that is voice command word...")
+                        selectionCursor.setAnchor(segment: self.noteSegments[index])
+                    }
+                    
+                    // update selection focus
+                    if replaceSelectionFocus {
+                        print("\tReplacing Selection Cursor Focus with version that is voice command word...")
+                        selectionCursor.setFocus(segment: self.noteSegments[index])
+                    }
+                    
+                    // update selection cached anchor
+                    if replaceSelectionCachedAnchor {
+                        print("\tReplacing Selection Cursor Cached Anchor with version that is voice command word...")
+                        selectionCursor.setCachedAnchor(segment: self.noteSegments[index])
                     }
                 }
-            } else {
-                for (index, segment) in self.noteBuffer.reversed().enumerated() {
-                    if segment.getText().lowercased() == firstCommandWord.lowercased() {
-                        lowestCommandIndex = self.noteBuffer.count - index - 1
-                        break
+                
+                // we can't have a voice command as the anchor
+                var updateSelectionAnchor = false
+                var lastBufferWordIndex = Int(Utils.UNKNOWN)
+                if selectionCursor.cachedAnchor != nil && self.noteBuffer.count > 0 && !selectionCursor.cachedAnchor!.isCommitted() {
+                    print("\tBuffer non-empty and Cached Anchor detected to be buffer segment...")
+                    print("\tFind index of new anchor...")
+                    var lastBufferWord: NoteSegment?
+                    for (index, segment) in self.noteBuffer.reversed().enumerated() {
+                        if !segment.isSilence() && !segment.isVoiceCommandWord() {
+                            lastBufferWord = segment
+                            lastBufferWordIndex = index
+                            print("\tFound new anchor index: ", lastBufferWordIndex)
+                            break
+                        }
+                    }
+                    updateSelectionAnchor = selectionCursor.anchor != nil && lastBufferWord != nil && !selectionCursor.anchor!.isEqual(lastBufferWord!)
+                    if !updateSelectionAnchor {
+                        print("\tIndex of new anchor not found. Abort updating selection cursor anchor...")
+                    }
+                } else if selectionCursor.cachedAnchor != nil && self.noteBuffer.count == 0 {
+                    print("\tBuffer is empty and Cached Anchor detected to be committed segment...")
+                    print("\tFind index of new anchor...")
+                    let secondLastBufferRange = self.committedBufferRanges[self.committedBufferRanges.count - 2]
+                    let lastWordsBuffer = self.noteSegments[secondLastBufferRange]
+                    var lastBufferWord: NoteSegment?
+                    for (index, segment) in lastWordsBuffer.reversed().enumerated() {
+                        if !segment.isSilence() && !segment.isVoiceCommandWord() {
+                            lastBufferWord = segment
+                            lastBufferWordIndex = self.noteSegments.distance(to: secondLastBufferRange.startIndex) + (lastWordsBuffer.count - index - 1)
+                            print("\tFound new anchor index: ", lastBufferWordIndex)
+                            break
+                        }
+                    }
+                    updateSelectionAnchor = selectionCursor.anchor != nil && lastBufferWord != nil && !selectionCursor.anchor!.isEqual(lastBufferWord!)
+                    if !updateSelectionAnchor {
+                        print("\tIndex of new anchor not found. Abort updating selection cursor anchor...")
+                    }
+                } else {
+                    print("\tFind index of new anchor...")
+                    updateSelectionAnchor = selectionCursor.anchor != nil && self.noteSegments.last != nil && !selectionCursor.anchor!.isEqual(self.noteSegments.last!)
+                    
+                    if updateSelectionAnchor {
+                        lastBufferWordIndex = self.noteSegments.count - 1
+                        print("\tFound new anchor index: ", lastBufferWordIndex)
                     }
                 }
-
-                for index in lowestCommandIndex!..<self.noteBuffer.count {
-                    if let lowestCommandIndex = lowestCommandIndex, index >= lowestCommandIndex  {
-                        // duplicate segment
-                        let duplicateSegment = self.noteBuffer[index].duplicate()
-                        
-                        // determine if we need to replace selection values
-                        let replaceSelectionAnchor = duplicateSegment == selectionCursor.anchor
-                        let replaceSelectionFocus = duplicateSegment == selectionCursor.focus
-                        let replaceSelectionCachedAnchor = duplicateSegment == selectionCursor.cachedAnchor
-                        
-                        // set duplicate segment as voice command word
-                        duplicateSegment.setIsVoiceCommandWord(to: true)
-                        
-                        // set duplicate segment
-                        self.noteBuffer[index] = duplicateSegment
-                        
-                        // update selection anchor
-                        if replaceSelectionAnchor {
-                            selectionCursor.setAnchor(segment: self.noteBuffer[index])
-                        }
-                        
-                        // update selection focus
-                        if replaceSelectionFocus {
-                            selectionCursor.setFocus(segment: self.noteBuffer[index])
-                        }
-                        
-                        // update selection cached anchor
-                        if replaceSelectionCachedAnchor {
-                            selectionCursor.setCachedAnchor(segment: self.noteBuffer[index])
-                        }
-                    }
+                
+                if updateSelectionAnchor {
+                    print("\tSelection Anchor needs to be updated from voice command word: ", selectionCursor.anchor?.getText() ?? "nil")
+                } else {
+                    print("\tIndex of new anchor not found. Abort updating selection cursor anchor...")
+                }
+                
+                if updateSelectionAnchor && self.noteBuffer.count == 0 && lastBufferWordIndex != Int(Utils.UNKNOWN) {
+                    print("\tUpdating Selection Anchor...")
+                    let segment = self.noteSegments[lastBufferWordIndex]
+                    print("\tNew Selection Anchor: ", segment.getText())
+                    selectionCursor.setAnchor(segment: segment)
+                } else if updateSelectionAnchor && self.noteBuffer.count > 0 && lastBufferWordIndex != Int(Utils.UNKNOWN) && !selectionCursor.cachedAnchor!.isCommitted()  {
+                    print("\tUpdating Selection Anchor...")
+                    let segment = self.noteBuffer[lastBufferWordIndex]
+                    print("\tNew Selection Anchor: ", segment.getText())
+                    selectionCursor.setAnchor(segment: segment)
                 }
             }
 
@@ -3677,9 +3729,11 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                 
                 if let command = voiceCommandEngine.includesCommand(passage: transcription.formattedString) {
                     print("\tCommand Recognized!")
-                    self.stopListeningForSpeech(pause: true)
                     // prepare voice command handler
+                    // must come before stopListeningForSpeech
                     self.prepareVoiceCommandHandler(command: command)
+                    
+                    self.stopListeningForSpeech(pause: true)
                 }
             }
         }
@@ -3742,9 +3796,11 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                 
                 if let command = voiceCommandEngine.includesCommand(passage: result.bestTranscription.formattedString) {
                     print("\tCommand Recognized!")
-                    self.stopListeningForSpeech(pause: true)
                     // prepare voice command handler
+                    // must come before stopListeningForSpeech
                     self.prepareVoiceCommandHandler(command: command)
+                    
+                    self.stopListeningForSpeech(pause: true)
                 } else if self.withPassiveEcho && AVAudioSession.isHeadphonesConnected {
                     // Echo formatted String
                     self.echoText(text: result.bestTranscription.formattedString)

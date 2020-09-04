@@ -192,18 +192,17 @@ class NoteSegment: AVCompositionTrackSegment {
     // does note check for time equality
     func isEqual(_ segment: NoteSegment) -> Bool {
         // We omit:
-        // sourceURL
-        // sourceTrackID
-        // timeMapping.target.start
-        // timeMapping.target.end
-        // isCommitted()
-        // isValidSentenceLastWord()
-        // getBackgroundNoise()
-        // getPower()
-        // getSentence()
-        // getSpeakingRate()
-        // getAvgPauseDuration()
-        // getIndex()
+        // timeMapping.target.start => dynamic property
+        // timeMapping.target.end => dynamic property
+        // isCommitted() => we don't need to discriminate this for equality
+        // isValidSentenceLastWord() => dynamic property
+        // getBackgroundNoise() => dynamic property
+        // getPower() => dynamic property
+        // getSentence() => dynamic property
+        // getSpeakingRate() => dynamic property
+        // getAvgPauseDuration() => dynamic property
+        // getIndex() => discrepency between buffer and commited
+        // getPitch => might not be set yet
         return self.sourceURL == segment.sourceURL &&
         self.sourceTrackID == segment.sourceTrackID &&
         self.timeMapping.source.start == segment.timeMapping.source.start &&
@@ -222,7 +221,6 @@ class NoteSegment: AVCompositionTrackSegment {
         self.getLexicalClass() == segment.getLexicalClass() &&
         self.getLemma() == segment.getLemma() &&
         self.getSentiment() == segment.getSentiment() &&
-        self.getPitch() == segment.getPitch() &&
         self.getNote() == segment.getNote()
     }
     

@@ -24,7 +24,6 @@ public final class VoiceCommandEngine: NSObject {
         "start notes",
         "stock note",
         "starting out",
-        "start not",
         "stop note",
         "stop not",
         "stop notes",
@@ -69,6 +68,62 @@ public final class VoiceCommandEngine: NSObject {
         "volume"
     ]
     
+    private let voiceCommandMapping: [String : String] = [
+        "play note": "play note",
+        "play not": "play note",
+        "play notes": "play note",
+        "pause note": "pause note",
+        "pause not": "pause note",
+        "pause notes": "pause note",
+        "start note": "start note",
+        "start not": "start note",
+        "start notes": "start note",
+        "stock note": "start note",
+        "starting out": "start note",
+        "stop note": "stop note",
+        "stop not": "stop note",
+        "stop notes": "stop note",
+        "echo note": "echo note",
+        "ecko note": "echo note",
+        "play ecko": "play echo",
+        "play echo": "play echo",
+        "start echo": "start echo",
+        "start ecko": "start echo",
+        "pause echo": "pause echo",
+        "pause ecko": "pause echo",
+        "stop echo": "stop echo",
+        "stop ecko": "stop echo",
+        "activate punctuation": "activate punctuation",
+        "deactivate punctuation": "deactivate punctuation",
+        "activate silences": "activate silences",
+        "deactivate silences": "deactivate silences",
+        "activate temporal suggestions": "activate temporal suggestions",
+        "deactivate temporal suggestions": "deactivate temporal suggestions",
+        "activate punctuation suggestions": "activate punctuation suggestions",
+        "deactivate punctuation suggestions": "deactivate punctuation suggestions",
+        "activate formatting suggestions": "activate formatting suggestions",
+        "deactivate formatting suggestions": "deactivate formatting suggestions",
+        "activate passive echo": "activate passive echo",
+        "deactivate passive echo": "deactivate passive echo",
+        "turn volume up": "increase volume",
+        "turn volume down": "decrease volume",
+        "increase volume": "increase volume",
+        "decrease volume": "decrease volume",
+        "adjust volume up": "increase volume",
+        "adjust volume down": "decrease volume",
+        "volume up": "increase volume",
+        "volume down": "decrease volume",
+        "just volume up": "increase volume",
+        "i just volume up": "increase volume",
+        "just volume down": "decrease volume",
+        "i just volume down": "decrease volume",
+        "adjust volume": "adjust volume",
+        "i just volume": "adjust volume",
+        "just volume": "adjust volume",
+        "change volume": "adjust volume",
+        "volume": "adjust volume"
+    ]
+    
     func includesCommand(passage: String) -> String? {
         let bagOfWords = passage.lowercased().components(separatedBy: " ")
         
@@ -78,16 +133,16 @@ public final class VoiceCommandEngine: NSObject {
                 let phrase = "\(bagOfWords[i]) \(bagOfWords[i+1])"
                 if voiceCommands.contains(phrase) {
                     print("===== Voice Command Engine: Includes Command =====")
-                    print("\tFound voice command: \"\(phrase)\"")
-                    return phrase
+                    print("\tFound voice command: \"\(self.voiceCommandMapping[phrase] ?? phrase)\"")
+                    return self.voiceCommandMapping[phrase] ?? phrase
                 }
             }
         } else if bagOfWords.count == 2 {
             let phrase = "\(bagOfWords[0]) \(bagOfWords[1])"
             if voiceCommands.contains(phrase) {
                 print("===== Voice Command Engine: Includes Command =====")
-                print("\tFound voice command: \"\(phrase)\"")
-                return phrase
+                print("\tFound voice command: \"\(self.voiceCommandMapping[phrase] ?? phrase)\"")
+                return self.voiceCommandMapping[phrase] ?? phrase
             }
         }
         
@@ -97,16 +152,16 @@ public final class VoiceCommandEngine: NSObject {
                 let phrase = "\(bagOfWords[i]) \(bagOfWords[i+1]) \(bagOfWords[i+2])"
                 if voiceCommands.contains(phrase) {
                     print("===== Voice Command Engine: Includes Command =====")
-                    print("\tFound voice command: \"\(phrase)\"")
-                    return phrase
+                    print("\tFound voice command: \"\(self.voiceCommandMapping[phrase] ?? phrase)\"")
+                    return self.voiceCommandMapping[phrase] ?? phrase
                 }
             }
         } else if bagOfWords.count == 3 {
             let phrase = "\(bagOfWords[0]) \(bagOfWords[1]) \(bagOfWords[2])"
             if voiceCommands.contains(phrase) {
                 print("===== Voice Command Engine: Includes Command =====")
-                print("\tFound voice command: \"\(phrase)\"")
-                return phrase
+                print("\tFound voice command: \"\(self.voiceCommandMapping[phrase] ?? phrase)\"")
+                return self.voiceCommandMapping[phrase] ?? phrase
             }
         }
         
@@ -116,7 +171,7 @@ public final class VoiceCommandEngine: NSObject {
     func process(note: Note, query: String, handler: (() -> Void)? = nil) {
         print("===== Processing Voice Command =====")
         let query = query.lowercased()
-        print("\tQuery: \"\(query)\"")
+        print("\tQuery: \"\(self.voiceCommandMapping[query] ?? query)\"")
         
         switch (query) {
         case "play note", "play not", "play notes":
@@ -422,9 +477,11 @@ public final class VoiceCommandEngine: NSObject {
                         if let segment = note.vc!.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let range = note.vc!.note.getSegmentTextRange(of: segment) {
                             // update text
                             note.vc!.updateUIText(range: range)
-                            
+                        }
+                        
+                        if let segment = note.vc!.note.getSegment(type: .current), let pitch = segment.getPitch() {
                             // update pitch
-                            note.vc!.pitchLabel.text = segment.getPitch()?.note.string
+                            note.vc!.pitchLabel.text = pitch.note.string
                         }
                     }
                 }, onFinishHandler: {
