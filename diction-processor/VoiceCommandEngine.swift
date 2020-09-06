@@ -68,7 +68,7 @@ public final class VoiceCommandEngine: NSObject {
         "volume"
     ]
     
-    private let voiceCommandMapping: [String : String] = [
+    let voiceCommandMapping: [String : String] = [
         "play note": "play note",
         "play not": "play note",
         "play notes": "play note",
@@ -205,11 +205,11 @@ public final class VoiceCommandEngine: NSObject {
                 Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
                     let synthesizerItem = SynthesizerItem(
-                        synthesizer: note.speechSynthesizer,
+                        synthesizer: note.vc!.speechSynthesizer,
                         text: "No ongoing note.",
                         voice: voice,
-                        rate: note.echoRate,
-                        volume: note.playbackVolume
+                        rate: note.vc!.echoRate,
+                        volume: note.vc!.playbackVolume
                     )
                     
                     Utils.runSpeechSynthesizer(item: synthesizerItem)
@@ -232,11 +232,11 @@ public final class VoiceCommandEngine: NSObject {
                 Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
                     let synthesizerItem = SynthesizerItem(
-                        synthesizer: note.speechSynthesizer,
+                        synthesizer: note.vc!.speechSynthesizer,
                         text: "Echo already in progress.",
                         voice: voice,
-                        rate: note.echoRate,
-                        volume: note.playbackVolume
+                        rate: note.vc!.echoRate,
+                        volume: note.vc!.playbackVolume
                     )
                     
                     Utils.runSpeechSynthesizer(item: synthesizerItem)
@@ -259,11 +259,11 @@ public final class VoiceCommandEngine: NSObject {
                 Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
                     let synthesizerItem = SynthesizerItem(
-                        synthesizer: note.speechSynthesizer,
+                        synthesizer: note.vc!.speechSynthesizer,
                         text: "Note not being echoed.",
                         voice: voice,
-                        rate: note.echoRate,
-                        volume: note.playbackVolume
+                        rate: note.vc!.echoRate,
+                        volume: note.vc!.playbackVolume
                     )
                     
                     Utils.runSpeechSynthesizer(item: synthesizerItem)
@@ -286,11 +286,11 @@ public final class VoiceCommandEngine: NSObject {
                 Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
                     let synthesizerItem = SynthesizerItem(
-                        synthesizer: note.speechSynthesizer,
+                        synthesizer: note.vc!.speechSynthesizer,
                         text: "Note not being echoed.",
                         voice: voice,
-                        rate: note.echoRate,
-                        volume: note.playbackVolume
+                        rate: note.vc!.echoRate,
+                        volume: note.vc!.playbackVolume
                     )
                     
                     Utils.runSpeechSynthesizer(item: synthesizerItem)
@@ -371,16 +371,16 @@ public final class VoiceCommandEngine: NSObject {
             // Play Sound
             soundEngine.voiceCommandAccept()
             
-            let currentVolume = note.playbackVolume
+            let currentVolume = note.vc!.playbackVolume
             if currentVolume < 1 {
                 setPlaybackVolume(to: min(currentVolume + Utils.DISCRETE_VOLUME_DELTA, 1)) {
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
                     let synthesizerItem = SynthesizerItem(
-                        synthesizer: note.speechSynthesizer,
+                        synthesizer: note.vc!.speechSynthesizer,
                         text: "Volume increased.",
                         voice: voice,
-                        rate: note.echoRate,
-                        volume: note.playbackVolume
+                        rate: note.vc!.echoRate,
+                        volume: note.vc!.playbackVolume
                     )
                     
                     Utils.runSpeechSynthesizer(item: synthesizerItem)
@@ -395,11 +395,11 @@ public final class VoiceCommandEngine: NSObject {
                 Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
                     let synthesizerItem = SynthesizerItem(
-                        synthesizer: note.speechSynthesizer,
+                        synthesizer: note.vc!.speechSynthesizer,
                         text: "Volume already at maximum.",
                         voice: voice,
-                        rate: note.echoRate,
-                        volume: note.playbackVolume
+                        rate: note.vc!.echoRate,
+                        volume: note.vc!.playbackVolume
                     )
                     
                     Utils.runSpeechSynthesizer(item: synthesizerItem)
@@ -409,16 +409,16 @@ public final class VoiceCommandEngine: NSObject {
             // Play Sound
             soundEngine.voiceCommandAccept()
             
-            let currentVolume = note.playbackVolume
+            let currentVolume = note.vc!.playbackVolume
             if currentVolume > 0 {
                 setPlaybackVolume(to: max(currentVolume - Utils.DISCRETE_VOLUME_DELTA, 0.1)) {
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
                     let synthesizerItem = SynthesizerItem(
-                        synthesizer: note.speechSynthesizer,
+                        synthesizer: note.vc!.speechSynthesizer,
                         text: "Volume decreased.",
                         voice: voice,
-                        rate: note.echoRate,
-                        volume: note.playbackVolume
+                        rate: note.vc!.echoRate,
+                        volume: note.vc!.playbackVolume
                     )
                     
                     Utils.runSpeechSynthesizer(item: synthesizerItem)
@@ -433,11 +433,11 @@ public final class VoiceCommandEngine: NSObject {
                 Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
                     let synthesizerItem = SynthesizerItem(
-                        synthesizer: note.speechSynthesizer,
+                        synthesizer: note.vc!.speechSynthesizer,
                         text: "Volume already at minimum.",
                         voice: voice,
-                        rate: note.echoRate,
-                        volume: note.playbackVolume
+                        rate: note.vc!.echoRate,
+                        volume: note.vc!.playbackVolume
                     )
                     
                     Utils.runSpeechSynthesizer(item: synthesizerItem)

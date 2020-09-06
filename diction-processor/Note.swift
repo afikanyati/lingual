@@ -185,32 +185,20 @@ class Note: AVMutableComposition {
     private var onListeningStartHandler: (() -> Void)?
     
     // MARK: - Speech Synthesis Properties
-    /// Stores a reference to note's speech synthesizer object
-    public let speechSynthesizer = AVSpeechSynthesizer()
-    /// Stores a queue of synthesizer tasks to be executed serially
-    public var synthesizerQueue = Queue<SynthesizerItem>()
-    /// Specifies whether note has been instructed to clear out contents of synthesizer queue
-    private(set) var isExhaustingSynthesizerQueue = false
     /// Specifies whether passive echo should execute when headphones are connected
     private(set) var withPassiveEcho = true
     /// Specifies whether echo is currently playing
-    public var isPlayingEcho: Bool {
-        return speechSynthesizer.isSpeaking
-    }
+    public var isPlayingEcho = false
     /// Specifies whether echo is currently paused (active, but paused vs. inactive)
     public var echoIsPaused: Bool {
-        return speechSynthesizer.isPaused
+        return self.vc!.speechSynthesizer.isPaused
     }
-    /// Stores the rate of the speech synthesis speech
-    private(set) var echoRate: Float = 0.53
-    /// Stores a handler to be executed when echo is complete (always executes)
-    private(set) var onEchoFinish: (() -> Void)?
-    /// Stores a temporary handler to be executed when echo is complete (executes on-demand)
-    private(set) var tempOnEchoFinish: (() -> Void)?
-    /// Stores a handler to be executed when a new echo range is received and processed
-    private(set) var onEchoUpdate: ((_ hightlightRange: NSRange) -> Void)?
     /// Stores a handler to be executed when note is complete
     private(set) var onComplete: (() -> Void)?
+    /// Schedules a temporary handler to be executed when echo is complete
+    private var scheduleTempOnEchoFinishHandler: ((_ handler: @escaping () -> Void) -> Void)?
+    /// Range of last echo of note segments
+    private(set) var lastEchoSegmentRange: Range<Int>?
     
     // MARK: - Audio Playback Properties
     /// Stores a reference to the note's player object
@@ -221,10 +209,6 @@ class Note: AVMutableComposition {
     private let playbackBus = 1
     /// Stores the current playback rate of note playback
     private(set) var playbackRate: Float = 1
-    /// Stores the current playback volume of note playback
-    public var playbackVolume: Float {
-        return AVAudioSession.sharedInstance().outputVolume
-    }
     /// Stores a reference to the playback observer that executes after each segment
     public var boundaryObserverToken: Any?
     /// Stores a reference to the playback observer that executes each second
@@ -264,9 +248,8 @@ class Note: AVMutableComposition {
     ///     - withTextStrictlyAsWords: Supplies whether note will only present written language as words (versus numerals or punctuation symbols)
     ///     - onListenUpdate: Supplies a handler to be executed when a new listening buffer is received and processed
     ///     - onListenStop: Supplies a handler to be executed when listening has stopped
-    ///     - onEchoUpdate: Supplies a handler to be executed when a new echo range is received and processed
-    ///     - onEchoFinish: Supplies a handler to be executed when echo is complete (always executes)
     ///     - onComplete: Supplies a handler to be executed when note is complete.
+    ///     - scheduleTempOnEchoFinishHandler: Schedules a temporary handler to be executed when echo is complete
     init(
         vc: ViewController? = nil,
         filename: String,
@@ -281,9 +264,8 @@ class Note: AVMutableComposition {
         withTextStrictlyAsWords: Bool = false,
         onListenUpdate: ((_ bufferRange: NSRange?) -> Void)? = nil,
         onListenStop: (() -> Void)? = nil,
-        onEchoUpdate: ((_ hightlightRange: NSRange) -> Void)? = nil,
-        onEchoFinish: (() -> Void)? = nil,
-        onComplete: (() -> Void)? = nil
+        onComplete: (() -> Void)? = nil,
+        scheduleTempOnEchoFinishHandler: ((_ handler: @escaping () -> Void) -> Void)? = nil
     ) {
         print("===== Instantiating new note: \(filename) =====")
         self.filename = filename
@@ -292,9 +274,8 @@ class Note: AVMutableComposition {
         self.useOnDeviceRecognition = withOnDeviceRecognition
         self.onListenUpdate = onListenUpdate
         self.onListenStop = onListenStop
-        self.onEchoFinish = onEchoFinish
-        self.onEchoUpdate = onEchoUpdate
         self.onComplete = onComplete
+        self.scheduleTempOnEchoFinishHandler = scheduleTempOnEchoFinishHandler
         self.withPunctuationSuggestions = withPunctuationSuggestions
         self.withFormattingSuggestions = withFormattingSuggestions
         self.withTextStrictlyAsWords = withTextStrictlyAsWords
@@ -336,9 +317,6 @@ class Note: AVMutableComposition {
             self._fileType = fileType
         }
         
-        // Assign delegates
-        speechSynthesizer.delegate = self
-        
         // Configure Observers
         self.configureNotificationObservers()
         
@@ -356,7 +334,7 @@ class Note: AVMutableComposition {
     deinit {}
     
     public override var description: String {
-        return "Note {\n\tfilename: \(self.filename) \n\tfileType: \(self.fileType) \n\tspeaker: \(self.speaker) \n\tnoteSegments: \(self.noteSegments) \n\tnoteBuffer: \(self.noteBuffer) \n\tcommittedBufferRanges: \(String(describing: self.committedBufferRanges)) \n\tstartTime: \(self.startTime) \n\tendTime: \(self.endTime) \n\tduration: \(self.duration) \n\tisExporting: \(self.isExporting) \n\tnumSentences: \(self.numSentences) \n\tlanguage: \(String(describing: self.language)) \n\tavgSpeakingRate: \(self.avgSpeakingRate) \n\twithTemporalSuggestions: \(self.withTemporalSuggestions) \n\twithPunctuationSuggestions: \(self.withPunctuationSuggestions) \n\twithFormattingSuggestions: \(self.withFormattingSuggestions) \n\twithTextStrictlyAsWords: \(self.withTextStrictlyAsWords) \n\tauthorizedToListenForSpeech: \(self.authorizedToListenForSpeech) \n\tclipCount: \(self.clipCount) \n\trecordStartDate: \(String(describing: self.recordStartDate)) \n\taccumulatedDuration: \(self.accumulatedDuration) \n\tsoundIntensityStream: \(self.soundIntensityStream) \n\tminPower: \(self.minPower) \n\tpitchStream: \(self.pitchStream) \n\tuseOnDeviceRecognition: \(self.useOnDeviceRecognition) \n\tisListeningForSpeech: \(self.isListeningForSpeech) \n\tpausedListeningForSpeech: \(self.pausedListeningForSpeech) \n\tisListeningForCommands: \(self.isListeningForCommands) \n\tpausedListeningForCommands: \(self.pausedListeningForCommands) \n\tisExhaustingSynthesizerQueue: \(self.isExhaustingSynthesizerQueue) \n\twithPassiveEcho: \(self.withPassiveEcho) \n\tisPlayingEcho: \(self.isPlayingEcho) \n\techoIsPaused: \(self.echoIsPaused) \n\tplaybackRate: \(self.playbackRate) \n\tpreviousBoundarySegment: \(String(describing: self.previousBoundarySegment)) \n\tisPlayingNote: \(self.isPlayingNote) \n\tskipPunctuation: \(self.skipPunctuation) \n\tskipSilence: \(self.skipSilence) \n\tstartPlaybackAt: \(String(describing: self.startPlaybackAt)) \n\tstopPlaybackAt: \(String(describing: self.stopPlaybackAt))\n}"
+        return "Note {\n\tfilename: \(self.filename) \n\tfileType: \(self.fileType) \n\tspeaker: \(self.speaker) \n\tnoteSegments: \(self.noteSegments) \n\tnoteBuffer: \(self.noteBuffer) \n\tcommittedBufferRanges: \(String(describing: self.committedBufferRanges)) \n\tstartTime: \(self.startTime) \n\tendTime: \(self.endTime) \n\tduration: \(self.duration) \n\tisExporting: \(self.isExporting) \n\tnumSentences: \(self.numSentences) \n\tlanguage: \(String(describing: self.language)) \n\tavgSpeakingRate: \(self.avgSpeakingRate) \n\twithTemporalSuggestions: \(self.withTemporalSuggestions) \n\twithPunctuationSuggestions: \(self.withPunctuationSuggestions) \n\twithFormattingSuggestions: \(self.withFormattingSuggestions) \n\twithTextStrictlyAsWords: \(self.withTextStrictlyAsWords) \n\tauthorizedToListenForSpeech: \(self.authorizedToListenForSpeech) \n\tclipCount: \(self.clipCount) \n\trecordStartDate: \(String(describing: self.recordStartDate)) \n\taccumulatedDuration: \(self.accumulatedDuration) \n\tsoundIntensityStream: \(self.soundIntensityStream) \n\tminPower: \(self.minPower) \n\tpitchStream: \(self.pitchStream) \n\tuseOnDeviceRecognition: \(self.useOnDeviceRecognition) \n\tisListeningForSpeech: \(self.isListeningForSpeech) \n\tpausedListeningForSpeech: \(self.pausedListeningForSpeech) \n\tisListeningForCommands: \(self.isListeningForCommands) \n\tpausedListeningForCommands: \(self.pausedListeningForCommands) \n\twithPassiveEcho: \(self.withPassiveEcho) \n\tisPlayingEcho: \(self.isPlayingEcho) \n\techoIsPaused: \(self.echoIsPaused) \n\tplaybackRate: \(self.playbackRate) \n\tpreviousBoundarySegment: \(String(describing: self.previousBoundarySegment)) \n\tisPlayingNote: \(self.isPlayingNote) \n\tskipPunctuation: \(self.skipPunctuation) \n\tskipSilence: \(self.skipSilence) \n\tstartPlaybackAt: \(String(describing: self.startPlaybackAt)) \n\tstopPlaybackAt: \(String(describing: self.stopPlaybackAt))\n}"
     }
     
     // MARK: - Configuration Methods
@@ -396,7 +374,7 @@ class Note: AVMutableComposition {
         do {
             try recordFile = AVAudioFile(
                 forWriting: Utils.getTempFileURL(of: "\(self.filename)-\(self.clipCount)\(self.fileType)"),
-                settings: audioEngine.inputNode.inputFormat(forBus: recordBus).settings
+                settings: audioEngine.inputNode.inputFormat(forBus: self.recordBus).settings
             )
             authorizedToListenForSpeech = true
             print("\tSource URL for writing note successfully created: \(self.filename)-\(self.clipCount)\(self.fileType)")
@@ -550,11 +528,11 @@ class Note: AVMutableComposition {
             Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {[weak self] timer in
                 let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self!.vc)
                 let synthesizerItem = SynthesizerItem(
-                    synthesizer: self!.speechSynthesizer,
+                    synthesizer: self!.vc!.speechSynthesizer,
                     text: "Note already started.",
                     voice: voice,
-                    rate: self!.echoRate,
-                    volume: self!.playbackVolume
+                    rate: self!.vc!.echoRate,
+                    volume: self!.vc!.playbackVolume
                 )
                 
                 Utils.runSpeechSynthesizer(item: synthesizerItem)
@@ -626,7 +604,7 @@ class Note: AVMutableComposition {
         }
 
         let node = audioEngine.inputNode
-        let recordingFormat = node.outputFormat(forBus: recordBus)
+        let recordingFormat = node.outputFormat(forBus: self.recordBus)
         print("===== Recording Info ===== \n\tSoftware Format: \(recordingFormat.sampleRate)\n\tHardware Format: \(AVAudioSession.sharedInstance().sampleRate) \n\tInput Latency: \(recordingSession.inputLatency.rounded(toPlaces: 5)) \n\tOutput Latency: \(recordingSession.outputLatency.rounded(toPlaces: 5)) \n\tIOBufferDuration: \(recordingSession.ioBufferDuration.rounded(toPlaces: 5))")
         
 //        let recordSettings: [String : AnyObject] = [
@@ -642,7 +620,7 @@ class Note: AVMutableComposition {
         request!.requiresOnDeviceRecognition = false // Set to false by default, but conditionally changed below
 
         // Tap into microphone bus to receive and process audio input buffers
-        node.installTap(onBus: recordBus, bufferSize: 1024, format: recordingFormat) { [unowned self] (buffer, _) in
+        node.installTap(onBus: self.recordBus, bufferSize: 1024, format: recordingFormat) { [unowned self] (buffer, _) in
             self.request!.append(buffer)
             // We place this here so we start tracking recording from the first buffer chnk we receive
             DispatchQueue.main.async {
@@ -747,11 +725,11 @@ class Note: AVMutableComposition {
             Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {[weak self] timer in
                 let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self!.vc)
                 let synthesizerItem = SynthesizerItem(
-                    synthesizer: self!.speechSynthesizer,
+                    synthesizer: self!.vc!.speechSynthesizer,
                     text: "No ongoing note.",
                     voice: voice,
-                    rate: self!.echoRate,
-                    volume: self!.playbackVolume
+                    rate: self!.vc!.echoRate,
+                    volume: self!.vc!.playbackVolume
                 )
                 
                 Utils.runSpeechSynthesizer(item: synthesizerItem)
@@ -896,18 +874,13 @@ class Note: AVMutableComposition {
                 // First temporary segment
                 
                 // Set source timestamp
-                sourceTimestamp = DEFAULT_SEGMENT_DURATION
+                sourceTimestamp = floor(Note.defaultSegmentTimescale * DEFAULT_SEGMENT_DURATION)
                 
                 // Set duration
                 duration = floor(Note.defaultSegmentTimescale * DEFAULT_SEGMENT_DURATION)
             } else {
-                let processedSeconds: Double = self.noteBuffer[0].timeMapping.target.start.seconds
                 // Set source timestamp
-                sourceTimestamp = floor(Note.defaultSegmentTimescale * (
-                        processedSeconds +
-                        Double(transcriptionIndex) * DEFAULT_SEGMENT_DURATION
-                    )
-                )
+                sourceTimestamp = floor(Note.defaultSegmentTimescale * (Double(transcriptionIndex + 1) * DEFAULT_SEGMENT_DURATION))
                 
                 // Set duration
                 duration = floor(Note.defaultSegmentTimescale * DEFAULT_SEGMENT_DURATION)
@@ -1696,11 +1669,11 @@ class Note: AVMutableComposition {
             Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {[weak self] timer in
                 let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self!.vc)
                 let synthesizerItem = SynthesizerItem(
-                    synthesizer: self!.speechSynthesizer,
+                    synthesizer: self!.vc!.speechSynthesizer,
                     text: "Note is empty.",
                     voice: voice,
-                    rate: self!.echoRate,
-                    volume: self!.playbackVolume
+                    rate: self!.vc!.echoRate,
+                    volume: self!.vc!.playbackVolume
                 )
                 
                 Utils.runSpeechSynthesizer(item: synthesizerItem)
@@ -1720,9 +1693,9 @@ class Note: AVMutableComposition {
             soundEngine.play()
         }
         
-        if speechSynthesizer.isSpeaking {
+        if self.vc!.speechSynthesizer.isSpeaking {
             print("\tPause speech synthesizer to play speech audio.\n")
-            speechSynthesizer.stopSpeaking(at: .immediate)
+            self.vc!.speechSynthesizer.stopSpeaking(at: .immediate)
         }
 
         if onStartHandler != nil {
@@ -1750,7 +1723,7 @@ class Note: AVMutableComposition {
             note: self,
             startTime: self.startPlaybackAt!,
             rate: self.playbackRate,
-            volume: self.playbackVolume,
+            volume: self.vc!.playbackVolume,
             onStartHandler: onStartHandler
         )
 
@@ -1785,11 +1758,11 @@ class Note: AVMutableComposition {
             Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {[weak self] timer in
                 let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self!.vc)
                 let synthesizerItem = SynthesizerItem(
-                    synthesizer: self!.speechSynthesizer,
+                    synthesizer: self!.vc!.speechSynthesizer,
                     text: "Note is empty.",
                     voice: voice,
-                    rate: self!.echoRate,
-                    volume: self!.playbackVolume
+                    rate: self!.vc!.echoRate,
+                    volume: self!.vc!.playbackVolume
                 )
                 
                 Utils.runSpeechSynthesizer(item: synthesizerItem)
@@ -1803,9 +1776,9 @@ class Note: AVMutableComposition {
         // Play Sound
         soundEngine.play()
         
-        if speechSynthesizer.isSpeaking {
+        if self.vc!.speechSynthesizer.isSpeaking {
             print("===== Pause speech synthesizer to play speech audio =====")
-            speechSynthesizer.stopSpeaking(at: .immediate)
+            self.vc!.speechSynthesizer.stopSpeaking(at: .immediate)
         }
 
         if onStartHandler != nil {
@@ -1836,7 +1809,7 @@ class Note: AVMutableComposition {
             note: self,
             startTime: self.startPlaybackAt!,
             rate: self.playbackRate,
-            volume: self.playbackVolume,
+            volume: self.vc!.playbackVolume,
             onStartHandler: onStartHandler
         )
         
@@ -1871,11 +1844,11 @@ class Note: AVMutableComposition {
             Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {[weak self] timer in
                 let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self!.vc)
                 let synthesizerItem = SynthesizerItem(
-                    synthesizer: self!.speechSynthesizer,
+                    synthesizer: self!.vc!.speechSynthesizer,
                     text: "Note is empty.",
                     voice: voice,
-                    rate: self!.echoRate,
-                    volume: self!.playbackVolume
+                    rate: self!.vc!.echoRate,
+                    volume: self!.vc!.playbackVolume
                 )
                 
                 Utils.runSpeechSynthesizer(item: synthesizerItem)
@@ -1889,9 +1862,9 @@ class Note: AVMutableComposition {
         // Play Sound
         soundEngine.play()
         
-        if speechSynthesizer.isSpeaking {
+        if self.vc!.speechSynthesizer.isSpeaking {
             print("===== Pause speech synthesizer to play speech audio =====")
-            speechSynthesizer.stopSpeaking(at: .immediate)
+            self.vc!.speechSynthesizer.stopSpeaking(at: .immediate)
         }
 
         if onStartHandler != nil {
@@ -1922,7 +1895,7 @@ class Note: AVMutableComposition {
             note: self,
             startTime: self.startPlaybackAt!,
             rate: self.playbackRate,
-            volume: self.playbackVolume,
+            volume: self.vc!.playbackVolume,
             onStartHandler: onStartHandler
         )
         
@@ -1977,68 +1950,84 @@ class Note: AVMutableComposition {
     }
     
     // MARK: - Echo Methods
-    
+    // Computer understanding of the note
     func startEcho(onStartHandler: (() -> Void)? = nil, onCompletionHandler: (() -> Void)? = nil) {
-        // Computer understanding of the note
-        
-        
         if player.isPlaying {
             print("\tStop speech audio to play speech synthesizer")
             self.stop()
         }
         
         if self.isListeningForCommands && !AVAudioSession.isHeadphonesConnected {
-            self.stopListeningForVoiceCommands(pause: true)
+            self.stopListeningForVoiceCommands(pause: true) {
+                self.handleEcho(onStartHandler: onStartHandler, onCompletionHandler: onCompletionHandler)
+            }
+        } else if self.isListeningForCommands && AVAudioSession.isHeadphonesConnected {
+            self.handleEcho(onStartHandler: onStartHandler, onCompletionHandler: onCompletionHandler)
         }
         
+        if self.isListeningForSpeech && !AVAudioSession.isHeadphonesConnected {
+            self.stopListeningForSpeech(pause: true) {
+                self.handleEcho(onStartHandler: onStartHandler, onCompletionHandler: onCompletionHandler)
+            }
+        } else if self.isListeningForSpeech && AVAudioSession.isHeadphonesConnected {
+            self.handleEcho(onStartHandler: onStartHandler, onCompletionHandler: onCompletionHandler)
+        }
+    }
+    
+    func pauseEcho(handler: (() -> Void)? = nil) {
+        print("===== Pause Echo =====")
+        self.vc!.speechSynthesizer.pauseSpeaking(at: .immediate)
+        handler?()
+    }
+    
+    func stopEcho(handler: (() -> Void)? = nil) {
+        print("===== Stop Echo =====")
+        self.vc!.speechSynthesizer.stopSpeaking(at: .immediate)
+        handler?()
+    }
+    
+    func handleEcho(onStartHandler: (() -> Void)? = nil, onCompletionHandler: (() -> Void)? = nil) {
         // Play Sound
         soundEngine.play()
         
         if self.echoIsPaused {
             // continue last echo
             print("===== Continue Echo =====")
-            speechSynthesizer.continueSpeaking()
+            self.vc!.speechSynthesizer.continueSpeaking()
         } else {
             // start new echo
             print("===== Start Echo =====")
             print("\tInitiate new speech synthesizer utterance")
             let noteText = self.getText() // make forEcho true when we're doing voice only
             let synthesizerItem = SynthesizerItem(
-                synthesizer: self.speechSynthesizer,
+                synthesizer: self.vc!.speechSynthesizer,
                 text: noteText,
                 voice: speaker.playbackVoice,
-                rate: self.echoRate,
-                volume: self.playbackVolume
+                rate: self.vc!.echoRate,
+                volume: self.vc!.playbackVolume
             )
             
-            Utils.runSpeechSynthesizer(item: synthesizerItem)
+            self.vc!.synthesizerQueue.enqueue(synthesizerItem)
+            self.vc!.exhaustSynthesizerQueue()
+            self.isPlayingEcho = true
+            
+            // cache range of echo segments
+            self.lastEchoSegmentRange = 0..<(self.noteSegments.count + self.noteBuffer.count)
             
             if let onCompletionHandler = onCompletionHandler {
-                self.tempOnEchoFinish = onCompletionHandler
+                self.scheduleTempOnEchoFinishHandler?(onCompletionHandler)
             }
         
             onStartHandler?()
         }
     }
     
-    func pauseEcho(handler: (() -> Void)? = nil) {
-        print("===== Pause Echo =====")
-        speechSynthesizer.pauseSpeaking(at: .immediate)
-        handler?()
-    }
-    
-    func stopEcho(handler: (() -> Void)? = nil) {
-        print("===== Stop Echo =====")
-        speechSynthesizer.stopSpeaking(at: .immediate)
-        handler?()
-    }
-    
     func echoText(text: String) {
         print("===== Echo note text =====")
         
         // Stop existing echo
-        if speechSynthesizer.isSpeaking {
-            speechSynthesizer.stopSpeaking(at: .immediate)
+        if self.vc!.speechSynthesizer.isSpeaking {
+            self.vc!.speechSynthesizer.stopSpeaking(at: .immediate)
         }
         
         if player.isPlaying {
@@ -2046,45 +2035,21 @@ class Note: AVMutableComposition {
             self.stop()
         }
         
-        print("\techoing: \"\(text)\"")
+        let echoText = text.trimTrailingPunctuation()
+        print("\techoing: \"\(echoText)\"")
         
-        // Create echo text
-        let splitText = text.components(separatedBy: " ")
-        var echoText = ""
-        for word in splitText {
-            if let index = word.firstIndex(of: "?") {
-                echoText += " \(word.replacingCharacters(in: index...index, with: " question mark ?"))"
-            } else if let index = word.firstIndex(of: "!") {
-                echoText += " \(word.replacingCharacters(in: index...index, with: " exclamation mark !"))"
-            } else if let index = word.firstIndex(of: ".") {
-                echoText += " \(word.replacingCharacters(in: index...index, with: " period ."))"
-            } else if let index = word.firstIndex(of: ",") {
-                echoText += " \(word.replacingCharacters(in: index...index, with: " comma ,"))"
-            } else {
-                echoText += " \(word)"
-            }
-        }
-        echoText = echoText.trimmingCharacters(in: .whitespacesAndNewlines)
         
         let synthesizerItem = SynthesizerItem(
-            synthesizer: self.speechSynthesizer,
+            synthesizer: self.vc!.speechSynthesizer,
             text: echoText,
             voice: speaker.playbackVoice,
-            rate: self.echoRate,
-            volume: self.playbackVolume
+            rate: self.vc!.echoRate,
+            volume: self.vc!.playbackVolume
         )
         
-        self.synthesizerQueue.enqueue(synthesizerItem)
-        exhaustSynthesizerQueue()
-    }
-    
-    func exhaustSynthesizerQueue() {
-        let item = self.synthesizerQueue.dequeue()
-        self.isExhaustingSynthesizerQueue = !self.synthesizerQueue.isEmpty
-
-        if let item = item {
-            Utils.runSpeechSynthesizer(item: item)
-        }
+        self.vc!.synthesizerQueue.enqueue(synthesizerItem)
+        self.vc!.exhaustSynthesizerQueue()
+        self.isPlayingEcho = true
     }
     
     // MARK: - Mutating Methods
@@ -3247,7 +3212,7 @@ class Note: AVMutableComposition {
                     
                     // update selection anchor
                     if replaceSelectionAnchor {
-                        print("\tReplacing Selection Cursor Anchor with version that is voice command word...")
+                        print("\tReplacing Selection Cursor Anchor with version that is not voice command word...")
                         selectionCursor.setAnchor(segment: self.noteSegments[index])
                     }
                     
@@ -3269,7 +3234,7 @@ class Note: AVMutableComposition {
                 var lastBufferWordIndex = Int(Utils.UNKNOWN)
                 if selectionCursor.cachedAnchor != nil && self.noteBuffer.count > 0 && !selectionCursor.cachedAnchor!.isCommitted() {
                     print("\tBuffer non-empty and Cached Anchor detected to be buffer segment...")
-                    print("\tFind index of new anchor to use as new cached anchor value...")
+                    print("\tFind index of new anchor to use as new anchor value...")
                     var lastBufferWord: NoteSegment?
                     for (index, segment) in self.noteBuffer.reversed().enumerated() {
                         if !segment.isSilence() && !segment.isVoiceCommandWord() {
@@ -3280,12 +3245,9 @@ class Note: AVMutableComposition {
                         }
                     }
                     updateSelectionAnchor = selectionCursor.anchor != nil && lastBufferWord != nil && !selectionCursor.anchor!.isEqual(lastBufferWord!)
-                    if !updateSelectionAnchor {
-                        print("\tIndex of new anchor not found. Abort updating selection cursor anchor...")
-                    }
                 } else if selectionCursor.cachedAnchor != nil && self.noteBuffer.count == 0 {
                     print("\tBuffer is empty and Cached Anchor detected to be committed segment...")
-                    print("\tFind index of new anchor to use as new cached anchor value...")
+                    print("\tFind index of new anchor to use as new anchor value...")
                     let secondLastBufferRange = self.committedBufferRanges[self.committedBufferRanges.count - 2]
                     let lastWordsBuffer = self.noteSegments[secondLastBufferRange]
                     var lastBufferWord: NoteSegment?
@@ -3298,22 +3260,18 @@ class Note: AVMutableComposition {
                         }
                     }
                     updateSelectionAnchor = selectionCursor.anchor != nil && lastBufferWord != nil && !selectionCursor.anchor!.isEqual(lastBufferWord!)
-                    if !updateSelectionAnchor {
-                        print("\tIndex of new anchor not found. Abort updating selection cursor anchor...")
-                    }
                 } else {
-                    print("\tFind index of new anchor to use as new cached anchor value...")
-                    updateSelectionAnchor = selectionCursor.anchor != nil && self.noteSegments.last != nil && !selectionCursor.anchor!.isEqual(self.noteSegments.last!)
-                    
-                    if updateSelectionAnchor {
-                        for (index, segment) in self.noteSegments.reversed().enumerated() {
-                            if !segment.isSilence() && !segment.isVoiceCommandWord() {
-                                lastBufferWordIndex = self.noteSegments.count - index - 1
-                                print("\tFound new anchor index: ", lastBufferWordIndex)
-                                break
-                            }
+                    print("\tFind index of new anchor to use as new anchor value...")
+                    var lastBufferWord: NoteSegment?
+                    for (index, segment) in self.noteSegments.reversed().enumerated() {
+                        if !segment.isSilence() && !segment.isVoiceCommandWord() {
+                            lastBufferWord = segment
+                            lastBufferWordIndex = self.noteSegments.count - index - 1
+                            print("\tFound new anchor index: ", lastBufferWordIndex)
+                            break
                         }
                     }
+                    updateSelectionAnchor = selectionCursor.anchor != nil && lastBufferWord != nil && !selectionCursor.anchor!.isEqual(lastBufferWord)
                 }
                 
                 if updateSelectionAnchor {
@@ -3344,7 +3302,10 @@ class Note: AVMutableComposition {
     
     func handleOnListenUpdate() {
         if self.noteBuffer.count > 0, let firstBufferSegment = self.noteBuffer.first, let lastBufferSegment = self.noteBuffer.last, let firstBufferSegmentTextRange = self.getSegmentTextRange(of: firstBufferSegment), let lastBufferSegmentTextRange = self.getSegmentTextRange(of: lastBufferSegment) {
-            let bufferTextRange = NSRange(location: firstBufferSegmentTextRange.location, length: (lastBufferSegmentTextRange.location - firstBufferSegmentTextRange.location) + lastBufferSegmentTextRange.length)
+            let bufferTextRange = NSRange(
+                location: firstBufferSegmentTextRange.location,
+                length: (lastBufferSegmentTextRange.location - firstBufferSegmentTextRange.location) + lastBufferSegmentTextRange.length
+            )
             self.onListenUpdate?(bufferTextRange)
         } else {
             self.onListenUpdate?(nil)
@@ -3499,8 +3460,8 @@ class Note: AVMutableComposition {
                 self.previousBoundarySegment = currentSegment
                 
                 // Make sure volume is correctly set
-                if self.player.volume != self.playbackVolume {
-                    Utils.setPlayerVolume(player: self.player, volume: self.playbackVolume)
+                if self.player.volume != self.vc!.playbackVolume {
+                    Utils.setPlayerVolume(player: self.player, volume: self.vc!.playbackVolume)
                 }
             }
             
@@ -3531,8 +3492,8 @@ class Note: AVMutableComposition {
                 self.previousBoundarySegment = currentSegment
                 
                 // Make sure volume is correctly set
-                if self.player.volume != self.playbackVolume {
-                    Utils.setPlayerVolume(player: self.player, volume: self.playbackVolume)
+                if self.player.volume != self.vc!.playbackVolume {
+                    Utils.setPlayerVolume(player: self.player, volume: self.vc!.playbackVolume)
                 }
             }
             
@@ -3561,8 +3522,8 @@ class Note: AVMutableComposition {
                 self.previousBoundarySegment = currentSegment
                 
                 // Make sure volume is correctly set
-                if self.player.volume != self.playbackVolume {
-                    Utils.setPlayerVolume(player: self.player, volume: self.playbackVolume)
+                if self.player.volume != self.vc!.playbackVolume {
+                    Utils.setPlayerVolume(player: self.player, volume: self.vc!.playbackVolume)
                 }
             }
             
@@ -3614,13 +3575,7 @@ class Note: AVMutableComposition {
         if command == "stop note" && AVAudioSession.isHeadphonesConnected {
             voiceCommandEngine.process(note: self, query: command)
         } else if !AVAudioSession.isHeadphonesConnected && (
-            command == "play note" ||
-            command == "echo note" ||
-            command == "ecko note" ||
-            command == "play ecko" ||
-            command == "play echo" ||
-            command == "start ecko" ||
-            command == "start echo"
+            voiceCommandEngine.voiceCommandMapping[command] == "play note"
         ) {
             // We don't have headphones connected, so we don't start listening until playback is complete
             // If we listen immediately, the words will be heard and processed
@@ -3637,6 +3592,15 @@ class Note: AVMutableComposition {
                         onStartHandler: self.onListeningStartHandler
                     )
                 }
+            }
+        } else if !AVAudioSession.isHeadphonesConnected && (
+            voiceCommandEngine.voiceCommandMapping[command] == "echo note"
+        ) {
+            // We don't have headphones connected, so we don't start listening until playback is complete
+            // If we listen immediately, the words will be heard and processed
+            voiceCommandEngine.process(note: self, query: command) {
+                // Reset accumulated Duration for next clip capture
+                self.accumulatedDuration = TimeInterval(0)
             }
         } else {
             voiceCommandEngine.process(note: self, query: command)
@@ -3732,8 +3696,8 @@ extension Note: SFSpeechRecognitionTaskDelegate {
             if self.isListeningForSpeech {
                 print("===== Received hypothesis transcription: ", transcription.formattedString)
                 // Stop Echo
-                if self.speechSynthesizer.isSpeaking {
-                    self.speechSynthesizer.stopSpeaking(at: .word)
+                if self.vc!.speechSynthesizer.isSpeaking {
+                    self.vc!.speechSynthesizer.stopSpeaking(at: .word)
                 }
 
                 self.performTranscriptionUpdate(transcription)
@@ -3816,11 +3780,20 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                     
                     self.stopListeningForSpeech(pause: true)
                 } else if self.withPassiveEcho && AVAudioSession.isHeadphonesConnected {
-                    // Echo formatted String
-                    self.echoText(text: result.bestTranscription.formattedString)
+                    // compute echo text range
+                    if let lastEchoSegmentRange = self.committedBufferRanges.last {
+                        self.lastEchoSegmentRange = lastEchoSegmentRange
+                    }
                     
-                    // Give haptic feedback
-                    hapticEngine.lightImpact()
+                    if let lastEchoSegmentRange = self.lastEchoSegmentRange {
+                        let text = self.getText(segments: Array(self.noteSegments[lastEchoSegmentRange]))
+
+                        // Echo formatted String
+                        self.echoText(text: text)
+                        
+                        // Give haptic feedback
+                        hapticEngine.lightImpact()
+                    }
                 }
             } else if self.isListeningForSpeech && self.pausedListeningForSpeech && self.request!.requiresOnDeviceRecognition {
                 // Only the on-server recognition should go here in theory
@@ -3845,52 +3818,6 @@ extension Note: SFSpeechRecognitionTaskDelegate {
     
     func speechRecognitionDidDetectSpeech(_ task: SFSpeechRecognitionTask) {
         print("===== System has detected first incident of speech input =====")
-    }
-}
-
-// MARK: - Speech Synthesizer Delegate Extension
-
-extension Note: AVSpeechSynthesizerDelegate {
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        print("===== Speech synthesis was cancelled =====")
-    }
-    
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didContinue utterance: AVSpeechUtterance) {
-        print("===== Paused speech synthesis successfully instructed to continue =====")
-    }
-    
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        print("===== Speech synthesis utterance successfully completed =====")
-        if self.isExhaustingSynthesizerQueue {
-            self.exhaustSynthesizerQueue()
-        } else {
-            self.tempOnEchoFinish?()
-            self.onEchoFinish?()
-            self.tempOnEchoFinish = nil
-        }
-        
-        if self.pausedListeningForCommands && !AVAudioSession.isHeadphonesConnected {
-            // when headphones are off we don't listen for voice commands while echoing
-            // but on completion we turn it back on
-            self.startListeningForVoiceCommands(
-                soundIntensityHandler: self.soundIntensityHandler,
-                pitchHandler: self.pitchHandler
-            )
-        }
-    }
-    
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didPause utterance: AVSpeechUtterance) {
-        print("===== Speech synthesis utterance successfully paused =====")
-    }
-    
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
-        print("===== Speech synthesis utterance successfully started =====")
-    }
-    
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, willSpeakRangeOfSpeechString characterRange: NSRange, utterance: AVSpeechUtterance) {
-        if !self.isListeningForSpeech {
-            self.onEchoUpdate?(characterRange)
-        }
     }
 }
 

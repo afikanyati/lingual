@@ -44,6 +44,8 @@ extension String {
     }
     
     func trimTrailingPunctuation() -> String {
-        return self.trimmingCharacters(in: .punctuationCharacters)
+        return self.trimmingCharacters(in: .whitespacesAndNewlines)
+        .trimmingCharacters(in: .punctuationCharacters)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

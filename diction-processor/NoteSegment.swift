@@ -707,7 +707,7 @@ class NoteSegment: AVCompositionTrackSegment {
     func runNotificationSearch() {
         self.scheduleNotificationSearch = false
 
-        if let note = self.note, AVAudioSession.isHeadphonesConnected && note.withPunctuationSuggestions && !voiceCommandWord && self.isSilence() && self.suggestsNewParagraph() && self.isCommitted() && self.index >= 0 && (self.index + 1) < note.noteSegments.count && !note.noteSegments[self.index + 1].isVoiceCommandWord() {
+        if let note = self.note, AVAudioSession.isHeadphonesConnected && note.withPunctuationSuggestions && !self.voiceCommandWord && self.isSilence() && self.suggestsNewParagraph() && self.isCommitted() && self.index >= 0 && (self.index + 1) < note.noteSegments.count && !note.noteSegments[self.index + 1].isVoiceCommandWord() {
             // Received newline punctuation suggestion
             // Headphones are connected
             
@@ -715,17 +715,37 @@ class NoteSegment: AVCompositionTrackSegment {
             let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
 
             let synthesizerItem = SynthesizerItem(
-                synthesizer: note.speechSynthesizer,
+                synthesizer: note.vc!.speechSynthesizer,
                 text: "New line.",
                 voice: voice,
-                rate: note.echoRate,
-                volume: note.playbackVolume
+                rate: note.vc!.echoRate,
+                volume: note.vc!.playbackVolume
             )
-            note.synthesizerQueue.enqueue(synthesizerItem)
+            note.vc!.synthesizerQueue.enqueue(synthesizerItem)
             
             // Give haptic feedback
             hapticEngine.mediumImpact()
-        } else if let note = self.note, !AVAudioSession.isHeadphonesConnected && note.withPunctuationSuggestions && !voiceCommandWord && self.isSilence() && self.suggestsNewParagraph() && self.isCommitted() && self.index >= 0 && (self.index + 1) < note.noteSegments.count && !note.noteSegments[self.index + 1].isVoiceCommandWord() {
+        } else if let note = self.note, AVAudioSession.isHeadphonesConnected && note.withPunctuationSuggestions && !self.voiceCommandWord && self.isSilence() && self.suggestsNewSentence() && self.isCommitted() && self.index >= 0 && (self.index + 1) < note.noteSegments.count && !note.noteSegments[self.index + 1].isVoiceCommandWord() {
+            // Received new sentence punctuation suggestion
+            // Headphones are connected
+            
+            // Give auditory feedback
+            let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+            let synthesizerItem = SynthesizerItem(
+                synthesizer: note.vc!.speechSynthesizer,
+                text: "New sentence.",
+                voice: voice,
+                rate: note.vc!.echoRate,
+                volume: note.vc!.playbackVolume
+            )
+            note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+            
+            // Give haptic feedback
+            hapticEngine.mediumImpact()
+        }
+        
+        if let note = self.note, note.withPunctuationSuggestions && !self.voiceCommandWord && self.isSilence() && self.suggestsNewParagraph() && self.isCommitted() && self.index >= 0 && (self.index + 1) < note.noteSegments.count && !note.noteSegments[self.index + 1].isVoiceCommandWord() {
             // Received newline punctuation suggestion
             // Headphones not are connected
             
@@ -733,26 +753,8 @@ class NoteSegment: AVCompositionTrackSegment {
             note.vc!.scheduleNotification(text: "New line suggestion.")
             
             // Give haptic feedback
-            hapticEngine.lightImpact()
-        } else if let note = self.note, AVAudioSession.isHeadphonesConnected && note.withPunctuationSuggestions && !voiceCommandWord && self.isSilence() && self.suggestsNewSentence() && self.isCommitted() && self.index >= 0 && (self.index + 1) < note.noteSegments.count && !note.noteSegments[self.index + 1].isVoiceCommandWord() {
-            // Received new sentence punctuation suggestion
-            // Headphones are connected
-            
-            // Give auditory feedback
-            let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
-
-            let synthesizerItem = SynthesizerItem(
-                synthesizer: note.speechSynthesizer,
-                text: "New sentence.",
-                voice: voice,
-                rate: note.echoRate,
-                volume: note.playbackVolume
-            )
-            note.synthesizerQueue.enqueue(synthesizerItem)
-            
-            // Give haptic feedback
             hapticEngine.mediumImpact()
-        } else if let note = self.note, !AVAudioSession.isHeadphonesConnected && note.withPunctuationSuggestions && !voiceCommandWord && self.isSilence() && self.suggestsNewSentence() && self.isCommitted() && self.index >= 0 && (self.index + 1) < note.noteSegments.count && !note.noteSegments[self.index + 1].isVoiceCommandWord() {
+        } else if let note = self.note, note.withPunctuationSuggestions && !self.voiceCommandWord && self.isSilence() && self.suggestsNewSentence() && self.isCommitted() && self.index >= 0 && (self.index + 1) < note.noteSegments.count && !note.noteSegments[self.index + 1].isVoiceCommandWord() {
             // Received new sentence punctuation suggestion
             // Headphones not are connected
             
@@ -760,7 +762,7 @@ class NoteSegment: AVCompositionTrackSegment {
             note.vc!.scheduleNotification(text: "New sentence suggestion.")
             
             // Give haptic feedback
-            hapticEngine.heavyImpact()
+            hapticEngine.mediumImpact()
         }
     }
     

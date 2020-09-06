@@ -19,7 +19,7 @@ let AVATAR_URL = "https://firebasestorage.googleapis.com/v0/b/afika-nyati-websit
 
 // MARK: - ViewController
 
-class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEngineDelegate {
+class ViewController: UIViewController {
     
     // MARK: - Outlets and Views
     @IBOutlet weak var wakePhraseLabel: UILabel!
@@ -40,15 +40,18 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     let font = UIFont.systemFont(ofSize: 18.0)
     var isListeningForVolume = false
     var notificationQueue = Queue<NotificationItem>()
+    /// Specifies whether view has been instructed to clear out contents of notification queue
     private(set) var isExhaustingNotificationQueue = false
+    /// Stores the current playback volume of note playback
+    public var playbackVolume: Float {
+        return AVAudioSession.sharedInstance().outputVolume
+    }
     var UITimer: Timer?
     var cursorBlinkTimer: Timer?
     var appNotificationTimer: Timer?
     var volumeListeningRateTimer: Timer?
     var stopListeningForVolumeTimer: Timer?
     var onNoteListenUpdate: ((_ bufferRange: NSRange?) -> Void)?
-    var onNoteEchoFinish: (() -> Void)?
-    var onNoteEchoUpdate: ((_ range: NSRange) -> Void)?
     var onNoteListenStop: (() -> Void)?
     var onNoteComplete: (() -> Void)?
     static let PLAY_NOTE_LABEL = "Play Note"
@@ -88,6 +91,14 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     // MARK: - Speech Synthesis Properties
     let speechSynthesizer = AVSpeechSynthesizer()
     var synthesizerVoice : AVSpeechSynthesisVoice?
+    /// Stores a queue of synthesizer tasks to be executed serially
+    public var synthesizerQueue = Queue<SynthesizerItem>()
+    /// Specifies whether view has been instructed to clear out contents of synthesizer queue
+    private(set) var isExhaustingSynthesizerQueue = false
+    /// Stores the rate of the speech synthesis speech
+    private(set) var echoRate: Float = 0.53
+    /// Stores a temporary handler to be executed when echo is complete (executes on-demand)
+    private(set) var tempOnEchoFinish: (() -> Void)?
     
     // MARK: - Pitch Recognition Properties
     let minPower: Float = -160.0
@@ -118,6 +129,9 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         
         // Set textContainer font size
         self.transcriptionText.font = self.font
+        
+        // Assign delegates
+        speechSynthesizer.delegate = self
         
         // add volume observer
         session.addObserver(
@@ -330,25 +344,6 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             }
         }
         
-        self.onNoteEchoFinish = {[weak self] in
-            DispatchQueue.main.async {
-                self?.updateUIText()
-                if (!self!.playTextToSpeechButton.isHidden) {
-                    self?.playTextToSpeechButton.setTitle(ViewController.PLAY_ECHO_LABEL, for: .normal)
-                }
-                
-                if !self!.appActivated {
-                    self?.appActivated = true
-                }
-            }
-        }
-        
-        self.onNoteEchoUpdate = {[weak self] hightlightRange in
-            DispatchQueue.main.async {
-                self?.updateUIText(highlightRange: hightlightRange)
-            }
-        }
-        
         self.onNoteListenStop = {[weak self] in
             DispatchQueue.main.async {
                 self?.updateUIText()
@@ -387,7 +382,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         clearTimedNotification()
         
         if note.isPlayingEcho {
-            note.stopEcho(handler: onNoteEchoFinish)
+            note.stopEcho()
         }
         
         if note.isPlayingNote {
@@ -637,9 +632,10 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             withTextStrictlyAsWords: false,
             onListenUpdate: onNoteListenUpdate,
             onListenStop: onNoteListenStop,
-            onEchoUpdate: onNoteEchoUpdate,
-            onEchoFinish: onNoteEchoFinish,
-            onComplete: onNoteComplete
+            onComplete: onNoteComplete,
+            scheduleTempOnEchoFinishHandler: { [weak self] handler in
+                self?.tempOnEchoFinish = handler
+            }
         )
 
         // add observer to new note
@@ -653,10 +649,11 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         return note
     }
     
-    func scheduleNotification(text: String, type: NotificationType? = nil) {
+    func scheduleNotification(text: String, type: NotificationType? = nil, duration: TimeInterval? = 5) {
         let notificationItem = NotificationItem(
             text: text,
-            type: type
+            type: type,
+            duration: duration
         )
         self.notificationQueue.enqueue(notificationItem)
     }
@@ -670,7 +667,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         }
     }
     
-    func runTimedNotification(item: NotificationItem, duration: TimeInterval = 5) {
+    func runTimedNotification(item: NotificationItem) {
         // Stop UI Timer if we receive app notification while recording
         if self.note.isListeningForSpeech && self.UITimer != nil {
             self.stopRecordingUITimer()
@@ -678,7 +675,7 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         
         self.navigationItem.title = item.text
         self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.red]
-        self.appNotificationTimer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) {[weak self] timer in
+        self.appNotificationTimer = Timer.scheduledTimer(withTimeInterval: item.duration!, repeats: false) {[weak self] timer in
             // Restart UI Timer is we received app notification while receiving
             if self!.isExhaustingNotificationQueue {
                 self?.navigationItem.title = ""
@@ -750,6 +747,15 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         } else {
             self.navigationItem.title = ""
             self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
+        }
+    }
+    
+    func exhaustSynthesizerQueue() {
+        let item = self.synthesizerQueue.dequeue()
+        self.isExhaustingSynthesizerQueue = !self.synthesizerQueue.isEmpty
+
+        if let item = item {
+            Utils.runSpeechSynthesizer(item: item)
         }
     }
     
@@ -1370,8 +1376,28 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
         }
     }
     
-    // MARK: - Speech Recognizer Task Delegates
+    // MARK: - Touch Events
     
+    @objc func handleSingleTap(touch: UITapGestureRecognizer) {
+        if self.appActivated && self.note.isListeningForSpeech {
+            let touchPoint = touch.location(in: self.transcriptionText)
+            let textPosition = self.transcriptionText.closestPosition(to: touchPoint)
+            
+            if self.transcriptionText.selectedRange != Utils.EMPTY_NSRANGE {
+                self.transcriptionText.selectedRange = NSRange(location: 0, length: 0)
+            }
+            
+            if let textPosition = textPosition {
+                print("===== Touch Interaction: Single Tap =====")
+                selectionCursor.moveCursor(textPosition: textPosition, cache: true)
+            }
+        }
+    }
+}
+    
+// MARK: - Speech Recognition Delegate Extension
+
+extension ViewController: SFSpeechRecognitionTaskDelegate {
     func speechRecognitionTaskFinishedReadingAudio(_ task: SFSpeechRecognitionTask) {
         print("===== System is no longer accepting new speech input =====")
     }
@@ -1419,6 +1445,28 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
                     
                     // Give haptic feedback
                     hapticEngine.error()
+                    
+                    // Give visual feedback
+                    self.scheduleNotification(
+                        text: "\"\(transcription.segments.count > 3 ? "\(transcription.segments.first!.substring.lowercased())...\(transcription.segments.last!.substring.lowercased())" : text)\"",
+                        duration: 3
+                    )
+                    self.exhaustNotificationQueue()
+                    
+                    // Give audio feedback
+                    if AVAudioSession.isHeadphonesConnected {
+                        let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self)
+
+                        let synthesizerItem = SynthesizerItem(
+                            synthesizer: self.speechSynthesizer,
+                            text: text,
+                            voice: voice,
+                            rate: self.echoRate,
+                            volume: self.playbackVolume
+                        )
+                        self.synthesizerQueue.enqueue(synthesizerItem)
+                        self.exhaustSynthesizerQueue()
+                    }
                 }
                 
                 return
@@ -1455,40 +1503,117 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
     func speechRecognitionDidDetectSpeech(_ task: SFSpeechRecognitionTask) {
         print("===== System has detected first incident of speech input =====")
     }
-    
-    // MARK: - Speech Synthesizer Delegates
-    
+}
+
+// MARK: - Speech Synthesizer Delegate Extension
+
+extension ViewController: AVSpeechSynthesizerDelegate {
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         print("===== Speech synthesis was cancelled =====")
     }
-    
+
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didContinue utterance: AVSpeechUtterance) {
         print("===== Paused speech synthesis successfully instructed to continue =====")
     }
-    
+
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         print("===== Speech synthesis utterance successfully completed =====")
         self.updateUIText()
-        if (!playTextToSpeechButton.isHidden) {
-            playTextToSpeechButton.setTitle(ViewController.PLAY_ECHO_LABEL, for: .normal)
+        if !self.playTextToSpeechButton.isHidden {
+            self.playTextToSpeechButton.setTitle(ViewController.PLAY_ECHO_LABEL, for: .normal)
+        }
+        
+        if self.isExhaustingSynthesizerQueue {
+            self.exhaustSynthesizerQueue()
+        } else if self.note.isPlayingEcho {
+            // turn off isPlayingEcho
+            self.note.isPlayingEcho = false
+        }
+        
+        self.tempOnEchoFinish?()
+        self.tempOnEchoFinish = nil
+        
+        if self.appActivated && self.note.pausedListeningForCommands && !AVAudioSession.isHeadphonesConnected {
+            // when headphones are off we don't listen for voice commands while echoing
+            // but on completion we turn it back on
+            self.note.startListeningForVoiceCommands(
+                soundIntensityHandler: { power in
+                    if let power = power {
+                        DispatchQueue.main.async {
+                            let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
+                            let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
+                            self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+                        }
+                    }
+                },
+                pitchHandler: { pitchDatum in
+                    if let pitchDatum = pitchDatum, !self.note.isPlayingNote {
+                        DispatchQueue.main.async {
+                            let pitch = pitchDatum.pitch.note.string
+                            self.pitchLabel.text = pitch
+                        }
+                    }
+                }
+            )
+        }
+
+        if self.appActivated && self.note.pausedListeningForSpeech && !AVAudioSession.isHeadphonesConnected {
+            // when headphones are off we don't listen for speech while echoing
+            // but on completion we turn it back on
+            self.note.startListeningForSpeech(
+                soundIntensityHandler: { power in
+                    if let power = power {
+                        DispatchQueue.main.async {
+                            let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
+                            let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
+                            self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+                        }
+                    }
+                },
+                pitchHandler: { pitchDatum in
+                    if let pitchDatum = pitchDatum, !self.note.isPlayingNote {
+                        DispatchQueue.main.async {
+                            let pitch = pitchDatum.pitch.note.string
+                            self.pitchLabel.text = pitch
+                        }
+                    }
+                }
+            )
         }
     }
-    
+
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didPause utterance: AVSpeechUtterance) {
         print("===== Speech synthesis utterance successfully paused =====")
     }
-    
+
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
         print("===== Speech synthesis utterance successfully started =====")
     }
-    
+
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, willSpeakRangeOfSpeechString characterRange: NSRange, utterance: AVSpeechUtterance) {
-        if appActivated {
-            self.updateUIText(highlightRange: characterRange)
+        if appActivated && self.note.isPlayingEcho && utterance.speechString == self.note.getText(segments: Array(self.note.noteSegments[self.note.lastEchoSegmentRange!])).trimTrailingPunctuation() {
+            var textRange = characterRange
+            // normalize range to include contribution from text before echoed passage
+            var lowestEchoSegment: NoteSegment?
+            for segment in self.note.noteSegments[self.note.lastEchoSegmentRange!] {
+                if !segment.isSilence() && !segment.isVoiceCommandWord() {
+                    lowestEchoSegment = segment
+                    break
+                }
+            }
+
+            if let lowestEchoSegment = lowestEchoSegment, let lowestEchoSegmentRange = self.note.getSegmentTextRange(of: lowestEchoSegment), self.note.isListeningForSpeech {
+                textRange = NSRange(location: lowestEchoSegmentRange.location + characterRange.location, length: characterRange.length)
+            }
+            
+            self.updateUIText(highlightRange: textRange)
         }
     }
+}
     
-    // MARK: - Pitch Recognition Delegates
+// MARK: - Pitch Recognition Delegate Extension
+
+extension ViewController: PitchEngineDelegate {
     func pitchEngine(_ pitchEngine: PitchEngine, didReceivePitch pitch: Pitch) {
         // TODO: Timing
         
@@ -1500,7 +1625,6 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
             // Set speaker pitch
             if !self.appActivated {
                 do {
-                    
                     if note.speaker.pitch == nil {
                         print("===== Base vocal frequency detected =====")
                         // when uncommented, it stops system from hearing wake phrase
@@ -1549,24 +1673,6 @@ class ViewController: UIViewController, SFSpeechRecognitionTaskDelegate, PitchEn
 
     public func pitchEngineWentBelowLevelThreshold(_ pitchEngine: PitchEngine) {
         // print("===== Pitch Engine below level threshold =====")
-    }
-    
-    // MARK: - Touch Events
-    
-    @objc func handleSingleTap(touch: UITapGestureRecognizer) {
-        if self.appActivated && self.note.isListeningForSpeech {
-            let touchPoint = touch.location(in: self.transcriptionText)
-            let textPosition = self.transcriptionText.closestPosition(to: touchPoint)
-            
-            if self.transcriptionText.selectedRange != Utils.EMPTY_NSRANGE {
-                self.transcriptionText.selectedRange = NSRange(location: 0, length: 0)
-            }
-            
-            if let textPosition = textPosition {
-                print("===== Touch Interaction: Single Tap =====")
-                selectionCursor.moveCursor(textPosition: textPosition, cache: true)
-            }
-        }
     }
 }
 
