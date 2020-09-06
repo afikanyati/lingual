@@ -8,6 +8,7 @@
 
 import Foundation
 import UIKit
+import AVFoundation
 
 public let voiceCommandEngine = VoiceCommandEngine.shared
 public final class VoiceCommandEngine: NSObject {
@@ -28,7 +29,9 @@ public final class VoiceCommandEngine: NSObject {
         "stop not",
         "stop notes",
         "echo note",
+        "echo notes",
         "ecko note",
+        "ecko notes",
         "play ecko",
         "play echo",
         "start echo",
@@ -38,17 +41,29 @@ public final class VoiceCommandEngine: NSObject {
         "stop echo",
         "stop ecko",
         "activate punctuation",
+        "turn on punctuation",
         "deactivate punctuation",
+        "turn off punctuation",
         "activate silences",
+        "turn on silences",
         "deactivate silences",
+        "turn off silences",
         "activate temporal suggestions",
+        "turn on temporal suggestions",
         "deactivate temporal suggestions",
+        "turn off temporal suggestions",
         "activate punctuation suggestions",
+        "turn on punctuation suggestions",
         "deactivate punctuation suggestions",
+        "turn off punctuation suggestions",
         "activate formatting suggestions",
+        "turn on formatting suggestions",
         "deactivate formatting suggestions",
+        "turn off formatting suggestions",
         "activate passive echo",
+        "turn on passive echo",
         "deactivate passive echo",
+        "turn off passive echo",
         "turn volume up",
         "turn volume down",
         "increase volume",
@@ -84,7 +99,9 @@ public final class VoiceCommandEngine: NSObject {
         "stop not": "stop note",
         "stop notes": "stop note",
         "echo note": "echo note",
+        "echo notes": "echo note",
         "ecko note": "echo note",
+        "ecko notes": "echo note",
         "play ecko": "play echo",
         "play echo": "play echo",
         "start echo": "start echo",
@@ -94,17 +111,29 @@ public final class VoiceCommandEngine: NSObject {
         "stop echo": "stop echo",
         "stop ecko": "stop echo",
         "activate punctuation": "activate punctuation",
+        "turn on punctuation": "activate punctuation",
         "deactivate punctuation": "deactivate punctuation",
+        "turn off punctuation": "deactivate punctuation",
         "activate silences": "activate silences",
+        "turn on silences": "activate silences",
         "deactivate silences": "deactivate silences",
+        "turn off silences": "deactivate silences",
         "activate temporal suggestions": "activate temporal suggestions",
+        "turn on temporal suggestions": "activate temporal suggestions",
         "deactivate temporal suggestions": "deactivate temporal suggestions",
+        "turn off temporal suggestions": "deactivate temporal suggestions",
         "activate punctuation suggestions": "activate punctuation suggestions",
+        "turn on punctuation suggestions": "activate punctuation suggestions",
         "deactivate punctuation suggestions": "deactivate punctuation suggestions",
+        "turn off punctuation suggestions": "deactivate punctuation suggestions",
         "activate formatting suggestions": "activate formatting suggestions",
+        "turn on formatting suggestions": "activate formatting suggestions",
         "deactivate formatting suggestions": "deactivate formatting suggestions",
+        "turn off formatting suggestions": "deactivate formatting suggestions",
         "activate passive echo": "activate passive echo",
+        "turn on passive echo": "activate passive echo",
         "deactivate passive echo": "deactivate passive echo",
+        "turn off passive echo": "deactivate passive echo",
         "turn volume up": "increase volume",
         "turn volume down": "decrease volume",
         "increase volume": "increase volume",
@@ -216,7 +245,7 @@ public final class VoiceCommandEngine: NSObject {
                 }
             }
             break
-        case "echo note", "ecko note", "play echo", "play ecko", "start echo", "start ecko":
+        case "echo note", "echo notes", "ecko note", "ecko notes", "play echo", "play ecko", "start echo", "start ecko":
             // Play Sound
             if !note.isPlayingEcho {
                 soundEngine.voiceCommandAccept()
@@ -373,7 +402,10 @@ public final class VoiceCommandEngine: NSObject {
             
             let currentVolume = note.vc!.playbackVolume
             if currentVolume < 1 {
-                setPlaybackVolume(to: min(currentVolume + Utils.DISCRETE_VOLUME_DELTA, 1)) {
+                setPlaybackVolume(
+                    note: note,
+                    to: min(currentVolume + Utils.DISCRETE_VOLUME_DELTA, 1)
+                ) {
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
                     let synthesizerItem = SynthesizerItem(
                         synthesizer: note.vc!.speechSynthesizer,
@@ -411,7 +443,10 @@ public final class VoiceCommandEngine: NSObject {
             
             let currentVolume = note.vc!.playbackVolume
             if currentVolume > 0 {
-                setPlaybackVolume(to: max(currentVolume - Utils.DISCRETE_VOLUME_DELTA, 0.1)) {
+                setPlaybackVolume(
+                    note: note,
+                    to: max(currentVolume - Utils.DISCRETE_VOLUME_DELTA, 0.1)
+                ) {
                     let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
                     let synthesizerItem = SynthesizerItem(
                         synthesizer: note.vc!.speechSynthesizer,
@@ -447,11 +482,31 @@ public final class VoiceCommandEngine: NSObject {
             startListeningForVolume(note: note)
         default:
             soundEngine.voiceCommandDeny()
+            
+            let queryArray = query.split(separator: " ")
+
+            // Give visual feedback
+            note.vc!.scheduleNotification(
+                text: "\"\(queryArray.count > 3 ? "\(queryArray.first!.lowercased())...\(queryArray.last!.lowercased())" : query)\"",
+                duration: 3
+            )
+            note.vc!.exhaustNotificationQueue()
         }
     }
 
     func playNote(note: Note, rate: Float? = nil, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Play Note")
+
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Play Note\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+        
+        // Give audio feedback
+        // *** The note playing is the audio feedback ***
+
         if let rate = rate {
             setPlaybackRate(note: note, to: rate)
         }
@@ -501,6 +556,35 @@ public final class VoiceCommandEngine: NSObject {
     
     func pauseNote(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Pause Note")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Pause Note\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+        
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected && note.isPlayingNote {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "note paused",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+        
+
         if note.isPlayingNote {
             note.pause() {
                 DispatchQueue.main.async {
@@ -514,6 +598,34 @@ public final class VoiceCommandEngine: NSObject {
     
     func startListeningForSpeech(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Start Listening For Speech")
+
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Start Note\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+        
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected && !note.isListeningForSpeech {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "note started",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+
         note.vc!.recordingButton.setTitle("Stop Note", for: .normal)
         note.vc!.clearTimedNotification()
         note.startListeningForSpeech(
@@ -543,6 +655,34 @@ public final class VoiceCommandEngine: NSObject {
     
     func stopListeningForSpeech(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Stop Listening For Speech")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Stop Note\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+        
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "note stopped",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+
         note.stopListeningForSpeech() {
             handler?()
         }
@@ -550,104 +690,592 @@ public final class VoiceCommandEngine: NSObject {
     
     func startEcho(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Start Echo")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Start Echo\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+        
+        // Give audio feedback
+        // *** The note playing is the audio feedback ***
+
         note.startEcho(onStartHandler: handler)
     }
     
     func pauseEcho(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Pause Echo")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Pause Echo\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+        
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected && note.isPlayingEcho {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "echo paused",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+
         note.pauseEcho(handler: handler)
     }
     
     func stopEcho(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Stop Echo")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Stop Echo\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+        
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected && note.isPlayingEcho {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "echo stopped",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+
         note.stopEcho(handler: handler)
     }
     
     func trimNote(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Trim Note")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Trim Note\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+        
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "trimming note",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+
         // note.trimNote(keeping: <#T##CMTimeRange#>)
     }
     
     func activateSkipPunctuation(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Activate Skip Punctuation")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Skip Punctuation\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+        
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected && !note.skipPunctuation {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "skip punctuation activated",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+
         note.setSkipPunctuation(to: true)
         handler?()
     }
     
     func deactivateSkipPunctuation(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Deactivate Skip Punctuation")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Include Punctuation\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+        
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected && note.skipPunctuation {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "skip punctuation deactivated",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+
         note.setSkipPunctuation(to: false)
         handler?()
     }
     
     func activateSilence(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Activate Silence")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Activate Silences\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+        
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected && !note.skipSilence {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "silences activated",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+
         note.setSkipSilence(to: true)
         handler?()
     }
     
     func deactivateSilence(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Deactivate Silence")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Deactivate Silences\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+        
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected && note.skipSilence {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "silences deactivated",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+
         note.setSkipSilence(to: false)
         handler?()
     }
     
     func activateTemporalSuggestions(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Activate Temporal Suggestions")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Activate Temporal Suggestions\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+        
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected && !note.withTemporalSuggestions {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "temporal suggestions activated",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+
         note.setWithTemporalSuggestions(to: true)
         handler?()
     }
     
     func deactivateTemporalSuggestions(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Deactivate Temporal Suggestions")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Deactivate Temporal Suggestions\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+        
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected && note.withTemporalSuggestions {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "temporal suggestions deactivated",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+
         note.setWithTemporalSuggestions(to: false)
         handler?()
     }
     
     func activatePunctuationSuggestions(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Activate Punctuation Suggestions")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Activate Punctuation Suggestions\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+        
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected && !note.withPunctuationSuggestions {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "punctuation suggestions activated",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+
+        
         note.setWithPunctuationSuggestions(to: true)
         handler?()
     }
     
     func deactivatePunctuationSuggestions(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Deactivate Punctuation Suggestions")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Deactivate Punctuation Suggestions\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+        
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected && note.withTemporalSuggestions {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "punctuation suggestions deactivated",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+        
         note.setWithPunctuationSuggestions(to: false)
         handler?()
     }
     
     func activateFormattingSuggestions(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Activate Formatting Suggestions")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Activate Formatting Suggestions\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+        
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected && !note.withFormattingSuggestions {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "formatting suggestions activated",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+        
         note.setWithFormattingSuggestions(to: true)
         handler?()
     }
     
     func deactivateFormattingSuggestions(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Deactivate Formatting Suggestions")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Deactivate Formatting Suggestions\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected && note.withPunctuationSuggestions {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "formatting suggestions deactivated",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+        
         note.setWithFormattingSuggestions(to: false)
         handler?()
     }
     
     func activatePassiveEcho(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Activate Passive Echo")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Activate Passive Echo\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected && !note.withPassiveEcho {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "passive echo activated",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+        
         note.setWithPassiveEcho(to: true)
         handler?()
     }
     
     func deactivatePassiveEcho(note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Deactivate Passive Echo")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Deactivate Passive Echo\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected && note.withPassiveEcho {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "passive echo deactivated",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+        
         note.setWithPassiveEcho(to: false)
         handler?()
     }
     
     func setPlaybackRate(note: Note, to rate: Float, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Set Playback Rate")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Set Playback Rate\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+        
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "setting playback rate",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+        
         note.setPlaybackRate(to: rate)
         handler?()
     }
     
-    func setPlaybackVolume(to volume: Float, handler: (() -> Void)? = nil) {
+    func setPlaybackVolume(note: Note, to volume: Float, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Set Playback Volume")
+        
+        // Give visual feedback
+        note.vc!.scheduleNotification(
+            text: "\"Set Playback Volume\"",
+            duration: 3
+        )
+        note.vc!.exhaustNotificationQueue()
+
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected {
+            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+            // because we will be note.isListeningForVoiceCommands
+            // which will catch the words and process them
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: "setting playback volume",
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+        
         Utils.setMainVolume(to: volume)
         handler?()
     }

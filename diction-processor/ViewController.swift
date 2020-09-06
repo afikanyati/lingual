@@ -1455,17 +1455,22 @@ extension ViewController: SFSpeechRecognitionTaskDelegate {
                     
                     // Give audio feedback
                     if AVAudioSession.isHeadphonesConnected {
-                        let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self)
+                        // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+                        // because we will be note.isListeningForVoiceCommands
+                        // which will catch the words and process them
+                        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {[weak self] timer in
+                            let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self)
 
-                        let synthesizerItem = SynthesizerItem(
-                            synthesizer: self.speechSynthesizer,
-                            text: text,
-                            voice: voice,
-                            rate: self.echoRate,
-                            volume: self.playbackVolume
-                        )
-                        self.synthesizerQueue.enqueue(synthesizerItem)
-                        self.exhaustSynthesizerQueue()
+                            let synthesizerItem = SynthesizerItem(
+                                synthesizer: self!.speechSynthesizer,
+                                text: text,
+                                voice: voice,
+                                rate: self!.echoRate,
+                                volume: self!.playbackVolume
+                            )
+                            self?.synthesizerQueue.enqueue(synthesizerItem)
+                            self?.exhaustSynthesizerQueue()
+                        }
                     }
                 }
                 
