@@ -30,6 +30,8 @@ class ViewController: UIViewController {
     @IBOutlet weak var recordingButton: UIButton!
     @IBOutlet weak var soundIntensityIndicatorHeight: NSLayoutConstraint!
     @IBOutlet weak var pitchLabel: UILabel!
+    @IBOutlet weak var commandBar: UIView!
+    @IBOutlet weak var commandBarPositionLeft: NSLayoutConstraint!
     var cursorView: UIView?
     
     // MARK: - General Properties
@@ -109,34 +111,44 @@ class ViewController: UIViewController {
         super.viewDidLoad()
         
         // Set up Audio Session
-        configureAudioSession()
+        self.configureAudioSession()
         
         // Set up notification observers
-        configureNotificationObservers()
+        self.configureNotificationObservers()
         
         // Set up note handlers
-        configureNoteHandlers()
+        self.configureNoteHandlers()
 
         // App Visits
-        configureAppVisits()
+        self.configureAppVisits()
 
         // Prepare UI
-        setActiveUI(as: false)
-        wakePhraseLabel.text = "\"\(wakePhrase.capitalizeFirstLetter())\""
+        self.setActiveUI(as: false)
+        self.wakePhraseLabel.text = "\"\(wakePhrase.capitalizeFirstLetter())\""
+        self.prepareCommandBar()
+        self.setCommandBarVisibility(as: false)
         
         // Start listening for wake word
-        configureListeningForWakePhrase()
+        self.configureListeningForWakePhrase()
         
         // Set textContainer font size
         self.transcriptionText.font = self.font
         
         // Assign delegates
-        speechSynthesizer.delegate = self
+        self.speechSynthesizer.delegate = self
         
         // add volume observer
-        session.addObserver(
+        self.session.addObserver(
             self,
             forKeyPath: #keyPath(AVAudioSession.outputVolume),
+            options: [.old, .new],
+            context: nil
+        )
+        
+        // add observer to hasSelection
+        selectionCursor.addObserver(
+            self,
+            forKeyPath: "hasSelection",
             options: [.old, .new],
             context: nil
         )
@@ -150,9 +162,16 @@ class ViewController: UIViewController {
         super.viewWillDisappear(animated)
         
         // remove volume observer
-        session.removeObserver(
+        self.session.removeObserver(
             self,
             forKeyPath: #keyPath(AVAudioSession.outputVolume),
+            context: nil
+        )
+        
+        // remove observer from hasSelection
+        selectionCursor.removeObserver(
+            self,
+            forKeyPath: "hasSelection",
             context: nil
         )
         
@@ -162,8 +181,8 @@ class ViewController: UIViewController {
     
     // MARK: - Inactive
     func activateApp() {
-        appActivated = true
-        setActiveUI(as: true)
+        self.appActivated = true
+        self.setActiveUI(as: true)
         
         // clear pitch and volume streams
         self.pitchStream = [PitchDatum]()
@@ -224,6 +243,17 @@ class ViewController: UIViewController {
         } catch {
             print("===== There was an error requesting permissions to record audio or setting session category =====")
         }
+    }
+    
+    func prepareCommandBar() {
+        self.commandBar.layer.shadowPath =
+              UIBezierPath(roundedRect: self.commandBar.bounds,
+              cornerRadius: self.commandBar.layer.cornerRadius).cgPath
+        self.commandBar.layer.shadowColor = UIColor.black.cgColor
+        self.commandBar.layer.shadowOpacity = 0.5
+        self.commandBar.layer.shadowOffset = CGSize(width: 5, height: 5)
+        self.commandBar.layer.shadowRadius = 5
+        self.commandBar.layer.masksToBounds = false
     }
     
     @objc func handleAudioSessionRouteChange(notification: Notification) {
@@ -615,6 +645,30 @@ class ViewController: UIViewController {
                 self.cursorBlinkTimer?.invalidate()
                 self.cursorBlinkTimer = nil
             }
+        }
+    }
+    
+    func setCommandBarVisibility(as visible: Bool) {
+        if visible {
+            UIView.animate(
+                withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
+                delay: 0,
+                options: [.curveEaseIn],
+                animations: {
+                    self.commandBar.alpha = 1
+                    self.commandBarPositionLeft.constant = 10
+                }
+            )
+        } else {
+            UIView.animate(
+                withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
+                delay: 0,
+                options: [.curveEaseIn],
+                animations: {
+                    self.commandBar.alpha = 0
+                    self.commandBarPositionLeft.constant = -10
+                }
+            )
         }
     }
     
@@ -1373,6 +1427,10 @@ class ViewController: UIViewController {
             if let isListeningForSpeech = change?[.newKey] as? Bool {
                 self.setCursorVisibility(as: isListeningForSpeech)
             }
+        } else if keyPath == "hasSelection" {
+            if let hasSelection = change?[.newKey] as? Bool {
+                self.setCommandBarVisibility(as: hasSelection)
+            }
         }
     }
     
@@ -1392,6 +1450,30 @@ class ViewController: UIViewController {
                 selectionCursor.moveCursor(textPosition: textPosition, cache: true)
             }
         }
+    }
+
+    @IBAction func handleDeleteSelection(_ sender: Any) {
+        print("handleDeleteSelection")
+    }
+    
+    @IBAction func handleReplaceSelection(_ sender: Any) {
+        print("handleReplaceSelection")
+    }
+    
+    @IBAction func handleCopySelection(_ sender: Any) {
+        print("handleCopySelection")
+    }
+    
+    @IBAction func handleCutSelection(_ sender: Any) {
+        print("handleCutSelection")
+    }
+    
+    @IBAction func handlePasteSelection(_ sender: Any) {
+        print("handlePasteSelection")
+    }
+    
+    @IBAction func handleExportSelection(_ sender: Any) {
+        print("handleExportSelection")
     }
 }
     
@@ -1426,7 +1508,7 @@ extension ViewController: SFSpeechRecognitionTaskDelegate {
                     text += " \(segment.substring)"
                 }
                 
-                text = text.lowercased()
+                text = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
                 if text.contains(self.wakePhrase) { // wake word/phrase needs to be two words to get pitch data
                     self.stopListeningForWakePhrase()
                     // Play Sound
@@ -1447,29 +1529,31 @@ extension ViewController: SFSpeechRecognitionTaskDelegate {
                     hapticEngine.error()
                     
                     // Give visual feedback
-                    self.scheduleNotification(
-                        text: "\"\(transcription.segments.count > 3 ? "\(transcription.segments.first!.substring.lowercased())...\(transcription.segments.last!.substring.lowercased())" : text)\"",
-                        duration: 3
-                    )
-                    self.exhaustNotificationQueue()
-                    
-                    // Give audio feedback
-                    if AVAudioSession.isHeadphonesConnected {
-                        // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
-                        // because we will be note.isListeningForVoiceCommands
-                        // which will catch the words and process them
-                        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {[weak self] timer in
-                            let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self)
+                    if text.count > 0 {
+                        self.scheduleNotification(
+                            text: "\"\(transcription.segments.count > 3 ? "\(transcription.segments.first!.substring.lowercased())...\(transcription.segments.last!.substring.lowercased())" : text)\"",
+                            duration: 3
+                        )
+                        self.exhaustNotificationQueue()
+                        
+                        // Give audio feedback
+                        if AVAudioSession.isHeadphonesConnected {
+                            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
+                            // because we will be note.isListeningForVoiceCommands
+                            // which will catch the words and process them
+                            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {[weak self] timer in
+                                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self)
 
-                            let synthesizerItem = SynthesizerItem(
-                                synthesizer: self!.speechSynthesizer,
-                                text: text,
-                                voice: voice,
-                                rate: self!.echoRate,
-                                volume: self!.playbackVolume
-                            )
-                            self?.synthesizerQueue.enqueue(synthesizerItem)
-                            self?.exhaustSynthesizerQueue()
+                                let synthesizerItem = SynthesizerItem(
+                                    synthesizer: self!.speechSynthesizer,
+                                    text: text,
+                                    voice: voice,
+                                    rate: self!.echoRate,
+                                    volume: self!.playbackVolume
+                                )
+                                self?.synthesizerQueue.enqueue(synthesizerItem)
+                                self?.exhaustSynthesizerQueue()
+                            }
                         }
                     }
                 }

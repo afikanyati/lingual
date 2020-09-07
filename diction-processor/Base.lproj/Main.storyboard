@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="16097.2" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="5KJ-jK-SKN">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="16097.3" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="5KJ-jK-SKN">
     <device id="retina6_1" orientation="portrait" appearance="light"/>
     <dependencies>
         <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="16087"/>
@@ -68,7 +68,7 @@
                                 <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="35"/>
                                 <nil key="highlightedColor"/>
                             </label>
-                            <view contentMode="scaleToFill" preservesSuperviewLayoutMargins="YES" translatesAutoresizingMaskIntoConstraints="NO" id="NP2-Ys-Ufm">
+                            <view contentMode="scaleToFill" preservesSuperviewLayoutMargins="YES" translatesAutoresizingMaskIntoConstraints="NO" id="NP2-Ys-Ufm" userLabel="Sound Intensity Indicator">
                                 <rect key="frame" x="409" y="88" width="5" height="774"/>
                                 <color key="backgroundColor" systemColor="systemRedColor" red="1" green="0.23137254900000001" blue="0.18823529410000001" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                 <constraints>
@@ -82,9 +82,81 @@
                                 <color key="textColor" systemColor="systemRedColor" red="1" green="0.23137254900000001" blue="0.18823529410000001" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                 <nil key="highlightedColor"/>
                             </label>
+                            <view contentMode="scaleToFill" preservesSuperviewLayoutMargins="YES" translatesAutoresizingMaskIntoConstraints="NO" id="cGl-s2-JbF" userLabel="Command Bar">
+                                <rect key="frame" x="10" y="320" width="60" height="310"/>
+                                <subviews>
+                                    <button opaque="NO" contentMode="center" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Ls1-gV-zQT" userLabel="Delete Button">
+                                        <rect key="frame" x="10" y="10" width="40" height="40"/>
+                                        <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                        <fontDescription key="fontDescription" type="system" pointSize="18"/>
+                                        <color key="tintColor" systemColor="systemGray2Color" red="0.68235294120000001" green="0.68235294120000001" blue="0.69803921570000005" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                        <state key="normal" image="trash" catalog="system"/>
+                                        <connections>
+                                            <action selector="handleDeleteSelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="o5i-IB-KVc"/>
+                                        </connections>
+                                    </button>
+                                    <button opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="MZ0-QU-5C9" userLabel="Replace Button">
+                                        <rect key="frame" x="10" y="60" width="40" height="40"/>
+                                        <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                        <color key="tintColor" systemColor="systemGray2Color" red="0.68235294120000001" green="0.68235294120000001" blue="0.69803921570000005" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                        <state key="normal" image="arrow.2.squarepath" catalog="system"/>
+                                        <connections>
+                                            <action selector="handleReplaceSelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="IUr-z5-d6E"/>
+                                        </connections>
+                                    </button>
+                                    <button opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="jWO-oc-hZ3" userLabel="Copy Button">
+                                        <rect key="frame" x="10" y="110" width="40" height="40"/>
+                                        <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                        <color key="tintColor" systemColor="systemGray2Color" red="0.68235294120000001" green="0.68235294120000001" blue="0.69803921570000005" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                        <state key="normal" image="doc.on.doc" catalog="system"/>
+                                        <connections>
+                                            <action selector="handleCopySelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="eix-K1-NP0"/>
+                                        </connections>
+                                    </button>
+                                    <button opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="tv2-W8-nJE" userLabel="Cut Button">
+                                        <rect key="frame" x="10" y="160" width="40" height="40"/>
+                                        <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                        <color key="tintColor" systemColor="systemGray2Color" red="0.68235294120000001" green="0.68235294120000001" blue="0.69803921570000005" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                        <state key="normal" image="scissors" catalog="system"/>
+                                        <connections>
+                                            <action selector="handleCutSelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="8nh-sl-tqk"/>
+                                        </connections>
+                                    </button>
+                                    <button opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="I1T-S6-ayI" userLabel="Paste Button">
+                                        <rect key="frame" x="10" y="210" width="40" height="40"/>
+                                        <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                        <color key="tintColor" systemColor="systemGray2Color" red="0.68235294120000001" green="0.68235294120000001" blue="0.69803921570000005" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                        <state key="normal" image="doc.on.clipboard" catalog="system"/>
+                                        <connections>
+                                            <action selector="handlePasteSelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="G31-iC-2g2"/>
+                                        </connections>
+                                    </button>
+                                    <button opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="r9K-lg-211" userLabel="Export Button">
+                                        <rect key="frame" x="10" y="260" width="40" height="40"/>
+                                        <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                        <color key="tintColor" systemColor="systemGray2Color" red="0.68235294120000001" green="0.68235294120000001" blue="0.69803921570000005" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                        <state key="normal" image="square.and.arrow.up" catalog="system"/>
+                                        <connections>
+                                            <action selector="handleExportSelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="t0C-Ca-JT4"/>
+                                        </connections>
+                                    </button>
+                                </subviews>
+                                <color key="backgroundColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="310" id="uSB-Kb-egH"/>
+                                    <constraint firstAttribute="width" constant="60" id="xmW-wi-S4i"/>
+                                </constraints>
+                                <userDefinedRuntimeAttributes>
+                                    <userDefinedRuntimeAttribute type="boolean" keyPath="layer.masksToBounds" value="NO"/>
+                                    <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
+                                        <integer key="value" value="30"/>
+                                    </userDefinedRuntimeAttribute>
+                                </userDefinedRuntimeAttributes>
+                            </view>
                         </subviews>
                         <color key="backgroundColor" systemColor="systemBackgroundColor" cocoaTouchSystemColor="whiteColor"/>
                         <constraints>
+                            <constraint firstItem="cGl-s2-JbF" firstAttribute="leading" secondItem="6Tk-OE-BBY" secondAttribute="leading" constant="10" id="1UX-tG-wle"/>
                             <constraint firstItem="6Tk-OE-BBY" firstAttribute="bottom" secondItem="NP2-Ys-Ufm" secondAttribute="bottom" id="1ar-Pc-ScE"/>
                             <constraint firstItem="6Tk-OE-BBY" firstAttribute="bottom" secondItem="6Uq-Se-aCc" secondAttribute="bottom" constant="18" id="3i1-R6-t2V"/>
                             <constraint firstItem="6Tk-OE-BBY" firstAttribute="trailing" secondItem="nkY-JO-vng" secondAttribute="trailing" constant="20" id="H9L-7G-bki"/>
@@ -101,6 +173,7 @@
                             <constraint firstItem="6Tk-OE-BBY" firstAttribute="bottom" secondItem="IFh-EB-UyX" secondAttribute="bottom" constant="82" id="hCP-bw-1oy"/>
                             <constraint firstItem="6Tk-OE-BBY" firstAttribute="bottom" secondItem="qWP-6t-6mG" secondAttribute="bottom" constant="220" id="kr2-Rn-fbP"/>
                             <constraint firstItem="6Tk-OE-BBY" firstAttribute="trailing" secondItem="NP2-Ys-Ufm" secondAttribute="trailing" id="oJO-7J-F3Q"/>
+                            <constraint firstItem="cGl-s2-JbF" firstAttribute="centerY" secondItem="6Tk-OE-BBY" secondAttribute="centerY" id="pJe-Yg-Xgo"/>
                             <constraint firstItem="qWP-6t-6mG" firstAttribute="top" secondItem="6Tk-OE-BBY" secondAttribute="top" id="wuz-Ap-m1F"/>
                             <constraint firstItem="gtR-6I-crM" firstAttribute="top" secondItem="Rxj-vn-QnZ" secondAttribute="bottom" constant="10" id="yoF-aA-2rm"/>
                         </constraints>
@@ -108,6 +181,8 @@
                     </view>
                     <navigationItem key="navigationItem" id="3OJ-C9-X31"/>
                     <connections>
+                        <outlet property="commandBar" destination="cGl-s2-JbF" id="Y6B-8E-1vX"/>
+                        <outlet property="commandBarPositionLeft" destination="1UX-tG-wle" id="E8G-0H-Fmc"/>
                         <outlet property="pitchLabel" destination="nkY-JO-vng" id="aWJ-73-aAj"/>
                         <outlet property="playAudioButton" destination="Q4P-7Q-bZD" id="IdB-3s-gNu"/>
                         <outlet property="playTextToSpeechButton" destination="IFh-EB-UyX" id="dXl-fO-8Th"/>
@@ -141,4 +216,12 @@
             <point key="canvasLocation" x="113.04347826086958" y="137.94642857142856"/>
         </scene>
     </scenes>
+    <resources>
+        <image name="arrow.2.squarepath" catalog="system" width="128" height="89"/>
+        <image name="doc.on.clipboard" catalog="system" width="117" height="128"/>
+        <image name="doc.on.doc" catalog="system" width="117" height="128"/>
+        <image name="scissors" catalog="system" width="128" height="92"/>
+        <image name="square.and.arrow.up" catalog="system" width="115" height="128"/>
+        <image name="trash" catalog="system" width="121" height="128"/>
+    </resources>
 </document>

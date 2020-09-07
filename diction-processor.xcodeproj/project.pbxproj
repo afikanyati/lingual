@@ -105,6 +105,7 @@
 		8BEC137724906FF60056E767 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 8BEC137524906FF60056E767 /* LaunchScreen.storyboard */; };
 		8BEC138224906FF60056E767 /* diction_processorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEC138124906FF60056E767 /* diction_processorTests.swift */; };
 		8BEC138D24906FF60056E767 /* diction_processorUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEC138C24906FF60056E767 /* diction_processorUITests.swift */; };
+		EFCD311834F5FA424F68B4E4 /* libPods-diction-processor.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D1458E52ABFDE185D82A961F /* libPods-diction-processor.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -127,6 +128,7 @@
 /* Begin PBXFileReference section */
 		8B09CDFF24932E4E001EC02D /* NoteSegment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteSegment.swift; sourceTree = "<group>"; };
 		8B0CF44524F4407200479BF5 /* delete.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = delete.wav; sourceTree = "<group>"; };
+		8B2248761A827D8C70EFC8A2 /* Pods-diction-processor.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-diction-processor.release.xcconfig"; path = "Target Support Files/Pods-diction-processor/Pods-diction-processor.release.xcconfig"; sourceTree = "<group>"; };
 		8B24440124DB6F4A0050C959 /* HapticEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticEngine.swift; sourceTree = "<group>"; };
 		8B24440324DB75170050C959 /* NotificationType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationType.swift; sourceTree = "<group>"; };
 		8B24440624DCE50D0050C959 /* TimeNormalizerType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeNormalizerType.swift; sourceTree = "<group>"; };
@@ -229,6 +231,8 @@
 		8BEC138824906FF60056E767 /* diction-processorUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "diction-processorUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BEC138C24906FF60056E767 /* diction_processorUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = diction_processorUITests.swift; sourceTree = "<group>"; };
 		8BEC138E24906FF60056E767 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		D1458E52ABFDE185D82A961F /* libPods-diction-processor.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-diction-processor.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		DB540E91EDCF2D33D7D8D9EA /* Pods-diction-processor.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-diction-processor.debug.xcconfig"; path = "Target Support Files/Pods-diction-processor/Pods-diction-processor.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -236,6 +240,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EFCD311834F5FA424F68B4E4 /* libPods-diction-processor.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -256,6 +261,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		70479DC371D157611D2B3E32 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				D1458E52ABFDE185D82A961F /* libPods-diction-processor.a */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		8B24440524DCE44F0050C959 /* enums */ = {
 			isa = PBXGroup;
 			children = (
@@ -380,6 +393,13 @@
 			path = extensions;
 			sourceTree = "<group>";
 		};
+		8BE148302505A6C3006C32CF /* images */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = images;
+			sourceTree = "<group>";
+		};
 		8BEC135B24906FF30056E767 = {
 			isa = PBXGroup;
 			children = (
@@ -387,6 +407,8 @@
 				8BEC138024906FF60056E767 /* diction-processorTests */,
 				8BEC138B24906FF60056E767 /* diction-processorUITests */,
 				8BEC136524906FF30056E767 /* Products */,
+				B4E257D93DCDF259140BB194 /* Pods */,
+				70479DC371D157611D2B3E32 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -403,6 +425,7 @@
 		8BEC136624906FF30056E767 /* diction-processor */ = {
 			isa = PBXGroup;
 			children = (
+				8BE148302505A6C3006C32CF /* images */,
 				8B74881F24DCF4C6004C94A0 /* data-structures */,
 				8B24440524DCE44F0050C959 /* enums */,
 				8BA3056C24D107E90056E4DF /* extensions */,
@@ -446,6 +469,15 @@
 			path = "diction-processorUITests";
 			sourceTree = "<group>";
 		};
+		B4E257D93DCDF259140BB194 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				DB540E91EDCF2D33D7D8D9EA /* Pods-diction-processor.debug.xcconfig */,
+				8B2248761A827D8C70EFC8A2 /* Pods-diction-processor.release.xcconfig */,
+			);
+			path = Pods;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -453,6 +485,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 8BEC139124906FF60056E767 /* Build configuration list for PBXNativeTarget "diction-processor" */;
 			buildPhases = (
+				656F9C8753763C654E5B3D36 /* [CP] Check Pods Manifest.lock */,
 				8BEC136024906FF30056E767 /* Sources */,
 				8BEC136124906FF30056E767 /* Frameworks */,
 				8BEC136224906FF30056E767 /* Resources */,
@@ -584,6 +617,31 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		656F9C8753763C654E5B3D36 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-diction-processor-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		8BEC136024906FF30056E767 /* Sources */ = {
@@ -840,6 +898,7 @@
 		};
 		8BEC139224906FF60056E767 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = DB540E91EDCF2D33D7D8D9EA /* Pods-diction-processor.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
@@ -858,6 +917,7 @@
 		};
 		8BEC139324906FF60056E767 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 8B2248761A827D8C70EFC8A2 /* Pods-diction-processor.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;

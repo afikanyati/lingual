@@ -107,11 +107,17 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         return .backwards
     }
     var clipboard: [NoteSegment]? = nil
-    var isCollapsed: Bool {
+    @objc dynamic var isCollapsed: Bool {
         return (self.anchor != nil && self.focus == nil) || (self.anchor == nil && self.focus != nil)
     }
-    var hasSelection: Bool {
+    @objc class func keyPathsForValuesAffectingIsCollpsed() -> Set<String> {
+        return [ "focus", "anchor" ]
+    }
+    @objc dynamic var hasSelection: Bool {
         return self.focus != nil && self.anchor != nil && !self.isCollapsed
+    }
+    @objc class func keyPathsForValuesAffectingHasSelection() -> Set<String> {
+        return [ "focus", "anchor", "isCollapsed" ]
     }
     var isAtEndOfTextView: Bool {
         let lastSegment = self.getNoteNthLastSegment(n: 0)
@@ -168,14 +174,14 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         )
         
         // remove observer from anchor
-        self.addObserver(
+        self.removeObserver(
             self,
             forKeyPath: "anchor",
             context: nil
         )
         
         // remove observer from focus
-        self.addObserver(
+        self.removeObserver(
             self,
             forKeyPath: "focus",
             context: nil

@@ -62,6 +62,7 @@ class Utils {
     static var DISCRETE_VOLUME_DELTA: Float = 0.2
     static var DEFAULT_CURSOR_BLINK_RATE: TimeInterval = 0.53
     static var DEFAULT_CURSOR_BLINK_TRANSITION_DURATION: TimeInterval = 0.1
+    static var DEFAULT_VIEW_TRANSITION_DURATION: TimeInterval = 0.3
     
     static let pitchToFrequencyMap: [String : Double] = [
         "C0": 16,
