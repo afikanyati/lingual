@@ -23,6 +23,8 @@ public final class SoundEffectEngine: NSObject {
     var playPlayer: AVAudioPlayer? = nil
     var processingPlayer: AVQueuePlayer? = nil
     var processingLooper: AVPlayerLooper? = nil
+    var modalAmbiencePlayer: AVQueuePlayer? = nil
+    var modalAmbienceLooper: AVPlayerLooper? = nil
     var repeatPlayer: AVAudioPlayer? = nil
     var saveNotePlayer: AVAudioPlayer? = nil
     var startListeningPlayer: AVAudioPlayer? = nil
@@ -31,6 +33,7 @@ public final class SoundEffectEngine: NSObject {
     var voiceCommandDenyPlayer: AVAudioPlayer? = nil
     var deletePlayer: AVAudioPlayer? = nil
     var isProcessing = false
+    var isPlayingModalAmbience = false
     
     private override init() {
         // Commit Buffer
@@ -86,11 +89,20 @@ public final class SoundEffectEngine: NSObject {
         // Processing
         let processingPath = Bundle.main.path(forResource: "processing", ofType: "wav")!
         let processingURL = URL(fileURLWithPath: processingPath)
-        let asset = AVAsset(url: processingURL)
-        let item = AVPlayerItem(asset: asset)
-        processingPlayer = AVQueuePlayer(playerItem: item)
+        let processingAsset = AVAsset(url: processingURL)
+        let processingItem = AVPlayerItem(asset: processingAsset)
+        processingPlayer = AVQueuePlayer(playerItem: processingItem)
         processingPlayer?.volume = 0.02
-        processingLooper = AVPlayerLooper(player: processingPlayer!, templateItem: item)
+        processingLooper = AVPlayerLooper(player: processingPlayer!, templateItem: processingItem)
+        
+        // Modal Ambience
+        let modalAmbiencePath = Bundle.main.path(forResource: "modal-ambience", ofType: "wav")!
+        let modalAmbienceURL = URL(fileURLWithPath: modalAmbiencePath)
+        let modalAmbienceAsset = AVAsset(url: modalAmbienceURL)
+        let modalAmbienceItem = AVPlayerItem(asset: modalAmbienceAsset)
+        processingPlayer = AVQueuePlayer(playerItem: modalAmbienceItem)
+        processingPlayer?.volume = 0.02
+        processingLooper = AVPlayerLooper(player: processingPlayer!, templateItem: modalAmbienceItem)
         
         // Repeat
         let repeatPath = Bundle.main.path(forResource: "repeat", ofType: "wav")!
@@ -175,6 +187,14 @@ public final class SoundEffectEngine: NSObject {
     func stopProcessing() {
         processingPlayer?.stop()
         self.isProcessing = false
+    }
+    func startModalAmbience() {
+        modalAmbiencePlayer?.play()
+        self.isPlayingModalAmbience = true
+    }
+    func stopModalAmbience() {
+        modalAmbiencePlayer?.stop()
+        self.isPlayingModalAmbience = false
     }
     func repeatSegment() { repeatPlayer?.play() }
     func saveNote() { saveNotePlayer?.play() }

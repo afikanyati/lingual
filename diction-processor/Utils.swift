@@ -60,9 +60,39 @@ class Utils {
         return 10
     }
     static var DISCRETE_VOLUME_DELTA: Float = 0.2
+    static var DISCRETE_ECHO_RATE_DELTA: Float = 0.05
+    static var DISCRETE_PLAYBACK_DELTA: Float = 0.2
     static var DEFAULT_CURSOR_BLINK_RATE: TimeInterval = 0.53
     static var DEFAULT_CURSOR_BLINK_TRANSITION_DURATION: TimeInterval = 0.1
     static var DEFAULT_VIEW_TRANSITION_DURATION: TimeInterval = 0.3
+    static let DEFAULT_FIG_COUNT = 2
+    static let TEMPORAL_DELTA = 0.01
+    static let DEFAULT_SEGMENT_DURATION: Double = 100000 // Must be high enough such that no user will record a note of this duration
+    static let TRANSCRIPTION_LATENCY_DURATION: Double = 0.3
+    static let SOUND_INTENSITY_SIG_FIG_COUNT: Int = 4
+    static let MAXIMUM_VOLUME: Float = 1
+    static let MINIMUM_VOLUME: Float = 0.1
+    static let MAXIMUM_ECHO_RATE: Float = AVSpeechUtteranceMaximumSpeechRate
+    static let MINIMUM_ECHO_RATE: Float = AVSpeechUtteranceMinimumSpeechRate
+    static let MAXIMUM_PLAYBACK_RATE: Float = 3
+    static let MINIMUM_PLAYBACK_RATE: Float = 0.2
+    static let COMMAND_BAR_MAXIMUM_HEIGHT: CGFloat = 410
+    static let COMMAND_BAR_MINIMUM_HEIGHT: CGFloat = 260
+    static let COMMAND_BAR_BUTTON_HEIGHT: CGFloat = 40
+    static let COMMAND_BAR_BUTTON_PADDING: CGFloat = 10
+    static let INCREASE_RATE_COMMAND_BUTTON_STANDARD_Y_POSITION: CGFloat = 10
+    static let DECREASE_RATE_COMMAND_BUTTON_STANDARD_Y_POSITION: CGFloat = 60
+    static let DELETE_COMMAND_BUTTON_STANDARD_Y_POSITION: CGFloat = 110
+    static let REPLACE_COMMAND_BUTTON_STANDARD_Y_POSITION: CGFloat = 160
+    static let COPY_COMMAND_BUTTON_STANDARD_Y_POSITION: CGFloat = 210
+    static let CUT_COMMAND_BUTTON_STANDARD_Y_POSITION: CGFloat = 260
+    static let PASTE_COMMAND_BUTTON_STANDARD_Y_POSITION: CGFloat = 310
+    static let EXPORT_COMMAND_BUTTON_STANDARD_Y_POSITION: CGFloat = 360
+    static var SKIP_PLAYBACK_DURATION: Double = 10
+    static var MENU_BAR_HEIGHT: CGFloat = 70
+    static var COMMAND_BAR_HEIGHT: CGFloat = 60
+    static var COMMAND_BAR_BACKGROUND_COLOR: String = "#7771C2FF"
+    static var SCROLL_VIEW_HEIGHT: CGFloat = 60
     
     static let pitchToFrequencyMap: [String : Double] = [
         "C0": 16,
@@ -129,12 +159,12 @@ class Utils {
     ]
 
     // MARK: - Factory Methods
-    public static func trimNote(note: Note, keeping: CMTimeRange, permanent: Bool = false, onCompletionHandler: @escaping (_ note: Note?) -> Void) {
+    public static func trimNote(note: Note, keeping: CMTimeRange, permanent: Bool = false, onFinishHandler: @escaping (_ note: Note?) -> Void) {
         print("===== Trim Note Factory Method =====")
         note.duplicate() { note in
             if let duplicateNote = note {
                 duplicateNote.trim(keeping: keeping, permanent: permanent) {
-                    onCompletionHandler(duplicateNote)
+                    onFinishHandler(duplicateNote)
                 }
             }
         }
@@ -145,7 +175,7 @@ class Utils {
     // Cannot export to outputURL's that already exist
     // Reference: https://stackoverflow.com/questions/20203548/avassetexportsession-not-exporting-time-range
     // Deleting: https://stackoverflow.com/questions/42041405/delete-a-file-using-swift-in-ios
-    public static func exportNote(note: Note, filename: String, fileType: String, timeRange: CMTimeRange, onCompletionHandler: (() -> Void)? = nil) {
+    public static func exportNote(note: Note, filename: String, fileType: String, timeRange: CMTimeRange, onFinishHandler: (() -> Void)? = nil) {
         print("===== Export Note =====")
         
         do {
@@ -169,8 +199,79 @@ class Utils {
         if !AVAssetExportSession.exportPresets(compatibleWith: note).contains(AVAssetExportPresetAppleM4A) {
             fatalError("\t[Error] Expected export preset value not compatible with note")
         }
+        
+        // Normalize Segments
+        if note.omitSilences {
+            print("\tRemove silences and voice command segments...")
+        } else {
+            print("\tRemove voice command segments...")
+        }
+        let normalizedExportSegments = Utils.cleanseSegments(
+            segments: note.noteSegments,
+            omitSilences: note.omitSilences,
+            omitVoiceCommands: true,
+            omitDeleted: true
+        )
+        
+        // Create normalized segment index map
+        var normalizedSegmentIndexMap: [String: Int] = [:]
+        for segment in normalizedExportSegments {
+            normalizedSegmentIndexMap[segment.getUID()] = segment.getIndex()
+        }
+        
+        // Normalize Transformations
+        var normalizedTransformations = [NoteTransformation]()
+        if note.transformations.count > 0 {
+            if note.omitSilences {
+                print("\tRecompute transformation without silences and voice command segments")
+            } else {
+                print("\tRecompute transformation without voice command segments...")
+            }
 
-        guard let exporter = AVAssetExportSession(asset: note, presetName: AVAssetExportPresetAppleM4A) else {
+            normalizedTransformations = Utils.cleanseTransformations(
+                transformations: note.transformations,
+                segments: normalizedExportSegments,
+                segmentIndexMap: normalizedSegmentIndexMap,
+                omitSilences: note.omitSilences,
+                omitVoiceCommands: true,
+                omitDeleted: true
+            )
+        }
+        
+        print("\tGenerate mutable composition for exporting...")
+        let mutableComposition = AVMutableComposition()
+        mutableComposition.addMutableTrack(withMediaType: .audio, preferredTrackID: Int32(kCMPersistentTrackID_Invalid))
+        do {
+            try mutableComposition.tracks[0].validateSegments(normalizedExportSegments)
+            mutableComposition.tracks[0].segments = normalizedExportSegments
+            
+            // Apply transformations
+            if normalizedTransformations.count > 0 {
+                print("\tApply transformations to composition...")
+            }
+            for transformation in normalizedTransformations {
+                // we can keep moving in until we catch a non silence
+                let lowerSegment = normalizedExportSegments[transformation.noteRange.lowerBound]
+                let upperSegment = normalizedExportSegments[transformation.noteRange.upperBound]
+                // playback rate
+                if transformation.type == .playbackRate {
+                    let timeRange = CMTimeRangeFromTimeToTime(
+                        start: lowerSegment.timeMapping.target.start,
+                        end: upperSegment.timeMapping.target.end
+                    )
+                    let duration = CMTimeMake(
+                        value: Int64(Note.defaultSegmentTimescale * (timeRange.duration.seconds * Double( 1 / transformation.value!))),
+                        timescale: Int32(Note.defaultSegmentTimescale)
+                    )
+                    print("\tTransformation (\n\ttype: playbackRate \n\tuids: \(transformation.uids) \n\ttext: \(transformation.text) \n\tvalue: \(transformation.value!) \n\ttextRange: \(transformation.textRange) \n\tnoteRange: \(transformation.noteRange) \n\ttimeRange: \(timeRange) \n\tduration: \(duration)\n)")
+                    mutableComposition.scaleTimeRange(timeRange, toDuration: duration)
+                }
+            }
+        } catch {
+            fatalError("===== There was a problem validating normalized export segments =====")
+        }
+
+        guard let exporter = AVAssetExportSession(asset: mutableComposition, presetName: AVAssetExportPresetAppleM4A) else {
             fatalError("\t[Error] There was an problem instantiating exporter")
         }
         
@@ -190,7 +291,7 @@ class Utils {
             DispatchQueue.global(qos: .userInitiated).async {
                 if exporter.status == AVAssetExportSession.Status.completed {
                     print("===== Note successfully exported: \(filename).m4a =====")
-                    onCompletionHandler?()
+                    onFinishHandler?()
                 } else {
                     print("===== [Error] Unable to export note =====")
                     if let error = exporter.error {
@@ -205,7 +306,6 @@ class Utils {
     public static func runPlayer(
         note: Note,
         startTime: CMTime,
-        rate: Float,
         volume: Float,
         onStartHandler: (() -> Void)? = nil
     ) -> AVPlayer? {
@@ -271,9 +371,16 @@ class Utils {
             
             note.player.play()
             
+            let firstPlayableSegment = note.getSegment(
+                forTrackTime: CMTimeMake(
+                    value: Int64(Note.defaultSegmentTimescale * (startTime.seconds + Utils.TEMPORAL_DELTA)),
+                    timescale: Int32(Note.defaultSegmentTimescale)
+                )
+            )
+            let rate = firstPlayableSegment?.getRate() ?? note.vc!.playbackRate
             let rateWasSet = Utils.setPlayerRate(player: note.player, rate: rate)
             if rateWasSet {
-                print("\tPlayer rate was successfully set...")
+                print("\tPlayer rate was successfully set: ", rate)
             } else {
                 print("\t[Error] There was a problem setting player rate. Player had not been started yet.")
             }
@@ -345,7 +452,59 @@ class Utils {
         }
     }
     
-    public static func setMainVolume(to volume: Float) {
+    public static func runError(note: Note, handler: (() -> Void)?) {
+        if !AVAudioSession.isHeadphonesConnected {
+            note.stopListeningForVoiceCommands(pause: true) {
+                handler?()
+            }
+        } else {
+            handler?()
+        }
+    }
+    
+    public static func executeFeedback(visualMessage: String? = nil, audioMessage: String? = nil, note: Note, discardPrior: Bool = false) {
+        // Give visual feedback
+        if let visualMessage = visualMessage {
+            note.vc!.scheduleNotification(
+                text: visualMessage,
+                duration: 3
+            )
+            note.vc!.exhaustNotificationQueue()
+        }
+        
+        // Give audio feedback
+        if AVAudioSession.isHeadphonesConnected, let audioMessage = audioMessage {
+            // we don't run when !AVAudioSession.isHeadphonesConnected
+            // because we will will catch the words and process them
+            let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+            let synthesizerItem = SynthesizerItem(
+                synthesizer: note.vc!.speechSynthesizer,
+                text: audioMessage,
+                voice: voice,
+                rate: note.vc!.echoRate,
+                volume: note.vc!.playbackVolume
+            )
+
+            if discardPrior {
+                note.vc!.emptySynthesizerQueue()
+            }
+
+            note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                note.vc!.exhaustSynthesizerQueue()
+            }
+        }
+    }
+    
+    public static func setMainVolume(to volume: Float, note: Note) {
+        // Present Feedback
+        Utils.executeFeedback(
+            visualMessage: "Set Playback Volume",
+            audioMessage: "set volume to \(volume)",
+            note: note
+        )
+
         MPVolumeView.setVolume(volume)
         print("volume: ", AVAudioSession.sharedInstance().outputVolume, volume)
     }
@@ -639,6 +798,17 @@ class Utils {
         return formattedString
     }
     
+    public static func getDateString(date: TimeInterval) -> String? {
+        guard date > 0 else {
+            return nil
+        }
+        // Prepare date formatter
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
+        dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        return dateFormatter.string(from: Date(timeIntervalSince1970: date))
+    }
+    
     public static func getSynthesizerVoice(withGender gender: Gender? = nil, vc: UIViewController? = nil) -> AVSpeechSynthesisVoice? {
         var synthesizerVoice: AVSpeechSynthesisVoice?
         voicesLoop: for voice in AVSpeechSynthesisVoice.speechVoices() {
@@ -775,6 +945,332 @@ class Utils {
             return (abs(Double(minPower)) - abs(power)) / abs(Double(minPower))
         }
     }
+    
+    // normalizes by changing target times not source times
+    public static func cleanseSegments(
+        segments: [NoteSegment],
+        omitSilences: Bool,
+        omitVoiceCommands: Bool,
+        omitDeleted: Bool
+    ) -> [NoteSegment] {
+        print("===== Cleanse Segments =====")
+        var cleansedSegments = [NoteSegment]()
+        
+        if omitSilences {
+            print("\tFilter out silences...")
+        }
+        if omitVoiceCommands {
+            print("\tFilter out voice command words...")
+        }
+
+        for segment in segments {
+            // Filter out silences
+            if omitSilences && segment.isSilence() && segment.timeMapping.target.duration.seconds > Utils.SILENCE_SKIP_THRESHOLD {
+                continue
+            }
+            
+            // Filter out voice command segments
+            if omitVoiceCommands && segment.isVoiceCommandWord() {
+                continue
+            }
+            
+            if omitDeleted && segment.isDeleted() {
+                continue
+            }
+            
+            // add segment to array
+            let duplicateSegment = segment.duplicate()
+            cleansedSegments.append(duplicateSegment)
+        }
+        
+        // normalize segments array
+        print("\tShift segments to close up gaps in time caused by removes segments...")
+        var lastEnd = CMTime.zero
+        var normalizedCleansedSegments = [NoteSegment]()
+        var silenceIndices = [Int]()
+        for (index, segment) in cleansedSegments.enumerated() {
+            if segment.timeMapping.target.start.seconds > lastEnd.seconds {
+                let shiftedSegment = NoteSegment(
+                    note: segment.note,
+                    word: segment.getText(),
+                    trackURL: segment.sourceURL!,
+                    trackID: segment.sourceTrackID,
+                    phoneticallySimilarWords: segment.getPhoneticallySimilarWords(),
+                    sourceTimeRange: segment.timeMapping.source,
+                    targetTimeRange: CMTimeRangeMake(
+                        start: lastEnd,
+                        duration: segment.timeMapping.target.duration
+                    ),
+                    tokenType: segment.getTokenType(),
+                    lexicalClass: segment.getLexicalClass(),
+                    nameType: segment.getNameType(),
+                    lemma: segment.getLemma(),
+                    sentimentScore: segment.getSentiment(),
+                    voiceCommandWord: segment.isVoiceCommandWord(), // should be false if we've removed all voice commands
+                    deleted: segment.isDeleted()
+                )
+
+                // Sound Intensity
+                if segment.getPower() != Double.infinity {
+                    // Import sound intensity
+                    let power = segment.getPower()
+                    shiftedSegment.setPower(power: power)
+                }
+                
+                // Pitch
+                if let pitch = segment.getPitch() {
+                    // Import pitch
+                    shiftedSegment.setPitch(pitch: pitch)
+                }
+                
+                // Rate
+                shiftedSegment.setRate(rate: segment.getRate())
+                
+                // Date Created and Modified
+                shiftedSegment.dateCreated = segment.dateCreated
+                shiftedSegment.dateModified = segment.dateModified
+                
+                // UID
+                shiftedSegment.setUID(uid: segment.getUID())
+
+                // Add to segments array
+                normalizedCleansedSegments.append(shiftedSegment)
+                
+                // Save silence index
+                if (!omitSilences && !shiftedSegment.isDeleted() && shiftedSegment.isSilence()) || (omitSilences && !shiftedSegment.isDeleted() && shiftedSegment.isSilence() && shiftedSegment.timeMapping.target.duration.seconds <= Utils.SILENCE_SKIP_THRESHOLD) {
+                    silenceIndices.append(index)
+                }
+                
+                // Update last end value
+                lastEnd = CMTimeAdd(lastEnd, segment.timeMapping.target.duration)
+            } else {
+                // Save silence index
+                if (!omitSilences && !segment.isDeleted() && segment.isSilence()) || (omitSilences && !segment.isDeleted() && segment.isSilence() && segment.timeMapping.target.duration.seconds <= Utils.SILENCE_SKIP_THRESHOLD) {
+                    silenceIndices.append(index)
+                }
+
+                // Add to segments array
+                normalizedCleansedSegments.append(segment)
+                
+                // Update last end value
+                lastEnd = segment.timeMapping.target.end
+            }
+        }
+        
+        var avgPauseDuration: Double?
+        if silenceIndices.count > 0 {
+            avgPauseDuration = silenceIndices.reduce(0, { result, i in
+                return result + normalizedCleansedSegments[i].timeMapping.target.duration.seconds
+            }) / Double(silenceIndices.count)
+            avgPauseDuration = avgPauseDuration!.rounded(toPlaces: Utils.DEFAULT_FIG_COUNT)
+        }
+        
+        var speakingRate: Double?
+        if normalizedCleansedSegments.count > 0 {
+            speakingRate = normalizedCleansedSegments.reduce(0, { result, item in
+                if !item.isPunctuation() && !item.isSilence() && !item.isVoiceCommandWord() && !item.isDeleted() {
+                    return result + 1
+                }
+                
+                return result
+            }) / Double(normalizedCleansedSegments.first!.getNote()!.getDuration(filteredDuration: true).seconds / Double(TimeConstant.secsPerMin))
+            speakingRate = speakingRate!.rounded(toPlaces: Utils.DEFAULT_FIG_COUNT)
+        }
+        
+        // Update Index, Background Noise, AvgPauseDuration, SpeakingRate
+        var fullyNormalizedCleansedSegments = [NoteSegment]()
+        for (index, segment) in normalizedCleansedSegments.enumerated() {
+            // Set segment index
+            segment.setIndex(index: index)
+            
+            // Set backgroundNoise
+            segment.setBackgroundNoise(noise: normalizedCleansedSegments.first!.getNote()!.getBackgroundNoise())
+
+            // Set avgPauseDuration
+            if let avgPauseDuration = avgPauseDuration {
+                segment.setAvgPauseDuration(duration: avgPauseDuration)
+            }
+            
+            // Set speakingRate
+            if let speakingRate = speakingRate {
+                segment.setSpeakingRate(rate: speakingRate)
+            }
+            
+            fullyNormalizedCleansedSegments.append(segment)
+        }
+        
+        return fullyNormalizedCleansedSegments
+    }
+    
+    public static func cleanseTransformations(
+        transformations: [NoteTransformation],
+        segments: [NoteSegment],
+        segmentIndexMap: [String: Int],
+        omitSilences: Bool,
+        omitVoiceCommands: Bool,
+        omitDeleted: Bool
+    ) -> [NoteTransformation] {
+        print("===== Cleanse Transformations =====")
+
+        var cleansedTransformations = [NoteTransformation]()
+        for transformation in transformations {
+            print("\tTransformation -------")
+            print(transformation)
+            
+            // skip if segments have been removed
+            print("\tCheck to see if transformation should still exist...")
+            var allSegmentsRemoved = true
+            for segmentUID in transformation.uids.keys {
+                allSegmentsRemoved = allSegmentsRemoved && !(segmentIndexMap[segmentUID] != nil)
+                if !allSegmentsRemoved {
+                    // We found one cunter-example where we found a transformation segment in the segment-index map
+                    // no need to check the others
+                    break
+                }
+            }
+            
+            if allSegmentsRemoved {
+                // Has the effect of removing transformation
+                print("\tAll transformation segments have been removed. Discarding transformation...")
+                continue
+            } else {
+                print("\tSegments argument includes segments in original transformation. Transformation should exist. Continue cleansing...")
+            }
+            
+            // check for deleted transformation segments
+            // remove silences if instructed to by method argument
+            // remove voice commands if instructed to by method argument
+            print("\tChecking for deleted transformation segments...")
+            if omitSilences {
+                print("\tRemoving silences...")
+            }
+            if omitVoiceCommands {
+                print("\tRemove voice command segments...")
+            }
+            var transformationUIDs: [String:Int] = [:]
+            for segmentUID in transformation.uids.keys {
+                if let segmentIndex = segmentIndexMap[segmentUID],
+                    ((omitSilences && !segments[segmentIndex].isSilence()) || (omitSilences && segments[segmentIndex].isSilence() && segments[segmentIndex].timeMapping.target.duration.seconds <= Utils.SILENCE_SKIP_THRESHOLD) || !omitSilences && segments[segmentIndex].isSilence()) &&
+                    ((omitVoiceCommands && !segments[segmentIndex].isVoiceCommandWord()) || !omitVoiceCommands && segments[segmentIndex].isVoiceCommandWord()) &&
+                    ((omitDeleted && !segments[segmentIndex].isDeleted()) || !omitDeleted && segments[segmentIndex].isDeleted()) {
+                    transformationUIDs[segmentUID] = segmentIndex
+                }
+            }
+
+            let sortedUIDIndexPairs = transformationUIDs.sorted { $0.1 < $1.1 }
+            print("\tExisting transformation segments: ", sortedUIDIndexPairs)
+            
+            // Determine transformation ranges
+            print("\tDetermine and factor in transformation slicing or shifting due to addition or removal of segments...")
+            
+            var startIndex: Int?
+            var lastIndex: Int?
+            var transformationRanges = [ClosedRange<Int>]()
+            print("\tLocating first transformation range...")
+            for uidIndexPair in sortedUIDIndexPairs {
+                if startIndex == nil {
+                    // first segment
+                    startIndex = uidIndexPair.value
+                    lastIndex = uidIndexPair.value
+                    print("\tNew transformation range lower bound index: ", startIndex!)
+                } else if startIndex != nil && lastIndex != nil && uidIndexPair.value > lastIndex! + 1 {
+                    // create transformation range
+                    transformationRanges.append(startIndex!...lastIndex!)
+                    print("\tNew transformation range: ", startIndex!...lastIndex!)
+                    
+                    // reinitialize start index
+                    startIndex = uidIndexPair.value
+                    lastIndex = uidIndexPair.value
+                    print("\tNew transformation range lower bound index: ", startIndex!)
+                } else {
+                    // increment last index
+                    lastIndex = uidIndexPair.value
+                }
+            }
+            
+            // create last segment
+            if startIndex != nil && lastIndex != nil {
+                // create transformation range
+                transformationRanges.append(startIndex!...lastIndex!)
+                print("\tNew transformation range: ", startIndex!...lastIndex!)
+            }
+            
+            for range in transformationRanges {
+                print("\tCreate new cleansed transformation...")
+                let lowerSegment = segments[range.lowerBound]
+                let upperSegment = segments[range.upperBound]
+
+                // Compute text
+                let text = lowerSegment.note!.getText(
+                    from: lowerSegment.timeMapping.target.start,
+                    until: upperSegment.timeMapping.target.end,
+                    segments: segments
+                )
+                print("\tCompute cleansed transformation text: ", text)
+
+                // Compute value
+                let value = transformation.value
+                if let value = value {
+                    print("\tCompute cleansed transformation value: ", value)
+                }
+                
+                // Compute text range
+                let lowerRange = lowerSegment.note!.getSegmentTextRange(of: lowerSegment)
+                let upperRange = upperSegment.note!.getSegmentTextRange(of: upperSegment)
+                let lowerLocation = lowerRange!.location
+                let upperLocation = upperRange!.location
+                let upperLength = upperRange!.length
+                let textRange = NSRange(location: lowerLocation, length: (upperLocation - lowerLocation) + upperLength)
+                print("\tCompute cleansed transformation textRange: ", textRange)
+                
+                // Compute range
+                let noteRange = range
+                print("\tCompute cleansed transformation noteRange: ", noteRange)
+                
+                // Collect segment uids
+                var uids: [String: Int] = [:]
+                for segment in segments[noteRange] {
+                    uids[segment.getUID()] = segment.getIndex()
+                }
+                print("\tCompute cleansed transformation segmentIndexMap: ", uids)
+                
+                let cleansedTransformation = NoteTransformation(
+                    type: transformation.type,
+                    uids: uids,
+                    text: text,
+                    value: value,
+                    textRange: textRange,
+                    noteRange: noteRange
+                )
+                print("\tInstantiate cleansed transformation: ", cleansedTransformation)
+                
+                cleansedTransformations.append(cleansedTransformation)
+                print("Add cleansed transformation to array...")
+            }
+        }
+        
+        return cleansedTransformations
+    }
+    
+    public static func initializeCursor(textView: UITextView, cursorView: UIView, font: UIFont) {
+        // compute x and y positions
+        let textContainerPadding = textView.textContainer.lineFragmentPadding
+        let xPos = textView.frame.minX + textContainerPadding
+        let yPos = textView.frame.minY + textContainerPadding + ((font.lineHeight - font.pointSize) / 2)
+        let width = Utils.CURSOR_WIDTH
+
+        // Create a CGRect object which is used to render a rectangle.
+        let frame: CGRect = CGRect(
+            x: xPos,
+            y: yPos,
+            width: CGFloat(width),
+            height: CGFloat(font.lineHeight)
+        )
+        
+        cursorView.frame = frame
+    }
+    
+    // MARK: - Helper Functions
     
     private static func getDocumentsDirectory() -> URL {
         let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)

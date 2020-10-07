@@ -32,6 +32,12 @@ public struct Queue<T> {
     public func peek() -> T? {
         return list.first?.value
     }
+    
+    public mutating func empty() {
+        while !list.isEmpty, let element = list.first {
+            let _ = list.remove(node: element)
+        }
+    }
 }
 
 extension Queue: CustomStringConvertible {

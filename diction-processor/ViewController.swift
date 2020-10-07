@@ -22,25 +22,95 @@ let AVATAR_URL = "https://firebasestorage.googleapis.com/v0/b/afika-nyati-websit
 class ViewController: UIViewController {
     
     // MARK: - Outlets and Views
+    
+    // ===== Menu Bar =====
+    @IBOutlet weak var startNoteButton: UIView!
+    @IBOutlet weak var editNoteButton: UIView!
+    @IBOutlet weak var resumeNoteButton: UIView!
+    @IBOutlet weak var stopListeningNoteButton: UIView!
+    @IBOutlet weak var playNoteButton: UIView!
+    @IBOutlet weak var stopPlayingNoteButton: UIView!
+    @IBOutlet weak var playEchoButton: UIView!
+    @IBOutlet weak var stopEchoButton: UIView!
+    @IBOutlet weak var exportNoteButton: UIView!
+    @IBOutlet weak var walkNoteButton: UIView!
+    
+    // ===== Command Bar =====
+    
+    // Resting Buttons
+    @IBOutlet weak var runNoteButton: UIView!
+    @IBOutlet weak var pauseNoteButton: UIView!
+    
+    // Conditional Buttons
+    @IBOutlet weak var moveHereButton: UIView!
+    @IBOutlet weak var previewClipboardButton: UIView!
+    @IBOutlet weak var lastCommitButton: UIView!
+    @IBOutlet weak var pauseEchoButton: UIView!
+    @IBOutlet weak var skipBackwardButton: UIView!
+    @IBOutlet weak var skipForwardButton: UIView!
+    @IBOutlet weak var playbackRateButton: UIView!
+    @IBOutlet weak var echoRateButton: UIView!
+    
+    // Selection Buttons
+    @IBOutlet weak var increaseRateButton: UIView!
+    @IBOutlet weak var decreaseRateButton: UIView!
+    @IBOutlet weak var deleteSelectionButton: UIView!
+    @IBOutlet weak var replaceSelectionButton: UIView!
+    @IBOutlet weak var copySelectionButton: UIView!
+    @IBOutlet weak var cutSelectionButton: UIView!
+    @IBOutlet weak var exportSelectionButton: UIView!
+    
+    // Wake Phrase
     @IBOutlet weak var wakePhraseLabel: UILabel!
     @IBOutlet weak var wakePhraseSubtitleLabel: UILabel!
-    @IBOutlet weak var transcriptionText: UITextView!
-    @IBOutlet weak var playAudioButton: UIButton!
-    @IBOutlet weak var playTextToSpeechButton: UIButton!
-    @IBOutlet weak var recordingButton: UIButton!
+    
+    // Text View
+    @IBOutlet weak var textView: UITextView!
+    @IBOutlet weak var textViewPositionTop: NSLayoutConstraint!
+    @IBOutlet weak var textViewPositionBottom: NSLayoutConstraint!
+    
+    // Indicators
     @IBOutlet weak var soundIntensityIndicatorHeight: NSLayoutConstraint!
+    @IBOutlet weak var soundIntensityIndicatorPositionBottom: NSLayoutConstraint!
     @IBOutlet weak var pitchLabel: UILabel!
-    @IBOutlet weak var commandBar: UIView!
-    @IBOutlet weak var commandBarPositionLeft: NSLayoutConstraint!
+    @IBOutlet weak var transformationLabel: UILabel!
+    
+    // Scroll View
+    @IBOutlet weak var scrollView: UIScrollView!
+    @IBOutlet weak var scrollViewPositionTop: NSLayoutConstraint!
+
+    // Command Bar
+    @IBOutlet weak var commandBar: UIStackView!
+    @IBOutlet weak var commandBarPositionTop: NSLayoutConstraint!
+    
+    // Menu Bar
+    @IBOutlet weak var menuBar: UIStackView!
+    @IBOutlet weak var menuBarPositionBottom: NSLayoutConstraint!
+    
+    // Slider
+    @IBOutlet weak var sliderView: UIView!
+    @IBOutlet weak var sliderViewPositionTop: NSLayoutConstraint!
+    @IBOutlet weak var slider: UISlider!
+    @IBOutlet weak var exitSliderButton: UIView!
+    
+    // Cursor
     var cursorView: UIView?
     
     // MARK: - General Properties
     var appActivated = false
     var useOnDeviceRecognition = DEFAULT_USE_ON_DEVICE_RECOGNITION
     var numAppSessions = 0
-    let wakePhrase = "rise and shine"
+    let wakePhrases = [
+        "rise and shine",
+        "rison shine",
+        "razon shine"
+    ]
     let font = UIFont.systemFont(ofSize: 18.0)
+    var listeningPermissionsGranted = false
+    var isListeningForWakePhrase = false
     var isListeningForVolume = false
+    var sliderIsVisible = false
+    var sliderType: SliderType?
     var notificationQueue = Queue<NotificationItem>()
     /// Specifies whether view has been instructed to clear out contents of notification queue
     private(set) var isExhaustingNotificationQueue = false
@@ -53,15 +123,9 @@ class ViewController: UIViewController {
     var appNotificationTimer: Timer?
     var volumeListeningRateTimer: Timer?
     var stopListeningForVolumeTimer: Timer?
-    var onNoteListenUpdate: ((_ bufferRange: NSRange?) -> Void)?
+    var onNoteListenUpdate: ((_ text: String, _ bufferRange: NSRange?) -> Void)?
     var onNoteListenStop: (() -> Void)?
     var onNoteComplete: (() -> Void)?
-    static let PLAY_NOTE_LABEL = "Play Note"
-    static let PAUSE_NOTE_LABEL = "Pause Note"
-    static let PLAY_ECHO_LABEL = "Play Echo"
-    static let PAUSE_ECHO_LABEL = "Pause Echo"
-    static let START_NOTE_LABEL = "Start Note"
-    static let STOP_NOTE_LABEL = "Stop Note"
     
     // MARK: - General Audio Properties
     @objc dynamic var session = AVAudioSession.sharedInstance()
@@ -89,6 +153,14 @@ class ViewController: UIViewController {
     }()
     private var soundIntensityStream = [SoundIntensityDatum]()
     private var pitchStream = [PitchDatum]()
+    /// Stores a UI handler to be executed when new sound intensity data is received
+    private(set) var soundIntensityHandler: ((_ power: Double?) -> Void)?
+    /// Stores a UI handler to be executed when new pitch data is received
+    private(set) var pitchHandler: ((_ pitchDatum: PitchDatum?) -> Void)?
+    
+    // MARK: - Audio Playback Properties
+    /// Stores the current playback rate of note playback
+    private(set) var playbackRate: Float = 1
     
     // MARK: - Speech Synthesis Properties
     let speechSynthesizer = AVSpeechSynthesizer()
@@ -97,8 +169,11 @@ class ViewController: UIViewController {
     public var synthesizerQueue = Queue<SynthesizerItem>()
     /// Specifies whether view has been instructed to clear out contents of synthesizer queue
     private(set) var isExhaustingSynthesizerQueue = false
+    /// Stores flag that indicates if we've prematurely ended echo utterance
+    private(set) var interruptedEcho = false
     /// Stores the rate of the speech synthesis speech
     private(set) var echoRate: Float = 0.53
+    private var updateEchoRate: Float?
     /// Stores a temporary handler to be executed when echo is complete (executes on-demand)
     private(set) var tempOnEchoFinish: (() -> Void)?
     
@@ -118,21 +193,34 @@ class ViewController: UIViewController {
         
         // Set up note handlers
         self.configureNoteHandlers()
+        
+        // Set up ui handlers
+        self.configureUIHandlers()
 
         // App Visits
         self.configureAppVisits()
+        
+        // Permissions
+        if !self.listeningPermissionsGranted {
+            self.requestPermissions()
+        }
 
         // Prepare UI
         self.setActiveUI(as: false)
-        self.wakePhraseLabel.text = "\"\(wakePhrase.capitalizeFirstLetter())\""
+        self.wakePhraseLabel.text = "\"\(self.wakePhrases[0].capitalizeFirstLetter())\""
+        self.prepareMenuBar()
+        self.prepareScrollView()
         self.prepareCommandBar()
-        self.setCommandBarVisibility(as: false)
+        self.prepareSlider()
+        self.adjustCommandBar()
+        self.adjustMenuBar()
+        self.transformationLabel.isHidden = true
         
         // Start listening for wake word
         self.configureListeningForWakePhrase()
         
         // Set textContainer font size
-        self.transcriptionText.font = self.font
+        self.textView.font = self.font
         
         // Assign delegates
         self.speechSynthesizer.delegate = self
@@ -153,9 +241,24 @@ class ViewController: UIViewController {
             context: nil
         )
         
+        // add observer to clipboard
+        selectionCursor.addObserver(
+            self,
+            forKeyPath: "clipboard",
+            options: [.old, .new],
+            context: nil
+        )
+        
+        self.textView.addObserver(
+            self,
+            forKeyPath: "selectedTextRange",
+            options: [.old, .new],
+            context: nil
+        )
+        
         let singleTap = UITapGestureRecognizer(target: self, action: #selector(handleSingleTap))
         singleTap.numberOfTapsRequired = 1
-        self.transcriptionText.addGestureRecognizer(singleTap)
+        self.textView.addGestureRecognizer(singleTap)
     }
     
     override func viewWillDisappear(_ animated: Bool) {
@@ -175,6 +278,31 @@ class ViewController: UIViewController {
             context: nil
         )
         
+        self.note.removeObserver(
+            self,
+            forKeyPath: "isListeningForSpeech",
+            context: nil
+        )
+        
+        self.note.removeObserver(
+            self,
+            forKeyPath: "pausedListeningForSpeech",
+            context: nil
+        )
+        
+        // remove observer from clipboard
+        selectionCursor.removeObserver(
+            self,
+            forKeyPath: "clipboard",
+            context: nil
+        )
+        
+        self.textView.removeObserver(
+            self,
+            forKeyPath: "selectedTextRange",
+            context: nil
+        )
+        
         // remove notification observers
         NotificationCenter.default.removeObserver(self)
     }
@@ -184,29 +312,17 @@ class ViewController: UIViewController {
         self.appActivated = true
         self.setActiveUI(as: true)
         
+        self.adjustCommandBar()
+        self.adjustMenuBar()
+        
         // clear pitch and volume streams
         self.pitchStream = [PitchDatum]()
         self.soundIntensityStream = [SoundIntensityDatum]()
 
         // start listening for voice commands
         note.startListeningForVoiceCommands(
-            soundIntensityHandler: { power in
-                if let power = power {
-                    DispatchQueue.main.async {
-                        let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
-                        let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
-                        self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
-                    }
-                }
-            },
-            pitchHandler: { pitchDatum in
-                if let pitchDatum = pitchDatum, !self.note.isPlayingNote {
-                    DispatchQueue.main.async {
-                        let pitch = pitchDatum.pitch.note.string
-                        self.pitchLabel.text = pitch
-                    }
-                }
-            }
+            soundIntensityHandler: self.soundIntensityHandler!,
+            pitchHandler: self.pitchHandler!
         )
     }
     
@@ -237,6 +353,7 @@ class ViewController: UIViewController {
         do {
             // .voiceChat mode does not default to speakers
             try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth, .duckOthers])
+            try session.setPreferredSampleRate(44_100)
             try session.setActive(true)
         } catch let error as NSError {
             print("===== There was an error requesting permissions to record audio or setting session category: \(error.localizedDescription) =====")
@@ -245,15 +362,92 @@ class ViewController: UIViewController {
         }
     }
     
+    func prepareMenuBar() {
+        self.menuBar.layer.shadowPath =
+              UIBezierPath(
+                roundedRect: self.menuBar.bounds,
+                cornerRadius: self.menuBar.layer.cornerRadius
+              ).cgPath
+        self.menuBar.layer.shadowColor = UIColor.black.cgColor
+        self.menuBar.layer.shadowOpacity = 0.5
+        self.menuBar.layer.shadowOffset = CGSize(width: 0, height: -5)
+        self.menuBar.layer.shadowRadius = 5
+        self.menuBar.layer.masksToBounds = false
+    }
+    
+    func prepareScrollView() {
+
+    }
+    
     func prepareCommandBar() {
+        self.commandBar.backgroundColor = UIColor(hex: Utils.COMMAND_BAR_BACKGROUND_COLOR)
         self.commandBar.layer.shadowPath =
-              UIBezierPath(roundedRect: self.commandBar.bounds,
-              cornerRadius: self.commandBar.layer.cornerRadius).cgPath
+              UIBezierPath(
+                roundedRect: self.commandBar.bounds,
+                cornerRadius: self.commandBar.layer.cornerRadius
+              ).cgPath
         self.commandBar.layer.shadowColor = UIColor.black.cgColor
         self.commandBar.layer.shadowOpacity = 0.5
-        self.commandBar.layer.shadowOffset = CGSize(width: 5, height: 5)
+        self.commandBar.layer.shadowOffset = CGSize(width: 0, height: 5)
         self.commandBar.layer.shadowRadius = 5
         self.commandBar.layer.masksToBounds = false
+    }
+    
+    func prepareSlider() {
+        self.slider.minimumValue = Utils.MINIMUM_PLAYBACK_RATE
+        self.slider.maximumValue = Utils.MAXIMUM_PLAYBACK_RATE
+        self.slider.isContinuous = true
+        self.slider.addTarget(self, action: #selector(self.sliderValueDidChange), for: .valueChanged)
+        
+        // Hide Slider
+        self.setSliderVisibility(as: false)
+    }
+    
+    func getStopListeningButton(withStopIndicator: Bool = false) -> UIBarButtonItem {
+        let button  = UIButton(type: .custom)
+
+        button.frame = CGRect(x: 0.0, y: 0.0, width: 40.0, height: 40.0)
+        button.addTarget(self, action: #selector(handleToggleListening), for: .touchUpInside)
+        
+        if withStopIndicator {
+            button.backgroundColor = UIColor.red
+            button.layer.cornerRadius = 0.5 * button.bounds.size.width
+            button.setImage(UIImage(systemName: "mic.slash"), for: .normal)
+            button.tintColor = UIColor.white
+        } else {
+            button.setImage(UIImage(systemName: "mic.slash"), for: .normal)
+            button.tintColor = UIColor.systemGray
+        }
+        
+        let barButton = UIBarButtonItem(customView: button)
+        
+        return barButton
+    }
+    
+    func getDeleteNoteButton() -> UIBarButtonItem {
+        let button  = UIButton(type: .custom)
+
+        button.frame = CGRect(x: 0.0, y: 0.0, width: 40.0, height: 40.0)
+        button.addTarget(self, action: #selector(resetSession), for: .touchUpInside)
+        button.setImage(UIImage(systemName: "trash"), for: .normal)
+        button.tintColor = UIColor.systemGray
+        
+        let barButton = UIBarButtonItem(customView: button)
+        
+        return barButton
+    }
+    
+    func getPasteClipboardButton() -> UIBarButtonItem {
+        let button  = UIButton(type: .custom)
+
+        button.frame = CGRect(x: 0.0, y: 0.0, width: 40.0, height: 40.0)
+        button.addTarget(self, action: #selector(self.handlePasteClipboard), for: .touchUpInside)
+        button.setImage(UIImage(systemName: "doc.on.clipboard"), for: .normal)
+        button.tintColor = UIColor.systemGray
+        
+        let barButton = UIBarButtonItem(customView: button)
+
+        return barButton
     }
     
     @objc func handleAudioSessionRouteChange(notification: Notification) {
@@ -368,22 +562,21 @@ class ViewController: UIViewController {
     }
     
     func configureNoteHandlers() {
-        self.onNoteListenUpdate = {[weak self] bufferRange in
+        self.onNoteListenUpdate = {[weak self] text, bufferRange in
             DispatchQueue.main.async {
-                self?.updateUIText(bufferRange: bufferRange)
+                self?.updateUIText(text: text, bufferRange: bufferRange, transformations: self!.note.transformations)
+                self?.adjustCommandBar()
+                self?.adjustMenuBar()
             }
         }
         
         self.onNoteListenStop = {[weak self] in
             DispatchQueue.main.async {
-                self?.updateUIText()
+                self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
                 self?.stopRecordingUITimer()
-
-                if !self!.note.isListeningForSpeech {
-                    self?.setAudioButtonsVisibility(visible: true)
-                    self?.recordingButton.setTitle(ViewController.START_NOTE_LABEL, for: .normal)
-                    self?.soundIntensityIndicatorHeight.constant = 0
-                }
+                self?.adjustCommandBar()
+                self?.adjustMenuBar()
+                self?.soundIntensityIndicatorHeight.constant = 0
             }
         }
         
@@ -393,10 +586,41 @@ class ViewController: UIViewController {
 
             DispatchQueue.main.async {
                 self?.stopRecordingUITimer()
-                self?.scheduleNotification(text: "Saved!", type: .success) // we must have stopped recording ui timer before calling this
-                self?.exhaustNotificationQueue()
                 self?.soundIntensityIndicatorHeight.constant = 0
-                self?.navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Reset", style: .plain, target: self, action: #selector(self?.resetSession))
+                self?.adjustCommandBar()
+                self?.adjustMenuBar()
+                self?.navigationItem.rightBarButtonItems = [self!.getDeleteNoteButton()]
+                if let _ = selectionCursor.clipboard {
+                    self?.navigationItem.rightBarButtonItems?.insert(self!.getPasteClipboardButton(), at: 0)
+                }
+                self?.activateListeningIndicator(withStopListeningButton: true)
+            }
+        }
+    }
+    
+    func configureUIHandlers() {
+        self.soundIntensityHandler = { power in
+            if let power = power {
+                DispatchQueue.main.async {
+                    var screenHeight = self.view.safeAreaLayoutGuide.layoutFrame.height
+                    if self.commandBar.alpha == 1 {
+                        screenHeight -= Utils.COMMAND_BAR_HEIGHT
+                    }
+                    if self.scrollView.alpha == 1 {
+                        screenHeight -= Utils.MENU_BAR_HEIGHT
+                    }
+                    let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * screenHeight
+                    let soundIntensityHeight: CGFloat = CGFloat(min(height, screenHeight))
+                    self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
+                }
+            }
+        }
+        self.pitchHandler = { pitchDatum in
+            if let pitchDatum = pitchDatum, !self.note.isPlayingNote {
+                DispatchQueue.main.async {
+                    let pitch = pitchDatum.pitch.note.string
+                    self.pitchLabel.text = pitch
+                }
             }
         }
     }
@@ -407,17 +631,21 @@ class ViewController: UIViewController {
         soundEngine.delete()
         
         // Give haptic feedback
-        hapticEngine.selection()
+        hapticEngine.mediumImpact()
 
+        // Clear any timed notification
         clearTimedNotification()
         
-        if note.isPlayingEcho {
-            note.stopEcho()
+        if note.isPlayingEcho || note.isPlayingPassiveEcho {
+            note.stopEcho(omitFeedback: true)
         }
         
         if note.isPlayingNote {
             note.stop()
         }
+        
+        // Reset Selection Cursor
+        selectionCursor.reset()
         
         // Remove previous observer
         self.note.removeObserver(
@@ -426,50 +654,28 @@ class ViewController: UIViewController {
             context: nil
         )
         
+        self.note.removeObserver(
+            self,
+            forKeyPath: "pausedListeningForSpeech",
+            context: nil
+        )
+        
+        // Stop listening for speech
+        // Reset note
         if note.isListeningForSpeech {
             note.stopListeningForSpeech() {
                 self.note = self.createNewNote()
                 self.note.startListeningForVoiceCommands(
-                    soundIntensityHandler: { power in
-                        if let power = power {
-                            DispatchQueue.main.async {
-                                let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
-                                let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
-                                self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
-                            }
-                        }
-                    },
-                    pitchHandler: { pitchDatum in
-                        if let pitchDatum = pitchDatum, !self.note.isPlayingNote {
-                            DispatchQueue.main.async {
-                                let pitch = pitchDatum.pitch.note.string
-                                self.pitchLabel.text = pitch
-                            }
-                        }
-                    }
+                    soundIntensityHandler: self.soundIntensityHandler!,
+                    pitchHandler: self.pitchHandler!
                 )
             }
         } else if note.isListeningForCommands {
             note.stopListeningForVoiceCommands() {
                 self.note = self.createNewNote()
                 self.note.startListeningForVoiceCommands(
-                    soundIntensityHandler: { power in
-                        if let power = power {
-                            DispatchQueue.main.async {
-                                let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
-                                let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
-                                self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
-                            }
-                        }
-                    },
-                    pitchHandler: { pitchDatum in
-                        if let pitchDatum = pitchDatum, !self.note.isPlayingNote {
-                            DispatchQueue.main.async {
-                                let pitch = pitchDatum.pitch.note.string
-                                self.pitchLabel.text = pitch
-                            }
-                        }
-                    }
+                    soundIntensityHandler: self.soundIntensityHandler!,
+                    pitchHandler: self.pitchHandler!
                 )
             }
         } else {
@@ -477,20 +683,22 @@ class ViewController: UIViewController {
         }
         
         DispatchQueue.main.async {
-            self.transcriptionText.attributedText = NSMutableAttributedString(string: "")
-            self.navigationItem.rightBarButtonItem = nil
-            self.setAudioButtonsVisibility(visible: false)
+            self.textView.attributedText = NSMutableAttributedString(string: "")
+            self.navigationItem.rightBarButtonItems = nil
+            self.adjustCommandBar()
+            self.adjustMenuBar()
+            self.setCursorVisibility(as: false)
         }
     }
     
-    func requestPermissions(handler: (() -> Void)?) {
+    func requestPermissions(handler: (() -> Void)? = nil) {
         SFSpeechRecognizer.requestAuthorization {
             [unowned self] (authStatus) in
             DispatchQueue.main.async {
-                self.recordingButton.isEnabled = false
+                self.listeningPermissionsGranted = false
                 switch authStatus {
                 case .authorized:
-                    self.recordingButton.isEnabled = true
+                    self.listeningPermissionsGranted = true
                     print("===== Speech recognition permission granted =====")
                 case .denied:
                     print("===== Speech recognition permission denied =====")
@@ -577,47 +785,39 @@ class ViewController: UIViewController {
     }
     
     func setCursorVisibility(as visible: Bool) {
+        print("=====  Set Cursor Visibility: \(visible) =====")
         // manage cursor view
-        if visible && self.transcriptionText.attributedText.length == 0 {
-            // compute x and y positions
-            let textContainerPadding = transcriptionText.textContainer.lineFragmentPadding
-            let xPos = transcriptionText.frame.minX + textContainerPadding
-            let yPos = transcriptionText.frame.minY + textContainerPadding + ((self.font.lineHeight - self.font.pointSize) / 2)
-            let width = Utils.CURSOR_WIDTH
-            
-
-            // Create a CGRect object which is used to render a rectangle.
-            let cursor: CGRect = CGRect(
-                x: xPos,
-                y: yPos,
-                width: CGFloat(width),
-                height: CGFloat(self.font.lineHeight)
+        if self.cursorView == nil && visible && self.textView.attributedText.length == 0 {
+            // initial set up for cursor
+            self.cursorView = UIView()
+            Utils.initializeCursor(
+                textView: self.textView,
+                cursorView: self.cursorView!,
+                font: self.font
             )
-            
-            // Create a UIView object which use above CGRect object.
-            self.cursorView = UIView(frame: cursor)
             
             // Set UIView background color
             self.cursorView!.backgroundColor = UIColor.systemBlue
             
             // Create corner radius
-            self.cursorView!.layer.cornerRadius = CGFloat(width / 2)
+            self.cursorView!.layer.cornerRadius = CGFloat(Utils.CURSOR_WIDTH / 2)
             
             // Add above UIView object as the main view's subview.
             self.view.addSubview(self.cursorView!)
-        } else if visible && self.transcriptionText.attributedText.length > 0 {
-            // keep cursor where it last was
-        } else if let cursorView = self.cursorView, !visible {
-            // remove cursor
-            cursorView.removeFromSuperview()
-            self.cursorView = nil
+        } else if let _ = self.cursorView, visible && self.textView.attributedText.length > 0 && self.cursorView!.alpha == 0 {
+            // show cursor again
+            self.cursorView!.alpha = 1
+        } else if let _ = self.cursorView, !visible && self.note.isListeningForSpeech {
+            // hide cursor
+            self.cursorView!.alpha = 0
         }
         
         // manage cursor model
         if visible {
-            selectionCursor.setTextView(textView: self.transcriptionText)
-            selectionCursor.setCursorView(cursorView: self.cursorView!)
+            selectionCursor.setTextView(textView: self.textView)
+            selectionCursor.setCursorView(cursorView: cursorView)
             selectionCursor.setNote(note: self.note)
+            selectionCursor.setFont(font: self.font)
             
             if self.cursorBlinkTimer != nil {
                 // Stopped cursor blinking that's already running
@@ -638,8 +838,6 @@ class ViewController: UIViewController {
                 }
             }
         } else {
-            selectionCursor.reset()
-            
             // stop cursor blink
             if self.cursorBlinkTimer != nil {
                 self.cursorBlinkTimer?.invalidate()
@@ -648,45 +846,225 @@ class ViewController: UIViewController {
         }
     }
     
+    func removeCursor() {
+        print("===== Remove Cursor =====")
+        // selectionCursor.reset()
+
+        // remove cursor
+        if let cursorView = self.cursorView {
+            cursorView.removeFromSuperview()
+            self.cursorView = nil
+        }
+    }
+    
+    func setMenuBarVisibility(as visible: Bool) {
+        if visible {
+            // Show Command Bar
+            UIView.animate(
+                withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
+                delay: 0,
+                options: [.curveEaseIn],
+                animations: {
+                    self.menuBar.alpha = 1
+                    self.menuBarPositionBottom.constant = 0
+                }
+            )
+            // Reduce TextView Height
+            UIView.animate(
+                withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
+                delay: 0,
+                options: [.curveEaseIn],
+                animations: {
+                    self.textViewPositionBottom.constant = Utils.MENU_BAR_HEIGHT
+                }
+            )
+            
+            // Move Sound Intensity Indicator Bottom
+            UIView.animate(
+                withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
+                delay: 0,
+                options: [.curveEaseIn],
+                animations: {
+                    self.soundIntensityIndicatorPositionBottom.constant = Utils.MENU_BAR_HEIGHT
+                }
+            )
+        } else {
+            // Hide Command Bar
+            UIView.animate(
+                withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
+                delay: 0,
+                options: [.curveEaseIn],
+                animations: {
+                    self.menuBar.alpha = 0
+                    self.menuBarPositionBottom.constant = -20
+                }
+            )
+            
+            // Incrase TextView Height
+            UIView.animate(
+                withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
+                delay: 0,
+                options: [.curveEaseIn],
+                animations: {
+                    self.textViewPositionBottom.constant = 0
+                }
+            )
+            
+            // Move Sound Intensity Indicator Bottom
+            UIView.animate(
+                withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
+                delay: 0,
+                options: [.curveEaseIn],
+                animations: {
+                    self.soundIntensityIndicatorPositionBottom.constant = 0
+                }
+            )
+        }
+    }
+    
+    func setScrollViewVisibility(as visible: Bool) {
+        if visible {
+            // Show Command Bar
+            UIView.animate(
+                withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
+                delay: 0,
+                options: [.curveEaseIn],
+                animations: {
+                    self.scrollView.alpha = 1
+                    self.scrollViewPositionTop.constant = 0
+                }
+            )
+            // Reduce TextView Height
+            UIView.animate(
+                withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
+                delay: 0,
+                options: [.curveEaseIn],
+                animations: {
+                    self.textViewPositionTop.constant = Utils.SCROLL_VIEW_HEIGHT
+                }
+            )
+            
+            // Adjust cursor
+            Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { timer in
+                // Adjust cursor to appropriate position
+                if selectionCursor.isVisible && !selectionCursor.hasSelection {
+                    selectionCursor.textViewDidChange(self.textView)
+                }
+            }
+        } else {
+            // Hide Command Bar
+            UIView.animate(
+                withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
+                delay: 0,
+                options: [.curveEaseIn],
+                animations: {
+                    self.scrollView.alpha = 0
+                    self.scrollViewPositionTop.constant = -20
+                }
+            )
+            
+            // Expand TextView Height
+            UIView.animate(
+                withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
+                delay: 0,
+                options: [.curveEaseIn],
+                animations: {
+                    self.textViewPositionTop.constant = 0
+                }
+            )
+
+            // Adjust cursor
+            Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { timer in
+                // Adjust cursor to appropriate position
+                if selectionCursor.isVisible && !selectionCursor.hasSelection {
+                    selectionCursor.textViewDidChange(self.textView)
+                }
+            }
+        }
+    }
+    
     func setCommandBarVisibility(as visible: Bool) {
         if visible {
+            // Show Slider View
+            self.commandBar.isHidden = false
+
+            // Animate in Command Bar
             UIView.animate(
                 withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
                 delay: 0,
                 options: [.curveEaseIn],
                 animations: {
                     self.commandBar.alpha = 1
-                    self.commandBarPositionLeft.constant = 10
                 }
             )
         } else {
+            // Animate out Command Bar
             UIView.animate(
                 withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
                 delay: 0,
                 options: [.curveEaseIn],
                 animations: {
                     self.commandBar.alpha = 0
-                    self.commandBarPositionLeft.constant = -10
                 }
             )
+            
+            // Hide Command Bar
+            Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { timer in
+                self.commandBar.isHidden = true
+            }
+        }
+    }
+    
+    func setSliderVisibility(as visible: Bool) {
+        if visible {
+            // Show Slider View
+            self.sliderView.isHidden = false
+
+            // Animate in Slider View
+            UIView.animate(
+                withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
+                delay: 0,
+                options: [.curveEaseIn],
+                animations: {
+                    self.sliderView.alpha = 1
+                }
+            )
+        } else {
+            // Animate out Slider View
+            UIView.animate(
+                withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
+                delay: 0,
+                options: [.curveEaseIn],
+                animations: {
+                    self.sliderView.alpha = 0
+                }
+            )
+            
+            // Hide Slider View
+            Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { timer in
+                self.sliderView.isHidden = true
+            }
         }
     }
     
     func createNewNote() -> Note {
         // create new note
+        let uid = UUID().uuidString
         let note = Note(
             vc: self,
-            filename: "note-\(UUID().uuidString)",
+            uid: uid,
+            filename: "note-\(uid)",
             speaker: Speaker(name: "Afika Nyati", avatarURL: URL(string: AVATAR_URL)!, vc: self),
             minPower: minPower,
-            withOnDeviceRecognition: useOnDeviceRecognition,
+            withOnDeviceRecognition: self.useOnDeviceRecognition,
             withTemporalSuggestions: false,
             withPunctuationSuggestions: true,
             withFormattingSuggestions: true,
             withTextStrictlyAsWords: false,
-            onListenUpdate: onNoteListenUpdate,
-            onListenStop: onNoteListenStop,
-            onComplete: onNoteComplete,
+            withCapitalization: true,
+            onListenUpdate: self.onNoteListenUpdate,
+            onListenStop: self.onNoteListenStop,
+            onComplete: self.onNoteComplete,
             scheduleTempOnEchoFinishHandler: { [weak self] handler in
                 self?.tempOnEchoFinish = handler
             }
@@ -696,6 +1074,12 @@ class ViewController: UIViewController {
         note.addObserver(
             self,
             forKeyPath: "isListeningForSpeech",
+            options: [.old, .new],
+            context: nil
+        )
+        note.addObserver(
+            self,
+            forKeyPath: "pausedListeningForSpeech",
             options: [.old, .new],
             context: nil
         )
@@ -721,31 +1105,37 @@ class ViewController: UIViewController {
         }
     }
     
+    func emptyNotificationQueue() {
+        self.notificationQueue.empty()
+    }
+    
     func runTimedNotification(item: NotificationItem) {
-        // Stop UI Timer if we receive app notification while recording
-        if self.note.isListeningForSpeech && self.UITimer != nil {
-            self.stopRecordingUITimer()
-        }
-        
-        self.navigationItem.title = item.text
-        self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.red]
-        self.appNotificationTimer = Timer.scheduledTimer(withTimeInterval: item.duration!, repeats: false) {[weak self] timer in
-            // Restart UI Timer is we received app notification while receiving
-            if self!.isExhaustingNotificationQueue {
+        DispatchQueue.main.async {
+            // Stop UI Timer if we receive app notification while recording
+            if self.note.isListeningForSpeech && self.UITimer != nil {
+                self.stopRecordingUITimer()
+            }
+            
+            // Stop any prior notification that hasn't completed yet
+            if self.appNotificationTimer != nil {
+                self.appNotificationTimer?.invalidate()
+                self.appNotificationTimer = nil
+            }
+
+            self.navigationItem.title = item.text
+            self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.red]
+            
+            self.appNotificationTimer = Timer.scheduledTimer(withTimeInterval: item.duration!, repeats: false) {[weak self] timer in
                 self?.navigationItem.title = ""
                 self?.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
-
-                self!.exhaustNotificationQueue()
-            } else if self!.note.isListeningForSpeech {
-                self?.navigationItem.title = ""
-                self?.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
-
-                DispatchQueue.main.async {
+                
+                // Restart UI Timer is we received app notification while receiving
+                if self!.isExhaustingNotificationQueue {
+                    self!.exhaustNotificationQueue()
+                } else if self!.note.isListeningForSpeech {
+                    self?.clearTimedNotification()
                     self!.startRecordingUITimer(recording: true)
                 }
-            } else {
-                self?.navigationItem.title = ""
-                self?.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
             }
         }
         
@@ -767,8 +1157,10 @@ class ViewController: UIViewController {
         self.appNotificationTimer = nil
         
         // Clear out UI artifacts
-        self.navigationItem.title = ""
-        self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
+        DispatchQueue.main.async {
+            self.navigationItem.title = ""
+            self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
+        }
     }
     
     func presentIndefiniteNotification(item: NotificationItem) {
@@ -782,25 +1174,26 @@ class ViewController: UIViewController {
             self.stopRecordingUITimer()
         }
         
-        self.navigationItem.title = item.text
-        if self.note.isListeningForSpeech {
-            self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.red]
-        } else {
-            self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
+        DispatchQueue.main.async {
+            self.navigationItem.title = item.text
+            if self.note.isListeningForSpeech || !self.appActivated {
+                self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.red]
+            } else {
+                self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
+            }
         }
     }
     
     func removeIndefiniteNotification() {
-        if self.note.isListeningForSpeech {
-            self.navigationItem.title = ""
-            self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
-
-            DispatchQueue.main.async {
+        DispatchQueue.main.async {
+            if self.note.isListeningForSpeech {
+                self.navigationItem.title = ""
+                self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
                 self.startRecordingUITimer(recording: true)
+            } else {
+                self.navigationItem.title = ""
+                self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
             }
-        } else {
-            self.navigationItem.title = ""
-            self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
         }
     }
     
@@ -811,6 +1204,14 @@ class ViewController: UIViewController {
         if let item = item {
             Utils.runSpeechSynthesizer(item: item)
         }
+    }
+    
+    func emptySynthesizerQueue() {
+        if self.speechSynthesizer.isSpeaking {
+            self.speechSynthesizer.stopSpeaking(at: .immediate)
+        }
+        
+        self.synthesizerQueue.empty()
     }
     
     @objc func appGainsFocus() {
@@ -857,209 +1258,47 @@ class ViewController: UIViewController {
         }
     }
     
-    // MARK: - View Actions
-
-    @IBAction func recordButtonTapped(_ sender: Any) {
-        let authStatus = SFSpeechRecognizer.authorizationStatus()
-        
-        if session.recordPermission != .granted || authStatus != .authorized {
-            let alertController = UIAlertController(title: "Speech Recognition Permission Denied", message: "Please grant permission for application to initiate speech transcription.", preferredStyle: .alert)
-            alertController.addAction(UIAlertAction(title: "Grant Permission", style: .default) { [unowned self] action in
-                self.requestPermissions(handler: {
-                    self.configureListeningForWakePhrase()
-                })
-            })
-            alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-            present(alertController, animated: true)
-            return
-        }
-        
-        if authStatus == .authorized && session.recordPermission == .granted {
-            if !note.isListeningForSpeech && !note.isExporting {
-                print("===== Start Recording =====")
-                recordingButton.setTitle(ViewController.STOP_NOTE_LABEL, for: .normal)
-                note.startListeningForSpeech(
-                    soundIntensityHandler: { power in
-                        if let power = power {
-                            DispatchQueue.main.async {
-                                let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
-                                let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
-                                self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
-                            }
-                        }
-                    },
-                    pitchHandler: { pitchDatum in
-                        if let pitchDatum = pitchDatum, !self.note.isPlayingNote {
-                            DispatchQueue.main.async {
-                                let pitch = pitchDatum.pitch.note.string
-                                self.pitchLabel.text = pitch
-                            }
-                        }
-                    },
-                    onStartHandler: {
-                        DispatchQueue.main.async {
-                            self.startRecordingUITimer(recording: true)
-                        }
-                    }
-                )
-                
-                // Give haptic feedback
-                hapticEngine.selection()
-            } else if note.isListeningForSpeech && !note.isExporting {
-                print("===== Stop Recording =====")
-                note.stopListeningForSpeech() {[weak self] in
-                    self?.onNoteListenStop!()
-                }
-                
-                // Give haptic feedback
-                hapticEngine.selection()
-            }
-        }
-    }
-
-    @IBAction func playButtonTapped(_ sender: Any) {
-        if note.isPlayingNote {
-            note.pause() { [weak self] in
-                DispatchQueue.main.async {
-                    self?.playAudioButton.setTitle(ViewController.PLAY_NOTE_LABEL, for: .normal)
-                }
-            }
-            
-            // Give haptic feedback
-            hapticEngine.selection()
-        } else {
-            note.play(
-                onStartHandler: { [weak self] in
-                    // print("Successfully executed playback on start handler")
-                    DispatchQueue.main.async {
-                        self?.playAudioButton.setTitle(ViewController.PAUSE_NOTE_LABEL, for: .normal)
-                    }
-                },
-                secondElapseHandler: { [weak self] in
-                    // print("Successfully executed playback second elapsed handler")
-                    DispatchQueue.main.async {
-                        if !self!.note.isListeningForSpeech {
-                            self?.navigationItem.title = "\(Utils.formattedTime(time: Float(self!.note.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.note.duration.seconds)))"
-                        }
-                    }
-                },
-                segmentBoundaryHandler: { [weak self] in
-                    // print("Successfully executed playback on segment boundary handler")
-                    DispatchQueue.main.async {
-                        if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let highlightRange = self?.note.getSegmentTextRange(of: segment) {
-                            // update text
-                            self?.updateUIText(highlightRange: highlightRange)
-                        }
-                        
-                        if let segment = self?.note.getSegment(type: .current), let pitch = segment.getPitch() {
-                            // update pitch
-                            self?.pitchLabel.text = pitch.note.string
-                        }
-                    }
-                }, onFinishHandler: { [weak self] in
-                    // print("Successfully executed playback on finish handler")
-                    DispatchQueue.main.async {
-                        self?.updateUIText()
-                        self!.note.player.replaceCurrentItem(with: nil)
-                        if !self!.note.isListeningForSpeech {
-                            self?.navigationItem.title = ""
-                            self?.playAudioButton.setTitle(ViewController.PLAY_NOTE_LABEL, for: .normal)
-                        }
-                    }
-                }
-            )
-            
-            // Give haptic feedback
-            hapticEngine.selection()
-        }
-    }
-    
-    @IBAction func speechToTextButtonTapped(_ sender: Any) {
-        if note.echoIsPaused {
-            print("==== Speech synthesizer continue speaking =====")
-            note.startEcho(onStartHandler: { [weak self] in
-                DispatchQueue.main.async {
-                    self?.playTextToSpeechButton.setTitle(ViewController.PAUSE_ECHO_LABEL, for: .normal)
-                }
-            })
-            
-            // Give haptic feedback
-            hapticEngine.selection()
-        } else if note.isPlayingEcho {
-            print("==== Speech synthesizer paused =====")
-            note.pauseEcho() { [weak self] in
-                DispatchQueue.main.async {
-                    self?.playTextToSpeechButton.setTitle(ViewController.PLAY_ECHO_LABEL, for: .normal)
-                }
-            }
-            
-            // Give haptic feedback
-            hapticEngine.selection()
-        } else {
-            playAudioButton.setTitle(ViewController.PLAY_NOTE_LABEL, for: .normal)
-            note.startEcho(onStartHandler: { [weak self] in
-                DispatchQueue.main.async {
-                    self?.navigationItem.title = ""
-                    self?.playTextToSpeechButton.setTitle(ViewController.PAUSE_ECHO_LABEL, for: .normal)
-                }
-            })
-            
-            // Give haptic feedback
-            hapticEngine.selection()
-        }
-    }
-    
     // MARK: - View Methods
     
-    func setAudioButtonsVisibility(visible: Bool) {
-        self.playAudioButton.isHidden = !visible
-        self.playAudioButton.isEnabled = visible
-        self.playTextToSpeechButton.isHidden = !visible
-        self.playTextToSpeechButton.isEnabled = visible
-    }
-    
     func setActiveUI(as visible: Bool) {
-        transcriptionText.isHidden = !visible
-        recordingButton.isHidden = !visible
-        recordingButton.isEnabled = visible
+        textView.isHidden = !visible
         pitchLabel.isHidden = !visible
         wakePhraseSubtitleLabel.isHidden = visible
         wakePhraseLabel.isHidden = visible
         
         if !visible {
-            playAudioButton.isHidden = true
-            playAudioButton.isEnabled = false
-            playTextToSpeechButton.isHidden = true
-            playTextToSpeechButton.isEnabled = false
+            self.setCursorVisibility(as: false)
         }
     }
     
-    func updateUIText(highlightRange: NSRange? = nil, bufferRange: NSRange? = nil) {
-        let text = note.getText()
-        
-        if text.count == 0 {
-            return
-        }
-        
-        if let highlightRange = highlightRange {
-            let mutableAttributedString = NSMutableAttributedString(string: text)
+    func updateUIText(text: String, highlightRange: NSRange? = nil, bufferRange: NSRange? = nil, transformations: [NoteTransformation]? = nil) {
+        let mutableAttributedString = NSMutableAttributedString(string: text)
+
+        if let bufferRange = bufferRange, bufferRange.length > 0 && text.count > 0 {
+            // If passage is in buffer, we make gray text
+            mutableAttributedString.addAttribute(.foregroundColor, value: UIColor.systemGray, range: bufferRange)
+        } else if let highlightRange = highlightRange, highlightRange.length > 0 && text.count > 0 {
+            // If words in note are being echoed, we highlight them
             mutableAttributedString.addAttribute(.foregroundColor, value: UIColor.white, range: highlightRange)
             mutableAttributedString.addAttribute(.backgroundColor, value: UIColor.red, range: highlightRange)
-            transcriptionText.attributedText = mutableAttributedString
-            transcriptionText.font = self.font
-        } else if let bufferRange = bufferRange {
-            let mutableAttributedString = NSMutableAttributedString(string: text)
-            mutableAttributedString.addAttribute(.foregroundColor, value: UIColor.systemGray, range: bufferRange)
-            transcriptionText.attributedText = mutableAttributedString
-            transcriptionText.font = self.font
-        } else {
-            let mutableAttributedString = NSMutableAttributedString(string: text)
-            transcriptionText.attributedText = mutableAttributedString
-            transcriptionText.font = self.font
         }
         
+        // Emphasize all transformations text
+        if let transformations = transformations {
+            for transformation in transformations {
+                mutableAttributedString.addAttribute(.foregroundColor, value: UIColor.systemOrange, range: transformation.textRange)
+            }
+        }
+        
+        // Add all accumulated attributes to text object
+        textView.attributedText = mutableAttributedString
+        // Set font
+        textView.font = self.font
+        
         // Notify of text change
-        selectionCursor.textViewDidChange(self.transcriptionText)
+        if selectionCursor.isVisible {
+            selectionCursor.textViewDidChange(self.textView)
+        }
     }
     
     /**
@@ -1068,8 +1307,14 @@ class ViewController: UIViewController {
         - Parameter recording: Whether the timer should be set to be a recording.
     */
     func startRecordingUITimer(recording: Bool) {
+        if self.UITimer != nil {
+            self.stopRecordingUITimer()
+        }
+        
         if recording {
-            self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.red]
+            DispatchQueue.main.async {
+                self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.red]
+            }
         }
         
         if selectionCursor.hasSelection && selectionCursor.direction == .forwards {
@@ -1121,14 +1366,287 @@ class ViewController: UIViewController {
         self.navigationItem.title = ""
     }
     
-    func activateListeningIndicator() {
+    func activateListeningIndicator(withRecording: Bool = false, withStopListeningButton: Bool = false) {
         let spinner = UIActivityIndicatorView(style: .medium)
+        if withRecording {
+            spinner.color = UIColor.red
+        }
         spinner.startAnimating()
-        self.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: spinner)
+
+        let spinnerButton = UIBarButtonItem(customView: spinner)
+        var buttons = [spinnerButton]
+        if withStopListeningButton {
+            let stopListeningButton = self.getStopListeningButton()
+            buttons.append(stopListeningButton)
+        }
+        
+        self.navigationItem.leftBarButtonItems = buttons
     }
     
     func deactivateListeningIndicator() {
         self.navigationItem.leftBarButtonItem = nil
+    }
+    
+    func adjustMenuBar() {
+        print("===== Adjust Menu Bar =====")
+
+        // Start Note Button
+        if !self.note.isListeningForSpeech &&
+            self.note.noteSegments.count == 0 &&
+            self.listeningPermissionsGranted {
+            self.showButton(self.startNoteButton)
+        } else {
+            self.hideButton(self.startNoteButton)
+        }
+        
+        // Resume Note Button
+        if self.note.isListeningForSpeech && self.note.userInitiatedPausedListeningForSpeech {
+            self.showButton(self.resumeNoteButton)
+        } else {
+            self.hideButton(self.resumeNoteButton)
+        }
+        
+        // Edit Note Button
+        if !self.note.isListeningForSpeech &&
+            self.note.noteSegments.count > 0 &&
+            self.listeningPermissionsGranted {
+            self.showButton(self.editNoteButton)
+        } else {
+            self.hideButton(self.editNoteButton)
+        }
+        
+        // Stop Listening Note Button
+        if self.note.isListeningForSpeech && !self.note.isExporting {
+            self.showButton(self.stopListeningNoteButton)
+        } else {
+            self.hideButton(self.stopListeningNoteButton)
+        }
+        
+        // Play Note Button
+        if (!self.note.isPlayingNote || (self.note.isPlayingNote && self.note.pausedPlayingNote)) && self.note.noteSegments.count > 0 {
+            self.showButton(self.playNoteButton)
+        } else {
+            self.hideButton(self.playNoteButton)
+        }
+        
+        // Stop Playing Note Button
+        if self.note.isPlayingNote && self.note.noteSegments.count > 0 {
+            self.showButton(self.stopPlayingNoteButton)
+        } else {
+            self.hideButton(self.stopPlayingNoteButton)
+        }
+        
+        // Play Echo Button
+        if (!(self.note.isPlayingEcho || self.note.isPlayingPassiveEcho) || (self.note.isPlayingEcho && self.note.pausedEcho)) && self.note.noteSegments.count > 0 {
+            self.showButton(self.playEchoButton)
+        } else {
+            self.hideButton(self.playEchoButton)
+        }
+
+        // Stop Echo Button
+        if (self.note.isPlayingEcho || self.note.isPlayingPassiveEcho) && self.note.noteSegments.count > 0 {
+            self.showButton(self.stopEchoButton)
+        } else {
+            self.hideButton(self.stopEchoButton)
+        }
+        
+        // Export Note Button
+        if self.note.noteSegments.count > 0 && !self.note.isListeningForSpeech {
+            self.showButton(self.exportNoteButton)
+        } else {
+            self.hideButton(self.exportNoteButton)
+        }
+        
+        // Walk Note Button
+        if self.note.noteSegments.count > 0 {
+            self.showButton(self.walkNoteButton)
+        } else {
+            self.hideButton(self.walkNoteButton)
+        }
+        
+        // ===== Manage Visibility of Menu Bar =====
+    
+        if self.appActivated {
+            self.setMenuBarVisibility(as: true)
+        } else {
+            self.setMenuBarVisibility(as: false)
+        }
+    }
+    
+    func adjustCommandBar() {
+        print("===== Adjust Command Bar =====")
+        
+        // ===== Number of active buttons =====
+        var numActiveButtons = 0
+        
+        // ===== Resting Command Bar Buttons ======
+        
+        // Run Note Button
+        if self.note.noteSegments.count > 0 && !selectionCursor.hasSelection {
+            numActiveButtons += 1
+            self.showButton(self.runNoteButton)
+        } else {
+            self.hideButton(self.runNoteButton)
+        }
+        
+        // Pause Note Button
+        if self.note.noteSegments.count > 0 &&
+            (
+                (self.note.isListeningForSpeech && !self.note.pausedListeningForSpeech) ||
+                (self.note.isPlayingNote && !self.note.pausedPlayingNote)
+            ) && !selectionCursor.hasSelection {
+            numActiveButtons += 1
+            self.showButton(self.pauseNoteButton)
+        } else {
+            self.hideButton(self.pauseNoteButton)
+        }
+        
+        // Playback Rate Button
+        if self.note.noteSegments.count > 0 && !selectionCursor.hasSelection {
+            numActiveButtons += 1
+            self.showButton(self.playbackRateButton)
+        } else {
+            self.hideButton(self.playbackRateButton)
+        }
+        
+        // Echo Rate Button
+        if self.note.noteSegments.count > 0 && !selectionCursor.hasSelection {
+            numActiveButtons += 1
+            self.showButton(self.echoRateButton)
+        } else {
+            self.hideButton(self.echoRateButton)
+        }
+        
+        // ===== Conditional Buttons =====
+        
+        // Move Here Button
+        if !selectionCursor.isAtEndOfTextView && self.note.isListeningForSpeech && !selectionCursor.hasSelection {
+            numActiveButtons += 1
+            self.showButton(self.moveHereButton)
+        } else {
+            self.hideButton(self.moveHereButton)
+        }
+        
+        // Preview Clipboard Button
+        if let _ = selectionCursor.clipboard, self.previewClipboardButton.alpha == 0 && self.note.isListeningForSpeech && !selectionCursor.hasSelection {
+            numActiveButtons += 1
+            self.showButton(self.previewClipboardButton)
+        } else {
+            self.hideButton(self.previewClipboardButton)
+        }
+        
+        // Last Commit Button
+        if self.note.committedBufferRanges.count > 0 && self.note.isListeningForSpeech && !selectionCursor.hasSelection {
+            numActiveButtons += 1
+            self.showButton(self.lastCommitButton)
+        } else {
+            self.hideButton(self.lastCommitButton)
+        }
+        
+        // Pause Echo Button
+        if self.note.isPlayingEcho && !self.note.pausedEcho && !selectionCursor.hasSelection {
+            numActiveButtons += 1
+            self.showButton(self.pauseEchoButton)
+        } else {
+            self.hideButton(self.pauseEchoButton)
+        }
+        
+        // Skip Backward Button
+        if self.note.isPlayingNote && !selectionCursor.hasSelection {
+            numActiveButtons += 1
+            self.showButton(self.skipBackwardButton)
+        } else {
+            self.hideButton(self.skipBackwardButton)
+        }
+        
+        // Skip Forward Button
+        if self.note.isPlayingNote && !selectionCursor.hasSelection {
+            numActiveButtons += 1
+            self.showButton(self.skipForwardButton)
+        } else {
+            self.hideButton(self.skipForwardButton)
+        }
+        
+        // ===== Selection Buttons ======
+
+        // Increase Rate Button
+        if let firstSelectionSegment = selectionCursor.selectionSegments?.first, selectionCursor.hasSelection && firstSelectionSegment.getRate() + Utils.DISCRETE_PLAYBACK_DELTA <= Utils.MAXIMUM_PLAYBACK_RATE  {
+            numActiveButtons += 1
+            self.showButton(self.increaseRateButton)
+        } else {
+            self.hideButton(self.increaseRateButton)
+        }
+        
+        // Decrease Rate Button
+        if let firstSelectionSegment = selectionCursor.selectionSegments?.first, selectionCursor.hasSelection && firstSelectionSegment.getRate() - Utils.DISCRETE_PLAYBACK_DELTA >= Utils.MINIMUM_PLAYBACK_RATE {
+            numActiveButtons += 1
+            self.showButton(self.decreaseRateButton)
+        } else {
+            self.hideButton(self.decreaseRateButton)
+        }
+        
+        // Delete Button
+        if selectionCursor.hasSelection {
+            numActiveButtons += 1
+            self.showButton(self.deleteSelectionButton)
+        } else {
+            self.hideButton(self.deleteSelectionButton)
+        }
+        
+        // Replace Button
+        if selectionCursor.hasSelection {
+            numActiveButtons += 1
+            self.showButton(self.replaceSelectionButton)
+        } else {
+            self.hideButton(self.replaceSelectionButton)
+        }
+        
+        // Copy Button
+        if selectionCursor.hasSelection {
+            numActiveButtons += 1
+            self.showButton(self.copySelectionButton)
+        } else {
+            self.hideButton(self.copySelectionButton)
+        }
+        
+        // Cut Button
+        if selectionCursor.hasSelection {
+            numActiveButtons += 1
+            self.showButton(self.cutSelectionButton)
+        } else {
+            self.hideButton(self.cutSelectionButton)
+        }
+        
+        // Export Button
+        if selectionCursor.hasSelection {
+            numActiveButtons += 1
+            self.showButton(self.exportSelectionButton)
+        } else {
+            self.hideButton(self.exportSelectionButton)
+        }
+        
+        // ===== Manage Visibility of CommandBar =====
+    
+        if numActiveButtons > 0 && self.appActivated {
+            self.setScrollViewVisibility(as: true)
+        } else {
+            self.setScrollViewVisibility(as: false)
+        }
+    }
+    
+    func handleTransformationsView() {
+        if let selectionTransformations = selectionCursor.selectionTransformations, selectionCursor.hasSelection {
+            self.transformationLabel.isHidden = false
+            self.transformationLabel.text = "1.0"
+            for transformation in selectionTransformations {
+                if transformation.type == .playbackRate, let value = transformation.value {
+                    self.transformationLabel.text = String(value)
+                    break
+                }
+            }
+        } else {
+            self.transformationLabel.isHidden = true
+        }
     }
     
     // MARK: - Wake Phrase Methods
@@ -1143,6 +1661,14 @@ class ViewController: UIViewController {
         
         // Give haptic feedback
         hapticEngine.heavyImpact()
+        
+        // Visually indicate app is listening
+        DispatchQueue.main.async {
+            self.activateListeningIndicator(withStopListeningButton: true)
+        }
+        
+        // Update Wake Phrase Flage
+        self.isListeningForWakePhrase = true
         
         // must be placed before we start listening for wake phrase
         // if pitch engine begins first, we are for some reason unable to do speech recognition
@@ -1169,9 +1695,16 @@ class ViewController: UIViewController {
                 // Sound Intensity
                 let power = Utils.computeSoundIntensity(buffer: buffer)
                 if let power = power {
+                    var screenHeight = self.view.safeAreaLayoutGuide.layoutFrame.height
+                    if self.commandBar.alpha == 1 {
+                        screenHeight -= Utils.COMMAND_BAR_HEIGHT
+                    }
+                    if self.scrollView.alpha == 1 {
+                        screenHeight -= Utils.MENU_BAR_HEIGHT
+                    }
                     let soundIntensityDatum = SoundIntensityDatum(date: Date(), power: power)
                     self.soundIntensityStream.append(soundIntensityDatum)
-                    let soundIntensityHeight = CGFloat(min((CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height), self.view.safeAreaLayoutGuide.layoutFrame.height))
+                    let soundIntensityHeight = CGFloat(min((CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * screenHeight), screenHeight))
                     self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
                 }
                 // Pitch
@@ -1188,27 +1721,43 @@ class ViewController: UIViewController {
             print("[Error] There was a problem starting speech recognition: \(error.localizedDescription)")
         }
         
-        guard let myRecognizer = SFSpeechRecognizer() else {
-            print("===== Speech Recognizer is not supported for current locale =====")
-            return
+        let handleRecognizer = {
+            print("\tUsing On-Device Recognition")
+            self.request!.requiresOnDeviceRecognition = true
+            
+            if let speechRecognizer = self.speechRecognizer, !speechRecognizer.isAvailable {
+                print("\tSpeech Recognizer is not available")
+                return
+            }
+            
+            self.speechRecognizer?.defaultTaskHint = .dictation
+            self.recognitionTask = self.speechRecognizer?.recognitionTask(with: self.request!, delegate: self)
         }
         
-        if useOnDeviceRecognition && myRecognizer.supportsOnDeviceRecognition {
-            print("===== Using On-Device Recognition =====")
-            request!.requiresOnDeviceRecognition = true
+        if let speechRecognizer = self.speechRecognizer, useOnDeviceRecognition && speechRecognizer.supportsOnDeviceRecognition {
+            handleRecognizer()
+        } else {
+            // check again after two seconds
+            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                if let speechRecognizer = self.speechRecognizer, self.useOnDeviceRecognition && speechRecognizer.supportsOnDeviceRecognition {
+                    handleRecognizer()
+                } else {
+                    // Present error
+                    let alertController = UIAlertController(title: "Unable to initiate Voice Recognition", message: "Lingual relies on on-device recognition to deliver a the best user experience. Your device does not support it.", preferredStyle: .alert)
+                    alertController.addAction(UIAlertAction(title: "Close", style: .cancel))
+                    DispatchQueue.main.async {
+                        self.present(alertController, animated: true)
+                    }
+                }
+            }
         }
-        
-        if !myRecognizer.isAvailable {
-            print("===== Speech Recognizer is not available =====")
-            return
-        }
-        
-        speechRecognizer?.defaultTaskHint = .dictation
-        recognitionTask = speechRecognizer?.recognitionTask(with: request!, delegate: self)
     }
     
     func stopListeningForWakePhrase(onStopHandler: (() -> Void)? = nil) {
         print("===== Stopping Listening for Wake Phrase =====")
+        
+        // Update Wake Phrase Flage
+        self.isListeningForWakePhrase = false
         
         let node = audioEngine.inputNode
         node.removeTap(onBus: self.recordBus)
@@ -1229,6 +1778,8 @@ class ViewController: UIViewController {
             self.recognitionTask!.finish() // don't wrap in if statement because it is sometimes not .running
             self.request!.endAudio() // don't add a request = nil because it results in request not being there sometimes.
             self.pitchEngine.stop()
+            // Remove is listening indicator
+            self.deactivateListeningIndicator()
             onStopHandler?()
         }
     }
@@ -1265,23 +1816,8 @@ class ViewController: UIViewController {
                     self.stopListeningForVolumeTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) {[weak self] timer in
                         self?.stopListeningForVolume() {
                             self?.note.startListeningForVoiceCommands(
-                                soundIntensityHandler: { power in
-                                    if let power = power {
-                                        DispatchQueue.main.async {
-                                            let height = CGFloat(Utils.normalizedPower(power: power, minPower: self!.minPower)) * self!.view.safeAreaLayoutGuide.layoutFrame.height
-                                            let soundIntensityHeight: CGFloat = CGFloat(min(height, self!.view.safeAreaLayoutGuide.layoutFrame.height))
-                                            self?.soundIntensityIndicatorHeight.constant = soundIntensityHeight
-                                        }
-                                    }
-                                },
-                                pitchHandler: { pitchDatum in
-                                    if let pitchDatum = pitchDatum, !self!.note.isPlayingNote {
-                                        DispatchQueue.main.async {
-                                            let pitch = pitchDatum.pitch.note.string
-                                            self?.pitchLabel.text = pitch
-                                        }
-                                    }
-                                }
+                                soundIntensityHandler: self!.soundIntensityHandler!,
+                                pitchHandler: self!.pitchHandler!
                             )
                         }
                     }
@@ -1289,9 +1825,16 @@ class ViewController: UIViewController {
 
                 let power = Utils.computeSoundIntensity(buffer: buffer)
                 if let power = power {
+                    var screenHeight = self.view.safeAreaLayoutGuide.layoutFrame.height
+                    if self.commandBar.alpha == 1 {
+                        screenHeight -= Utils.COMMAND_BAR_HEIGHT
+                    }
+                    if self.scrollView.alpha == 1 {
+                        screenHeight -= Utils.MENU_BAR_HEIGHT
+                    }
                     let soundIntensityDatum = SoundIntensityDatum(date: Date(), power: power)
                     self.soundIntensityStream.append(soundIntensityDatum)
-                    let soundIntensityHeight = CGFloat(min((CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height), self.view.safeAreaLayoutGuide.layoutFrame.height))
+                    let soundIntensityHeight = CGFloat(min((CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * screenHeight), screenHeight))
                     self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
                     
                     if soundIntensityDatum.power > self.getBackgroundNoise() + Utils.TALKING_POWER_DELTA && self.isListeningForVolume && self.stopListeningForVolumeTimer != nil {
@@ -1301,23 +1844,8 @@ class ViewController: UIViewController {
                             if self?.stopListeningForVolumeTimer != nil {
                                 self?.stopListeningForVolume() {
                                     self?.note.startListeningForVoiceCommands(
-                                        soundIntensityHandler: { power in
-                                            if let power = power {
-                                                DispatchQueue.main.async {
-                                                    let height = CGFloat(Utils.normalizedPower(power: power, minPower: self!.minPower)) * self!.view.safeAreaLayoutGuide.layoutFrame.height
-                                                    let soundIntensityHeight: CGFloat = CGFloat(min(height, self!.view.safeAreaLayoutGuide.layoutFrame.height))
-                                                    self?.soundIntensityIndicatorHeight.constant = soundIntensityHeight
-                                                }
-                                            }
-                                        },
-                                        pitchHandler: { pitchDatum in
-                                            if let pitchDatum = pitchDatum, !self!.note.isPlayingNote {
-                                                DispatchQueue.main.async {
-                                                    let pitch = pitchDatum.pitch.note.string
-                                                    self?.pitchLabel.text = pitch
-                                                }
-                                            }
-                                        }
+                                        soundIntensityHandler: self!.soundIntensityHandler!,
+                                        pitchHandler: self!.pitchHandler!
                                     )
                                 }
                             }
@@ -1362,6 +1890,57 @@ class ViewController: UIViewController {
         }
     }
     
+    // MARK: - Setters
+       
+    func setPlaybackRate(to rate: Float) {
+        print("===== Set Playback Rate: \(rate) =====")
+        
+        // Present Feedback
+        Utils.executeFeedback(
+            visualMessage: "Set Playback Rate",
+            audioMessage: "set playback rate to \(self.playbackRate)",
+            note: self.note
+        )
+
+        self.playbackRate = rate
+
+        if self.note.isPlayingNote {
+            self.note.player.rate = self.playbackRate
+        }
+    }
+
+    // sets relative to wpm of current note
+    func setPlaybackRate(wpm: Float) {
+        print("===== Set Playback Rate: \(wpm)wpm =====")
+        
+        // Present Feedback
+        Utils.executeFeedback(
+            visualMessage: "Set Playback Rate",
+            audioMessage: "set playback rate to \(self.playbackRate)",
+            note: self.note
+        )
+        
+        self.playbackRate = wpm / Float(self.note.avgSpeakingRate).rounded(toPlaces: Utils.DEFAULT_FIG_COUNT)
+
+        if self.note.isPlayingNote {
+            self.note.player.rate = self.playbackRate
+        }
+    }
+    
+    // Implementing real-time rate change: https://stackoverflow.com/questions/25499803/how-to-change-speech-rate-during-speaking-using-avspeechsynthesizer-in-ios-7
+    func setEchoRate(to rate: Float) {
+        print("===== Set Echo Rate: \(rate) =====")
+        
+        // Present Feedback
+        Utils.executeFeedback(
+            visualMessage: "Set Echo Rate",
+            audioMessage: "set echo rate to \(self.echoRate)",
+            note: self.note
+        )
+        
+        self.echoRate = rate
+    }
+    
     // MARK: - Getters
     
     func getBackgroundNoise() -> Double {
@@ -1398,6 +1977,48 @@ class ViewController: UIViewController {
         return pitchSum / numPitches
     }
     
+    // MARK: - Helper Functions
+    
+    func showButton(_ commandButton: UIView) -> Void {
+        let button = commandButton.subviews.filter {$0 is UIButton }
+        if let button = button.first as? UIButton {
+            button.isEnabled = true
+        }
+        commandButton.isHidden = false
+        
+        if commandButton.alpha == 0 {
+            UIView.animate(
+                withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
+                delay: 0,
+                options: [.curveEaseIn],
+                animations: {
+                    commandButton.alpha = 1
+                }
+            )
+        }
+    }
+    
+    func hideButton(_ commandButton: UIView) -> Void {
+        if commandButton.alpha == 1 {
+            UIView.animate(
+                withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
+                delay: 0,
+                options: [.curveEaseIn],
+                animations: {
+                    commandButton.alpha = 0
+                }
+            )
+        }
+        
+        Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { timer in
+            let button = commandButton.subviews.filter {$0 is UIButton }
+            if let button = button.first as? UIButton {
+                button.isEnabled = false
+            }
+            commandButton.isHidden = true
+        }
+    }
+    
     // MARK: - Key-Value Observer
     
     override func observeValue(forKeyPath keyPath: String?,
@@ -1423,13 +2044,72 @@ class ViewController: UIViewController {
                 outputVolume = -1
                 print("\tnew volume: ", outputVolume, session.outputVolume)
             }
+        } else if keyPath == "selectedTextRange" {
+            // Determine if we adjust command bar
+            self.adjustCommandBar()
         } else if keyPath == "isListeningForSpeech" {
-            if let isListeningForSpeech = change?[.newKey] as? Bool {
+            if let isListeningForSpeech = change?[.newKey] as? Bool, isListeningForSpeech {
                 self.setCursorVisibility(as: isListeningForSpeech)
+            } else if let isListeningForSpeech = change?[.newKey] as? Bool, !isListeningForSpeech {
+                self.removeCursor()
+                self.setCursorVisibility(as: false)
             }
         } else if keyPath == "hasSelection" {
-            if let hasSelection = change?[.newKey] as? Bool {
-                self.setCommandBarVisibility(as: hasSelection)
+            if let hasSelection = change?[.newKey] as? Bool, hasSelection && self.note.isListeningForSpeech && !self.note.pausedListeningForSpeech && !self.note.isListeningForCommands {
+                // ====== Go from no selection to selection while recording ======
+                //
+                
+                Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                    // Determine if we present adjust rate buttons
+                    self.adjustCommandBar()
+                }
+                // Determine if we present transformation information
+                self.handleTransformationsView()
+                // We show command bar when successfully paused listening for speech
+                // stop listening for speech, start listening for commands
+                self.note.stopListeningForSpeech(pause: true) {
+                    self.note.startListeningForVoiceCommands(
+                        soundIntensityHandler: self.soundIntensityHandler!,
+                        pitchHandler: self.pitchHandler!
+                    )
+                }
+            } else if let newHasSelection = change?[.newKey] as? Bool, let oldHasSelection = change?[.oldKey] as? Bool, !newHasSelection && oldHasSelection && self.note.isListeningForSpeech && self.note.pausedListeningForSpeech && self.note.isListeningForCommands && !self.note.isPlayingNote && !self.note.isPlayingEcho && !self.note.isPlayingPassiveEcho {
+                // ====== Go from selection to no selection while recording ======
+                //
+                Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                    // Determine if we present adjust rate buttons
+                    self.adjustCommandBar()
+                }
+                // Determine if we present transformation information
+                self.handleTransformationsView()
+                // start listening for speech again
+                self.note.startListeningForSpeech(
+                    soundIntensityHandler: self.soundIntensityHandler!,
+                    pitchHandler: self.pitchHandler!
+                )
+                
+                Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                    // Update UI Text in case we have new transformations
+                    self.updateUIText(text: self.note.getText(), transformations: self.note.transformations)
+                }
+            } else if let hasSelection = change?[.newKey] as? Bool, hasSelection && !self.note.isListeningForSpeech && self.note.isListeningForCommands {
+                // ====== Go from no selection to selection while not recording ======
+                //
+                // Determine if we present transformation information
+                self.handleTransformationsView()
+            } else if let newHasSelection = change?[.newKey] as? Bool, let oldHasSelection = change?[.oldKey] as? Bool, !newHasSelection && oldHasSelection && !self.note.isListeningForSpeech && self.note.isListeningForCommands {
+                // ====== Go from selection to no selection while not recording ======
+                //
+                // Determine if we present transformation information
+                self.handleTransformationsView()
+            }
+        } else if keyPath == "clipboard" {
+            if let clipboard = change?[.newKey] as? [NoteSegment]?, let _ = clipboard {
+                self.adjustCommandBar()
+                self.navigationItem.rightBarButtonItems = [self.getPasteClipboardButton()]
+            } else {
+                self.adjustCommandBar()
+                self.navigationItem.rightBarButtonItems = nil
             }
         }
     }
@@ -1437,43 +2117,703 @@ class ViewController: UIViewController {
     // MARK: - Touch Events
     
     @objc func handleSingleTap(touch: UITapGestureRecognizer) {
+        print("===== Touch Interaction: Single Tap =====")
         if self.appActivated && self.note.isListeningForSpeech {
-            let touchPoint = touch.location(in: self.transcriptionText)
-            let textPosition = self.transcriptionText.closestPosition(to: touchPoint)
+            print("\tDetermine text position near touch point...")
+            let touchPoint = touch.location(in: self.textView)
+            let textPosition = self.textView.closestPosition(to: touchPoint)
             
-            if self.transcriptionText.selectedRange != Utils.EMPTY_NSRANGE {
-                self.transcriptionText.selectedRange = NSRange(location: 0, length: 0)
+            if self.textView.selectedTextRange != nil && selectionCursor.hasSelection {
+                // Remove Selection in view and model
+                print("\tPrior selection detected. Remove Selection in view and model...")
+                selectionCursor.clearSelection()
             }
             
             if let textPosition = textPosition {
-                print("===== Touch Interaction: Single Tap =====")
+                print("\tMove cursor to new position...")
                 selectionCursor.moveCursor(textPosition: textPosition, cache: true)
+            }
+            
+            self.adjustCommandBar()
+        } else {
+            print("\tAborted because app is not active or not listening for speech.")
+        }
+    }
+    
+    // Reference: https://www.appsdeveloperblog.com/create-uislider-in-swift-programmatically/
+    // Reference: https://stackoverflow.com/questions/25499803/how-to-change-speech-rate-during-speaking-using-avspeechsynthesizer-in-ios-7
+    @objc func sliderValueDidChange(_ sender: UISlider!) {
+        print("===== Slider Value Changed =====")
+        print("\tNew value: \(sender.value)")
+        
+        if self.sliderType == .playback {
+            // Set new playback rate
+            self.playbackRate = sender.value
+            
+            if self.note.isPlayingNote {
+                let _ = Utils.setPlayerRate(player: self.note.player, rate: sender.value)
+            }
+        } else if self.sliderType == .echo {
+            // Set new echo rate
+            if self.note.isPlayingEcho || self.note.isPlayingPassiveEcho {
+                // Activate update echo rate flag
+                self.updateEchoRate = sender.value
+            } else {
+                // Set immediately
+                self.echoRate = sender.value
             }
         }
     }
+    
+    // MARK: - Navigation Bar Methods
+    
+    @objc func handleToggleListening(_ sender: Any) {
+        print("===== Handle Toggle Listening =====")
+        if self.note.isListeningForCommands || (!self.appActivated && self.isListeningForWakePhrase) {
+            // Stop Listening For Commands
+            if self.appActivated {
+                self.note.stopListeningForVoiceCommands() {
+                    let stopListeningButton = self.getStopListeningButton(withStopIndicator: true)
+                    self.navigationItem.leftBarButtonItems = [stopListeningButton]
+                }
+            } else {
+                self.stopListeningForWakePhrase() {[weak self] in
+                    let stopListeningButton = self!.getStopListeningButton(withStopIndicator: true)
+                    self?.navigationItem.leftBarButtonItems = [stopListeningButton]
+                }
+            }
+        } else {
+            if self.appActivated {
+                // Listening For Commands
+                self.note.startListeningForVoiceCommands(
+                    soundIntensityHandler: self.soundIntensityHandler!,
+                    pitchHandler: self.pitchHandler!
+                )
+            } else {
+                self.startListeningForWakePhrase()
+            }
+        }
+    }
+    
+    // MARK: - Menu Bar Methods
+
+    @IBAction func handleStartNote(_ sender: Any) {
+        print("===== Handle Start Note =====")
+        let authStatus = SFSpeechRecognizer.authorizationStatus()
+        
+        if session.recordPermission != .granted || authStatus != .authorized {
+            let alertController = UIAlertController(title: "Speech Recognition Permission Denied", message: "Please grant permission for application to initiate speech transcription.", preferredStyle: .alert)
+            alertController.addAction(UIAlertAction(title: "Grant Permission", style: .default) { [unowned self] action in
+                self.requestPermissions(handler: {
+                    self.configureListeningForWakePhrase()
+                })
+            })
+            alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            present(alertController, animated: true)
+            return
+        }
+        
+        if authStatus == .authorized && session.recordPermission == .granted {
+            if !note.isListeningForSpeech && !note.isExporting {
+                if !self.note.isListeningForCommands {
+                    // User switched off listening with the button
+                    // Change button to normal again
+                    
+                }
+                
+                print("\tStarting Note...")
+                note.startListeningForSpeech(
+                    soundIntensityHandler: self.soundIntensityHandler!,
+                    pitchHandler: self.pitchHandler!,
+                    onStartHandler: {
+                        DispatchQueue.main.async {
+                            self.startRecordingUITimer(recording: true)
+                            self.adjustCommandBar()
+                            self.adjustMenuBar()
+                        }
+                    }
+                )
+            } else {
+                print("\t[Error] There was a problem starting note. System does not have record permissions.")
+            }
+        }
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    @IBAction func handleResumeNote(_ sender: Any) {
+        print("===== Handle Resume Note =====")
+        
+        note.startListeningForSpeech(
+            soundIntensityHandler: self.soundIntensityHandler!,
+            pitchHandler: self.pitchHandler!,
+            onStartHandler: {
+                DispatchQueue.main.async {
+                    self.startRecordingUITimer(recording: true)
+                    self.adjustCommandBar()
+                    self.adjustMenuBar()
+                }
+            }
+        )
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+
+    @IBAction func handleEditNote(_ sender: Any) {
+        print("===== Handle Edit Note =====")
+        let authStatus = SFSpeechRecognizer.authorizationStatus()
+        
+        if session.recordPermission != .granted || authStatus != .authorized {
+            let alertController = UIAlertController(title: "Speech Recognition Permission Denied", message: "Please grant permission for application to initiate speech transcription.", preferredStyle: .alert)
+            alertController.addAction(UIAlertAction(title: "Grant Permission", style: .default) { [unowned self] action in
+                self.requestPermissions(handler: {
+                    self.configureListeningForWakePhrase()
+                })
+            })
+            alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            present(alertController, animated: true)
+            return
+        }
+        
+        if authStatus == .authorized && session.recordPermission == .granted {
+            if !note.isListeningForSpeech && !note.isExporting {
+                print("\tStarting Note...")
+                note.startListeningForSpeech(
+                    soundIntensityHandler: self.soundIntensityHandler!,
+                    pitchHandler: self.pitchHandler!,
+                    onStartHandler: {
+                        DispatchQueue.main.async {
+                            self.startRecordingUITimer(recording: true)
+                            self.adjustCommandBar()
+                            self.adjustMenuBar()
+                        }
+                    }
+                )
+            } else {
+                print("\t[Error] There was a problem starting note. System does not have record permissions.")
+            }
+        }
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    @IBAction func handleStopListeningNote(_ sender: Any) {
+        print("===== Stop Recording =====")
+        if note.isListeningForSpeech && !note.isExporting {
+            print("\tStopping Note...")
+            note.stopListeningForSpeech() {[weak self] in
+                self?.onNoteListenStop!()
+                self?.adjustCommandBar()
+                self?.adjustMenuBar()
+            }
+        } else {
+            print("\t[Error] There was a problem stopping note. We're not listening for speech or are exporting note.")
+        }
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    @IBAction func handlePlayNote(_ sender: Any) {
+        print("===== Handle Play Note =====")
+        self.note.play(
+            onStartHandler: { [weak self] in
+                // print("Successfully executed playback on start handler")
+                DispatchQueue.main.async {
+                    self?.adjustCommandBar()
+                    self?.adjustMenuBar()
+                }
+            },
+            secondElapseHandler: { [weak self] in
+                // print("Successfully executed playback second elapsed handler")
+                DispatchQueue.main.async {
+                    if !self!.note.isListeningForSpeech && self!.note.player.currentTime().seconds != Double.infinity && self!.note.player.currentTime().seconds != Double.nan && self!.note.player.currentTime().seconds != -Double.infinity {
+                        self?.navigationItem.title = "\(Utils.formattedTime(time: Float(self!.note.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.note.getDuration(filteredDuration: true).seconds)))"
+                    }
+                }
+            },
+            segmentBoundaryHandler: { [weak self] in
+                // print("Successfully executed playback on segment boundary handler")
+                DispatchQueue.main.async {
+                    if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let highlightRange = self?.note.getSegmentTextRange(of: segment) {
+                        // update text
+                        self?.updateUIText(text: self!.note.getText(), highlightRange: highlightRange, transformations: self!.note.transformations)
+                    }
+                    
+                    if let segment = self?.note.getSegment(type: .current), let pitch = segment.getPitch() {
+                        // update pitch
+                        self?.pitchLabel.text = pitch.note.string
+                    }
+                }
+            }, onFinishHandler: { [weak self] in
+                // print("Successfully executed playback on finish handler")
+                DispatchQueue.main.async {
+                    self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
+                    self!.note.player.replaceCurrentItem(with: nil)
+                    if !self!.note.isListeningForSpeech {
+                        self?.navigationItem.title = ""
+                        self?.adjustCommandBar()
+                        self?.adjustMenuBar()
+                    }
+                }
+            }
+        )
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+
+    @IBAction func handleStopPlayingNote(_ sender: Any) {
+        print("===== Handle Play Note =====")
+        
+        // Stop Note
+        self.note.stop() { [weak self] in
+            DispatchQueue.main.async {
+                self?.adjustCommandBar()
+                self?.adjustMenuBar()
+            }
+        }
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    @IBAction func handlePlayEcho(_ sender: Any) {
+        print("==== Handle Play Echo =====")
+        if self.note.pausedEcho {
+            print("\tSpeech synthesizer continue speaking...")
+            self.note.startEcho(
+                text: self.note.getText(),
+                onStartHandler: { [weak self] in
+                    DispatchQueue.main.async {
+                        self?.adjustCommandBar()
+                        self?.adjustMenuBar()
+                    }
+                }
+            )
+        } else {
+            print("\tSpeech synthesizer starts speaking...")
+            self.note.startEcho(
+                text: self.note.getText(),
+                onStartHandler: { [weak self] in
+                    DispatchQueue.main.async {
+                        self?.adjustCommandBar()
+                        self?.adjustMenuBar()
+                    }
+                }
+            )
+        }
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    @IBAction func handleStopEcho(_ sender: Any) {
+        if self.note.isPlayingEcho || self.note.isPlayingPassiveEcho {
+            print("==== Speech synthesizer paused =====")
+
+            self.note.stopEcho() { [weak self] in
+                DispatchQueue.main.async {
+                    self?.tempOnEchoFinish?()
+                    self?.tempOnEchoFinish = nil
+                    self?.adjustCommandBar()
+                    self?.adjustMenuBar()
+                }
+            }
+        }
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    @IBAction func handleWalkNote(_ sender: Any) {
+        print("===== Handle Walk Note =====")
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    @IBAction func handleExportNote(_ sender: Any) {
+        print("===== Handle Export Note =====")
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    // MARK: - Resting Command Bar Methods
+    @IBAction func handleMoveHere(_ sender: Any) {
+        print("===== Handle Move Here =====")
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    @IBAction func handleRunNote(_ sender: Any) {
+        print("===== Handle Run Note =====")
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    @IBAction func handlePauseNote(_ sender: Any) {
+        print("===== Handle Pause Note =====")
+        if self.note.isPlayingNote {
+            print("\tPausing Playing Note...")
+            self.note.pause() {
+                DispatchQueue.main.async {
+                    self.adjustCommandBar()
+                    self.adjustMenuBar()
+                }
+            }
+        } else if self.note.isListeningForSpeech {
+            print("\tPausing Listening Note....")
+            self.note.pauseListeningForSpeech() {
+                self.note.startListeningForVoiceCommands(
+                    soundIntensityHandler: self.soundIntensityHandler!,
+                    pitchHandler: self.pitchHandler!
+                ) {
+                    DispatchQueue.main.async {
+                        self.adjustCommandBar()
+                        self.adjustMenuBar()
+                    }
+                }
+            }
+        } else {
+            print("\tUnhandled Branch")
+        }
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    @IBAction func handleLastCommit(_ sender: Any) {
+        print("===== Handle Last Commit =====")
+        
+        let lastBufferRange = self.note.committedBufferRanges[self.note.committedBufferRanges.count - 1]
+        let lastBuffer = self.note.noteSegments[lastBufferRange]
+        let fromTime = lastBuffer.first!.timeMapping.target.start
+        let toTime = lastBuffer.last!.timeMapping.target.end
+        
+        self.note.play(
+            from: fromTime,
+            to: toTime,
+            onStartHandler: { [weak self] in
+                // print("Successfully executed playback on start handler")
+                DispatchQueue.main.async {
+                    self?.adjustCommandBar()
+                    self?.adjustMenuBar()
+                }
+            },
+            secondElapseHandler: { [weak self] in
+                // print("Successfully executed playback second elapsed handler")
+                DispatchQueue.main.async {
+                    if !self!.note.isListeningForSpeech && self!.note.player.currentTime().seconds != Double.infinity && self!.note.player.currentTime().seconds != Double.nan && self!.note.player.currentTime().seconds != -Double.infinity {
+                        self?.navigationItem.title = "\(Utils.formattedTime(time: Float(self!.note.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.note.getDuration(filteredDuration: true).seconds)))"
+                    }
+                }
+            },
+            segmentBoundaryHandler: { [weak self] in
+                // print("Successfully executed playback on segment boundary handler")
+                DispatchQueue.main.async {
+                    if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let highlightRange = self?.note.getSegmentTextRange(of: segment) {
+                        // update text
+                        self?.updateUIText(text: self!.note.getText(), highlightRange: highlightRange, transformations: self!.note.transformations)
+                    }
+                    
+                    if let segment = self?.note.getSegment(type: .current), let pitch = segment.getPitch() {
+                        // update pitch
+                        self?.pitchLabel.text = pitch.note.string
+                    }
+                }
+            }, onFinishHandler: { [weak self] in
+                // print("Successfully executed playback on finish handler")
+                DispatchQueue.main.async {
+                    self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
+                    self!.note.player.replaceCurrentItem(with: nil)
+                    if !self!.note.isListeningForSpeech {
+                        self?.navigationItem.title = ""
+                        self?.adjustCommandBar()
+                        self?.adjustMenuBar()
+                    }
+                }
+            }
+        )
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    @IBAction func handlePauseEcho(_ sender: Any) {
+        print("===== Handle Pause Echo =====")
+        self.note.pauseEcho() {
+            self.adjustCommandBar()
+            self.adjustMenuBar()
+            
+            if self.note.pausedListeningForCommands && !AVAudioSession.isHeadphonesConnected {
+                // when headphones are off we don't listen for voice commands while echoing
+                // but on completion we turn it back on
+                self.note.startListeningForVoiceCommands(
+                    soundIntensityHandler: self.soundIntensityHandler!,
+                    pitchHandler: self.pitchHandler!
+                )
+            }
+
+            if self.note.pausedListeningForSpeech && !AVAudioSession.isHeadphonesConnected {
+                // when headphones are off we don't listen for speech while echoing
+                // but on completion we turn it back on
+                self.note.startListeningForSpeech(
+                    soundIntensityHandler: self.soundIntensityHandler!,
+                    pitchHandler: self.pitchHandler!,
+                    onStartHandler: {
+                        DispatchQueue.main.async {
+                            self.startRecordingUITimer(recording: true)
+                            self.adjustCommandBar()
+                            self.adjustMenuBar()
+                        }
+                    }
+                )
+            }
+        }
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    @IBAction func handlePreviewClipboard(_ sender: Any) {
+        print("===== Handle Preview Clipboard =====")
+        
+        if let clipboardSelection = selectionCursor.clipboard {
+            let fromTime = clipboardSelection.first!.timeMapping.target.start
+            let toTime = clipboardSelection.last!.timeMapping.target.end
+            
+            self.note.play(
+                from: fromTime,
+                to: toTime,
+                onStartHandler: { [weak self] in
+                    // print("Successfully executed playback on start handler")
+                    DispatchQueue.main.async {
+                        self?.adjustCommandBar()
+                        self?.adjustMenuBar()
+                    }
+                },
+                secondElapseHandler: { [weak self] in
+                    // print("Successfully executed playback second elapsed handler")
+                    DispatchQueue.main.async {
+                        if !self!.note.isListeningForSpeech && self!.note.player.currentTime().seconds != Double.infinity && self!.note.player.currentTime().seconds != Double.nan && self!.note.player.currentTime().seconds != -Double.infinity {
+                            self?.navigationItem.title = "\(Utils.formattedTime(time: Float(self!.note.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.note.getDuration(filteredDuration: true).seconds)))"
+                        }
+                    }
+                },
+                segmentBoundaryHandler: { [weak self] in
+                    // print("Successfully executed playback on segment boundary handler")
+                    DispatchQueue.main.async {
+                        if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let highlightRange = self?.note.getSegmentTextRange(of: segment) {
+                            // update text
+                            self?.updateUIText(text: self!.note.getText(), highlightRange: highlightRange, transformations: self!.note.transformations)
+                        }
+                        
+                        if let segment = self?.note.getSegment(type: .current), let pitch = segment.getPitch() {
+                            // update pitch
+                            self?.pitchLabel.text = pitch.note.string
+                        }
+                    }
+                }, onFinishHandler: { [weak self] in
+                    // print("Successfully executed playback on finish handler")
+                    DispatchQueue.main.async {
+                        self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
+                        self!.note.player.replaceCurrentItem(with: nil)
+                        if !self!.note.isListeningForSpeech {
+                            self?.navigationItem.title = ""
+                            self?.adjustCommandBar()
+                            self?.adjustMenuBar()
+                        }
+                    }
+                }
+            )
+        }
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    @IBAction func handleSkipBackward(_ sender: Any) {
+        print("===== Handle Skip Backward =====")
+        let currentSegment = self.note.getSegment(type: .current)
+        
+        if let currentSegment = currentSegment, self.note.isPlayingNote {
+            let time = CMTimeMake(
+                value: Int64(Note.defaultSegmentTimescale * (currentSegment.timeMapping.target.start.seconds - Utils.SKIP_PLAYBACK_DURATION)),
+                timescale: Int32(Note.defaultSegmentTimescale)
+            )
+            self.note.skip(to: time)
+        }
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    @IBAction func handleSkipForward(_ sender: Any) {
+        print("===== Handle Skip Forward =====")
+        let currentSegment = self.note.getSegment(type: .current)
+        
+        if let currentSegment = currentSegment, self.note.isPlayingNote {
+            let time = CMTimeMake(
+                value: Int64(Note.defaultSegmentTimescale * (currentSegment.timeMapping.target.start.seconds + Utils.SKIP_PLAYBACK_DURATION)),
+                timescale: Int32(Note.defaultSegmentTimescale)
+            )
+            self.note.skip(to: time)
+        }
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    @IBAction func handlePlaybackRate(_ sender: Any) {
+        print("===== Handle Playback Rate =====")
+        
+        print("\tAdjusting flag to: true")
+        self.sliderIsVisible = true
+        self.sliderType = .playback
+        
+        print("\tSet Slider Min and Max Values...")
+        self.slider.minimumValue = Utils.MINIMUM_PLAYBACK_RATE
+        self.slider.maximumValue = Utils.MAXIMUM_PLAYBACK_RATE
+        self.slider.value = self.playbackRate
+        
+        print("\tHide Command Bar...")
+        self.setCommandBarVisibility(as: false)
+        self.adjustCommandBar()
+        
+        print("\tShow Slider View...")
+        Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { timer in
+            self.setSliderVisibility(as: true)
+        }
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    @IBAction func handleEchoRate(_ sender: Any) {
+        print("===== Handle Echo Rate =====")
+        
+        print("\tAdjusting flag to: true")
+        self.sliderIsVisible = true
+        self.sliderType = .echo
+        
+        print("\tSet Slider Min and Max Values...")
+        self.slider.minimumValue = Utils.MINIMUM_ECHO_RATE
+        self.slider.maximumValue = Utils.MAXIMUM_ECHO_RATE
+        self.slider.value = self.echoRate
+        
+        print("\tHide Command Bar...")
+        self.setCommandBarVisibility(as: false)
+        self.adjustCommandBar()
+        
+        print("\tShow Slider View...")
+        Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { timer in
+            self.setSliderVisibility(as: true)
+        }
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    @IBAction func handleExitSlider(_ sender: Any) {
+        print("===== Handle Exit Slider =====")
+        
+        print("\tAdjusting flag to: false")
+        self.sliderIsVisible = false
+        self.sliderType = nil
+        
+        print("\tHide Slider View...")
+        self.setSliderVisibility(as: false)
+        
+        print("\tShow Command Bar...")
+        Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { timer in
+            self.setCommandBarVisibility(as: true)
+            self.adjustCommandBar()
+        }
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    // MARK: - Selection Methods
+
+    @IBAction func handleIncreaseRateSelection(_ sender: Any) {
+        print("===== Increase Rate Selection: \(selectionCursor.selectionText ?? "nil") =====")
+        selectionCursor.adjustRateSelection(direction: .up)
+        // Determine if we present adjust rate buttons
+        self.adjustCommandBar()
+        // Update transformation view
+        self.handleTransformationsView()
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+    
+    @IBAction func handleDecreaseRateSelection(_ sender: Any) {
+        print("===== Decrease Rate Selection: \(selectionCursor.selectionText ?? "nil") =====")
+        selectionCursor.adjustRateSelection(direction: .down)
+        // Determine if we present adjust rate buttons
+        self.adjustCommandBar()
+        // Update transformation view
+        self.handleTransformationsView()
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
 
     @IBAction func handleDeleteSelection(_ sender: Any) {
-        print("handleDeleteSelection")
+        print("===== Handle Delete Selection: \(selectionCursor.selectionText ?? "nil") =====")
+        selectionCursor.deleteSelection()
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
     }
     
     @IBAction func handleReplaceSelection(_ sender: Any) {
-        print("handleReplaceSelection")
+        print("===== Handle Replace Selection: \(selectionCursor.selectionText ?? "nil") =====")
+        
+        // Turn on ambient track
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
     }
     
     @IBAction func handleCopySelection(_ sender: Any) {
-        print("handleCopySelection")
+        print("===== Handle Copy Selection: \(selectionCursor.selectionText ?? "nil") =====")
+        selectionCursor.copySelection()
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
     }
     
     @IBAction func handleCutSelection(_ sender: Any) {
-        print("handleCutSelection")
+        print("===== Handle Cut Selection: \(selectionCursor.selectionText ?? "nil") =====")
+        selectionCursor.cutSelection()
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
     }
     
-    @IBAction func handlePasteSelection(_ sender: Any) {
-        print("handlePasteSelection")
+    @objc func handlePasteClipboard(_ sender: Any) {
+        print("===== Handle Paste Selection: \(selectionCursor.selectionText ?? "nil") =====")
+        selectionCursor.pasteSelection()
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
     }
-    
+
     @IBAction func handleExportSelection(_ sender: Any) {
-        print("handleExportSelection")
+        print("===== Handle Export Selection: \(selectionCursor.selectionText ?? "nil") =====")
+        selectionCursor.exportSelection()
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
     }
 }
     
@@ -1509,52 +2849,43 @@ extension ViewController: SFSpeechRecognitionTaskDelegate {
                 }
                 
                 text = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-                if text.contains(self.wakePhrase) { // wake word/phrase needs to be two words to get pitch data
-                    self.stopListeningForWakePhrase()
-                    // Play Sound
-                    Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
-                        soundEngine.correctWakePhrase()
+                if text.contains(self.wakePhrases[0]) || text.contains(self.wakePhrases[1]) || text.contains(self.wakePhrases[2]) { // wake word/phrase needs to be two words to get pitch data
+                    self.stopListeningForWakePhrase() { [weak self] in
+                        // Play Sound
+                        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                            soundEngine.correctWakePhrase()
+                        }
+                        
+                        // Give haptic feedback
+                        hapticEngine.success()
+                        
+                        print("===== Wake Phrase Detected =====")
+                        self?.activateApp()
+                        // Remove voice command hint text
+                        self?.removeIndefiniteNotification()
+                        
+                        // Remove any speech synthesizing
+                        self?.emptySynthesizerQueue()
                     }
-                    
-                    // Give haptic feedback
-                    hapticEngine.success()
-                    
-                    print("===== Wake Phrase Detected =====")
-                    self.activateApp()
-                } else if !text.contains("rise") && !text.contains("rise and") {
+                } else if !text.contains("rise") && !text.contains("rise and") && !text.contains("rison") {
                     // Play Sound
                     soundEngine.incorrectWakePhrase()
                     
                     // Give haptic feedback
                     hapticEngine.error()
                     
-                    // Give visual feedback
+                    // Remove voice command hint text
+                    self.removeIndefiniteNotification()
+                    
+                    // Present feedback
                     if text.count > 0 {
-                        self.scheduleNotification(
-                            text: "\"\(transcription.segments.count > 3 ? "\(transcription.segments.first!.substring.lowercased())...\(transcription.segments.last!.substring.lowercased())" : text)\"",
-                            duration: 3
+                        self.emptySynthesizerQueue()
+                        Utils.executeFeedback(
+                            visualMessage: "\"\(transcription.segments.count > 3 ? "\(transcription.segments.first!.substring.lowercased())...\(transcription.segments.last!.substring.lowercased())" : text.lowercased())\"",
+                            audioMessage: text,
+                            note: self.note,
+                            discardPrior: true
                         )
-                        self.exhaustNotificationQueue()
-                        
-                        // Give audio feedback
-                        if AVAudioSession.isHeadphonesConnected {
-                            // we don't run when !AVAudioSession.isHeadphonesConnected && note.isListeningForSpeech
-                            // because we will be note.isListeningForVoiceCommands
-                            // which will catch the words and process them
-                            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {[weak self] timer in
-                                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self)
-
-                                let synthesizerItem = SynthesizerItem(
-                                    synthesizer: self!.speechSynthesizer,
-                                    text: text,
-                                    voice: voice,
-                                    rate: self!.echoRate,
-                                    volume: self!.playbackVolume
-                                )
-                                self?.synthesizerQueue.enqueue(synthesizerItem)
-                                self?.exhaustSynthesizerQueue()
-                            }
-                        }
                     }
                 }
                 
@@ -1571,16 +2902,27 @@ extension ViewController: SFSpeechRecognitionTaskDelegate {
                     text += " \(segment.substring)"
                 }
                 
-                text = text.lowercased()
-                if text.contains(self.wakePhrase) {
+                text = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+                if text.contains(self.wakePhrases[0]) || text.contains(self.wakePhrases[1]) || text.contains(self.wakePhrases[2]) {
                     self.stopListeningForWakePhrase()
-                } else if !self.speechSynthesizer.isSpeaking && DEFAULT_USE_ON_DEVICE_RECOGNITION {
-                    // Should not go here when we've said wake phrase but the if-statement doesn't return true.
-                    // Happens when there's another equally viable option for what sounds like the wake phrase.
-                    // or put alternatively, the hypothesized transcript is the wake phrase while the final transcript is a homophone.
-//                    print("===== Restart Listening and continue to look for wake phrase =====")
-//                    self.stopListeningForWakePhrase() {[weak self] in
-//                        self?.configureListeningForWakePhrase()
+                } else if !self.speechSynthesizer.isSpeaking && self.synthesizerQueue.isEmpty {
+//                    // Play Sound
+//                    soundEngine.incorrectWakePhrase()
+//
+//                    // Give haptic feedback
+//                    hapticEngine.error()
+//
+//                    // Remove voice command hint text
+//                    self.removeIndefiniteNotification()
+//
+//                    // Present feedback
+//                    if text.count > 0 {
+//                        self.emptySynthesizerQueue()
+//                        Utils.executeFeedback(
+//                            visualMessage: "\"\(result.bestTranscription.segments.count > 3 ? "\(result.bestTranscription.segments.first!.substring.lowercased())...\(result.bestTranscription.segments.last!.substring.lowercased())" : text.lowercased())\"",
+//                            audioMessage: text,
+//                            note: self.note
+//                        )
 //                    }
                 }
 
@@ -1607,9 +2949,20 @@ extension ViewController: AVSpeechSynthesizerDelegate {
 
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         print("===== Speech synthesis utterance successfully completed =====")
-        self.updateUIText()
-        if !self.playTextToSpeechButton.isHidden {
-            self.playTextToSpeechButton.setTitle(ViewController.PLAY_ECHO_LABEL, for: .normal)
+        if self.interruptedEcho {
+            // We just modified the echo rate while playing echo
+            // this ends echo and creates a new one with new rate
+            // from the last word uttered
+            //
+            // Do nothing
+            self.interruptedEcho = false
+            return
+        }
+        
+        if !selectionCursor.hasSelection && !self.note.isPlayingPassiveEcho {
+            // Avoid updating ui when selection
+            // it will remove selection
+            self.updateUIText(text: self.note.getText(), transformations: self.note.transformations)
         }
         
         if self.isExhaustingSynthesizerQueue {
@@ -1617,54 +2970,49 @@ extension ViewController: AVSpeechSynthesizerDelegate {
         } else if self.note.isPlayingEcho {
             // turn off isPlayingEcho
             self.note.isPlayingEcho = false
+            
+            // Update View
+            self.adjustCommandBar()
+            self.adjustMenuBar()
+            self.updateUIText(text: self.note.getText(), transformations: self.note.transformations)
+        } else if self.note.isPlayingPassiveEcho && utterance.speechString == self.note.getText(segments: Array(self.note.noteSegments[self.note.lastEchoSegmentRange!])).trimTrailingPunctuation() {
+            // turn off isPlayingPassiveEcho
+            self.note.isPlayingPassiveEcho = false
+            
+            // Update View
+            self.adjustCommandBar()
+            self.adjustMenuBar()
+            self.updateUIText(text: self.note.getText(), transformations: self.note.transformations)
         }
-        
+
         self.tempOnEchoFinish?()
         self.tempOnEchoFinish = nil
         
-        if self.appActivated && self.note.pausedListeningForCommands && !AVAudioSession.isHeadphonesConnected {
+        if self.appActivated && self.note.pausedListeningForCommands && !self.speechSynthesizer.isSpeaking && !AVAudioSession.isHeadphonesConnected {
             // when headphones are off we don't listen for voice commands while echoing
             // but on completion we turn it back on
             self.note.startListeningForVoiceCommands(
-                soundIntensityHandler: { power in
-                    if let power = power {
-                        DispatchQueue.main.async {
-                            let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
-                            let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
-                            self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
-                        }
-                    }
-                },
-                pitchHandler: { pitchDatum in
-                    if let pitchDatum = pitchDatum, !self.note.isPlayingNote {
-                        DispatchQueue.main.async {
-                            let pitch = pitchDatum.pitch.note.string
-                            self.pitchLabel.text = pitch
-                        }
-                    }
-                }
-            )
+                soundIntensityHandler: self.soundIntensityHandler!,
+                pitchHandler: self.pitchHandler!
+            ) {
+                // Call after isPlayingEcho is set to false by tempOnEchoFinish
+                self.adjustCommandBar()
+                self.adjustMenuBar()
+            }
         }
 
-        if self.appActivated && self.note.pausedListeningForSpeech && !AVAudioSession.isHeadphonesConnected {
+        if self.appActivated && self.note.pausedListeningForSpeech && !self.speechSynthesizer.isSpeaking && !AVAudioSession.isHeadphonesConnected {
             // when headphones are off we don't listen for speech while echoing
             // but on completion we turn it back on
             self.note.startListeningForSpeech(
-                soundIntensityHandler: { power in
-                    if let power = power {
-                        DispatchQueue.main.async {
-                            let height = CGFloat(Utils.normalizedPower(power: power, minPower: self.minPower)) * self.view.safeAreaLayoutGuide.layoutFrame.height
-                            let soundIntensityHeight: CGFloat = CGFloat(min(height, self.view.safeAreaLayoutGuide.layoutFrame.height))
-                            self.soundIntensityIndicatorHeight.constant = soundIntensityHeight
-                        }
-                    }
-                },
-                pitchHandler: { pitchDatum in
-                    if let pitchDatum = pitchDatum, !self.note.isPlayingNote {
-                        DispatchQueue.main.async {
-                            let pitch = pitchDatum.pitch.note.string
-                            self.pitchLabel.text = pitch
-                        }
+                soundIntensityHandler: self.soundIntensityHandler!,
+                pitchHandler: self.pitchHandler!,
+                onStartHandler: {
+                    DispatchQueue.main.async {
+                        self.startRecordingUITimer(recording: true)
+                        // Call after isPlayingEcho is set to false by tempOnEchoFinish
+                        self.adjustCommandBar()
+                        self.adjustMenuBar()
                     }
                 }
             )
@@ -1676,16 +3024,16 @@ extension ViewController: AVSpeechSynthesizerDelegate {
     }
 
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
-        print("===== Speech synthesis utterance successfully started =====")
+        print("===== Speech synthesis utterance successfully started: \(utterance.speechString) =====")
     }
 
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, willSpeakRangeOfSpeechString characterRange: NSRange, utterance: AVSpeechUtterance) {
-        if appActivated && self.note.isPlayingEcho && utterance.speechString == self.note.getText(segments: Array(self.note.noteSegments[self.note.lastEchoSegmentRange!])).trimTrailingPunctuation() {
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, willSpeakRangeOfSpeechString characterRange: NSRange, utterance: AVSpeechUtterance) {        
+        if self.appActivated && (self.note.isPlayingEcho || self.note.isPlayingPassiveEcho) && utterance.speechString == self.note.getText(segments: Array(self.note.noteSegments[self.note.lastEchoSegmentRange!])).trimTrailingPunctuation() {
             var textRange = characterRange
-            // normalize range to include contribution from text before echoed passage
+            // find lowest segment that is a word
             var lowestEchoSegment: NoteSegment?
             for segment in self.note.noteSegments[self.note.lastEchoSegmentRange!] {
-                if !segment.isSilence() && !segment.isVoiceCommandWord() {
+                if !segment.isSilence() && !segment.isVoiceCommandWord() && !segment.isDeleted() {
                     lowestEchoSegment = segment
                     break
                 }
@@ -1695,7 +3043,36 @@ extension ViewController: AVSpeechSynthesizerDelegate {
                 textRange = NSRange(location: lowestEchoSegmentRange.location + characterRange.location, length: characterRange.length)
             }
             
-            self.updateUIText(highlightRange: textRange)
+            if !selectionCursor.hasSelection {
+                // Avoid updating ui when selection
+                // it will remove selection
+                self.updateUIText(text: self.note.getText(), highlightRange: textRange, transformations: self.note.transformations)
+            }
+        }
+        
+        if let updateEchoRate = self.updateEchoRate, self.appActivated {
+            // Compute unprocessed utterance
+            let numProcessedChar = max(0, characterRange.location)
+            let unprocessedUtterance = utterance.speechString.substring(fromIndex: numProcessedChar).lowercased()
+            
+            // Stop speech synthesizer
+            self.speechSynthesizer.stopSpeaking(at: .immediate)
+            
+            // Change rate
+            self.echoRate = updateEchoRate
+            
+            // Run remainder utterance
+            let synthesizerItem = SynthesizerItem(
+                synthesizer: self.speechSynthesizer,
+                text: unprocessedUtterance,
+                voice: self.note.speaker.playbackVoice,
+                rate: self.echoRate,
+                volume: self.playbackVolume
+            )
+            Utils.runSpeechSynthesizer(item: synthesizerItem)
+            
+            self.updateEchoRate = nil
+            self.interruptedEcho = true
         }
     }
 }
@@ -1895,8 +3272,8 @@ extension ViewController: PitchEngineDelegate {
 //        secondElapseHandler: { [weak self] in
 //            // print("Successfully executed playback secondT elapsed handler")
 //            DispatchQueue.main.async {
-//                if !self!.note.isListeningForSpeech {
-//                    self?.navigationItem.title = "\(Utils.formattedTime(time: Float(self!.note.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.note.duration.seconds)))"
+//                if !self!.note.isListeningForSpeech && self!.note.player.currentTime().seconds != Double.infinity && self!.note.player.currentTime().seconds != Double.nan && self!.note.player.currentTime().seconds != -Double.infinity {
+//                    self?.navigationItem.title = "\(Utils.formattedTime(time: Float(self!.note.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.note.getDuration(filteredDuration: true).seconds)))"
 //                }
 //            }
 //        },
@@ -1905,7 +3282,7 @@ extension ViewController: PitchEngineDelegate {
 //            DispatchQueue.main.async {
 //                if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let highlightRange = self?.note.getSegmentTextRange(of: segment) {
 //                    // update text
-//                    self?.updateUIText(highlightRange: highlightRange)
+//                    self?.updateUIText(text: self!.note.getText(), highlightRange: highlightRange, transformations: self!.note.transformations)
 //                }
 //
 //                if let segment = self?.note.getSegment(type: .current), let pitch = segment.getPitch() {
@@ -1916,7 +3293,7 @@ extension ViewController: PitchEngineDelegate {
 //        }, onFinishHandler: { [weak self] in
 //            // print("Successfully executed playback on finish handler")
 //            DispatchQueue.main.async {
-//                self?.updateUIText()
+//                self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
 //                self?.playAudioButton.setTitle(ViewController.PLAY_NOTE_LABEL, for: .normal)
 //                self!.note.player.replaceCurrentItem(with: nil)
 //                if self!.note.isListeningForSpeech {
@@ -1945,8 +3322,8 @@ extension ViewController: PitchEngineDelegate {
 //        secondElapseHandler: { [weak self] in
 //            // print("Successfully executed playback secondT elapsed handler")
 //            DispatchQueue.main.async {
-//                if !self!.note.isListeningForSpeech {
-//                    self?.navigationItem.title = "\(Utils.formattedTime(time: Float(self!.note.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.note.duration.seconds)))"
+//                if !self!.note.isListeningForSpeech && self!.note.player.currentTime().seconds != Double.infinity && self!.note.player.currentTime().seconds != Double.nan && self!.note.player.currentTime().seconds != -Double.infinity {
+//                    self?.navigationItem.title = "\(Utils.formattedTime(time: Float(self!.note.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.note.getDuration(filteredDuration: true).seconds)))"
 //                }
 //            }
 //        },
@@ -1955,7 +3332,7 @@ extension ViewController: PitchEngineDelegate {
 //            DispatchQueue.main.async {
 //                if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let highlightRange = self?.note.getSegmentTextRange(of: segment) {
 //                    // update text
-//                    self?.updateUIText(highlightRange: highlightRange)
+//                    self?.updateUIText(text: self!.note.getText(), highlightRange: highlightRange, transformations: self!.note.transformations)
 //                }
 //
 //                if let segment = self?.note.getSegment(type: .current), let pitch = segment.getPitch() {
@@ -1966,7 +3343,7 @@ extension ViewController: PitchEngineDelegate {
 //        }, onFinishHandler: { [weak self] in
 //            // print("Successfully executed playback on finish handler")
 //            DispatchQueue.main.async {
-//                self?.updateUIText()
+//                self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
 //                self?.playAudioButton.setTitle(ViewController.PLAY_NOTE_LABEL, for: .normal)
 //                self!.note.player.replaceCurrentItem(with: nil)
 //                if self!.note.isListeningForSpeech {
