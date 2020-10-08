@@ -110,6 +110,16 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         return .backwards
     }
     @objc dynamic var clipboard: [NoteSegment]? = nil
+    var clipboardText: String? {
+        if let note = self.note, let clipboard = self.clipboard {
+            return note.getText(
+                from: clipboard.first!.timeMapping.target.start,
+                until: clipboard.last!.timeMapping.target.end
+            )
+        }
+        
+        return nil
+    }
     @objc dynamic var isCollapsed: Bool {
         return (self.anchor != nil && self.focus == nil) || (self.anchor == nil && self.focus != nil)
     }
@@ -854,14 +864,24 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     func pasteSelection() {
         print("===== Selection Cursor Paste =====")
         if let note = self.note, let anchor = self.anchor, let clipboard = self.clipboard {
+            
+            var pastedSegments = [NoteSegment]()
+            for segment in clipboard {
+                let duplicateSegment = segment.duplicate(withNewUID: true)
+                pastedSegments.append(duplicateSegment)
+            }
+            
+            // Update to new anchor
+            self.setAnchor(segment: pastedSegments.last!)
+            
             // Update to new cached anchor
             if let _ = self.cachedAnchor {
-                self.setCachedAnchor(segment: clipboard.last!)
+                self.setCachedAnchor(segment: pastedSegments.last!)
             }
             
             // Insert selection into note
             note.insertPassage(
-                segments: clipboard,
+                segments: pastedSegments,
                 at: anchor.timeMapping.target.end
             )
             

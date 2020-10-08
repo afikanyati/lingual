@@ -234,6 +234,8 @@ class Note: AVMutableComposition {
     }
     /// Specifies whether note is currently paused
     private(set) var pausedPlayingNote = false
+    /// Specifies whether playing external segments
+    private(set) var isPlayingExternalSegments = false
     /// Specifies whether segments corresponding to punctuation should be skipped
     private(set) var skipPunctuation = true
     /// Specifies whether segments corresponding to silences should be skipped
@@ -900,6 +902,10 @@ class Note: AVMutableComposition {
                     self.recognitionTask?.finish() // don't wrap in if statement because it is sometimes not .running
                     self.request!.endAudio() // don't add a request = nil because it results in request not being there sometimes.
                     self.pitchEngine.stop()
+                    self.vc!.activateListeningIndicator(
+                        withRecording: false,
+                        withStopListeningButton: true
+                    )
                     onPauseHandler?() // Needs to be outside DispatchQueue.main.async so it doesn't accidentally wrap two DispatchQueue.main.async if handler has one
                 }
             }
@@ -1009,6 +1015,10 @@ class Note: AVMutableComposition {
             self.recognitionTask?.finish() // don't wrap in if statement because it is sometimes not .running
             self.request!.endAudio() // don't add a request = nil because it results in request not being there sometimes.
             self.pitchEngine.stop()
+            self.vc!.activateListeningIndicator(
+                withRecording: false,
+                withStopListeningButton: forVoiceCommands && !self.isListeningForSpeech
+            )
             onStopHandler?() // Needs to be outside DispatchQueue.main.async so it doesn't accidentally wrap two DispatchQueue.main.async if handler has one
         }
         
@@ -1241,10 +1251,14 @@ class Note: AVMutableComposition {
                         trackID: self.tracks[0].trackID,
                         phoneticallySimilarWords: [],
                         // If we're normalizing target, this might be wrong
-                        sourceTimeRange: CMTimeRangeMake(
-                            start: lastEnd,
-                            duration: segment.timeMapping.source.start - lastEnd
-                        ),
+                        sourceTimeRange: normalizeType == .source ?
+                            CMTimeRangeMake(
+                                start: lastEnd,
+                                duration: segment.timeMapping.source.start - lastEnd
+                            )
+                            :
+                            segment.timeMapping.source
+                        ,
                         // If we're normalizing source, this might be wrong
                         targetTimeRange: CMTimeRangeMake(
                             start: lastEnd,
@@ -1662,7 +1676,7 @@ class Note: AVMutableComposition {
             let lastNormalizedWord = self.noteSegments[cachedAnchorIndex + lastBufferWordIndex]
             print("\tUpdating cached anchor...")
             for segment in self.noteSegments {
-                if segment.isEqual(lastNormalizedWord) {
+                if segment.getUID() == lastNormalizedWord.getUID() {
                     // update cached anchor
                     print("\tUpdating cached anchor in selection: ", segment.getText())
                     selectionCursor.setCachedAnchor(segment: segment)
@@ -1673,7 +1687,7 @@ class Note: AVMutableComposition {
         if let oldAnchor = oldAnchor, oldAnchor.getIndex() == Int(Utils.UNKNOWN) {
             print("\tUpdating anchor...")
             for segment in self.noteSegments {
-                if segment.isEqual(oldAnchor) {
+                if segment.getUID() == oldAnchor.getUID() {
                     // update anchor
                     print("\tUpdated anchor segment in selection cursor: ", segment.getText())
                     selectionCursor.setAnchor(segment: segment)
@@ -1684,7 +1698,7 @@ class Note: AVMutableComposition {
         if let oldFocus = oldFocus, oldFocus.getIndex() == Int(Utils.UNKNOWN) {
             print("\tUpdating focus...")
             for segment in self.noteSegments {
-                if segment.isEqual(oldFocus) {
+                if segment.getUID() == oldFocus.getUID() {
                     // update focus
                     print("\tUpdated focus segment in selection cursor: ", segment.getText())
                     selectionCursor.setAnchor(segment: segment)
@@ -1974,7 +1988,7 @@ class Note: AVMutableComposition {
         segmentBoundaryHandler: (() -> Void)? = nil,
         onFinishHandler: (() -> Void)? = nil
     ) {
-        print("===== Play Note =====")
+        print("===== Play Note: From and To =====")
         
         if self.noteSegments.count == 0 {
             // havent recorded anything
@@ -2032,6 +2046,7 @@ class Note: AVMutableComposition {
             }
             
             self.pausedPlayingNote = false
+            self.isPlayingExternalSegments = false
             
             if self.vc!.speechSynthesizer.isSpeaking {
                 print("\tPause speech synthesizer to play speech audio.\n")
@@ -2062,6 +2077,7 @@ class Note: AVMutableComposition {
             }
             
             self.pausedPlayingNote = false
+            self.isPlayingExternalSegments = false
             
             if self.vc!.speechSynthesizer.isSpeaking {
                 print("\tPause speech synthesizer to play speech audio.\n")
@@ -2090,6 +2106,91 @@ class Note: AVMutableComposition {
 
             // Run Player
             let player = Utils.runPlayer(
+                note: self,
+                startTime: self.startPlaybackAt!,
+                volume: self.vc!.playbackVolume,
+                onStartHandler: onStartHandler
+            )
+
+            if let player = player {
+                self.player = player
+            }
+        }
+        
+        if self.isListeningForCommands && !AVAudioSession.isHeadphonesConnected {
+            self.stopListeningForVoiceCommands(pause: true) {
+                playHandler()
+            }
+        } else if self.isListeningForSpeech && !AVAudioSession.isHeadphonesConnected {
+            self.stopListeningForSpeech(pause: true) {
+                playHandler()
+            }
+        } else {
+            playHandler()
+        }
+    }
+    
+    // Does not have pause action associated with it
+    // This is ephemeral
+    func play(
+        segments: [NoteSegment],
+        onStartHandler: (() -> Void)? = nil,
+        secondElapseHandler: (() -> Void)? = nil,
+        segmentBoundaryHandler: (() -> Void)? = nil,
+        onFinishHandler: (() -> Void)? = nil
+    ) {
+        print("===== Play Note: Segments =====")
+
+        let cleansedSegments = Utils.cleanseSegments(segments: segments)
+        let tempComposition = AVMutableComposition()
+        tempComposition.addMutableTrack(withMediaType: .audio, preferredTrackID: Int32(kCMPersistentTrackID_Invalid))
+        do {
+            try tempComposition.tracks[0].validateSegments(cleansedSegments)
+            tempComposition.tracks[0].segments = cleansedSegments
+        } catch {
+            fatalError("===== There was a problem creating temporary mutable composition to preview clipboard =====")
+        }
+        
+        // Stop ongoing echo
+        if self.isPlayingEcho || self.isPlayingPassiveEcho {
+            self.stopEcho(omitFeedback: true)
+        }
+        
+        print("\tInitiate new playback...")
+        let playHandler = {
+            // Play Sound
+            if !self.isListeningForSpeech && !selectionCursor.hasSelection {
+                // should not play if we have a selection
+                soundEngine.play()
+            }
+            
+            self.pausedPlayingNote = false
+            self.isPlayingExternalSegments = true
+            
+            if self.vc!.speechSynthesizer.isSpeaking {
+                print("\tPause speech synthesizer to play speech audio.\n")
+                self.vc!.speechSynthesizer.stopSpeaking(at: .immediate)
+            }
+
+            if onStartHandler != nil {
+                self.observerContext["onStartHandler"] = onStartHandler
+            }
+            
+            if secondElapseHandler != nil {
+                self.observerContext["secondElapseHandler"] = secondElapseHandler
+            }
+            
+            if onFinishHandler != nil {
+                self.observerContext["onFinishHandler"] = onFinishHandler
+            }
+            
+            // Set Start and End Times
+            self.startPlaybackAt = CMTime.zero
+            self.stopPlaybackAt = tempComposition.duration
+
+            // Run Player
+            let player = Utils.runPlayer(
+                composition: tempComposition,
                 note: self,
                 startTime: self.startPlaybackAt!,
                 volume: self.vc!.playbackVolume,
@@ -2270,6 +2371,7 @@ class Note: AVMutableComposition {
         self.startPlaybackAt = nil
         self.startPlaybackAt = nil
         self.pausedPlayingNote = false
+        self.isPlayingExternalSegments = false
         
         if !self.isListeningForSpeech && self.pausedListeningForCommands && !AVAudioSession.isHeadphonesConnected {
             self.startListeningForVoiceCommands(
@@ -2676,21 +2778,21 @@ class Note: AVMutableComposition {
                 // determine if we need to update selection cursor anchor
                 // we need to get these values early before we replace segments
                 // so that selection cursor doesn't lose reference to its anchor
-                if segment == selectionCursor.anchor {
+                if let _ = selectionCursor.anchor, segment.getUID() == selectionCursor.anchor!.getUID() && !segment.isDeleted() {
                     replaceSelectionAnchor = true
                 }
                 
                 // determine if we need to update selection cursor focus
                 // we need to get these values early before we replace segments
                 // so that selection cursor doesn't lose reference to its focus
-                if segment == selectionCursor.focus {
+                if let _ = selectionCursor.focus, segment.getUID() == selectionCursor.focus!.getUID() && !segment.isDeleted() {
                     replaceSelectionFocus = true
                 }
                 
                 // determine if we need to update selection cursor cached anchor
                 // we need to get these values early before we replace segments
                 // so that selection cursor doesn't lose reference to its cached anchor
-                if segment == selectionCursor.cachedAnchor {
+                if let _ = selectionCursor.cachedAnchor, segment.getUID() == selectionCursor.cachedAnchor!.getUID() && !segment.isDeleted() {
                     replaceSelectionCachedAnchor = true
                 }
             }
@@ -2738,17 +2840,17 @@ class Note: AVMutableComposition {
                     // update selection properties
                     for seg in normalizedSegments {
                         // update selection anchor
-                        if replaceSelectionAnchor && seg.isEqual(selectionCursor.anchor) {
+                        if replaceSelectionAnchor && seg.getUID() == selectionCursor.anchor!.getUID() {
                             selectionCursor.setAnchor(segment: seg)
                         }
                         
                         // update selection focus
-                        if replaceSelectionFocus && seg.isEqual(selectionCursor.focus) {
+                        if replaceSelectionFocus && seg.getUID() == selectionCursor.focus!.getUID() {
                             selectionCursor.setFocus(segment: seg)
                         }
                         
                         // update selection cached anchor
-                        if replaceSelectionCachedAnchor && seg.isEqual(selectionCursor.cachedAnchor) {
+                        if replaceSelectionCachedAnchor && seg.getUID() == selectionCursor.cachedAnchor!.getUID() {
                             selectionCursor.setCachedAnchor(segment: seg)
                         }
                     }
@@ -2809,17 +2911,17 @@ class Note: AVMutableComposition {
             // update selection properties
             for seg in self.noteSegments {
                 // update selection anchor
-                if replaceSelectionAnchor && seg.isEqual(selectionCursor.anchor) {
+                if replaceSelectionAnchor && seg.getUID() == selectionCursor.anchor!.getUID() {
                     selectionCursor.setAnchor(segment: seg)
                 }
                 
                 // update selection focus
-                if replaceSelectionFocus && seg.isEqual(selectionCursor.focus) {
+                if replaceSelectionFocus && seg.getUID() == selectionCursor.focus!.getUID() {
                     selectionCursor.setFocus(segment: seg)
                 }
                 
                 // update selection cached anchor
-                if replaceSelectionCachedAnchor && seg.isEqual(selectionCursor.cachedAnchor) {
+                if replaceSelectionCachedAnchor && seg.getUID() == selectionCursor.cachedAnchor!.getUID() {
                     selectionCursor.setCachedAnchor(segment: seg)
                 }
             }
@@ -3005,9 +3107,13 @@ class Note: AVMutableComposition {
             // set passage as new segments
             updatedSegments = segments
         }
+        
+        print("\tCleansing segments...")
+        let cleansedSegments = Utils.cleanseSegments(segments: updatedSegments)
 
+        print("\tNormalizing segments...")
         let _ = self.normalizeSegments(
-            segments: updatedSegments,
+            segments: cleansedSegments,
             normalizeType: .target,
             replaceNoteDetails: true,
             saveSegments: true,
@@ -3049,38 +3155,41 @@ class Note: AVMutableComposition {
                 segment.setIsDeleted(isDeleted: true)
                 // add as deleted
                 updatedSegments.append(segment)
-            }
-            
-            // Check if we need to update selection anchor
-            if segment.isEqual(selectionCursor.anchor) {
-                print("\tSelection cursor anchor requires updating...")
-                updateAnchor = true
-                // Clear anchor so we get no errors related to selectionRange
-                // When we update anchor when we have a selection, focus will be outdate and cause error
-                selectionCursor.setAnchor()
-            }
-            
-            // Check if we need to update selection focus
-            if segment.isEqual(selectionCursor.focus) {
-                print("\tSelection cursor focus requires updating...")
-                updateFocus = true
-                // Clear focus so we get no errors related to selectionRange
-                // When we update focus when we have a selection, anchor will be outdate and cause error
-                selectionCursor.setFocus()
-            }
-            
-            // Check if we need to update selection cached anchor
-            if segment.isEqual(selectionCursor.cachedAnchor) {
-                print("\tSelection cursor cached anchor requires updating...")
-                updateCachedAnchor = true
-                // Clear cached anchor
-                selectionCursor.setCachedAnchor()
+                
+                // Check if we need to update selection anchor
+                if let _ = selectionCursor.anchor, segment.getUID() == selectionCursor.anchor!.getUID() {
+                    print("\tSelection cursor anchor requires updating...")
+                    updateAnchor = true
+                    // Clear anchor so we get no errors related to selectionRange
+                    // When we update anchor when we have a selection, focus will be outdate and cause error
+                    selectionCursor.setAnchor()
+                }
+                
+                // Check if we need to update selection focus
+                if let _ = selectionCursor.focus, segment.getUID() == selectionCursor.focus!.getUID() {
+                    print("\tSelection cursor focus requires updating...")
+                    updateFocus = true
+                    // Clear focus so we get no errors related to selectionRange
+                    // When we update focus when we have a selection, anchor will be outdate and cause error
+                    selectionCursor.setFocus()
+                }
+                
+                // Check if we need to update selection cached anchor
+                if let _ = selectionCursor.cachedAnchor, segment.getUID() == selectionCursor.cachedAnchor!.getUID() {
+                    print("\tSelection cursor cached anchor requires updating...")
+                    updateCachedAnchor = true
+                    // Clear cached anchor
+                    selectionCursor.setCachedAnchor()
+                }
             }
         }
+        
+        print("\tCleansing segments...")
+        let cleansedSegments = Utils.cleanseSegments(segments: updatedSegments)
 
         print("\tNormalizing segments...")
         let _ = self.normalizeSegments(
-            segments: updatedSegments,
+            segments: cleansedSegments,
             normalizeType: .target,
             replaceNoteDetails: true,
             saveSegments: true,
@@ -3963,16 +4072,16 @@ class Note: AVMutableComposition {
             self.segmentIndexMap = [:]
             self.deletedSegmentIndexMap = [:]
             for segment in self.noteSegments {
-                if segment.isEqual(selectionCursor.anchor) {
+                if let _ = selectionCursor.anchor, segment.getUID() == selectionCursor.anchor!.getUID() {
                     print("\tUpdating selection cursor anchor...")
                     selectionCursor.setAnchor(segment: segment)
                 }
                 
-                if segment.isEqual(selectionCursor.focus) {
+                if let _ = selectionCursor.focus, segment.getUID() == selectionCursor.focus!.getUID() {
                      print("\tUpdating selection cursor focus...")
                     selectionCursor.setFocus(segment: segment)
                 }
-                if segment.isEqual(selectionCursor.cachedAnchor) {
+                if let _ = selectionCursor.cachedAnchor, segment.getUID() == selectionCursor.cachedAnchor!.getUID() {
                      print("\tUpdating selection cursor cached anchor...")
                     selectionCursor.setCachedAnchor(segment: segment)
                 }
@@ -4557,7 +4666,10 @@ class Note: AVMutableComposition {
                             break
                         }
                     }
-                    updateSelectionAnchor = selectionCursor.anchor != nil && lastBufferWord != nil && !selectionCursor.anchor!.isEqual(lastBufferWord!)
+                    
+                    if let currentAnchor = selectionCursor.anchor, let lastBufferWord = lastBufferWord {
+                        updateSelectionAnchor = currentAnchor.getUID() != lastBufferWord.getUID()
+                    }
                 } else if selectionCursor.cachedAnchor != nil && self.noteBuffer.count == 0 {
                     print("\tBuffer is empty and Cached Anchor detected to be committed segment...")
                     print("\tFind index of new anchor to use as new anchor value...")
@@ -4572,7 +4684,10 @@ class Note: AVMutableComposition {
                             break
                         }
                     }
-                    updateSelectionAnchor = selectionCursor.anchor != nil && lastBufferWord != nil && !selectionCursor.anchor!.isEqual(lastBufferWord!)
+                    
+                    if let currentAnchor = selectionCursor.anchor, let lastBufferWord = lastBufferWord {
+                        updateSelectionAnchor = currentAnchor.getUID() != lastBufferWord.getUID()
+                    }
                 } else {
                     print("\tFind index of new anchor to use as new anchor value...")
                     var lastBufferWord: NoteSegment?
@@ -4584,7 +4699,10 @@ class Note: AVMutableComposition {
                             break
                         }
                     }
-                    updateSelectionAnchor = selectionCursor.anchor != nil && lastBufferWord != nil && !selectionCursor.anchor!.isEqual(lastBufferWord)
+                    
+                    if let currentAnchor = selectionCursor.anchor, let lastBufferWord = lastBufferWord {
+                        updateSelectionAnchor = currentAnchor.getUID() != lastBufferWord.getUID()
+                    }
                 }
                 
                 if updateSelectionAnchor {
@@ -4676,24 +4794,28 @@ class Note: AVMutableComposition {
                 let timeScale = CMTimeScale(NSEC_PER_SEC)
                 let time = CMTime(seconds: 1, preferredTimescale: timeScale)
 
-                timerObserverToken = player.addPeriodicTimeObserver(forInterval: time, queue: .main) {time in
-                    self.handlePeriodicTimeObserver()
+                if let _ = self.observerContext["secondElapseHandler"] {
+                    self.timerObserverToken = player.addPeriodicTimeObserver(forInterval: time, queue: .main) {time in
+                        self.handlePeriodicTimeObserver()
+                    }
                 }
                 
-                if !selectionCursor.isLoopingSelection {
+                if let _ = self.observerContext["segmentBoundaryHandler"], !selectionCursor.isLoopingSelection {
                     // if we have a selection, animating through each word removes it
                     var boundaryTimes = [NSValue]()
                     for segment in self.noteSegments {
                         boundaryTimes.append(NSValue(time: segment.timeMapping.target.start))
                     }
                     
-                    boundaryObserverToken = player.addBoundaryTimeObserver(forTimes: boundaryTimes, queue: .main) {
+                    self.boundaryObserverToken = player.addBoundaryTimeObserver(forTimes: boundaryTimes, queue: .main) {
                         self.handleBoundaryTimeObserver()
                     }
                 }
                 
-                completionObserverToken = player.addBoundaryTimeObserver(forTimes: [NSValue(time: self.stopPlaybackAt!)], queue: .main) {
-                    self.handleCompletionObserver()
+                if let _ = self.observerContext["onFinishHandler"] {
+                    self.completionObserverToken = player.addBoundaryTimeObserver(forTimes: [NSValue(time: self.stopPlaybackAt!)], queue: .main) {
+                        self.handleCompletionObserver()
+                    }
                 }
                 
                 // Start note
@@ -4706,7 +4828,7 @@ class Note: AVMutableComposition {
                         timescale: Int32(Note.defaultSegmentTimescale)
                     )
                 )
-                let rate = firstPlayableSegment != nil ? firstPlayableSegment!.getRate() * self.vc!.playbackRate : self.vc!.playbackRate
+                let rate = firstPlayableSegment != nil && !self.isPlayingExternalSegments ? firstPlayableSegment!.getRate() * self.vc!.playbackRate : self.vc!.playbackRate
                 let rateWasSet = Utils.setPlayerRate(player: self.player, rate: rate)
                 if rateWasSet {
                     print("\tPlayer rate was successfully set: ", rate)
@@ -4714,7 +4836,7 @@ class Note: AVMutableComposition {
                     print("\t[Error] There was a problem setting player rate. Player had not been started yet.")
                 }
                 
-                if self.startPlaybackAt! == self.startTime {
+                if self.startPlaybackAt! == self.startTime && !self.isPlayingExternalSegments {
                     print("\tPlaying from start of recording...")
                     // Check to see if there is a silence at the start we need to skip
                     self.handleBoundaryTimeObserver(start: true)

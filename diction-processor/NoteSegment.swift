@@ -233,52 +233,6 @@ class NoteSegment: AVCompositionTrackSegment {
             firstSegment.effectiveDuration == secondSegment.effectiveDuration
     }
     
-    // weak object equavalence
-    // does note check for time equality and other dynamic properties
-    func isEqual(_ segment: NoteSegment) -> Bool {
-        // We omit:
-        // uid => not relevant
-        // dateCreated => not relevant
-        // dateModified => not relevant
-        // cachedText => not relevant
-        // cachedGetTextArguments => not relevant
-        // cachedIsValidLastSentenceWord => not relevant
-        // cachedIsSentenceTerminator => not relevant
-        // isDeleted => not relevant
-        // timeMapping.target.start => dynamic property
-        // timeMapping.target.end => dynamic property
-        // isCommitted() => we don't need to discriminate this for equality
-        // isValidSentenceLastWord() => dynamic property
-        // getBackgroundNoise() => dynamic property
-        // getPower() => dynamic property
-        // getSentence() => dynamic property
-        // getSpeakingRate() => dynamic property
-        // getAvgPauseDuration() => dynamic property
-        // getIndex() => discrepency between buffer and commited
-        // getPitch => might not be set yet
-        return self.sourceURL == segment.sourceURL &&
-        self.sourceTrackID == segment.sourceTrackID &&
-        self.timeMapping.source.start == segment.timeMapping.source.start &&
-        self.timeMapping.source.end == segment.timeMapping.source.end &&
-        self.getText() == segment.getText() &&
-        self.getPhoneticallySimilarWords() == segment.getPhoneticallySimilarWords() &&
-        self.isPunctuation() == segment.isPunctuation() &&
-        self.isSilence() == segment.isSilence() &&
-        self.isEmphasized() == segment.isEmphasized() &&
-        self.isNumber() == segment.isNumber() &&
-        self.isHomophone() == segment.isHomophone() &&
-        self.isVoiceCommandWord() == segment.isVoiceCommandWord() &&
-        self.isSentenceTerminator() == segment.isSentenceTerminator() &&
-        self.getTokenType() == segment.getTokenType() &&
-        self.getNameType() == segment.getNameType() &&
-        self.getLexicalClass() == segment.getLexicalClass() &&
-        self.getLemma() == segment.getLemma() &&
-        self.getSentiment() == segment.getSentiment() &&
-        self.getNote() == segment.getNote() &&
-        self.getRate() == segment.getRate() &&
-        self.effectiveDuration == segment.effectiveDuration
-    }
-    
     func checkRep() {
         var result = true
         // sourceTimeRange and targetTimeRange should have the same duration
@@ -862,7 +816,7 @@ class NoteSegment: AVCompositionTrackSegment {
     
     // MARK: - Mutating Methods
     
-    func duplicate(newNote: Note? = nil, timeRange: CMTimeRange? = nil) -> NoteSegment {
+    func duplicate(newNote: Note? = nil, timeRange: CMTimeRange? = nil, withNewUID: Bool = false) -> NoteSegment {
         let duplicateSegment = NoteSegment(
             word: self.word,
             trackURL: self.sourceURL!,
@@ -878,7 +832,8 @@ class NoteSegment: AVCompositionTrackSegment {
         )
         
         // Set UID
-        duplicateSegment.uid = self.uid
+        let uid = withNewUID ? UUID().uuidString : self.uid
+        duplicateSegment.uid = uid
         
         // Set Date Created
         duplicateSegment.dateCreated = self.dateCreated

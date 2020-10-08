@@ -309,9 +309,64 @@ class Utils {
         volume: Float,
         onStartHandler: (() -> Void)? = nil
     ) -> AVPlayer? {
-        print("===== Run Player =====")
-        if note.player.currentItem == nil, let snapshot = note.copy() as? AVAsset {
-            print("\tInitiating AVPlayer...")
+        print("===== Run Player: Note =====")
+        return self.handleRunPlayer(
+            note: note,
+            startTime: startTime,
+            volume: volume,
+            onStartHandler: onStartHandler
+        )
+    }
+    
+    public static func runPlayer(
+        composition: AVMutableComposition,
+        note: Note,
+        startTime: CMTime,
+        volume: Float,
+        onStartHandler: (() -> Void)? = nil
+    ) -> AVPlayer? {
+        print("===== Run Player: Composition =====")
+        return self.handleRunPlayer(
+            composition: composition,
+            note: note,
+            startTime: startTime,
+            volume: volume,
+            onStartHandler: onStartHandler
+        )
+    }
+    
+    private static func handleRunPlayer(
+        composition: AVMutableComposition? = nil,
+        note: Note,
+        startTime: CMTime,
+        volume: Float,
+        onStartHandler: (() -> Void)? = nil
+    ) -> AVPlayer? {
+        print("===== Handle Run Player =====")
+        if let composition = composition, note.player.currentItem == nil, let snapshot = composition.copy() as? AVAsset {
+            print("\tInitiating AVPlayer with Composition...")
+            let assetKeys = [
+                   "playable",
+                   "duration",
+                   "hasProtectedContent"
+               ]
+            let playerItem = AVPlayerItem(asset: snapshot, automaticallyLoadedAssetKeys: assetKeys)
+
+            playerItem.addObserver(
+                note,
+                forKeyPath: #keyPath(AVPlayerItem.status),
+                options: [.old, .new],
+                context: nil
+            )
+            
+            let player = AVPlayer(playerItem: playerItem)
+
+            // Set Volume
+            Utils.setPlayerVolume(player: player, volume: volume)
+
+            return player
+        } else if note.player.currentItem == nil, let snapshot = note.copy() as? AVAsset {
+            print("\tInitiating AVPlayer with Note...")
             let assetKeys = [
                    "playable",
                    "duration",
@@ -760,7 +815,7 @@ class Utils {
     }
     
     public static func getFileURL(of filename: String) -> URL {
-        return getDocumentsDirectory().appendingPathComponent(filename)
+        return self.getDocumentsDirectory().appendingPathComponent(filename)
     }
     
     // Reference: https://stackoverflow.com/questions/32657533/temporary-file-path-using-swift
@@ -949,9 +1004,9 @@ class Utils {
     // normalizes by changing target times not source times
     public static func cleanseSegments(
         segments: [NoteSegment],
-        omitSilences: Bool,
-        omitVoiceCommands: Bool,
-        omitDeleted: Bool
+        omitSilences: Bool = false,
+        omitVoiceCommands: Bool = false,
+        omitDeleted: Bool = false
     ) -> [NoteSegment] {
         print("===== Cleanse Segments =====")
         var cleansedSegments = [NoteSegment]()

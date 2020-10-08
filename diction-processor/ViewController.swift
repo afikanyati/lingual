@@ -826,14 +826,14 @@ class ViewController: UIViewController {
             }
             
             // start cursor blink
-            self.cursorBlinkTimer = Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_CURSOR_BLINK_RATE, repeats: true) { timer in
-                if let cursorView = self.cursorView, cursorView.alpha == 1 {
+            self.cursorBlinkTimer = Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_CURSOR_BLINK_RATE, repeats: true) { [weak self] timer in
+                if let cursorView = self?.cursorView, cursorView.alpha == 1 {
                     UIView.animate(withDuration: Utils.DEFAULT_CURSOR_BLINK_TRANSITION_DURATION) {
-                        self.cursorView!.alpha = 0
+                        self!.cursorView!.alpha = 0
                     }
-                } else if let cursorView = self.cursorView, cursorView.alpha == 0 {
+                } else if let cursorView = self?.cursorView, cursorView.alpha == 0 {
                     UIView.animate(withDuration: Utils.DEFAULT_CURSOR_BLINK_TRANSITION_DURATION) {
-                        self.cursorView!.alpha = 1
+                        self!.cursorView!.alpha = 1
                     }
                 }
             }
@@ -945,10 +945,10 @@ class ViewController: UIViewController {
             )
             
             // Adjust cursor
-            Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { timer in
+            Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { [weak self] timer in
                 // Adjust cursor to appropriate position
                 if selectionCursor.isVisible && !selectionCursor.hasSelection {
-                    selectionCursor.textViewDidChange(self.textView)
+                    selectionCursor.textViewDidChange(self!.textView)
                 }
             }
         } else {
@@ -974,10 +974,10 @@ class ViewController: UIViewController {
             )
 
             // Adjust cursor
-            Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { timer in
+            Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { [weak self] timer in
                 // Adjust cursor to appropriate position
                 if selectionCursor.isVisible && !selectionCursor.hasSelection {
-                    selectionCursor.textViewDidChange(self.textView)
+                    selectionCursor.textViewDidChange(self!.textView)
                 }
             }
         }
@@ -1009,8 +1009,8 @@ class ViewController: UIViewController {
             )
             
             // Hide Command Bar
-            Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { timer in
-                self.commandBar.isHidden = true
+            Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { [weak self] timer in
+                self!.commandBar.isHidden = true
             }
         }
     }
@@ -1041,8 +1041,8 @@ class ViewController: UIViewController {
             )
             
             // Hide Slider View
-            Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { timer in
-                self.sliderView.isHidden = true
+            Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { [weak self] timer in
+                self!.sliderView.isHidden = true
             }
         }
     }
@@ -1528,7 +1528,7 @@ class ViewController: UIViewController {
         }
         
         // Preview Clipboard Button
-        if let _ = selectionCursor.clipboard, self.previewClipboardButton.alpha == 0 && self.note.isListeningForSpeech && !selectionCursor.hasSelection {
+        if let _ = selectionCursor.clipboard, self.note.isListeningForSpeech {
             numActiveButtons += 1
             self.showButton(self.previewClipboardButton)
         } else {
@@ -1738,15 +1738,15 @@ class ViewController: UIViewController {
             handleRecognizer()
         } else {
             // check again after two seconds
-            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
-                if let speechRecognizer = self.speechRecognizer, self.useOnDeviceRecognition && speechRecognizer.supportsOnDeviceRecognition {
+            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { [weak self] timer in
+                if let speechRecognizer = self?.speechRecognizer, self!.useOnDeviceRecognition && speechRecognizer.supportsOnDeviceRecognition {
                     handleRecognizer()
                 } else {
                     // Present error
                     let alertController = UIAlertController(title: "Unable to initiate Voice Recognition", message: "Lingual relies on on-device recognition to deliver a the best user experience. Your device does not support it.", preferredStyle: .alert)
                     alertController.addAction(UIAlertAction(title: "Close", style: .cancel))
                     DispatchQueue.main.async {
-                        self.present(alertController, animated: true)
+                        self!.present(alertController, animated: true)
                     }
                 }
             }
@@ -2059,9 +2059,9 @@ class ViewController: UIViewController {
                 // ====== Go from no selection to selection while recording ======
                 //
                 
-                Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] timer in
                     // Determine if we present adjust rate buttons
-                    self.adjustCommandBar()
+                    self!.adjustCommandBar()
                 }
                 // Determine if we present transformation information
                 self.handleTransformationsView()
@@ -2076,9 +2076,9 @@ class ViewController: UIViewController {
             } else if let newHasSelection = change?[.newKey] as? Bool, let oldHasSelection = change?[.oldKey] as? Bool, !newHasSelection && oldHasSelection && self.note.isListeningForSpeech && self.note.pausedListeningForSpeech && self.note.isListeningForCommands && !self.note.isPlayingNote && !self.note.isPlayingEcho && !self.note.isPlayingPassiveEcho {
                 // ====== Go from selection to no selection while recording ======
                 //
-                Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
+                Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] timer in
                     // Determine if we present adjust rate buttons
-                    self.adjustCommandBar()
+                    self!.adjustCommandBar()
                 }
                 // Determine if we present transformation information
                 self.handleTransformationsView()
@@ -2088,9 +2088,9 @@ class ViewController: UIViewController {
                     pitchHandler: self.pitchHandler!
                 )
                 
-                Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { [weak self] timer in
                     // Update UI Text in case we have new transformations
-                    self.updateUIText(text: self.note.getText(), transformations: self.note.transformations)
+                    self!.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
                 }
             } else if let hasSelection = change?[.newKey] as? Bool, hasSelection && !self.note.isListeningForSpeech && self.note.isListeningForCommands {
                 // ====== Go from no selection to selection while not recording ======
@@ -2583,15 +2583,15 @@ class ViewController: UIViewController {
     }
     
     @IBAction func handlePreviewClipboard(_ sender: Any) {
-        print("===== Handle Preview Clipboard =====")
+        print("===== Handle Preview Clipboard:  \(selectionCursor.clipboardText ?? "nil") =====")
         
-        if let clipboardSelection = selectionCursor.clipboard {
-            let fromTime = clipboardSelection.first!.timeMapping.target.start
-            let toTime = clipboardSelection.last!.timeMapping.target.end
-            
+        if let clipboardSelection = selectionCursor.clipboard, clipboardSelection.count > 0 {
+            let selectionDuration = CMTimeSubtract(
+                clipboardSelection.last!.timeMapping.target.start,
+                clipboardSelection.first!.timeMapping.target.end
+            )
             self.note.play(
-                from: fromTime,
-                to: toTime,
+                segments: clipboardSelection,
                 onStartHandler: { [weak self] in
                     // print("Successfully executed playback on start handler")
                     DispatchQueue.main.async {
@@ -2603,21 +2603,7 @@ class ViewController: UIViewController {
                     // print("Successfully executed playback second elapsed handler")
                     DispatchQueue.main.async {
                         if !self!.note.isListeningForSpeech && self!.note.player.currentTime().seconds != Double.infinity && self!.note.player.currentTime().seconds != Double.nan && self!.note.player.currentTime().seconds != -Double.infinity {
-                            self?.navigationItem.title = "\(Utils.formattedTime(time: Float(self!.note.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.note.getDuration(filteredDuration: true).seconds)))"
-                        }
-                    }
-                },
-                segmentBoundaryHandler: { [weak self] in
-                    // print("Successfully executed playback on segment boundary handler")
-                    DispatchQueue.main.async {
-                        if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let highlightRange = self?.note.getSegmentTextRange(of: segment) {
-                            // update text
-                            self?.updateUIText(text: self!.note.getText(), highlightRange: highlightRange, transformations: self!.note.transformations)
-                        }
-                        
-                        if let segment = self?.note.getSegment(type: .current), let pitch = segment.getPitch() {
-                            // update pitch
-                            self?.pitchLabel.text = pitch.note.string
+                            self?.navigationItem.title = "\(Utils.formattedTime(time: Float(self!.note.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(selectionDuration.seconds)))"
                         }
                     }
                 }, onFinishHandler: { [weak self] in
@@ -2633,6 +2619,41 @@ class ViewController: UIViewController {
                     }
                 }
             )
+        } else {
+            // havent recorded anything
+            // Play Sound
+            soundEngine.error()
+            
+            // Give haptic feedback
+            hapticEngine.error()
+            
+            let errorHandler: () -> Void  = {
+                // Delay error message to allow error earcon to complete
+                Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {[weak self] timer in
+                    let voice = Utils.getSynthesizerVoice(withGender: .female, vc: self)
+                    let synthesizerItem = SynthesizerItem(
+                        synthesizer: self!.speechSynthesizer,
+                        text: "Clipboard is empty.",
+                        voice: voice,
+                        rate: self!.echoRate,
+                        volume: self!.playbackVolume
+                    )
+                    
+                    Utils.runSpeechSynthesizer(item: synthesizerItem)
+                }
+            }
+            
+            if self.note.isListeningForCommands && !AVAudioSession.isHeadphonesConnected {
+                self.note.stopListeningForVoiceCommands(pause: true) {
+                    Utils.runError(note: self.note, handler: errorHandler)
+                }
+            } else if self.note.isListeningForSpeech && !AVAudioSession.isHeadphonesConnected {
+                self.note.stopListeningForSpeech(pause: true) {
+                    Utils.runError(note: self.note, handler: errorHandler)
+                }
+            } else {
+                Utils.runError(note: self.note, handler: errorHandler)
+            }
         }
         
         // Give haptic feedback
@@ -2688,8 +2709,8 @@ class ViewController: UIViewController {
         self.adjustCommandBar()
         
         print("\tShow Slider View...")
-        Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { timer in
-            self.setSliderVisibility(as: true)
+        Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) {[weak self] timer in
+            self!.setSliderVisibility(as: true)
         }
         
         // Give haptic feedback
@@ -2713,8 +2734,8 @@ class ViewController: UIViewController {
         self.adjustCommandBar()
         
         print("\tShow Slider View...")
-        Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { timer in
-            self.setSliderVisibility(as: true)
+        Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { [weak self] timer in
+            self!.setSliderVisibility(as: true)
         }
         
         // Give haptic feedback
@@ -2732,9 +2753,9 @@ class ViewController: UIViewController {
         self.setSliderVisibility(as: false)
         
         print("\tShow Command Bar...")
-        Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { timer in
-            self.setCommandBarVisibility(as: true)
-            self.adjustCommandBar()
+        Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { [weak self] timer in
+            self!.setCommandBarVisibility(as: true)
+            self!.adjustCommandBar()
         }
         
         // Give haptic feedback
@@ -2801,7 +2822,7 @@ class ViewController: UIViewController {
     }
     
     @objc func handlePasteClipboard(_ sender: Any) {
-        print("===== Handle Paste Selection: \(selectionCursor.selectionText ?? "nil") =====")
+        print("===== Handle Paste Selection: \(selectionCursor.clipboardText ?? "nil") =====")
         selectionCursor.pasteSelection()
         
         // Give haptic feedback
