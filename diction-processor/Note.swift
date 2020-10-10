@@ -3815,6 +3815,15 @@ class Note: AVMutableComposition {
         print("\tAdd computed transformations to stored transformations...")
         self.transformations.append(contentsOf: transformations)
         
+        // Present Feedback
+        if let value = value {
+            Utils.executeFeedback(
+                visualMessage: "Selection rate: \(value)x",
+                audioMessage: "Adjusted selection rate to \(value)x.",
+                note: self
+            )
+        }
+        
         // Check rep invariant
         self.handleMutation()
         checkRep()

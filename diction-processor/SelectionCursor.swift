@@ -719,6 +719,10 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             } else {
                 newRate -= Utils.DISCRETE_PLAYBACK_DELTA
             }
+            
+            // Round off new rate
+            newRate = newRate.rounded(toPlaces: 1)
+            
             print("\tStore transformation with range: \(range) and rate: \(newRate)")
             
             // Compute text
@@ -858,7 +862,7 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         // Present Feedback
         Utils.executeFeedback(
             visualMessage: "Confirm Replacement",
-            audioMessage: "replace \"\(selectionText)\" with \"\(replacementText)\"?",
+            audioMessage: "\"\(replacementText)\". Accept, redo or cancel?",
             note: note
         )
         

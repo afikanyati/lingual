@@ -2014,8 +2014,8 @@ class ViewController: UIViewController {
         
         // Present Feedback
         Utils.executeFeedback(
-            visualMessage: "Set Playback Rate",
-            audioMessage: "set playback rate to \(self.playbackRate)",
+            visualMessage: "Playback Rate: \(self.playbackRate)x",
+            audioMessage: "Set playback rate to \(self.playbackRate)x.",
             note: self.note
         )
 
@@ -2032,8 +2032,8 @@ class ViewController: UIViewController {
         
         // Present Feedback
         Utils.executeFeedback(
-            visualMessage: "Set Playback Rate",
-            audioMessage: "set playback rate to \(self.playbackRate)",
+            visualMessage: "Playback Rate: \(self.playbackRate)x",
+            audioMessage: "Set playback rate to \(self.playbackRate)x.",
             note: self.note
         )
         
@@ -2050,8 +2050,8 @@ class ViewController: UIViewController {
         
         // Present Feedback
         Utils.executeFeedback(
-            visualMessage: "Set Echo Rate",
-            audioMessage: "set echo rate to \(self.echoRate)",
+            visualMessage: "Echo Rate: \(self.echoRate)x",
+            audioMessage: "Set echo rate to \(self.echoRate)x.",
             note: self.note
         )
         
@@ -2287,6 +2287,7 @@ class ViewController: UIViewController {
                 self.updateEchoRate = sender.value
             } else {
                 // Set immediately
+                
                 self.echoRate = sender.value
             }
         }
@@ -2972,6 +2973,21 @@ class ViewController: UIViewController {
     
     @IBAction func handleExitSlider(_ sender: Any) {
         print("===== Screen Button: Handle Exit Slider =====")
+        
+        // Present Feedback
+        if self.sliderType == .playback {
+            Utils.executeFeedback(
+                visualMessage: "Playback Rate: \(self.playbackRate)x",
+                audioMessage: "Set playback rate to \(self.playbackRate)x.",
+                note: self.note
+            )
+        } else {
+            Utils.executeFeedback(
+                visualMessage: "Echo rate: \(self.echoRate)x",
+                audioMessage: "Set echo rate to \(self.echoRate)x.",
+                note: self.note
+            )
+        }
         
         print("\tAdjusting flag to: false")
         self.sliderIsVisible = false
