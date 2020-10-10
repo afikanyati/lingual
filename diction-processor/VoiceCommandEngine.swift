@@ -120,6 +120,10 @@ public final class VoiceCommandEngine: NSObject {
         "i just playback rate up",
         "just playback rate down",
         "i just playback rate down",
+        "accept",
+        "except",
+        "redo",
+        "cancel"
     ]
     
     let voiceCommandMapping: [String : String] = [
@@ -229,6 +233,10 @@ public final class VoiceCommandEngine: NSObject {
         "i just playback rate up": "increase playback rate",
         "just playback rate down": "decrease playback rate",
         "i just playback rate down": "decrease playback rate",
+        "accept": "accept",
+        "except": "accept",
+        "redo": "redo",
+        "cancel": "cancel"
     ]
     
     func includesCommand(passage: String) -> String? {
@@ -1041,6 +1049,63 @@ public final class VoiceCommandEngine: NSObject {
                 } else {
                     Utils.runError(note: note, handler: errorHandler)
                 }
+            }
+        case "accept":
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+            
+            if selectionCursor.hasSelection && selectionCursor.isReplacingSelection && selectionCursor.isPromptingForReplacementAcceptance {
+                // Dismiss Dialog
+                Utils.dismissDialog(vc: note.vc!)
+                
+                // Turn off ambient track
+                soundEngine.stopModalAmbience()
+
+                // Clear buffer segments
+                print("\tClearing note buffer...")
+                note.clearBuffer()
+                
+                // Accept Replacement
+                print("\tAccepting Replacement Selection...")
+                selectionCursor.acceptReplacementSelection()
+            }
+        case "redo":
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+            
+            if selectionCursor.hasSelection && selectionCursor.isReplacingSelection && selectionCursor.isPromptingForReplacementAcceptance {
+                // Dismiss Dialog
+                Utils.dismissDialog(vc: note.vc!)
+                
+                // Turn off ambient track
+                soundEngine.stopModalAmbience()
+
+                // Clear buffer segments
+                print("\tClearing note buffer...")
+                note.clearBuffer()
+                
+                // Redo Replace Selection
+                print("\tRedoing Replace Selection...")
+                selectionCursor.initiateReplaceSelection()
+            }
+        case "cancel":
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+            
+            if selectionCursor.hasSelection && selectionCursor.isReplacingSelection {
+                // Dismiss Dialog
+                Utils.dismissDialog(vc: note.vc!)
+                
+                // Turn off ambient track
+                soundEngine.stopModalAmbience()
+
+                // Clear buffer segments
+                print("\tClearing note buffer...")
+                note.clearBuffer()
+                
+                // Cancel Replace Selection
+                print("\tCanceling Replace Selection...")
+                selectionCursor.cancelReplaceSelection()
             }
         default:
             soundEngine.voiceCommandDeny()

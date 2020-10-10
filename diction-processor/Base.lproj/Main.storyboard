@@ -36,7 +36,7 @@
                                 <rect key="frame" x="0.0" y="88" width="414" height="60"/>
                                 <subviews>
                                     <stackView opaque="NO" contentMode="scaleToFill" preservesSuperviewLayoutMargins="YES" distribution="fillEqually" alignment="center" spacing="10" translatesAutoresizingMaskIntoConstraints="NO" id="NJR-7J-DET" userLabel="Command Bar">
-                                        <rect key="frame" x="0.0" y="0.0" width="1460.5" height="60"/>
+                                        <rect key="frame" x="0.0" y="0.0" width="1547" height="60"/>
                                         <subviews>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="W2T-VK-Ovs" userLabel="Delete Selection Button">
                                                 <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
@@ -124,8 +124,51 @@
                                                     <constraint firstItem="K2e-BW-0gn" firstAttribute="width" secondItem="2AY-97-AlQ" secondAttribute="width" id="xe9-ay-tud"/>
                                                 </constraints>
                                             </view>
-                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="yaf-vd-hBM" userLabel="Copy Selection Button">
+                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="R9L-Ix-9gI" userLabel="Cancel Replace Selection Button">
                                                 <rect key="frame" x="173" y="0.0" width="76.5" height="60"/>
+                                                <subviews>
+                                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="pJl-CQ-HgM">
+                                                        <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
+                                                        <connections>
+                                                            <action selector="handleCancelReplaceSelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="Bkq-r5-2l3"/>
+                                                        </connections>
+                                                    </button>
+                                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="xmark" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="3L8-Gn-5kk" userLabel="Icon">
+                                                        <rect key="frame" x="26.5" y="10.5" width="24" height="23"/>
+                                                        <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                                        <constraints>
+                                                            <constraint firstAttribute="height" constant="24" id="FeW-6Q-BDZ"/>
+                                                            <constraint firstAttribute="width" constant="24" id="JqQ-bA-nIv"/>
+                                                        </constraints>
+                                                        <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
+                                                    </imageView>
+                                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Cancel" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="GPE-Ki-HOF" userLabel="Label">
+                                                        <rect key="frame" x="0.0" y="31" width="76.5" height="25"/>
+                                                        <constraints>
+                                                            <constraint firstAttribute="height" constant="25" id="DAv-qg-Wc7"/>
+                                                        </constraints>
+                                                        <fontDescription key="fontDescription" type="system" pointSize="11"/>
+                                                        <color key="textColor" systemColor="systemGray5Color"/>
+                                                        <nil key="highlightedColor"/>
+                                                    </label>
+                                                </subviews>
+                                                <constraints>
+                                                    <constraint firstAttribute="bottom" secondItem="GPE-Ki-HOF" secondAttribute="bottom" constant="4" id="46h-3h-ewT"/>
+                                                    <constraint firstItem="GPE-Ki-HOF" firstAttribute="centerX" secondItem="R9L-Ix-9gI" secondAttribute="centerX" id="CMN-gg-Lii"/>
+                                                    <constraint firstAttribute="trailing" secondItem="pJl-CQ-HgM" secondAttribute="trailing" id="Fev-MM-ZhD"/>
+                                                    <constraint firstItem="3L8-Gn-5kk" firstAttribute="centerX" secondItem="R9L-Ix-9gI" secondAttribute="centerX" id="Wi1-XJ-Ck3"/>
+                                                    <constraint firstItem="3L8-Gn-5kk" firstAttribute="top" secondItem="R9L-Ix-9gI" secondAttribute="top" constant="10" id="e78-Nj-y7z"/>
+                                                    <constraint firstItem="GPE-Ki-HOF" firstAttribute="width" secondItem="R9L-Ix-9gI" secondAttribute="width" id="jcL-Md-dgE"/>
+                                                    <constraint firstItem="pJl-CQ-HgM" firstAttribute="leading" secondItem="R9L-Ix-9gI" secondAttribute="leading" id="m3N-1R-dio"/>
+                                                    <constraint firstItem="pJl-CQ-HgM" firstAttribute="width" secondItem="R9L-Ix-9gI" secondAttribute="width" id="n7l-7f-r8z"/>
+                                                    <constraint firstAttribute="height" constant="60" id="oUx-Ld-uve"/>
+                                                    <constraint firstAttribute="bottom" secondItem="pJl-CQ-HgM" secondAttribute="bottom" id="sLD-vA-uto"/>
+                                                    <constraint firstItem="pJl-CQ-HgM" firstAttribute="height" secondItem="R9L-Ix-9gI" secondAttribute="height" id="zG1-AT-aXB"/>
+                                                    <constraint firstItem="pJl-CQ-HgM" firstAttribute="top" secondItem="R9L-Ix-9gI" secondAttribute="top" id="zQc-iE-KHq"/>
+                                                </constraints>
+                                            </view>
+                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="yaf-vd-hBM" userLabel="Copy Selection Button">
+                                                <rect key="frame" x="259.5" y="0.0" width="76.5" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="UJC-Kv-0oe">
                                                         <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
@@ -168,7 +211,7 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="n9G-RS-caI" userLabel="Cut Selection Button">
-                                                <rect key="frame" x="259.5" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="346" y="0.0" width="76.5" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="crV-xP-kSW">
                                                         <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
@@ -211,7 +254,7 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="llz-Gj-MCS" userLabel="Increase Rate Button">
-                                                <rect key="frame" x="346" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="432.5" y="0.0" width="76.5" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="GnD-E8-QyV">
                                                         <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
@@ -254,7 +297,7 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="uEe-RB-u37" userLabel="Decrease Rate Button">
-                                                <rect key="frame" x="432.5" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="519" y="0.0" width="76.5" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="6dP-qr-sNy">
                                                         <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
@@ -297,7 +340,7 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="L3s-u8-MH4" userLabel="Export Selection Button">
-                                                <rect key="frame" x="519" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="605.5" y="0.0" width="76.5" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Jpa-Jq-u8I">
                                                         <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
@@ -340,7 +383,7 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="81X-ao-BrY" userLabel="Move Here Button">
-                                                <rect key="frame" x="605.5" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="692" y="0.0" width="76.5" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="qJL-mn-r2t">
                                                         <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
@@ -384,7 +427,7 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="PeZ-QO-LMy" userLabel="Run Note Button">
-                                                <rect key="frame" x="692" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="778.5" y="0.0" width="76.5" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="5Is-lr-xL8">
                                                         <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
@@ -427,7 +470,7 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="aiq-7G-8JT" userLabel="Pause Note Button">
-                                                <rect key="frame" x="778.5" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="865" y="0.0" width="76.5" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="tNa-nV-25q">
                                                         <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
@@ -470,7 +513,7 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="t5M-tA-0Yi" userLabel="Last Commit Button">
-                                                <rect key="frame" x="865" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="951.5" y="0.0" width="76.5" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="mQR-1F-zVh">
                                                         <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
@@ -513,7 +556,7 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="88v-ju-wHm" userLabel="Pause Echo Button">
-                                                <rect key="frame" x="951.5" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="1038" y="0.0" width="76.5" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="4qB-HF-2wj">
                                                         <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
@@ -556,7 +599,7 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="j9F-d2-jUG" userLabel="Preview Clipboard Button">
-                                                <rect key="frame" x="1038" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="1124.5" y="0.0" width="76.5" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="X22-8f-tve">
                                                         <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
@@ -599,7 +642,7 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="MC4-GC-75X" userLabel="Skip Backward Button">
-                                                <rect key="frame" x="1124.5" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="1211" y="0.0" width="76.5" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="nVT-bq-2Zl">
                                                         <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
@@ -642,7 +685,7 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="JlL-cG-24s" userLabel="Skip Forward Button">
-                                                <rect key="frame" x="1211" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="1297.5" y="0.0" width="76.5" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="ce3-uz-QGs">
                                                         <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
@@ -685,7 +728,7 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="YBi-jc-AO8" userLabel="Playback Rate Button">
-                                                <rect key="frame" x="1297.5" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="1384" y="0.0" width="76.5" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="yCt-AL-5fA">
                                                         <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
@@ -728,7 +771,7 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="6Wt-Ih-DqE" userLabel="Echo Rate Button">
-                                                <rect key="frame" x="1384" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="1470.5" y="0.0" width="76.5" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="STn-Gi-zZL">
                                                         <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
@@ -1363,6 +1406,7 @@
                     </view>
                     <navigationItem key="navigationItem" id="3OJ-C9-X31"/>
                     <connections>
+                        <outlet property="cancelReplaceSelectionButton" destination="R9L-Ix-9gI" id="qjD-Xv-UoX"/>
                         <outlet property="commandBar" destination="NJR-7J-DET" id="Wvi-Il-cAZ"/>
                         <outlet property="commandBarPositionTop" destination="XiN-oJ-bqa" id="hdo-Bu-g2c"/>
                         <outlet property="copySelectionButton" destination="yaf-vd-hBM" id="BE5-Bd-06A"/>
@@ -1461,6 +1505,7 @@
         <image name="stop.circle" catalog="system" width="128" height="121"/>
         <image name="tortoise" catalog="system" width="128" height="68"/>
         <image name="trash" catalog="system" width="121" height="128"/>
+        <image name="xmark" catalog="system" width="128" height="113"/>
         <systemColor name="secondaryLabelColor">
             <color red="0.23529411764705882" green="0.23529411764705882" blue="0.2627450980392157" alpha="0.59999999999999998" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>

@@ -320,13 +320,17 @@ class Note: AVMutableComposition {
         if withPunctuationSuggestions && withTemporalSuggestions {
             // Inform that only one view mode may be active in any given moment
             self.withTemporalSuggestions = false
-            let alertController = UIAlertController(title: "Conflicting View Modes", message: "You've attemped to activate both punctuation and temporal suggestions. Only one can be active at a time, so we've activated punctuation suggestions only.", preferredStyle: .alert)
-            let closeAction = UIAlertAction(title: "Close", style: .cancel, handler: nil)
-            alertController.addAction(closeAction)
-
-            DispatchQueue.main.async {
-                vc?.present(alertController, animated: true, completion: nil)
-            }
+            let dialogActions = [
+                DialogAction(title: "Close", style: .cancel, handler: nil)
+            ]
+            
+            let dialogItem = DialogItem(
+                title: "Conflicting View Modes",
+                message: "You've attemped to activate both punctuation and temporal suggestions. Only one can be active at a time, so we've activated punctuation suggestions only.",
+                preferredStyle: .alert,
+                actions: dialogActions
+            )
+            Utils.presentDialog(dialogItem: dialogItem, vc: self.vc!)
         } else {
             // We set punctuation suggestions above
             // 1) if punctuation suggestions and temporal suggestions are true, we handle it in if-statement
@@ -406,7 +410,7 @@ class Note: AVMutableComposition {
         print("===== Configure Note Audio Write File =====")
         do {
             try recordFile = AVAudioFile(
-                forWriting: Utils.getTempFileURL(of: "\(self.filename)-\(self.clipCount)\(self.fileType)"),
+                forWriting: Utils.getFileURL(of: "\(self.filename)-\(self.clipCount)\(self.fileType)"),
                 settings: audioEngine.inputNode.inputFormat(forBus: self.recordBus).settings
             )
             authorizedToListenForSpeech = true
@@ -816,13 +820,17 @@ class Note: AVMutableComposition {
                     onStartHandler?()
                 } else {
                     // Present error
-                    let alertController = UIAlertController(title: "Unable to initiate Voice Recognition", message: "Lingual relies on on-device recognition to deliver a the best user experience. Your device does not support it.", preferredStyle: .alert)
-                    let closeAction = UIAlertAction(title: "Close", style: .cancel, handler: nil)
-                    alertController.addAction(closeAction)
-
-                    DispatchQueue.main.async {
-                        self.vc?.present(alertController, animated: true, completion: nil)
-                    }
+                    let dialogActions = [
+                        DialogAction(title: "Close", style: .cancel, handler: nil)
+                    ]
+                    
+                    let dialogItem = DialogItem(
+                        title: "Unable to initiate Voice Recognition",
+                        message: "Lingual relies on on-device recognition to deliver a the best user experience. Your device does not support it.",
+                        preferredStyle: .alert,
+                        actions: dialogActions
+                    )
+                    Utils.presentDialog(dialogItem: dialogItem, vc: self.vc!)
                 }
             }
         }
@@ -1133,7 +1141,7 @@ class Note: AVMutableComposition {
         let noteSegment = NoteSegment(
             note: self,
             word: word,
-            trackURL: Utils.getTempFileURL(of: "\(self.filename)-\(self.clipCount)\(self.fileType)"),
+            trackURL: Utils.getFileURL(of: "\(self.filename)-\(self.clipCount)\(self.fileType)"),
             trackID: self.tracks[0].trackID,
             phoneticallySimilarWords: phoneticallySimilarWords,
             sourceTimeRange: CMTimeRangeMake(
@@ -1168,9 +1176,10 @@ class Note: AVMutableComposition {
             let oldSegment = bufferSegments[transcriptionIndex]
             if oldSegment != noteSegment {
                 // determine if we need to replace selection values
-                let replaceSelectionAnchor = oldSegment == selectionCursor.anchor
-                let replaceSelectionFocus = oldSegment == selectionCursor.focus
-                let replaceSelectionCachedAnchor = oldSegment == selectionCursor.cachedAnchor
+                // prefent replacing selection values if we're processing a selection replacement
+                let replaceSelectionAnchor = oldSegment == selectionCursor.anchor && !selectionCursor.isReplacingSelection
+                let replaceSelectionFocus = oldSegment == selectionCursor.focus && !selectionCursor.isReplacingSelection
+                let replaceSelectionCachedAnchor = oldSegment == selectionCursor.cachedAnchor && !selectionCursor.isReplacingSelection
                 
                 // set updated segments
                 bufferSegments[transcriptionIndex] = noteSegment
@@ -1231,7 +1240,7 @@ class Note: AVMutableComposition {
         for (index, segment) in segs.enumerated() {
             if segment.timeMapping[normalizeType].start.seconds != lastEnd.seconds {
                 if segment.timeMapping[normalizeType].start.seconds > lastEnd.seconds && !segment.isSilence() {
-                    let trackURL = Utils.getTempFileURL(of: "\(self.filename)-\(self.clipCount)\(self.fileType)")
+                    let trackURL = Utils.getFileURL(of: "\(self.filename)-\(self.clipCount)\(self.fileType)")
 
                     if let lastCommittedSegment = self.noteSegments.last, index == 0 && segments != nil && segments!.first! != self.noteSegments.first! && self.noteSegments.count > 0 && normalizeType == .source && lastCommittedSegment.sourceURL!.absoluteString == trackURL.absoluteString {
                         // first segment is silence
@@ -1602,7 +1611,7 @@ class Note: AVMutableComposition {
         print("\tDuplicating buffer segments...")
         var segments = [NoteSegment]()
         for segment in self.noteBuffer {
-            segments.append(segment)
+            segments.append(segment.duplicate())
         }
         
         print("\tIdentifying insert time...")
@@ -1908,15 +1917,28 @@ class Note: AVMutableComposition {
         }
         
         if let cachedAnchor = selectionCursor.cachedAnchor, noteSegments == nil && cachedAnchor.getIndex() != Int(Utils.UNKNOWN) {
-            // insert buffer at the correct place based on cursor position
             noteSegments = self.noteSegments
-            // By default, insert(contentsOf:, at:) inserts the new elements before the anchor
-            // We add one to insert them after the ancher
-            let cachedAnchorIndex = cachedAnchor.getIndex()
-            noteSegments!.insert(contentsOf: self.noteBuffer, at: cachedAnchorIndex + 1)
+            
+            // insert buffer at the correct place based on cursor position
+            if !selectionCursor.isReplacingSelection {
+                // We don't want to factor buffer which has speech that has yet to be accepted
+                // Would show up in seleectionCursor.selectionText
+                
+                // By default, insert(contentsOf:, at:) inserts the new elements before the anchor
+                // We add one to insert them after the ancher
+                let cachedAnchorIndex = cachedAnchor.getIndex()
+                noteSegments!.insert(contentsOf: self.noteBuffer, at: cachedAnchorIndex + 1)
+            }
         } else if noteSegments == nil {
+            noteSegments = self.noteSegments
+            
             // insert buffer at the end of segments
-            noteSegments = self.noteSegments + self.noteBuffer
+            if !selectionCursor.isReplacingSelection {
+                // We don't want to factor buffer which has speech that has yet to be accepted
+                // Would show up in seleectionCursor.selectionText
+                
+                noteSegments = self.noteSegments + self.noteBuffer
+            }
         }
         
         // We have been given a specific set of segments to compute on vs. multi segment tracks
@@ -3206,6 +3228,16 @@ class Note: AVMutableComposition {
                     timescale: Int32(Note.defaultSegmentTimescale)
                 )
             )
+            
+            while segment != nil && segment!.timeMapping.target.start > CMTime.zero && (segment!.isVoiceCommandWord() || segment!.isDeleted() || segment!.isSilence()) {
+                let startTime = segment!.timeMapping.target.start
+                segment = self.getSegment(
+                    forTrackTime: CMTimeMake(
+                        value: Int64(Note.defaultSegmentTimescale * (max(0, startTime.seconds - thresholdShiftDuration))),
+                        timescale: Int32(Note.defaultSegmentTimescale)
+                    )
+                )
+            }
         }
         
         if let segment = segment, updateAnchor {
@@ -4773,9 +4805,9 @@ class Note: AVMutableComposition {
         change: [NSKeyValueChangeKey : Any]?,
         context: UnsafeMutableRawPointer?
     ){
-        guard self.noteBuffer.count == 0 else {
-            fatalError("===== [Error] There was a problem inserting passage. Buffer was not empty =====")
-        }
+//        guard self.noteBuffer.count == 0 else {
+//            fatalError("===== [Error] There was a problem inserting passage. Buffer was not empty =====")
+//        }
 
         if keyPath == #keyPath(AVPlayerItem.status) {
             let status: AVPlayerItem.Status
@@ -5195,9 +5227,11 @@ extension Note: SFSpeechRecognitionTaskDelegate {
 
                 self.performTranscriptionUpdate(transcription)
                 
-                let text = self.getText()
-                // execute listen update handler
-                self.handleOnListenUpdate(text: text)
+                if !selectionCursor.isReplacingSelection {
+                    let text = self.getText()
+                    // execute listen update handler
+                    self.handleOnListenUpdate(text: text)
+                }
                 
                 if let command = voiceCommandEngine.includesCommand(passage: transcription.formattedString) {
                     print("\tCommand Recognized!")
@@ -5246,50 +5280,46 @@ extension Note: SFSpeechRecognitionTaskDelegate {
     
     func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didFinishRecognition result: SFSpeechRecognitionResult) {
         DispatchQueue.main.async {
-            if self.isListeningForSpeech && !self.pausedListeningForSpeech && self.noteBuffer.count > 0 && !self.request!.requiresOnDeviceRecognition {
-                print("===== Some words heard. Apple servers ended dictation session =====")
-                self.stopListeningForSpeech(pause: true) {[weak self] in
+            let handleFinishRecognition = {
+                if !selectionCursor.isReplacingSelection {
                     // Play Sound
                     soundEngine.commitBuffer()
-                    // update segments
-                    self?.performTranscriptionUpdate(result.bestTranscription)
-                    
-                    // trigger commit notification
-                    // must happen before committing so we still have the segments in the buffer
-                    if !AVAudioSession.isHeadphonesConnected {
-                        self?.triggerBufferCommitNotification()
-                    }
-                    
-                    // commit buffer
-                    self?.commitBuffer()
-                    
-                    // execute listen update handler
-                    self?.handleOnListenUpdate(text: self!.getText())
-
-                    // Update duration
-                    self?.accumulatedDuration = max(0, Date().timeIntervalSince(self!.recordStartDate!) - Utils.TRANSCRIPTION_LATENCY_DURATION)
-
-                    self?.startListeningForSpeech(
-                        soundIntensityHandler: self?.soundIntensityHandler,
-                        pitchHandler: self?.pitchHandler
-                    )
                 }
-            } else if self.isListeningForSpeech && !self.pausedListeningForSpeech && self.noteBuffer.count > 0 && self.request!.requiresOnDeviceRecognition {
-                // Play Sound
-                soundEngine.commitBuffer()
 
                 // update segments
                 self.performTranscriptionUpdate(result.bestTranscription)
                 
                 // trigger commit notification
-                if !AVAudioSession.isHeadphonesConnected {
+                if !AVAudioSession.isHeadphonesConnected && !selectionCursor.isReplacingSelection {
                     self.triggerBufferCommitNotification()
                 }
                 
-                // commit buffer
-                self.commitBuffer()
-                // execute listen update handler
-                self.handleOnListenUpdate(text: self.getText())
+                if !selectionCursor.isReplacingSelection {
+                    // commit buffer
+                    self.commitBuffer()
+                    // execute listen update handler
+                    self.handleOnListenUpdate(text: self.getText())
+                } else {
+                    // handle replacement selection
+                    if !self.pausedListeningForSpeech {
+                        // make sure paused
+                        self.stopListeningForSpeech(pause: true) {
+                            self.startListeningForVoiceCommands(
+                                soundIntensityHandler: self.soundIntensityHandler!,
+                                pitchHandler: self.pitchHandler!
+                            ) {
+                                selectionCursor.handleReplaceSelection(segments: self.noteBuffer)
+                            }
+                        }
+                    } else {
+                        self.startListeningForVoiceCommands(
+                            soundIntensityHandler: self.soundIntensityHandler!,
+                            pitchHandler: self.pitchHandler!
+                        ) {
+                            selectionCursor.handleReplaceSelection(segments: self.noteBuffer)
+                        }
+                    }
+                }
                 
                 // Update duration
                 
@@ -5298,7 +5328,7 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                 // does not reset after every didFinishRecognition. As a result, we do not have to accumulate durations
                 if #available(iOS 14.0, *) {
                     // do nothing
-                } else {
+                } else if !selectionCursor.isReplacingSelection {
                     self.accumulatedDuration = max(0, Date().timeIntervalSince(self.recordStartDate!) - Utils.TRANSCRIPTION_LATENCY_DURATION)
                 }
 
@@ -5311,7 +5341,7 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                     self.prepareSpeechCommandHandler(command: command)
                     
                     self.stopListeningForSpeech(pause: true)
-                } else if self.withPassiveEcho && AVAudioSession.isHeadphonesConnected {
+                } else if self.withPassiveEcho && AVAudioSession.isHeadphonesConnected && !selectionCursor.isReplacingSelection {
                     // compute echo text range
                     if let lastEchoSegmentRange = self.committedBufferRanges.last {
                         self.lastEchoSegmentRange = lastEchoSegmentRange
@@ -5327,6 +5357,14 @@ extension Note: SFSpeechRecognitionTaskDelegate {
                         hapticEngine.lightImpact()
                     }
                 }
+            }
+            if self.isListeningForSpeech && !self.pausedListeningForSpeech && self.noteBuffer.count > 0 && !self.request!.requiresOnDeviceRecognition {
+                print("===== Some words heard. Apple servers ended dictation session =====")
+                self.stopListeningForSpeech(pause: true) {
+                    handleFinishRecognition()
+                }
+            } else if self.isListeningForSpeech && !self.pausedListeningForSpeech && self.noteBuffer.count > 0 && self.request!.requiresOnDeviceRecognition {
+                handleFinishRecognition()
             } else if self.isListeningForSpeech && self.pausedListeningForSpeech && !self.isListeningForCommands && self.noteBuffer.count > 0 && self.request!.requiresOnDeviceRecognition && self.recordStartDate != nil {
                 // sometimes the voice commands that initiate the note will be sent to be committed erroneously
                 // we discrimate them by not letting self.recordStartDate == nil, for which they would be if

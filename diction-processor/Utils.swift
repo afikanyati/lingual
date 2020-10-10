@@ -1325,6 +1325,35 @@ class Utils {
         cursorView.frame = frame
     }
     
+    public static func presentDialog(dialogItem: DialogItem, vc: UIViewController) {
+        // Play Sound
+        soundEngine.presentDialog()
+        
+        let dialog = UIAlertController(
+            title: dialogItem.title,
+            message: dialogItem.message,
+            preferredStyle: dialogItem.preferredStyle
+        )
+        
+        for action in dialogItem.actions {
+            let alertAction = UIAlertAction(
+                title: action.title,
+                style: action.style,
+                handler: action.handler
+            )
+            dialog.addAction(alertAction)
+        }
+        DispatchQueue.main.async {
+            vc.present(dialog, animated: true)
+        }
+    }
+    
+    public static func dismissDialog(vc: UIViewController) {
+        DispatchQueue.main.async {
+            vc.dismiss(animated: true)
+        }
+    }
+    
     // MARK: - Helper Functions
     
     private static func getDocumentsDirectory() -> URL {

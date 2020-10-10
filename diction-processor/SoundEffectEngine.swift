@@ -32,6 +32,7 @@ public final class SoundEffectEngine: NSObject {
     var voiceCommandAcceptPlayer: AVAudioPlayer? = nil
     var voiceCommandDenyPlayer: AVAudioPlayer? = nil
     var deletePlayer: AVAudioPlayer? = nil
+    var dialogPlayer: AVAudioPlayer? = nil
     var isProcessing = false
     var isPlayingModalAmbience = false
     
@@ -173,6 +174,16 @@ public final class SoundEffectEngine: NSObject {
         } catch {
             print("===== [Error] There was a problem importing 'Delete' sound =====")
         }
+        
+        // Present Dialog
+        let dialogPath = Bundle.main.path(forResource: "dialog", ofType: "wav")!
+        let dialogURL = URL(fileURLWithPath: dialogPath)
+
+        do {
+            dialogPlayer = try AVAudioPlayer(contentsOf: dialogURL)
+        } catch {
+            print("===== [Error] There was a problem importing 'Dialog' sound =====")
+        }
     }
     
     func commitBuffer() { commitBufferPlayer?.play() }
@@ -203,4 +214,5 @@ public final class SoundEffectEngine: NSObject {
     func voiceCommandAccept() { voiceCommandAcceptPlayer?.play() }
     func voiceCommandDeny() { voiceCommandDenyPlayer?.play() }
     func delete() { deletePlayer?.play() }
+    func presentDialog() { dialogPlayer?.play() }
 }

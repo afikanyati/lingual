@@ -63,6 +63,9 @@
 		8B766F5E24AC2AB200D41A13 /* BarycentricEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B766F4424AC2AB200D41A13 /* BarycentricEstimator.swift */; };
 		8B86B50724EF56C600568CDD /* NoteTrackType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B86B50624EF56C600568CDD /* NoteTrackType.swift */; };
 		8B88E97C2526E86F00DE3F75 /* SliderType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B88E97B2526E86F00DE3F75 /* SliderType.swift */; };
+		8B8D55EB2530D60E004AD436 /* dialog.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8B8D55EA2530D60E004AD436 /* dialog.wav */; };
+		8B8D55F02530E02C004AD436 /* DialogItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B8D55EF2530E02C004AD436 /* DialogItem.swift */; };
+		8B8D55F52530E043004AD436 /* DialogAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B8D55F42530E043004AD436 /* DialogAction.swift */; };
 		8BA3052C24C24C240056E4DF /* Sequence+containsAnyOf.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA3052B24C24C240056E4DF /* Sequence+containsAnyOf.swift */; };
 		8BA3052E24C286550056E4DF /* SoundEffectEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA3052D24C286550056E4DF /* SoundEffectEngine.swift */; };
 		8BA3054A24C28FCC0056E4DF /* commit-buffer.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BA3053E24C28FCC0056E4DF /* commit-buffer.wav */; };
@@ -191,6 +194,9 @@
 		8B766F4424AC2AB200D41A13 /* BarycentricEstimator.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BarycentricEstimator.swift; sourceTree = "<group>"; };
 		8B86B50624EF56C600568CDD /* NoteTrackType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteTrackType.swift; sourceTree = "<group>"; };
 		8B88E97B2526E86F00DE3F75 /* SliderType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SliderType.swift; sourceTree = "<group>"; };
+		8B8D55EA2530D60E004AD436 /* dialog.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = dialog.wav; sourceTree = "<group>"; };
+		8B8D55EF2530E02C004AD436 /* DialogItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DialogItem.swift; sourceTree = "<group>"; };
+		8B8D55F42530E043004AD436 /* DialogAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DialogAction.swift; sourceTree = "<group>"; };
 		8BA3052B24C24C240056E4DF /* Sequence+containsAnyOf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sequence+containsAnyOf.swift"; sourceTree = "<group>"; };
 		8BA3052D24C286550056E4DF /* SoundEffectEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundEffectEngine.swift; sourceTree = "<group>"; };
 		8BA3053E24C28FCC0056E4DF /* commit-buffer.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "commit-buffer.wav"; sourceTree = "<group>"; };
@@ -310,6 +316,8 @@
 			isa = PBXGroup;
 			children = (
 				8BCA1B0024A43D530068BABB /* Speaker.swift */,
+				8B8D55EF2530E02C004AD436 /* DialogItem.swift */,
+				8B8D55F42530E043004AD436 /* DialogAction.swift */,
 				8B669B6A24B2C3DD00D5996B /* PitchDatum.swift */,
 				8B766E8B24A8094300D41A13 /* SoundIntensityDatum.swift */,
 				8B766E8824A7D7D200D41A13 /* Sentence.swift */,
@@ -376,6 +384,7 @@
 			isa = PBXGroup;
 			children = (
 				8BA3053E24C28FCC0056E4DF /* commit-buffer.wav */,
+				8B8D55EA2530D60E004AD436 /* dialog.wav */,
 				8BA3054624C28FCC0056E4DF /* correct-wake-phrase.wav */,
 				8BA3054924C28FCC0056E4DF /* error.wav */,
 				8BA3054424C28FCC0056E4DF /* incorrect-wake-phrase.wav */,
@@ -601,6 +610,7 @@
 			files = (
 				8BB6859A24E3858000F3285B /* save.wav in Resources */,
 				8BA3054C24C28FCC0056E4DF /* play.wav in Resources */,
+				8B8D55EB2530D60E004AD436 /* dialog.wav in Resources */,
 				8BA3054E24C28FCC0056E4DF /* voice-command-deny.wav in Resources */,
 				8BA3055524C28FCC0056E4DF /* error.wav in Resources */,
 				8BA3055124C28FCC0056E4DF /* start-listening.wav in Resources */,
@@ -665,6 +675,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8B8D55F52530E043004AD436 /* DialogAction.swift in Sources */,
 				8B86B50724EF56C600568CDD /* NoteTrackType.swift in Sources */,
 				8B27A3DE24B6A8E9001E5F06 /* Float+Rounded.swift in Sources */,
 				8B3BC5BF24F882F9004FCD7B /* SelectionChangeType.swift in Sources */,
@@ -739,6 +750,7 @@
 				8BA3052C24C24C240056E4DF /* Sequence+containsAnyOf.swift in Sources */,
 				8B669B6524B0136500D5996B /* String+Substring+Replace+TrimTrailingPunctuation.swift in Sources */,
 				8B766F5E24AC2AB200D41A13 /* BarycentricEstimator.swift in Sources */,
+				8B8D55F02530E02C004AD436 /* DialogItem.swift in Sources */,
 				8B766F4624AC2AB200D41A13 /* YINEstimator.swift in Sources */,
 				8B766F5124AC2AB200D41A13 /* EstimationStrategy.swift in Sources */,
 				8B766F4C24AC2AB200D41A13 /* MaxValueEstimator.swift in Sources */,

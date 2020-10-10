@@ -56,6 +56,7 @@ class ViewController: UIViewController {
     @IBOutlet weak var decreaseRateButton: UIView!
     @IBOutlet weak var deleteSelectionButton: UIView!
     @IBOutlet weak var replaceSelectionButton: UIView!
+    @IBOutlet weak var cancelReplaceSelectionButton: UIView!
     @IBOutlet weak var copySelectionButton: UIView!
     @IBOutlet weak var cutSelectionButton: UIView!
     @IBOutlet weak var exportSelectionButton: UIView!
@@ -241,6 +242,22 @@ class ViewController: UIViewController {
             context: nil
         )
         
+        // add observer to isReplacingSelection
+        selectionCursor.addObserver(
+            self,
+            forKeyPath: "isReplacingSelection",
+            options: [.old, .new],
+            context: nil
+        )
+        
+        // add observer to isPromptingForReplacementAcceptance
+        selectionCursor.addObserver(
+            self,
+            forKeyPath: "isPromptingForReplacementAcceptance",
+            options: [.old, .new],
+            context: nil
+        )
+        
         // add observer to clipboard
         selectionCursor.addObserver(
             self,
@@ -275,6 +292,20 @@ class ViewController: UIViewController {
         selectionCursor.removeObserver(
             self,
             forKeyPath: "hasSelection",
+            context: nil
+        )
+        
+        // remove observer from isReplacingSelection
+        selectionCursor.removeObserver(
+            self,
+            forKeyPath: "isReplacingSelection",
+            context: nil
+        )
+        
+        // remove observer from isPromptingForReplacementAcceptance
+        selectionCursor.removeObserver(
+            self,
+            forKeyPath: "isPromptingForReplacementAcceptance",
             context: nil
         )
         
@@ -332,14 +363,22 @@ class ViewController: UIViewController {
         let authStatus = SFSpeechRecognizer.authorizationStatus()
         
         if authStatus != .authorized {
-            let alertController = UIAlertController(title: "Speech Recognition Permission Denied", message: "Please grant permission for application to initiate speech transcription.", preferredStyle: .alert)
-            alertController.addAction(UIAlertAction(title: "Grant Permission", style: .default) { [unowned self] action in
-                self.requestPermissions(handler: {
-                    self.configureListeningForWakePhrase()
-                })
-            })
-            alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-            present(alertController, animated: true)
+            let dialogActions = [
+                DialogAction(title: "Grant Permission", style: .default, handler: { [unowned self] action in
+                    self.requestPermissions(handler: {
+                        self.configureListeningForWakePhrase()
+                    })
+                }),
+                DialogAction(title: "Cancel", style: .cancel, handler: nil)
+            ]
+            
+            let dialogItem = DialogItem(
+                title: "Speech Recognition Permission Denied",
+                message: "Please grant permission for application to initiate speech transcription.",
+                preferredStyle: .alert,
+                actions: dialogActions
+            )
+            Utils.presentDialog(dialogItem: dialogItem, vc: self)
         } else {
             // pitch engine used to determine if user is male or female
             startListeningForWakePhrase()
@@ -1425,6 +1464,19 @@ class ViewController: UIViewController {
         // Play Note Button
         if (!self.note.isPlayingNote || (self.note.isPlayingNote && self.note.pausedPlayingNote)) && self.note.noteSegments.count > 0 {
             self.showButton(self.playNoteButton)
+            
+            // Change text
+            if selectionCursor.hasSelection && !AVAudioSession.isHeadphonesConnected {
+                let buttonLabel = self.walkNoteButton.subviews.filter {$0 is UILabel }
+                if let buttonLabel = buttonLabel.first as? UILabel {
+                    buttonLabel.text = "Play Selection"
+                }
+            } else {
+                let buttonLabel = self.walkNoteButton.subviews.filter {$0 is UILabel }
+                if let buttonLabel = buttonLabel.first as? UILabel {
+                    buttonLabel.text = "Play Note"
+                }
+            }
         } else {
             self.hideButton(self.playNoteButton)
         }
@@ -1432,6 +1484,19 @@ class ViewController: UIViewController {
         // Stop Playing Note Button
         if self.note.isPlayingNote && self.note.noteSegments.count > 0 {
             self.showButton(self.stopPlayingNoteButton)
+            
+            // Change text
+            if selectionCursor.hasSelection && !AVAudioSession.isHeadphonesConnected {
+                let buttonLabel = self.walkNoteButton.subviews.filter {$0 is UILabel }
+                if let buttonLabel = buttonLabel.first as? UILabel {
+                    buttonLabel.text = "Stop Selection"
+                }
+            } else {
+                let buttonLabel = self.walkNoteButton.subviews.filter {$0 is UILabel }
+                if let buttonLabel = buttonLabel.first as? UILabel {
+                    buttonLabel.text = "Stop Note"
+                }
+            }
         } else {
             self.hideButton(self.stopPlayingNoteButton)
         }
@@ -1460,6 +1525,19 @@ class ViewController: UIViewController {
         // Walk Note Button
         if self.note.noteSegments.count > 0 {
             self.showButton(self.walkNoteButton)
+            
+            // Change text
+            if selectionCursor.hasSelection {
+                let buttonLabel = self.walkNoteButton.subviews.filter {$0 is UILabel }
+                if let buttonLabel = buttonLabel.first as? UILabel {
+                    buttonLabel.text = "Walk Selection"
+                }
+            } else {
+                let buttonLabel = self.walkNoteButton.subviews.filter {$0 is UILabel }
+                if let buttonLabel = buttonLabel.first as? UILabel {
+                    buttonLabel.text = "Walk Note"
+                }
+            }
         } else {
             self.hideButton(self.walkNoteButton)
         }
@@ -1482,9 +1560,22 @@ class ViewController: UIViewController {
         // ===== Resting Command Bar Buttons ======
         
         // Run Note Button
-        if self.note.noteSegments.count > 0 && !selectionCursor.hasSelection {
+        if self.note.noteSegments.count > 0 && !selectionCursor.isReplacingSelection {
             numActiveButtons += 1
             self.showButton(self.runNoteButton)
+            
+            // Change text
+            if selectionCursor.hasSelection {
+                let buttonLabel = self.runNoteButton.subviews.filter {$0 is UILabel }
+                if let buttonLabel = buttonLabel.first as? UILabel {
+                    buttonLabel.text = "Run Selection"
+                }
+            } else {
+                let buttonLabel = self.runNoteButton.subviews.filter {$0 is UILabel }
+                if let buttonLabel = buttonLabel.first as? UILabel {
+                    buttonLabel.text = "Run Note"
+                }
+            }
         } else {
             self.hideButton(self.runNoteButton)
         }
@@ -1570,7 +1661,7 @@ class ViewController: UIViewController {
         // ===== Selection Buttons ======
 
         // Increase Rate Button
-        if let firstSelectionSegment = selectionCursor.selectionSegments?.first, selectionCursor.hasSelection && firstSelectionSegment.getRate() + Utils.DISCRETE_PLAYBACK_DELTA <= Utils.MAXIMUM_PLAYBACK_RATE  {
+        if let firstSelectionSegment = selectionCursor.selectionSegments?.first, selectionCursor.hasSelection && !selectionCursor.isReplacingSelection && firstSelectionSegment.getRate() + Utils.DISCRETE_PLAYBACK_DELTA <= Utils.MAXIMUM_PLAYBACK_RATE  {
             numActiveButtons += 1
             self.showButton(self.increaseRateButton)
         } else {
@@ -1578,7 +1669,7 @@ class ViewController: UIViewController {
         }
         
         // Decrease Rate Button
-        if let firstSelectionSegment = selectionCursor.selectionSegments?.first, selectionCursor.hasSelection && firstSelectionSegment.getRate() - Utils.DISCRETE_PLAYBACK_DELTA >= Utils.MINIMUM_PLAYBACK_RATE {
+        if let firstSelectionSegment = selectionCursor.selectionSegments?.first, selectionCursor.hasSelection && !selectionCursor.isReplacingSelection && firstSelectionSegment.getRate() - Utils.DISCRETE_PLAYBACK_DELTA >= Utils.MINIMUM_PLAYBACK_RATE {
             numActiveButtons += 1
             self.showButton(self.decreaseRateButton)
         } else {
@@ -1586,7 +1677,7 @@ class ViewController: UIViewController {
         }
         
         // Delete Button
-        if selectionCursor.hasSelection {
+        if selectionCursor.hasSelection && !selectionCursor.isReplacingSelection {
             numActiveButtons += 1
             self.showButton(self.deleteSelectionButton)
         } else {
@@ -1594,15 +1685,23 @@ class ViewController: UIViewController {
         }
         
         // Replace Button
-        if selectionCursor.hasSelection {
+        if selectionCursor.hasSelection && !selectionCursor.isReplacingSelection {
             numActiveButtons += 1
             self.showButton(self.replaceSelectionButton)
         } else {
             self.hideButton(self.replaceSelectionButton)
         }
         
+        // Cancel Replacement Button
+        if selectionCursor.hasSelection && selectionCursor.isReplacingSelection {
+            numActiveButtons += 1
+            self.showButton(self.cancelReplaceSelectionButton)
+        } else {
+            self.hideButton(self.cancelReplaceSelectionButton)
+        }
+        
         // Copy Button
-        if selectionCursor.hasSelection {
+        if selectionCursor.hasSelection && !selectionCursor.isReplacingSelection {
             numActiveButtons += 1
             self.showButton(self.copySelectionButton)
         } else {
@@ -1610,7 +1709,7 @@ class ViewController: UIViewController {
         }
         
         // Cut Button
-        if selectionCursor.hasSelection {
+        if selectionCursor.hasSelection && !selectionCursor.isReplacingSelection {
             numActiveButtons += 1
             self.showButton(self.cutSelectionButton)
         } else {
@@ -1618,7 +1717,7 @@ class ViewController: UIViewController {
         }
         
         // Export Button
-        if selectionCursor.hasSelection {
+        if selectionCursor.hasSelection && !selectionCursor.isReplacingSelection {
             numActiveButtons += 1
             self.showButton(self.exportSelectionButton)
         } else {
@@ -1742,12 +1841,17 @@ class ViewController: UIViewController {
                 if let speechRecognizer = self?.speechRecognizer, self!.useOnDeviceRecognition && speechRecognizer.supportsOnDeviceRecognition {
                     handleRecognizer()
                 } else {
-                    // Present error
-                    let alertController = UIAlertController(title: "Unable to initiate Voice Recognition", message: "Lingual relies on on-device recognition to deliver a the best user experience. Your device does not support it.", preferredStyle: .alert)
-                    alertController.addAction(UIAlertAction(title: "Close", style: .cancel))
-                    DispatchQueue.main.async {
-                        self!.present(alertController, animated: true)
-                    }
+                    let dialogActions = [
+                        DialogAction(title: "Close", style: .cancel, handler: nil)
+                    ]
+                    
+                    let dialogItem = DialogItem(
+                        title: "Unable to initiate Voice Recognition",
+                        message: "Lingual relies on on-device recognition to deliver a the best user experience. Your device does not support it.",
+                        preferredStyle: .alert,
+                        actions: dialogActions
+                    )
+                    Utils.presentDialog(dialogItem: dialogItem, vc: self!)
                 }
             }
         }
@@ -2111,6 +2215,14 @@ class ViewController: UIViewController {
                 self.adjustCommandBar()
                 self.navigationItem.rightBarButtonItems = nil
             }
+        } else if keyPath == "isReplacingSelection" {
+            // Determine if we adjust command bar
+            self.adjustCommandBar()
+            self.adjustMenuBar()
+        } else if keyPath == "isPromptingForReplacementAcceptance" {
+            // Determine if we adjust command bar
+            self.adjustCommandBar()
+            self.adjustMenuBar()
         }
     }
     
@@ -2202,14 +2314,22 @@ class ViewController: UIViewController {
         let authStatus = SFSpeechRecognizer.authorizationStatus()
         
         if session.recordPermission != .granted || authStatus != .authorized {
-            let alertController = UIAlertController(title: "Speech Recognition Permission Denied", message: "Please grant permission for application to initiate speech transcription.", preferredStyle: .alert)
-            alertController.addAction(UIAlertAction(title: "Grant Permission", style: .default) { [unowned self] action in
-                self.requestPermissions(handler: {
-                    self.configureListeningForWakePhrase()
-                })
-            })
-            alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-            present(alertController, animated: true)
+            let dialogActions = [
+                DialogAction(title: "Grant Permission", style: .default, handler: { [unowned self] action in
+                    self.requestPermissions(handler: {
+                        self.configureListeningForWakePhrase()
+                    })
+                }),
+                DialogAction(title: "Cancel", style: .cancel, handler: nil)
+            ]
+            
+            let dialogItem = DialogItem(
+                title: "Speech Recognition Permission Denied",
+                message: "Please grant permission for application to initiate speech transcription.",
+                preferredStyle: .alert,
+                actions: dialogActions
+            )
+            Utils.presentDialog(dialogItem: dialogItem, vc: self)
             return
         }
         
@@ -2266,14 +2386,22 @@ class ViewController: UIViewController {
         let authStatus = SFSpeechRecognizer.authorizationStatus()
         
         if session.recordPermission != .granted || authStatus != .authorized {
-            let alertController = UIAlertController(title: "Speech Recognition Permission Denied", message: "Please grant permission for application to initiate speech transcription.", preferredStyle: .alert)
-            alertController.addAction(UIAlertAction(title: "Grant Permission", style: .default) { [unowned self] action in
-                self.requestPermissions(handler: {
-                    self.configureListeningForWakePhrase()
-                })
-            })
-            alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-            present(alertController, animated: true)
+            let dialogActions = [
+                DialogAction(title: "Grant Permission", style: .default, handler: { [unowned self] action in
+                    self.requestPermissions(handler: {
+                        self.configureListeningForWakePhrase()
+                    })
+                }),
+                DialogAction(title: "Cancel", style: .cancel, handler: nil)
+            ]
+            
+            let dialogItem = DialogItem(
+                title: "Speech Recognition Permission Denied",
+                message: "Please grant permission for application to initiate speech transcription.",
+                preferredStyle: .alert,
+                actions: dialogActions
+            )
+            Utils.presentDialog(dialogItem: dialogItem, vc: self)
             return
         }
         
@@ -2317,50 +2445,100 @@ class ViewController: UIViewController {
         hapticEngine.mediumImpact()
     }
     
+    // Should never be called when headphones on while we have a selection
+    // Will be looping selection and have isPlayingNote set to true
+    // Which should hide playNoteButton
     @IBAction func handlePlayNote(_ sender: Any) {
         print("===== Handle Play Note =====")
-        self.note.play(
-            onStartHandler: { [weak self] in
-                // print("Successfully executed playback on start handler")
-                DispatchQueue.main.async {
-                    self?.adjustCommandBar()
-                    self?.adjustMenuBar()
-                }
-            },
-            secondElapseHandler: { [weak self] in
-                // print("Successfully executed playback second elapsed handler")
-                DispatchQueue.main.async {
-                    if !self!.note.isListeningForSpeech && self!.note.player.currentTime().seconds != Double.infinity && self!.note.player.currentTime().seconds != Double.nan && self!.note.player.currentTime().seconds != -Double.infinity {
-                        self?.navigationItem.title = "\(Utils.formattedTime(time: Float(self!.note.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.note.getDuration(filteredDuration: true).seconds)))"
-                    }
-                }
-            },
-            segmentBoundaryHandler: { [weak self] in
-                // print("Successfully executed playback on segment boundary handler")
-                DispatchQueue.main.async {
-                    if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let highlightRange = self?.note.getSegmentTextRange(of: segment) {
-                        // update text
-                        self?.updateUIText(text: self!.note.getText(), highlightRange: highlightRange, transformations: self!.note.transformations)
-                    }
-                    
-                    if let segment = self?.note.getSegment(type: .current), let pitch = segment.getPitch() {
-                        // update pitch
-                        self?.pitchLabel.text = pitch.note.string
-                    }
-                }
-            }, onFinishHandler: { [weak self] in
-                // print("Successfully executed playback on finish handler")
-                DispatchQueue.main.async {
-                    self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
-                    self!.note.player.replaceCurrentItem(with: nil)
-                    if !self!.note.isListeningForSpeech {
-                        self?.navigationItem.title = ""
+        
+        if let selectionSegments = selectionCursor.selectionSegments, selectionCursor.hasSelection && !AVAudioSession.isHeadphonesConnected {
+            self.note.play(
+                segments: selectionSegments,
+                onStartHandler: { [weak self] in
+                    // print("Successfully executed playback on start handler")
+                    DispatchQueue.main.async {
                         self?.adjustCommandBar()
                         self?.adjustMenuBar()
                     }
+                },
+                secondElapseHandler: { [weak self] in
+                    // print("Successfully executed playback second elapsed handler")
+                    DispatchQueue.main.async {
+                        if !self!.note.isListeningForSpeech && self!.note.player.currentTime().seconds != Double.infinity && self!.note.player.currentTime().seconds != Double.nan && self!.note.player.currentTime().seconds != -Double.infinity {
+                            self?.navigationItem.title = "\(Utils.formattedTime(time: Float(self!.note.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.note.getDuration(filteredDuration: true).seconds)))"
+                        }
+                    }
+                },
+                segmentBoundaryHandler: { [weak self] in
+                    // print("Successfully executed playback on segment boundary handler")
+                    DispatchQueue.main.async {
+                        if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let highlightRange = self?.note.getSegmentTextRange(of: segment) {
+                            // update text
+                            self?.updateUIText(text: self!.note.getText(), highlightRange: highlightRange, transformations: self!.note.transformations)
+                        }
+                        
+                        if let segment = self?.note.getSegment(type: .current), let pitch = segment.getPitch() {
+                            // update pitch
+                            self?.pitchLabel.text = pitch.note.string
+                        }
+                    }
+                }, onFinishHandler: { [weak self] in
+                    // print("Successfully executed playback on finish handler")
+                    DispatchQueue.main.async {
+                        self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
+                        self!.note.player.replaceCurrentItem(with: nil)
+                        if !self!.note.isListeningForSpeech {
+                            self?.navigationItem.title = ""
+                            self?.adjustCommandBar()
+                            self?.adjustMenuBar()
+                        }
+                    }
                 }
-            }
-        )
+            )
+        } else {
+            self.note.play(
+                onStartHandler: { [weak self] in
+                    // print("Successfully executed playback on start handler")
+                    DispatchQueue.main.async {
+                        self?.adjustCommandBar()
+                        self?.adjustMenuBar()
+                    }
+                },
+                secondElapseHandler: { [weak self] in
+                    // print("Successfully executed playback second elapsed handler")
+                    DispatchQueue.main.async {
+                        if !self!.note.isListeningForSpeech && self!.note.player.currentTime().seconds != Double.infinity && self!.note.player.currentTime().seconds != Double.nan && self!.note.player.currentTime().seconds != -Double.infinity {
+                            self?.navigationItem.title = "\(Utils.formattedTime(time: Float(self!.note.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.note.getDuration(filteredDuration: true).seconds)))"
+                        }
+                    }
+                },
+                segmentBoundaryHandler: { [weak self] in
+                    // print("Successfully executed playback on segment boundary handler")
+                    DispatchQueue.main.async {
+                        if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && !segment.isVoiceCommandWord(), let highlightRange = self?.note.getSegmentTextRange(of: segment) {
+                            // update text
+                            self?.updateUIText(text: self!.note.getText(), highlightRange: highlightRange, transformations: self!.note.transformations)
+                        }
+                        
+                        if let segment = self?.note.getSegment(type: .current), let pitch = segment.getPitch() {
+                            // update pitch
+                            self?.pitchLabel.text = pitch.note.string
+                        }
+                    }
+                }, onFinishHandler: { [weak self] in
+                    // print("Successfully executed playback on finish handler")
+                    DispatchQueue.main.async {
+                        self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
+                        self!.note.player.replaceCurrentItem(with: nil)
+                        if !self!.note.isListeningForSpeech {
+                            self?.navigationItem.title = ""
+                            self?.adjustCommandBar()
+                            self?.adjustMenuBar()
+                        }
+                    }
+                }
+            )
+        }
         
         // Give haptic feedback
         hapticEngine.mediumImpact()
@@ -2432,6 +2610,12 @@ class ViewController: UIViewController {
     @IBAction func handleWalkNote(_ sender: Any) {
         print("===== Handle Walk Note =====")
         
+        if selectionCursor.hasSelection {
+            // Walk Selection
+        } else {
+            // Walk Note
+        }
+        
         // Give haptic feedback
         hapticEngine.mediumImpact()
     }
@@ -2453,6 +2637,12 @@ class ViewController: UIViewController {
     
     @IBAction func handleRunNote(_ sender: Any) {
         print("===== Handle Run Note =====")
+        
+        if selectionCursor.hasSelection {
+            // Run Selection
+        } else {
+            // Run Note
+        }
         
         // Give haptic feedback
         hapticEngine.mediumImpact()
@@ -2800,11 +2990,38 @@ class ViewController: UIViewController {
         print("===== Handle Replace Selection: \(selectionCursor.selectionText ?? "nil") =====")
         
         // Turn on ambient track
+        soundEngine.startModalAmbience()
+        
+        // Execute replace selection
+        selectionCursor.initiateReplaceSelection()
+
+        // Determine if we present adjust rate buttons
+        self.adjustCommandBar()
         
         // Give haptic feedback
         hapticEngine.mediumImpact()
     }
     
+    @IBAction func handleCancelReplaceSelection(_ sender: Any) {
+        print("===== Handle Cancel Replace Selection: \(selectionCursor.selectionText ?? "nil") =====")
+        
+        // Turn off ambient track
+        soundEngine.stopModalAmbience()
+        
+        // Clear buffer segments
+        print("\tClearing note buffer...")
+        self.note.clearBuffer()
+        
+        // Cancel Replace Selection
+        selectionCursor.cancelReplaceSelection()
+        
+        // Determine if we present adjust rate buttons
+        self.adjustCommandBar()
+        
+        // Give haptic feedback
+        hapticEngine.mediumImpact()
+    }
+
     @IBAction func handleCopySelection(_ sender: Any) {
         print("===== Handle Copy Selection: \(selectionCursor.selectionText ?? "nil") =====")
         selectionCursor.copySelection()
