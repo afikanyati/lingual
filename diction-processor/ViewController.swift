@@ -1466,13 +1466,13 @@ class ViewController: UIViewController {
             self.showButton(self.playNoteButton)
             
             // Change text
-            if selectionCursor.hasSelection && !AVAudioSession.isHeadphonesConnected {
-                let buttonLabel = self.walkNoteButton.subviews.filter {$0 is UILabel }
+            if selectionCursor.hasSelection {
+                let buttonLabel = self.playNoteButton.subviews.filter {$0 is UILabel }
                 if let buttonLabel = buttonLabel.first as? UILabel {
                     buttonLabel.text = "Play Selection"
                 }
             } else {
-                let buttonLabel = self.walkNoteButton.subviews.filter {$0 is UILabel }
+                let buttonLabel = self.playNoteButton.subviews.filter {$0 is UILabel }
                 if let buttonLabel = buttonLabel.first as? UILabel {
                     buttonLabel.text = "Play Note"
                 }
@@ -1482,17 +1482,17 @@ class ViewController: UIViewController {
         }
         
         // Stop Playing Note Button
-        if self.note.isPlayingNote && self.note.noteSegments.count > 0 {
+        if self.note.isPlayingNote && self.note.noteSegments.count > 0 && !AVAudioSession.isHeadphonesConnected && !selectionCursor.hasSelection {
             self.showButton(self.stopPlayingNoteButton)
             
             // Change text
-            if selectionCursor.hasSelection && !AVAudioSession.isHeadphonesConnected {
-                let buttonLabel = self.walkNoteButton.subviews.filter {$0 is UILabel }
+            if selectionCursor.hasSelection {
+                let buttonLabel = self.stopPlayingNoteButton.subviews.filter {$0 is UILabel }
                 if let buttonLabel = buttonLabel.first as? UILabel {
                     buttonLabel.text = "Stop Selection"
                 }
             } else {
-                let buttonLabel = self.walkNoteButton.subviews.filter {$0 is UILabel }
+                let buttonLabel = self.stopPlayingNoteButton.subviews.filter {$0 is UILabel }
                 if let buttonLabel = buttonLabel.first as? UILabel {
                     buttonLabel.text = "Stop Note"
                 }
@@ -1504,6 +1504,19 @@ class ViewController: UIViewController {
         // Play Echo Button
         if (!(self.note.isPlayingEcho || self.note.isPlayingPassiveEcho) || (self.note.isPlayingEcho && self.note.pausedEcho)) && self.note.noteSegments.count > 0 {
             self.showButton(self.playEchoButton)
+            
+            // Change text
+            if selectionCursor.hasSelection {
+                let buttonLabel = self.playEchoButton.subviews.filter {$0 is UILabel }
+                if let buttonLabel = buttonLabel.first as? UILabel {
+                    buttonLabel.text = "Echo Selection"
+                }
+            } else {
+                let buttonLabel = self.playEchoButton.subviews.filter {$0 is UILabel }
+                if let buttonLabel = buttonLabel.first as? UILabel {
+                    buttonLabel.text = "Echo Note"
+                }
+            }
         } else {
             self.hideButton(self.playEchoButton)
         }
@@ -2166,6 +2179,7 @@ class ViewController: UIViewController {
                 Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] timer in
                     // Determine if we present adjust rate buttons
                     self!.adjustCommandBar()
+                    self!.adjustMenuBar()
                 }
                 // Determine if we present transformation information
                 self.handleTransformationsView()
@@ -2183,6 +2197,7 @@ class ViewController: UIViewController {
                 Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] timer in
                     // Determine if we present adjust rate buttons
                     self!.adjustCommandBar()
+                    self!.adjustMenuBar()
                 }
                 // Determine if we present transformation information
                 self.handleTransformationsView()
@@ -2255,7 +2270,7 @@ class ViewController: UIViewController {
     // Reference: https://www.appsdeveloperblog.com/create-uislider-in-swift-programmatically/
     // Reference: https://stackoverflow.com/questions/25499803/how-to-change-speech-rate-during-speaking-using-avspeechsynthesizer-in-ios-7
     @objc func sliderValueDidChange(_ sender: UISlider!) {
-        print("===== Slider Value Changed =====")
+        print("===== Screen Button: Slider Value Changed =====")
         print("\tNew value: \(sender.value)")
         
         if self.sliderType == .playback {
@@ -2280,7 +2295,7 @@ class ViewController: UIViewController {
     // MARK: - Navigation Bar Methods
     
     @objc func handleToggleListening(_ sender: Any) {
-        print("===== Handle Toggle Listening =====")
+        print("===== Screen Button: Handle Toggle Listening =====")
         if self.note.isListeningForCommands || (!self.appActivated && self.isListeningForWakePhrase) {
             // Stop Listening For Commands
             if self.appActivated {
@@ -2310,7 +2325,7 @@ class ViewController: UIViewController {
     // MARK: - Menu Bar Methods
 
     @IBAction func handleStartNote(_ sender: Any) {
-        print("===== Handle Start Note =====")
+        print("===== Screen Button: Handle Start Note =====")
         let authStatus = SFSpeechRecognizer.authorizationStatus()
         
         if session.recordPermission != .granted || authStatus != .authorized {
@@ -2363,7 +2378,7 @@ class ViewController: UIViewController {
     }
     
     @IBAction func handleResumeNote(_ sender: Any) {
-        print("===== Handle Resume Note =====")
+        print("===== Screen Button: Handle Resume Note =====")
         
         note.startListeningForSpeech(
             soundIntensityHandler: self.soundIntensityHandler!,
@@ -2382,7 +2397,7 @@ class ViewController: UIViewController {
     }
 
     @IBAction func handleEditNote(_ sender: Any) {
-        print("===== Handle Edit Note =====")
+        print("===== Screen Button: Handle Edit Note =====")
         let authStatus = SFSpeechRecognizer.authorizationStatus()
         
         if session.recordPermission != .granted || authStatus != .authorized {
@@ -2429,7 +2444,7 @@ class ViewController: UIViewController {
     }
     
     @IBAction func handleStopListeningNote(_ sender: Any) {
-        print("===== Stop Recording =====")
+        print("===== Screen Button: Stop Listening Note =====")
         if note.isListeningForSpeech && !note.isExporting {
             print("\tStopping Note...")
             note.stopListeningForSpeech() {[weak self] in
@@ -2449,7 +2464,7 @@ class ViewController: UIViewController {
     // Will be looping selection and have isPlayingNote set to true
     // Which should hide playNoteButton
     @IBAction func handlePlayNote(_ sender: Any) {
-        print("===== Handle Play Note =====")
+        print("===== Screen Button: Handle Play Note =====")
         
         if let selectionSegments = selectionCursor.selectionSegments, selectionCursor.hasSelection && !AVAudioSession.isHeadphonesConnected {
             self.note.play(
@@ -2485,13 +2500,16 @@ class ViewController: UIViewController {
                 }, onFinishHandler: { [weak self] in
                     // print("Successfully executed playback on finish handler")
                     DispatchQueue.main.async {
-                        self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
+                        if !selectionCursor.hasSelection {
+                            self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
+                        }
                         self!.note.player.replaceCurrentItem(with: nil)
                         if !self!.note.isListeningForSpeech {
                             self?.navigationItem.title = ""
-                            self?.adjustCommandBar()
-                            self?.adjustMenuBar()
                         }
+                        
+                        self?.adjustCommandBar()
+                        self?.adjustMenuBar()
                     }
                 }
             )
@@ -2528,13 +2546,16 @@ class ViewController: UIViewController {
                 }, onFinishHandler: { [weak self] in
                     // print("Successfully executed playback on finish handler")
                     DispatchQueue.main.async {
-                        self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
+                        if !selectionCursor.hasSelection {
+                            self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
+                        }
                         self!.note.player.replaceCurrentItem(with: nil)
                         if !self!.note.isListeningForSpeech {
                             self?.navigationItem.title = ""
-                            self?.adjustCommandBar()
-                            self?.adjustMenuBar()
                         }
+                        
+                        self?.adjustCommandBar()
+                        self?.adjustMenuBar()
                     }
                 }
             )
@@ -2545,7 +2566,7 @@ class ViewController: UIViewController {
     }
 
     @IBAction func handleStopPlayingNote(_ sender: Any) {
-        print("===== Handle Play Note =====")
+        print("===== Screen Button: Handle Playing Note =====")
         
         // Stop Note
         self.note.stop() { [weak self] in
@@ -2559,12 +2580,18 @@ class ViewController: UIViewController {
         hapticEngine.mediumImpact()
     }
     
-    @IBAction func handlePlayEcho(_ sender: Any) {
-        print("==== Handle Play Echo =====")
+    @IBAction func handleEchoNote(_ sender: Any) {
+        print("==== Screen Button: Handle Echo Note =====")
         if self.note.pausedEcho {
             print("\tSpeech synthesizer continue speaking...")
+            var text: String
+            if selectionCursor.hasSelection {
+                text = selectionCursor.selectionText!
+            } else {
+                text = self.note.getText()
+            }
             self.note.startEcho(
-                text: self.note.getText(),
+                text: text,
                 onStartHandler: { [weak self] in
                     DispatchQueue.main.async {
                         self?.adjustCommandBar()
@@ -2574,8 +2601,14 @@ class ViewController: UIViewController {
             )
         } else {
             print("\tSpeech synthesizer starts speaking...")
+            var text: String
+            if selectionCursor.hasSelection {
+                text = selectionCursor.selectionText!
+            } else {
+                text = self.note.getText()
+            }
             self.note.startEcho(
-                text: self.note.getText(),
+                text: text,
                 onStartHandler: { [weak self] in
                     DispatchQueue.main.async {
                         self?.adjustCommandBar()
@@ -2590,9 +2623,8 @@ class ViewController: UIViewController {
     }
     
     @IBAction func handleStopEcho(_ sender: Any) {
+        print("===== Screen Button: Handle Stop Echo =====")
         if self.note.isPlayingEcho || self.note.isPlayingPassiveEcho {
-            print("==== Speech synthesizer paused =====")
-
             self.note.stopEcho() { [weak self] in
                 DispatchQueue.main.async {
                     self?.tempOnEchoFinish?()
@@ -2608,7 +2640,7 @@ class ViewController: UIViewController {
     }
     
     @IBAction func handleWalkNote(_ sender: Any) {
-        print("===== Handle Walk Note =====")
+        print("===== Screen Button: Handle Walk Note =====")
         
         if selectionCursor.hasSelection {
             // Walk Selection
@@ -2621,7 +2653,7 @@ class ViewController: UIViewController {
     }
     
     @IBAction func handleExportNote(_ sender: Any) {
-        print("===== Handle Export Note =====")
+        print("===== Screen Button: Handle Export Note =====")
         
         // Give haptic feedback
         hapticEngine.mediumImpact()
@@ -2629,14 +2661,14 @@ class ViewController: UIViewController {
     
     // MARK: - Resting Command Bar Methods
     @IBAction func handleMoveHere(_ sender: Any) {
-        print("===== Handle Move Here =====")
+        print("===== Screen Button: Handle Move Here =====")
         
         // Give haptic feedback
         hapticEngine.mediumImpact()
     }
     
     @IBAction func handleRunNote(_ sender: Any) {
-        print("===== Handle Run Note =====")
+        print("===== Screen Button: Handle Run Note =====")
         
         if selectionCursor.hasSelection {
             // Run Selection
@@ -2649,7 +2681,7 @@ class ViewController: UIViewController {
     }
     
     @IBAction func handlePauseNote(_ sender: Any) {
-        print("===== Handle Pause Note =====")
+        print("===== Screen Button: Handle Pause Note =====")
         if self.note.isPlayingNote {
             print("\tPausing Playing Note...")
             self.note.pause() {
@@ -2680,7 +2712,7 @@ class ViewController: UIViewController {
     }
     
     @IBAction func handleLastCommit(_ sender: Any) {
-        print("===== Handle Last Commit =====")
+        print("===== Screen Button: Handle Last Commit =====")
         
         let lastBufferRange = self.note.committedBufferRanges[self.note.committedBufferRanges.count - 1]
         let lastBuffer = self.note.noteSegments[lastBufferRange]
@@ -2721,13 +2753,16 @@ class ViewController: UIViewController {
             }, onFinishHandler: { [weak self] in
                 // print("Successfully executed playback on finish handler")
                 DispatchQueue.main.async {
-                    self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
+                    if !selectionCursor.hasSelection {
+                        self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
+                    }
                     self!.note.player.replaceCurrentItem(with: nil)
                     if !self!.note.isListeningForSpeech {
                         self?.navigationItem.title = ""
-                        self?.adjustCommandBar()
-                        self?.adjustMenuBar()
                     }
+                    
+                    self?.adjustCommandBar()
+                    self?.adjustMenuBar()
                 }
             }
         )
@@ -2737,7 +2772,7 @@ class ViewController: UIViewController {
     }
     
     @IBAction func handlePauseEcho(_ sender: Any) {
-        print("===== Handle Pause Echo =====")
+        print("===== Screen Button: Handle Pause Echo =====")
         self.note.pauseEcho() {
             self.adjustCommandBar()
             self.adjustMenuBar()
@@ -2773,7 +2808,7 @@ class ViewController: UIViewController {
     }
     
     @IBAction func handlePreviewClipboard(_ sender: Any) {
-        print("===== Handle Preview Clipboard:  \(selectionCursor.clipboardText ?? "nil") =====")
+        print("===== Screen Button: Handle Preview Clipboard:  \(selectionCursor.clipboardText ?? "nil") =====")
         
         if let clipboardSelection = selectionCursor.clipboard, clipboardSelection.count > 0 {
             let selectionDuration = CMTimeSubtract(
@@ -2799,13 +2834,16 @@ class ViewController: UIViewController {
                 }, onFinishHandler: { [weak self] in
                     // print("Successfully executed playback on finish handler")
                     DispatchQueue.main.async {
-                        self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
+                        if !selectionCursor.hasSelection {
+                            self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
+                        }
                         self!.note.player.replaceCurrentItem(with: nil)
                         if !self!.note.isListeningForSpeech {
                             self?.navigationItem.title = ""
-                            self?.adjustCommandBar()
-                            self?.adjustMenuBar()
                         }
+                        
+                        self?.adjustCommandBar()
+                        self?.adjustMenuBar()
                     }
                 }
             )
@@ -2851,7 +2889,7 @@ class ViewController: UIViewController {
     }
     
     @IBAction func handleSkipBackward(_ sender: Any) {
-        print("===== Handle Skip Backward =====")
+        print("===== Screen Button: Handle Skip Backward =====")
         let currentSegment = self.note.getSegment(type: .current)
         
         if let currentSegment = currentSegment, self.note.isPlayingNote {
@@ -2867,7 +2905,7 @@ class ViewController: UIViewController {
     }
     
     @IBAction func handleSkipForward(_ sender: Any) {
-        print("===== Handle Skip Forward =====")
+        print("===== Screen Button: Handle Skip Forward =====")
         let currentSegment = self.note.getSegment(type: .current)
         
         if let currentSegment = currentSegment, self.note.isPlayingNote {
@@ -2883,7 +2921,7 @@ class ViewController: UIViewController {
     }
     
     @IBAction func handlePlaybackRate(_ sender: Any) {
-        print("===== Handle Playback Rate =====")
+        print("===== Screen Button: Handle Playback Rate =====")
         
         print("\tAdjusting flag to: true")
         self.sliderIsVisible = true
@@ -2908,7 +2946,7 @@ class ViewController: UIViewController {
     }
     
     @IBAction func handleEchoRate(_ sender: Any) {
-        print("===== Handle Echo Rate =====")
+        print("===== Screen Button: Handle Echo Rate =====")
         
         print("\tAdjusting flag to: true")
         self.sliderIsVisible = true
@@ -2933,7 +2971,7 @@ class ViewController: UIViewController {
     }
     
     @IBAction func handleExitSlider(_ sender: Any) {
-        print("===== Handle Exit Slider =====")
+        print("===== Screen Button: Handle Exit Slider =====")
         
         print("\tAdjusting flag to: false")
         self.sliderIsVisible = false
@@ -2955,7 +2993,7 @@ class ViewController: UIViewController {
     // MARK: - Selection Methods
 
     @IBAction func handleIncreaseRateSelection(_ sender: Any) {
-        print("===== Increase Rate Selection: \(selectionCursor.selectionText ?? "nil") =====")
+        print("===== Screen Button: Increase Rate Selection: \(selectionCursor.selectionText ?? "nil") =====")
         selectionCursor.adjustRateSelection(direction: .up)
         // Determine if we present adjust rate buttons
         self.adjustCommandBar()
@@ -2967,7 +3005,7 @@ class ViewController: UIViewController {
     }
     
     @IBAction func handleDecreaseRateSelection(_ sender: Any) {
-        print("===== Decrease Rate Selection: \(selectionCursor.selectionText ?? "nil") =====")
+        print("===== Screen Button: Decrease Rate Selection: \(selectionCursor.selectionText ?? "nil") =====")
         selectionCursor.adjustRateSelection(direction: .down)
         // Determine if we present adjust rate buttons
         self.adjustCommandBar()
@@ -2979,7 +3017,7 @@ class ViewController: UIViewController {
     }
 
     @IBAction func handleDeleteSelection(_ sender: Any) {
-        print("===== Handle Delete Selection: \(selectionCursor.selectionText ?? "nil") =====")
+        print("===== Screen Button: Handle Delete Selection: \(selectionCursor.selectionText ?? "nil") =====")
         selectionCursor.deleteSelection()
         
         // Give haptic feedback
@@ -2987,7 +3025,7 @@ class ViewController: UIViewController {
     }
     
     @IBAction func handleReplaceSelection(_ sender: Any) {
-        print("===== Handle Replace Selection: \(selectionCursor.selectionText ?? "nil") =====")
+        print("===== Screen Button: Handle Replace Selection: \(selectionCursor.selectionText ?? "nil") =====")
         
         // Turn on ambient track
         soundEngine.startModalAmbience()
@@ -3003,7 +3041,7 @@ class ViewController: UIViewController {
     }
     
     @IBAction func handleCancelReplaceSelection(_ sender: Any) {
-        print("===== Handle Cancel Replace Selection: \(selectionCursor.selectionText ?? "nil") =====")
+        print("===== Screen Button: Handle Cancel Replace Selection: \(selectionCursor.selectionText ?? "nil") =====")
         
         // Turn off ambient track
         soundEngine.stopModalAmbience()
@@ -3023,7 +3061,7 @@ class ViewController: UIViewController {
     }
 
     @IBAction func handleCopySelection(_ sender: Any) {
-        print("===== Handle Copy Selection: \(selectionCursor.selectionText ?? "nil") =====")
+        print("===== Screen Button: Handle Copy Selection: \(selectionCursor.selectionText ?? "nil") =====")
         selectionCursor.copySelection()
         
         // Give haptic feedback
@@ -3031,7 +3069,7 @@ class ViewController: UIViewController {
     }
     
     @IBAction func handleCutSelection(_ sender: Any) {
-        print("===== Handle Cut Selection: \(selectionCursor.selectionText ?? "nil") =====")
+        print("===== Screen Button: Handle Cut Selection: \(selectionCursor.selectionText ?? "nil") =====")
         selectionCursor.cutSelection()
         
         // Give haptic feedback
@@ -3039,7 +3077,7 @@ class ViewController: UIViewController {
     }
     
     @objc func handlePasteClipboard(_ sender: Any) {
-        print("===== Handle Paste Selection: \(selectionCursor.clipboardText ?? "nil") =====")
+        print("===== Screen Button: Handle Paste Selection: \(selectionCursor.clipboardText ?? "nil") =====")
         selectionCursor.pasteSelection()
         
         // Give haptic feedback
@@ -3047,7 +3085,7 @@ class ViewController: UIViewController {
     }
 
     @IBAction func handleExportSelection(_ sender: Any) {
-        print("===== Handle Export Selection: \(selectionCursor.selectionText ?? "nil") =====")
+        print("===== Screen Button: Handle Export Selection: \(selectionCursor.selectionText ?? "nil") =====")
         selectionCursor.exportSelection()
         
         // Give haptic feedback
@@ -3212,7 +3250,9 @@ extension ViewController: AVSpeechSynthesizerDelegate {
             // Update View
             self.adjustCommandBar()
             self.adjustMenuBar()
-            self.updateUIText(text: self.note.getText(), transformations: self.note.transformations)
+            if !selectionCursor.hasSelection {
+                self.updateUIText(text: self.note.getText(), transformations: self.note.transformations)
+            }
         } else if self.note.isPlayingPassiveEcho && utterance.speechString == self.note.getText(segments: Array(self.note.noteSegments[self.note.lastEchoSegmentRange!])).trimTrailingPunctuation() {
             // turn off isPlayingPassiveEcho
             self.note.isPlayingPassiveEcho = false
@@ -3220,7 +3260,9 @@ extension ViewController: AVSpeechSynthesizerDelegate {
             // Update View
             self.adjustCommandBar()
             self.adjustMenuBar()
-            self.updateUIText(text: self.note.getText(), transformations: self.note.transformations)
+            if !selectionCursor.hasSelection {
+                self.updateUIText(text: self.note.getText(), transformations: self.note.transformations)
+            }
         }
 
         self.tempOnEchoFinish?()
@@ -3237,9 +3279,7 @@ extension ViewController: AVSpeechSynthesizerDelegate {
                 self.adjustCommandBar()
                 self.adjustMenuBar()
             }
-        }
-
-        if self.appActivated && self.note.pausedListeningForSpeech && !self.speechSynthesizer.isSpeaking && !AVAudioSession.isHeadphonesConnected {
+        } else if self.appActivated && self.note.pausedListeningForSpeech && !self.speechSynthesizer.isSpeaking && !AVAudioSession.isHeadphonesConnected {
             // when headphones are off we don't listen for speech while echoing
             // but on completion we turn it back on
             self.note.startListeningForSpeech(
@@ -3531,12 +3571,16 @@ extension ViewController: PitchEngineDelegate {
 //        }, onFinishHandler: { [weak self] in
 //            // print("Successfully executed playback on finish handler")
 //            DispatchQueue.main.async {
-//                self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
-//                self?.playAudioButton.setTitle(ViewController.PLAY_NOTE_LABEL, for: .normal)
+//                if !selectionCursor.hasSelection {
+//                    self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
+//                }
 //                self!.note.player.replaceCurrentItem(with: nil)
-//                if self!.note.isListeningForSpeech {
+//                if !self!.note.isListeningForSpeech {
 //                    self?.navigationItem.title = ""
 //                }
+//
+//                self?.adjustCommandBar()
+//                self?.adjustMenuBar()
 //            }
 //        }
 //    )
@@ -3581,12 +3625,16 @@ extension ViewController: PitchEngineDelegate {
 //        }, onFinishHandler: { [weak self] in
 //            // print("Successfully executed playback on finish handler")
 //            DispatchQueue.main.async {
-//                self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
-//                self?.playAudioButton.setTitle(ViewController.PLAY_NOTE_LABEL, for: .normal)
+//                if !selectionCursor.hasSelection {
+//                    self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
+//                }
 //                self!.note.player.replaceCurrentItem(with: nil)
-//                if self!.note.isListeningForSpeech {
+//                if !self!.note.isListeningForSpeech {
 //                    self?.navigationItem.title = ""
 //                }
+//
+//                self?.adjustCommandBar()
+//                self?.adjustMenuBar()
 //            }
 //        }
 //    )

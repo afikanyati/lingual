@@ -2416,12 +2416,18 @@ class Note: AVMutableComposition {
         }
 
         handler?()
-        self.handleOnListenUpdate(text: self.getText()) // Will trigger update to Command Bar
+        if !selectionCursor.hasSelection {
+            self.handleOnListenUpdate(text: self.getText()) // Will trigger update to Command Bar
+        } else {
+            self.vc!.adjustCommandBar()
+            self.vc!.adjustMenuBar()
+        }
     }
     
     // MARK: - Echo Methods
     // Computer understanding of the note
     func startEcho(text: String, onStartHandler: (() -> Void)? = nil, onFinishHandler: (() -> Void)? = nil) {
+        print("===== Start Echo =====")
         if player.isPlaying {
             print("\tStop speech audio to play speech synthesizer")
             self.stop()
@@ -2486,7 +2492,7 @@ class Note: AVMutableComposition {
         // Give audio feedback
         // *** The note playing is the audio feedback ***
         
-        if self.isListeningForCommands && !AVAudioSession.isHeadphonesConnected {
+        if (self.isListeningForCommands || self.isListeningForSpeech) && !AVAudioSession.isHeadphonesConnected {
             self.stopListeningForVoiceCommands(pause: true) {
                 self.handleEcho(
                     text: text,
@@ -2494,23 +2500,7 @@ class Note: AVMutableComposition {
                     onFinishHandler: onFinishHandler
                 )
             }
-        } else if self.isListeningForCommands && AVAudioSession.isHeadphonesConnected {
-            self.handleEcho(
-                text: text,
-                onStartHandler: onStartHandler,
-                onFinishHandler: onFinishHandler
-            )
-        }
-        
-        if self.isListeningForSpeech && !AVAudioSession.isHeadphonesConnected {
-            self.stopListeningForSpeech(pause: true) {
-                self.handleEcho(
-                    text: text,
-                    onStartHandler: onStartHandler,
-                    onFinishHandler: onFinishHandler
-                )
-            }
-        } else if self.isListeningForSpeech && AVAudioSession.isHeadphonesConnected {
+        } else if (self.isListeningForCommands || self.isListeningForSpeech) && AVAudioSession.isHeadphonesConnected {
             self.handleEcho(
                 text: text,
                 onStartHandler: onStartHandler,
@@ -2602,6 +2592,7 @@ class Note: AVMutableComposition {
     }
     
     func handleEcho(text: String, onStartHandler: (() -> Void)? = nil, onFinishHandler: (() -> Void)? = nil) {
+        print("===== Handle Echo =====")
         // Play Sound
         soundEngine.play()
         
@@ -2613,12 +2604,11 @@ class Note: AVMutableComposition {
         
         if self.pausedEcho {
             // continue last echo
-            print("===== Continue Echo =====")
+            print("\tContinue existing echo utterance...")
             self.vc!.speechSynthesizer.continueSpeaking()
         } else {
             // start new echo
-            print("===== Start Echo =====")
-            print("\tInitiate new speech synthesizer utterance")
+            print("\tInitiate new speech synthesizer utterance...")
 
             let synthesizerItem = SynthesizerItem(
                 synthesizer: self.vc!.speechSynthesizer,
@@ -5048,7 +5038,7 @@ class Note: AVMutableComposition {
     func handleCompletionObserver() {
         print("===== Completed Playing Note =====")
 
-        if selectionCursor.hasSelection {
+        if selectionCursor.hasSelection && selectionCursor.isLoopingSelection {
             print("\tPause playback.")
             player.pause()
             print("\tLoop selection.")

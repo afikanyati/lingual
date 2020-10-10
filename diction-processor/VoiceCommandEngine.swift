@@ -1156,12 +1156,16 @@ public final class VoiceCommandEngine: NSObject {
                     }
                 }, onFinishHandler: {
                     DispatchQueue.main.async {
-                        note.vc!.updateUIText(text: note.getText(), transformations: note.transformations)
+                        if !selectionCursor.hasSelection {
+                            note.vc!.updateUIText(text: note.getText(), transformations: note.transformations)
+                        }
                         note.vc!.note.player.replaceCurrentItem(with: nil)
                         if !note.isListeningForSpeech {
                             note.vc!.navigationItem.title = ""
-                            note.vc!.adjustMenuBar()
                         }
+                        
+                        note.vc!.adjustCommandBar()
+                        note.vc!.adjustMenuBar()
                         handler?()
                     }
                 }
@@ -1202,12 +1206,16 @@ public final class VoiceCommandEngine: NSObject {
                 }
             }, onFinishHandler: {
                 DispatchQueue.main.async {
-                    note.vc!.updateUIText(text: note.getText(), transformations: note.transformations)
+                    if !selectionCursor.hasSelection {
+                        note.vc!.updateUIText(text: note.getText(), transformations: note.transformations)
+                    }
                     note.vc!.note.player.replaceCurrentItem(with: nil)
                     if !note.isListeningForSpeech {
                         note.vc!.navigationItem.title = ""
-                        note.vc!.adjustMenuBar()
                     }
+                    
+                    note.vc!.adjustCommandBar()
+                    note.vc!.adjustMenuBar()
                     handler?()
                 }
             }
