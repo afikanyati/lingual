@@ -64,7 +64,7 @@ class NoteSegment: AVCompositionTrackSegment {
         return Double.infinity
     }
     /// Specifies information related to the sentence of the note segment is a member of.
-    private var sentence = Sentence(number: Int(Utils.UNKNOWN), text: "", timeRange: CMTimeRange.zero)
+    private var sentence = Sentence(number: Int(Utils.UNKNOWN), text: "", timeRange: CMTimeRange.zero, noteRange: 0..<1)
     /// Scores text as positive, negative, or neutral based on its sentiment polarity.
     private var sentimentScore: [ScaleUnitType:Float] = [
         .word: Float.infinity,
@@ -215,6 +215,8 @@ class NoteSegment: AVCompositionTrackSegment {
             firstSegment.isVoiceCommandWord() == secondSegment.isVoiceCommandWord() &&
             firstSegment.isCommitted() == secondSegment.isCommitted() &&
             firstSegment.isValidSentenceLastWord() == secondSegment.isValidSentenceLastWord() &&
+            firstSegment.isValidWord() == secondSegment.isValidWord() &&
+            firstSegment.isActive() == secondSegment.isActive() &&
             firstSegment.isSentenceTerminator() == secondSegment.isSentenceTerminator() &&
             firstSegment.getTokenType() == secondSegment.getTokenType() &&
             firstSegment.getNameType() == secondSegment.getNameType() &&
@@ -309,14 +311,13 @@ class NoteSegment: AVCompositionTrackSegment {
         var removeLeadingSpace = false
         var previousWordIsSentenceTerminator = false
         var previousWordIsValidLastSentenceWord = false
-        var previousSegmentIsVoiceCommand = false // If previous segment is voice command, don't use punctuation suggestion for silence
         var i = 1
         if self.isCommitted() && self.index > 0 && note.noteSegments.count > self.index {
             while self.index - i >= 0 {
                 let segments = self.isCommitted() ? note.noteSegments : note.noteBuffer
                 let previousSegment = segments[self.index - i]
                 if previousSegment.isSilence() && !previousSegment.isVoiceCommandWord() && !previousSegment.isDeleted() {
-                    if (self.index - i + 1) < segments.count && !segments[self.index - i + 1].isVoiceCommandWord() {
+                    if (self.index - i + 1) < segments.count && !segments[self.index - i + 1].isVoiceCommandWord() && !segments[self.index - i + 1].isDeleted() {
                         // IMPORTANT: A silence before voice command words is marked as not a sentence terminator to prevent double sentence termination when factoring silence after a voice command
                         // For this reason we must factor them when computing capitalizeWord
 
@@ -329,7 +330,6 @@ class NoteSegment: AVCompositionTrackSegment {
                     previousWordIsSentenceTerminator = previousSegment.isSentenceTerminator()
                 } else if previousSegment.isVoiceCommandWord() && !previousSegment.isDeleted() {
                     i += 1
-                    previousSegmentIsVoiceCommand = previousSegment.isVoiceCommandWord()
                 } else if previousSegment.isDeleted() {
                     i += 1
                 } else {
@@ -343,19 +343,23 @@ class NoteSegment: AVCompositionTrackSegment {
         
         var nextWordIsConjunction = false
         var nextSegmentIsPunctuation = false // If next segment is punctuation, don't show suggested punctuation.
-        var nextSegmentIsVoiceCommand = false // If next segment is punctuation, it is not a sentence terminator
+        var nextSegmentIsVoiceCommand = false // If next segment is voice command, it is not a sentence terminator
+        var nextSegmentIsDeleted = false // If next segment is deleted, it is not a sentence terminator
+        var nextSegmentIsSentenceTerminator = false // If next segment is a sentence terminator, we won't have a comma
         var j = 1
-        var existsWordsAfterVoiceCommand = false // If there are no words after the voice command, we want to have a sentence terminator
+        var existsWordsAfterVoiceCommandAndDeleted = false // If there are no words after the voice command, we want to have a sentence terminator
         if self.isCommitted() && self.index + 1 < note.noteSegments.count  {
             let nextSegment = note.noteSegments[self.index + 1]
             nextWordIsConjunction = nextSegment.getLexicalClass() == .conjunction
             nextSegmentIsPunctuation = nextSegment.isPunctuation()
             nextSegmentIsVoiceCommand = nextSegment.isVoiceCommandWord()
+            nextSegmentIsDeleted = nextSegment.isDeleted()
+            nextSegmentIsSentenceTerminator = nextSegment.isSentenceTerminator()
             
             while self.index + j < note.noteSegments.count {
                 let nextSegment = note.noteSegments[self.index + j]
                 if !nextSegment.isVoiceCommandWord() && !nextSegment.isDeleted() {
-                    existsWordsAfterVoiceCommand = true
+                    existsWordsAfterVoiceCommandAndDeleted = true
                     break
                 }
                 
@@ -370,19 +374,19 @@ class NoteSegment: AVCompositionTrackSegment {
             if previousWordIsSentenceTerminator && suggestsNewParagraph() {
                 // New line
                 text += "\n\n"
-            } else if (!previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord) && !nextSegmentIsPunctuation && (!nextSegmentIsVoiceCommand || !existsWordsAfterVoiceCommand) && suggestsNewParagraph() {
+            } else if (!previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord) && !nextSegmentIsPunctuation && ((!nextSegmentIsVoiceCommand && !nextSegmentIsDeleted) || !existsWordsAfterVoiceCommandAndDeleted) && suggestsNewParagraph() {
                 // New Paragraph
                 // Sentence Terminators: Exclamation Mark, Question Mark, Period
                 let terminator = self.sentence.text.count > 0 && Utils.isQuestion(sentence: self.sentence.text) ? "?" : "."
                 let exclaimedTerminator = self.sentence.text.count > 0 && Utils.isQuestion(sentence: self.sentence.text) ? "?!" : "!"
                 text += "\(exclaimWord ? exclaimedTerminator : terminator)\n\n"
-            } else if (!previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord) && !nextSegmentIsPunctuation && (!nextSegmentIsVoiceCommand || !existsWordsAfterVoiceCommand) && suggestsNewSentence() {
+            } else if (!previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord) && !nextSegmentIsPunctuation && ((!nextSegmentIsVoiceCommand && !nextSegmentIsDeleted) || !existsWordsAfterVoiceCommandAndDeleted) && suggestsNewSentence() {
                 // Same Paragraph
                 // Sentence Terminators: Exclamation Mark, Question Mark, Period
                 let terminator = Utils.isQuestion(sentence: self.sentence.text) ? "?" : "."
                 let exclaimedTerminator = Utils.isQuestion(sentence: self.sentence.text) ? "?!" : "!"
                 text += "\(exclaimWord ? exclaimedTerminator : terminator)"
-            } else if !previousWordIsSentenceTerminator && nextWordIsConjunction && !previousSegmentIsVoiceCommand && suggestsNewComma() {
+            } else if !previousWordIsSentenceTerminator && !nextSegmentIsSentenceTerminator && nextWordIsConjunction && suggestsNewComma() {
                 // Comma
                 text += ","
             }
@@ -539,23 +543,29 @@ class NoteSegment: AVCompositionTrackSegment {
         }
         
         var nextSegmentLexicalClass: NLTag?
-        var nextSegmentIsVoiceCommand = false
+        var nextSegmentIsVoiceCommand = false // If next segment is voice command, it is not a sentence terminator
+        var nextSegmentIsDeleted = false // If next segment is deleted, it is not a sentence terminator
+        var nextSegmentIsSentenceTerminator = false // If next segment is a sentence terminator, we won't have a comma
         var j = 1
         if self.isCommitted() && self.index + 1 < note.noteSegments.count  {
+            let nextSegment = note.noteSegments[self.index + 1]
+            nextSegmentIsVoiceCommand = nextSegment.isVoiceCommandWord()
+            nextSegmentIsDeleted = nextSegment.isDeleted()
+            nextSegmentIsSentenceTerminator = nextSegment.isSentenceTerminator()
+            
             while self.index + j < note.noteSegments.count {
                 let nextSegment = note.noteSegments[self.index + j]
-                if nextSegment.isSilence() || nextSegment.isVoiceCommandWord() || nextSegment.isDeleted() {
-                    j += 1
-                } else {
+                if !nextSegment.isVoiceCommandWord() && !nextSegment.isDeleted() {
                     nextSegmentLexicalClass = nextSegment.getLexicalClass()
-                    nextSegmentIsVoiceCommand = nextSegment.isVoiceCommandWord()
                     break
                 }
+                
+                j += 1
             }
         }
 
         var isValidCommaWord = false
-        if let lexicalClass = self.lexicalClass, let nextSegmentLexicalClass = nextSegmentLexicalClass, lexicalClass == .adjective && nextSegmentLexicalClass == .adjective && !nextSegmentIsVoiceCommand  {
+        if let lexicalClass = self.lexicalClass, let nextSegmentLexicalClass = nextSegmentLexicalClass, lexicalClass == .adjective && nextSegmentLexicalClass == .adjective && !nextSegmentIsVoiceCommand && !nextSegmentIsDeleted && !nextSegmentIsSentenceTerminator  {
             // list of adjectives
             isValidCommaWord = true
         }
@@ -584,9 +594,14 @@ class NoteSegment: AVCompositionTrackSegment {
         if self.isCommitted() && self.index > 0 && note.noteSegments.count > self.index {
             while self.index - i >= 0 {
                 let previousSegment = note.noteSegments[self.index - i]
-                if previousSegment.isSilence() || previousSegment.isVoiceCommandWord() || previousSegment.isDeleted() {
+                
+                if previousSegment.isSilence() && !previousSegment.isVoiceCommandWord() && !previousSegment.isDeleted() {
                     i += 1
                     previousWordIsSentenceTerminator = previousSegment.isSentenceTerminator()
+                } else if previousSegment.isVoiceCommandWord() && !previousSegment.isDeleted() {
+                    i += 1
+                } else if previousSegment.isDeleted() {
+                    i += 1
                 } else {
                     previousWordIsValidLastSentenceWord = previousSegment.isValidSentenceLastWord()
                     previousWordIsSentenceTerminator = previousSegment.isSentenceTerminator()
@@ -596,18 +611,20 @@ class NoteSegment: AVCompositionTrackSegment {
         }
 
         var nextSegmentIsPunctuation = false // If next segment is punctuation, don't show suggested punctuation.
-        var nextSegmentIsVoiceCommand = false // If next segment is punctuation, it is not a sentence terminator
+        var nextSegmentIsVoiceCommand = false // If next segment is voice command, it is not a sentence terminator
+        var nextSegmentIsDeleted = false // If next segment is deleted, it is not a sentence terminator
         var j = 1
-        var existsWordsAfterVoiceCommand = false
+        var existsWordsAfterVoiceCommandAndDeleted = false
         if self.isCommitted() && self.index + 1 < note.noteSegments.count  {
             let nextSegment = note.noteSegments[self.index + 1]
             nextSegmentIsPunctuation = nextSegment.isPunctuation()
             nextSegmentIsVoiceCommand = nextSegment.isVoiceCommandWord()
+            nextSegmentIsDeleted = nextSegment.isDeleted()
             
             while self.index + j < note.noteSegments.count {
                 let nextSegment = note.noteSegments[self.index + j]
                 if !nextSegment.isVoiceCommandWord() && !nextSegment.isDeleted() {
-                    existsWordsAfterVoiceCommand = true
+                    existsWordsAfterVoiceCommandAndDeleted = true
                     break
                 }
                 
@@ -616,11 +633,11 @@ class NoteSegment: AVCompositionTrackSegment {
         }
         
         if self.isSilence() && withPunctuationSuggestions && avgPauseDuration != Utils.UNKNOWN {
-            if !previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord && !nextSegmentIsPunctuation && (!nextSegmentIsVoiceCommand || !existsWordsAfterVoiceCommand) && suggestsNewParagraph() {
+            if !previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord && !nextSegmentIsPunctuation && ((!nextSegmentIsVoiceCommand && !nextSegmentIsDeleted) || !existsWordsAfterVoiceCommandAndDeleted) && suggestsNewParagraph() {
                 // cache value
                 self.cachedIsSentenceTerminator = true
                 return true
-            } else if !previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord && !nextSegmentIsPunctuation && (!nextSegmentIsVoiceCommand || !existsWordsAfterVoiceCommand) && suggestsNewSentence() {
+            } else if !previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord && !nextSegmentIsPunctuation && ((!nextSegmentIsVoiceCommand && !nextSegmentIsDeleted) || !existsWordsAfterVoiceCommandAndDeleted) && suggestsNewSentence() {
                 // cache value
                 self.cachedIsSentenceTerminator = true
                 return true
@@ -630,6 +647,20 @@ class NoteSegment: AVCompositionTrackSegment {
         // cache value
         self.cachedIsSentenceTerminator = self.lexicalClass == .sentenceTerminator
         return self.lexicalClass == .sentenceTerminator
+    }
+    
+    func isValidWord() -> Bool {
+        return !self.isPunctuation() &&
+            !self.isNumber() &&
+            !self.isDeleted() &&
+            !self.isVoiceCommandWord() &&
+            !self.isSilence()
+    }
+    
+    func isActive() -> Bool {
+        return !self.isDeleted() &&
+            !self.isVoiceCommandWord() &&
+            !self.isSilence()
     }
     
     func getEffectiveDuration() -> CMTime {
@@ -897,26 +928,38 @@ class NoteSegment: AVCompositionTrackSegment {
             // Received newline punctuation suggestion
             // Headphones are connected
             
-            // Give auditory feedback
-            Utils.executeFeedback(
-                audioMessage: "New line.",
-                note: note
+            // Give audio feedback
+            let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+            let synthesizerItem = SynthesizerItem(
+                synthesizer: note.vc!.speechSynthesizer,
+                text: "New line.",
+                voice: voice,
+                rate: note.vc!.echoRate,
+                volume: note.vc!.playbackVolume
             )
-            
-            // Give haptic feedback
-            hapticEngine.mediumImpact()
+            note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+            // We intentionally do not exhaust queue here to it happens before passive echo if it has it
+            if note.withPassiveEcho {
+                note.vc!.exhaustSynthesizerQueue()
+            }
         } else if let note = self.note, note.isListeningForSpeech && !note.isExporting && note.stagedSpeechCommand == nil && AVAudioSession.isHeadphonesConnected && note.withPunctuationSuggestions && !self.voiceCommandWord && !self.deleted && self.isSilence() && self.suggestsNewSentence() && self.isCommitted() && self.index >= 0 && (self.index + 1) < note.noteSegments.count && !note.noteSegments[self.index + 1].isVoiceCommandWord() {
             // Received new sentence punctuation suggestion
             // Headphones are connected
             
-            // Give auditory feedback
-            Utils.executeFeedback(
-                audioMessage: "New sentence.",
-                note: note
+            // Give audiio feedback
+            let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+            let synthesizerItem = SynthesizerItem(
+                synthesizer: note.vc!.speechSynthesizer,
+                text: "New sentence.",
+                voice: voice,
+                rate: note.vc!.echoRate,
+                volume: note.vc!.playbackVolume
             )
-            
-            // Give haptic feedback
-            hapticEngine.mediumImpact()
+            note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+            // We intentionally do not exhaust queue here to it happens before passive echo if it has it
+            if !note.withPassiveEcho {
+                note.vc!.exhaustSynthesizerQueue()
+            }
         }
         
         if let note = self.note, note.isListeningForSpeech && !note.isExporting && note.stagedSpeechCommand == nil && note.withPunctuationSuggestions && !self.voiceCommandWord && !self.deleted && self.isSilence() && self.suggestsNewParagraph() && self.isCommitted() && self.index >= 0 && (self.index + 1) < note.noteSegments.count && !note.noteSegments[self.index + 1].isVoiceCommandWord() {
@@ -924,25 +967,21 @@ class NoteSegment: AVCompositionTrackSegment {
             // Headphones not are connected
             
             // Give visual feedback
-            Utils.executeFeedback(
-                visualMessage: "New line suggestion.",
-                note: note
+            note.vc!.scheduleNotification(
+                text: "New line suggestion.",
+                duration: 3
             )
-            
-            // Give haptic feedback
-            hapticEngine.mediumImpact()
+            note.vc!.exhaustNotificationQueue()
         } else if let note = self.note, note.isListeningForSpeech && !note.isExporting && note.stagedSpeechCommand == nil && note.withPunctuationSuggestions && !self.voiceCommandWord && !self.deleted && self.isSilence() && self.suggestsNewSentence() && self.isCommitted() && self.index >= 0 && (self.index + 1) < note.noteSegments.count && !note.noteSegments[self.index + 1].isVoiceCommandWord() {
             // Received new sentence punctuation suggestion
             // Headphones not are connected
             
             // Give visual feedback
-            Utils.executeFeedback(
-                visualMessage: "New sentence suggestion.",
-                note: note
+            note.vc!.scheduleNotification(
+                text: "New sentence suggestion.",
+                duration: 3
             )
-            
-            // Give haptic feedback
-            hapticEngine.mediumImpact()
+            note.vc!.exhaustNotificationQueue()
         }
     }
     

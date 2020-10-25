@@ -14,6 +14,8 @@
 		8B24440724DCE50D0050C959 /* TimeNormalizerType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B24440624DCE50D0050C959 /* TimeNormalizerType.swift */; };
 		8B27A3DC24B6A839001E5F06 /* Double+Rounded.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B27A3DB24B6A839001E5F06 /* Double+Rounded.swift */; };
 		8B27A3DE24B6A8E9001E5F06 /* Float+Rounded.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B27A3DD24B6A8E9001E5F06 /* Float+Rounded.swift */; };
+		8B3B52952537AF1400B2BEDB /* lingual-logomark.png in Resources */ = {isa = PBXBuildFile; fileRef = 8B3B52942537AF1400B2BEDB /* lingual-logomark.png */; };
+		8B3B529D2539016A00B2BEDB /* modal-ambience.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8B3B529C2539016A00B2BEDB /* modal-ambience.wav */; };
 		8B3BC5BF24F882F9004FCD7B /* SelectionChangeType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B3BC5BE24F882F9004FCD7B /* SelectionChangeType.swift */; };
 		8B5C3A1D252B93A000A4DCA7 /* UITextView+NoActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B5C3A1C252B93A000A4DCA7 /* UITextView+NoActions.swift */; };
 		8B669B5F24B0127E00D5996B /* Date+Subtract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B5E24B0127E00D5996B /* Date+Subtract.swift */; };
@@ -23,6 +25,7 @@
 		8B669B6724B013F200D5996B /* TimeConstant+Minute+Hour.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B6624B013F200D5996B /* TimeConstant+Minute+Hour.swift */; };
 		8B669B6924B01AF600D5996B /* Utils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B6824B01AF600D5996B /* Utils.swift */; };
 		8B669B6B24B2C3DD00D5996B /* PitchDatum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B6A24B2C3DD00D5996B /* PitchDatum.swift */; };
+		8B66BFE0253BD17F0085A94F /* VoiceCommandDatum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B66BFDF253BD17F0085A94F /* VoiceCommandDatum.swift */; };
 		8B74881E24DCE7C9004C94A0 /* CMTimeMapping+subscript.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B74881D24DCE7C9004C94A0 /* CMTimeMapping+subscript.swift */; };
 		8B766E8924A7D7D200D41A13 /* Sentence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B766E8824A7D7D200D41A13 /* Sentence.swift */; };
 		8B766E8C24A8094300D41A13 /* SoundIntensityDatum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B766E8B24A8094300D41A13 /* SoundIntensityDatum.swift */; };
@@ -96,7 +99,6 @@
 		8BB685A424E8E04500F3285B /* NSRange+toTextRange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BB685A324E8E04400F3285B /* NSRange+toTextRange.swift */; };
 		8BB685A624EA0FC400F3285B /* NotificationItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BB685A524EA0FC400F3285B /* NotificationItem.swift */; };
 		8BC6E100250D812F003DD26A /* Dictionary+isEqual.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BC6E0FF250D812F003DD26A /* Dictionary+isEqual.swift */; };
-		8BC6E1022510749D003DD26A /* modal-ambience.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BC6E1012510749C003DD26A /* modal-ambience.wav */; };
 		8BC6E10425107E61003DD26A /* DirectionType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BC6E10325107E61003DD26A /* DirectionType.swift */; };
 		8BC6E10625130DD1003DD26A /* TransformationType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BC6E10525130DD1003DD26A /* TransformationType.swift */; };
 		8BC6E10825130E34003DD26A /* NoteTransformation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BC6E10725130E34003DD26A /* NoteTransformation.swift */; };
@@ -145,6 +147,8 @@
 		8B24440624DCE50D0050C959 /* TimeNormalizerType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeNormalizerType.swift; sourceTree = "<group>"; };
 		8B27A3DB24B6A839001E5F06 /* Double+Rounded.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Double+Rounded.swift"; sourceTree = "<group>"; };
 		8B27A3DD24B6A8E9001E5F06 /* Float+Rounded.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Float+Rounded.swift"; sourceTree = "<group>"; };
+		8B3B52942537AF1400B2BEDB /* lingual-logomark.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "lingual-logomark.png"; sourceTree = "<group>"; };
+		8B3B529C2539016A00B2BEDB /* modal-ambience.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "modal-ambience.wav"; sourceTree = "<group>"; };
 		8B3BC5BE24F882F9004FCD7B /* SelectionChangeType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionChangeType.swift; sourceTree = "<group>"; };
 		8B5C3A1C252B93A000A4DCA7 /* UITextView+NoActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITextView+NoActions.swift"; sourceTree = "<group>"; };
 		8B669B5E24B0127E00D5996B /* Date+Subtract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Subtract.swift"; sourceTree = "<group>"; };
@@ -154,6 +158,7 @@
 		8B669B6624B013F200D5996B /* TimeConstant+Minute+Hour.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TimeConstant+Minute+Hour.swift"; sourceTree = "<group>"; };
 		8B669B6824B01AF600D5996B /* Utils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utils.swift; sourceTree = "<group>"; };
 		8B669B6A24B2C3DD00D5996B /* PitchDatum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitchDatum.swift; sourceTree = "<group>"; };
+		8B66BFDF253BD17F0085A94F /* VoiceCommandDatum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceCommandDatum.swift; sourceTree = "<group>"; };
 		8B74881D24DCE7C9004C94A0 /* CMTimeMapping+subscript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CMTimeMapping+subscript.swift"; sourceTree = "<group>"; };
 		8B766E8824A7D7D200D41A13 /* Sentence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sentence.swift; sourceTree = "<group>"; };
 		8B766E8B24A8094300D41A13 /* SoundIntensityDatum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundIntensityDatum.swift; sourceTree = "<group>"; };
@@ -227,7 +232,6 @@
 		8BB685A324E8E04400F3285B /* NSRange+toTextRange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSRange+toTextRange.swift"; sourceTree = "<group>"; };
 		8BB685A524EA0FC400F3285B /* NotificationItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationItem.swift; sourceTree = "<group>"; };
 		8BC6E0FF250D812F003DD26A /* Dictionary+isEqual.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Dictionary+isEqual.swift"; sourceTree = "<group>"; };
-		8BC6E1012510749C003DD26A /* modal-ambience.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "modal-ambience.wav"; sourceTree = "<group>"; };
 		8BC6E10325107E61003DD26A /* DirectionType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectionType.swift; sourceTree = "<group>"; };
 		8BC6E10525130DD1003DD26A /* TransformationType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransformationType.swift; sourceTree = "<group>"; };
 		8BC6E10725130E34003DD26A /* NoteTransformation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteTransformation.swift; sourceTree = "<group>"; };
@@ -312,6 +316,14 @@
 			path = enums;
 			sourceTree = "<group>";
 		};
+		8B3B52932537AF0600B2BEDB /* images */ = {
+			isa = PBXGroup;
+			children = (
+				8B3B52942537AF1400B2BEDB /* lingual-logomark.png */,
+			);
+			path = images;
+			sourceTree = "<group>";
+		};
 		8B74881F24DCF4C6004C94A0 /* data-structures */ = {
 			isa = PBXGroup;
 			children = (
@@ -320,6 +332,7 @@
 				8B8D55F42530E043004AD436 /* DialogAction.swift */,
 				8B669B6A24B2C3DD00D5996B /* PitchDatum.swift */,
 				8B766E8B24A8094300D41A13 /* SoundIntensityDatum.swift */,
+				8B66BFDF253BD17F0085A94F /* VoiceCommandDatum.swift */,
 				8B766E8824A7D7D200D41A13 /* Sentence.swift */,
 				8BE2EB1824BA44BC00E2D519 /* Determiners.swift */,
 				8BA3055A24C920DA0056E4DF /* SynthesizerItem.swift */,
@@ -388,7 +401,7 @@
 				8BA3054624C28FCC0056E4DF /* correct-wake-phrase.wav */,
 				8BA3054924C28FCC0056E4DF /* error.wav */,
 				8BA3054424C28FCC0056E4DF /* incorrect-wake-phrase.wav */,
-				8BC6E1012510749C003DD26A /* modal-ambience.wav */,
+				8B3B529C2539016A00B2BEDB /* modal-ambience.wav */,
 				8BA3054024C28FCC0056E4DF /* play.wav */,
 				8BB6859924E3858000F3285B /* save.wav */,
 				8BA3054324C28FCC0056E4DF /* processing.wav */,
@@ -451,6 +464,7 @@
 		8BEC136624906FF30056E767 /* diction-processor */ = {
 			isa = PBXGroup;
 			children = (
+				8B3B52932537AF0600B2BEDB /* images */,
 				8B74881F24DCF4C6004C94A0 /* data-structures */,
 				8B24440524DCE44F0050C959 /* enums */,
 				8BA3056C24D107E90056E4DF /* extensions */,
@@ -617,10 +631,11 @@
 				8BEC137724906FF60056E767 /* LaunchScreen.storyboard in Resources */,
 				8BA3054A24C28FCC0056E4DF /* commit-buffer.wav in Resources */,
 				8BA3054D24C28FCC0056E4DF /* voice-command-accept.wav in Resources */,
+				8B3B529D2539016A00B2BEDB /* modal-ambience.wav in Resources */,
 				8BA3055224C28FCC0056E4DF /* correct-wake-phrase.wav in Resources */,
 				8B0CF44624F4407200479BF5 /* delete.wav in Resources */,
-				8BC6E1022510749D003DD26A /* modal-ambience.wav in Resources */,
 				8BA3054B24C28FCC0056E4DF /* stop-listening.wav in Resources */,
+				8B3B52952537AF1400B2BEDB /* lingual-logomark.png in Resources */,
 				8BEC137424906FF60056E767 /* Assets.xcassets in Resources */,
 				8BA3054F24C28FCC0056E4DF /* processing.wav in Resources */,
 				8BEC136F24906FF30056E767 /* Main.storyboard in Resources */,
@@ -747,6 +762,7 @@
 				8BD595C7249AE45D000B3127 /* Note.swift in Sources */,
 				8B766F4A24AC2AB200D41A13 /* YINUtil.swift in Sources */,
 				8B766F5324AC2AB200D41A13 /* OutputSignalTracker.swift in Sources */,
+				8B66BFE0253BD17F0085A94F /* VoiceCommandDatum.swift in Sources */,
 				8BA3052C24C24C240056E4DF /* Sequence+containsAnyOf.swift in Sources */,
 				8B669B6524B0136500D5996B /* String+Substring+Replace+TrimTrailingPunctuation.swift in Sources */,
 				8B766F5E24AC2AB200D41A13 /* BarycentricEstimator.swift in Sources */,

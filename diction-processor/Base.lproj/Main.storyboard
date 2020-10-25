@@ -36,19 +36,191 @@
                                 <rect key="frame" x="0.0" y="88" width="414" height="60"/>
                                 <subviews>
                                     <stackView opaque="NO" contentMode="scaleToFill" preservesSuperviewLayoutMargins="YES" distribution="fillEqually" alignment="center" spacing="10" translatesAutoresizingMaskIntoConstraints="NO" id="NJR-7J-DET" userLabel="Command Bar">
-                                        <rect key="frame" x="0.0" y="0.0" width="1547" height="60"/>
+                                        <rect key="frame" x="0.0" y="0.0" width="2153" height="60"/>
                                         <subviews>
+                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="WTY-vs-DOu" userLabel="Exit Run / Walk Button">
+                                                <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
+                                                <subviews>
+                                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="llG-1j-9WT">
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
+                                                        <connections>
+                                                            <action selector="exitWalkRun:" destination="BYZ-38-t0r" eventType="touchUpInside" id="oTs-mv-hMm"/>
+                                                        </connections>
+                                                    </button>
+                                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="xmark" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="Fsr-9d-ke9" userLabel="Icon">
+                                                        <rect key="frame" x="34.5" y="10.5" width="24" height="23"/>
+                                                        <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                                        <constraints>
+                                                            <constraint firstAttribute="width" constant="24" id="GUI-1E-n3I"/>
+                                                            <constraint firstAttribute="height" constant="24" id="PDf-uV-ozb"/>
+                                                        </constraints>
+                                                        <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
+                                                    </imageView>
+                                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Exit" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="fa8-8P-7Dy" userLabel="Label">
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
+                                                        <constraints>
+                                                            <constraint firstAttribute="height" constant="25" id="Zha-ye-Uz9"/>
+                                                        </constraints>
+                                                        <fontDescription key="fontDescription" type="system" pointSize="11"/>
+                                                        <color key="textColor" systemColor="systemGray5Color"/>
+                                                        <nil key="highlightedColor"/>
+                                                    </label>
+                                                </subviews>
+                                                <constraints>
+                                                    <constraint firstItem="fa8-8P-7Dy" firstAttribute="centerX" secondItem="WTY-vs-DOu" secondAttribute="centerX" id="3tq-6e-f1m"/>
+                                                    <constraint firstItem="llG-1j-9WT" firstAttribute="leading" secondItem="WTY-vs-DOu" secondAttribute="leading" id="LGy-yK-sxA"/>
+                                                    <constraint firstAttribute="bottom" secondItem="llG-1j-9WT" secondAttribute="bottom" id="Ogq-Zt-jne"/>
+                                                    <constraint firstItem="llG-1j-9WT" firstAttribute="height" secondItem="WTY-vs-DOu" secondAttribute="height" id="QXY-zu-cZO"/>
+                                                    <constraint firstItem="Fsr-9d-ke9" firstAttribute="top" secondItem="WTY-vs-DOu" secondAttribute="top" constant="10" id="XSW-5R-3vv"/>
+                                                    <constraint firstAttribute="bottom" secondItem="fa8-8P-7Dy" secondAttribute="bottom" constant="4" id="YvG-vz-FTa"/>
+                                                    <constraint firstAttribute="trailing" secondItem="llG-1j-9WT" secondAttribute="trailing" id="cun-hb-Zk1"/>
+                                                    <constraint firstItem="fa8-8P-7Dy" firstAttribute="width" secondItem="WTY-vs-DOu" secondAttribute="width" id="dQx-nx-yWD"/>
+                                                    <constraint firstAttribute="height" constant="60" id="rMv-63-YcH"/>
+                                                    <constraint firstItem="Fsr-9d-ke9" firstAttribute="centerX" secondItem="WTY-vs-DOu" secondAttribute="centerX" id="tev-n3-QYY"/>
+                                                    <constraint firstItem="llG-1j-9WT" firstAttribute="top" secondItem="WTY-vs-DOu" secondAttribute="top" id="tsU-IO-o5m"/>
+                                                    <constraint firstItem="llG-1j-9WT" firstAttribute="width" secondItem="WTY-vs-DOu" secondAttribute="width" id="wSQ-XF-yxw"/>
+                                                </constraints>
+                                            </view>
+                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="diY-sg-ErT" userLabel="Walk Previous Element Button">
+                                                <rect key="frame" x="103" y="0.0" width="93" height="60"/>
+                                                <subviews>
+                                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="4S9-Ni-KcJ">
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
+                                                        <connections>
+                                                            <action selector="walkPreviousElement:" destination="BYZ-38-t0r" eventType="touchUpInside" id="L1T-y8-0nN"/>
+                                                        </connections>
+                                                    </button>
+                                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="arrow.left" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="LkK-TP-uxD" userLabel="Icon">
+                                                        <rect key="frame" x="34.5" y="10.5" width="24" height="22.5"/>
+                                                        <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                                        <constraints>
+                                                            <constraint firstAttribute="width" constant="24" id="TtP-24-7vp"/>
+                                                            <constraint firstAttribute="height" constant="24" id="wEe-59-qOR"/>
+                                                        </constraints>
+                                                        <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
+                                                    </imageView>
+                                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Previous" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="s6w-d7-htR" userLabel="Label">
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
+                                                        <constraints>
+                                                            <constraint firstAttribute="height" constant="25" id="DO7-dZ-zQN"/>
+                                                        </constraints>
+                                                        <fontDescription key="fontDescription" type="system" pointSize="11"/>
+                                                        <color key="textColor" systemColor="systemGray5Color"/>
+                                                        <nil key="highlightedColor"/>
+                                                    </label>
+                                                </subviews>
+                                                <constraints>
+                                                    <constraint firstAttribute="bottom" secondItem="s6w-d7-htR" secondAttribute="bottom" constant="4" id="1FK-gt-R2z"/>
+                                                    <constraint firstItem="4S9-Ni-KcJ" firstAttribute="leading" secondItem="diY-sg-ErT" secondAttribute="leading" id="4OV-Xo-f3a"/>
+                                                    <constraint firstItem="4S9-Ni-KcJ" firstAttribute="width" secondItem="diY-sg-ErT" secondAttribute="width" id="6rN-iK-hfF"/>
+                                                    <constraint firstAttribute="trailing" secondItem="4S9-Ni-KcJ" secondAttribute="trailing" id="Gbn-qR-9BR"/>
+                                                    <constraint firstItem="4S9-Ni-KcJ" firstAttribute="top" secondItem="diY-sg-ErT" secondAttribute="top" id="Ncs-bp-cld"/>
+                                                    <constraint firstItem="4S9-Ni-KcJ" firstAttribute="height" secondItem="diY-sg-ErT" secondAttribute="height" id="S7m-eN-enk"/>
+                                                    <constraint firstItem="LkK-TP-uxD" firstAttribute="centerX" secondItem="diY-sg-ErT" secondAttribute="centerX" id="TF9-uq-o5A"/>
+                                                    <constraint firstItem="s6w-d7-htR" firstAttribute="centerX" secondItem="diY-sg-ErT" secondAttribute="centerX" id="W3O-tU-9Ch"/>
+                                                    <constraint firstItem="s6w-d7-htR" firstAttribute="width" secondItem="diY-sg-ErT" secondAttribute="width" id="dvL-mW-PHC"/>
+                                                    <constraint firstAttribute="height" constant="60" id="uAw-Da-Ghy"/>
+                                                    <constraint firstItem="LkK-TP-uxD" firstAttribute="top" secondItem="diY-sg-ErT" secondAttribute="top" constant="10" id="urg-iy-esW"/>
+                                                    <constraint firstAttribute="bottom" secondItem="4S9-Ni-KcJ" secondAttribute="bottom" id="xqA-I5-b8R"/>
+                                                </constraints>
+                                            </view>
+                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="rSh-4Z-F1B" userLabel="Walk Next Element Button">
+                                                <rect key="frame" x="206" y="0.0" width="93" height="60"/>
+                                                <subviews>
+                                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="WUi-IX-70u">
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
+                                                        <connections>
+                                                            <action selector="walkNextElement:" destination="BYZ-38-t0r" eventType="touchUpInside" id="Ven-NS-krT"/>
+                                                        </connections>
+                                                    </button>
+                                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="arrow.right" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="4sP-Mc-Rar" userLabel="Icon">
+                                                        <rect key="frame" x="34.5" y="10.5" width="24" height="22.5"/>
+                                                        <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                                        <constraints>
+                                                            <constraint firstAttribute="height" constant="24" id="NTx-LT-lwy"/>
+                                                            <constraint firstAttribute="width" constant="24" id="dXX-Hv-0Pv"/>
+                                                        </constraints>
+                                                        <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
+                                                    </imageView>
+                                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Next" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="hOG-W9-rtV" userLabel="Label">
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
+                                                        <constraints>
+                                                            <constraint firstAttribute="height" constant="25" id="9St-vb-acW"/>
+                                                        </constraints>
+                                                        <fontDescription key="fontDescription" type="system" pointSize="11"/>
+                                                        <color key="textColor" systemColor="systemGray5Color"/>
+                                                        <nil key="highlightedColor"/>
+                                                    </label>
+                                                </subviews>
+                                                <constraints>
+                                                    <constraint firstItem="WUi-IX-70u" firstAttribute="height" secondItem="rSh-4Z-F1B" secondAttribute="height" id="5gm-AX-b9M"/>
+                                                    <constraint firstItem="WUi-IX-70u" firstAttribute="width" secondItem="rSh-4Z-F1B" secondAttribute="width" id="Fjr-km-Sfd"/>
+                                                    <constraint firstAttribute="bottom" secondItem="WUi-IX-70u" secondAttribute="bottom" id="HNp-dN-TDL"/>
+                                                    <constraint firstAttribute="trailing" secondItem="WUi-IX-70u" secondAttribute="trailing" id="IFw-L0-R0k"/>
+                                                    <constraint firstItem="hOG-W9-rtV" firstAttribute="width" secondItem="rSh-4Z-F1B" secondAttribute="width" id="Mji-i7-lSj"/>
+                                                    <constraint firstItem="4sP-Mc-Rar" firstAttribute="centerX" secondItem="rSh-4Z-F1B" secondAttribute="centerX" id="PGe-8Z-sG6"/>
+                                                    <constraint firstItem="WUi-IX-70u" firstAttribute="leading" secondItem="rSh-4Z-F1B" secondAttribute="leading" id="Rsx-kj-9la"/>
+                                                    <constraint firstItem="WUi-IX-70u" firstAttribute="top" secondItem="rSh-4Z-F1B" secondAttribute="top" id="TEe-Id-BjO"/>
+                                                    <constraint firstAttribute="bottom" secondItem="hOG-W9-rtV" secondAttribute="bottom" constant="4" id="UEh-MQ-hkm"/>
+                                                    <constraint firstItem="4sP-Mc-Rar" firstAttribute="top" secondItem="rSh-4Z-F1B" secondAttribute="top" constant="10" id="X8l-5E-KJT"/>
+                                                    <constraint firstItem="hOG-W9-rtV" firstAttribute="centerX" secondItem="rSh-4Z-F1B" secondAttribute="centerX" id="pvo-YB-fRB"/>
+                                                    <constraint firstAttribute="height" constant="60" id="tm1-Fo-mAC"/>
+                                                </constraints>
+                                            </view>
+                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="WWM-YB-zMH" userLabel="Halt Run Button">
+                                                <rect key="frame" x="309" y="0.0" width="93" height="60"/>
+                                                <subviews>
+                                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Tfe-5m-0Kp">
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
+                                                        <connections>
+                                                            <action selector="haltRun:" destination="BYZ-38-t0r" eventType="touchUpInside" id="rfe-YS-4Pa"/>
+                                                        </connections>
+                                                    </button>
+                                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="stopwatch" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="rJ2-1w-pAc" userLabel="Icon">
+                                                        <rect key="frame" x="34.5" y="6" width="24" height="30"/>
+                                                        <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                                        <constraints>
+                                                            <constraint firstAttribute="height" constant="24" id="0Ud-xU-PM7"/>
+                                                            <constraint firstAttribute="width" constant="24" id="ufX-as-lLS"/>
+                                                        </constraints>
+                                                        <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
+                                                    </imageView>
+                                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Halt" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="8Vx-Hs-BXj" userLabel="Label">
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
+                                                        <constraints>
+                                                            <constraint firstAttribute="height" constant="25" id="A6o-Mv-1Sk"/>
+                                                        </constraints>
+                                                        <fontDescription key="fontDescription" type="system" pointSize="11"/>
+                                                        <color key="textColor" systemColor="systemGray5Color"/>
+                                                        <nil key="highlightedColor"/>
+                                                    </label>
+                                                </subviews>
+                                                <constraints>
+                                                    <constraint firstAttribute="trailing" secondItem="Tfe-5m-0Kp" secondAttribute="trailing" id="3fE-zO-H2r"/>
+                                                    <constraint firstItem="8Vx-Hs-BXj" firstAttribute="width" secondItem="WWM-YB-zMH" secondAttribute="width" id="HmG-fT-gxb"/>
+                                                    <constraint firstItem="rJ2-1w-pAc" firstAttribute="top" secondItem="WWM-YB-zMH" secondAttribute="top" constant="10" id="IiE-4w-u8l"/>
+                                                    <constraint firstAttribute="bottom" secondItem="Tfe-5m-0Kp" secondAttribute="bottom" id="b7D-bK-FYd"/>
+                                                    <constraint firstItem="Tfe-5m-0Kp" firstAttribute="leading" secondItem="WWM-YB-zMH" secondAttribute="leading" id="d0G-Oz-vwi"/>
+                                                    <constraint firstItem="Tfe-5m-0Kp" firstAttribute="height" secondItem="WWM-YB-zMH" secondAttribute="height" id="esb-yH-klx"/>
+                                                    <constraint firstItem="Tfe-5m-0Kp" firstAttribute="width" secondItem="WWM-YB-zMH" secondAttribute="width" id="hoh-jc-xa5"/>
+                                                    <constraint firstAttribute="bottom" secondItem="8Vx-Hs-BXj" secondAttribute="bottom" constant="4" id="lDN-P6-xrd"/>
+                                                    <constraint firstItem="Tfe-5m-0Kp" firstAttribute="top" secondItem="WWM-YB-zMH" secondAttribute="top" id="m1z-1S-VHI"/>
+                                                    <constraint firstItem="rJ2-1w-pAc" firstAttribute="centerX" secondItem="WWM-YB-zMH" secondAttribute="centerX" id="pdA-fM-JSR"/>
+                                                    <constraint firstItem="8Vx-Hs-BXj" firstAttribute="centerX" secondItem="WWM-YB-zMH" secondAttribute="centerX" id="ycP-qi-Wr9"/>
+                                                    <constraint firstAttribute="height" constant="60" id="zev-gB-zwp"/>
+                                                </constraints>
+                                            </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="W2T-VK-Ovs" userLabel="Delete Selection Button">
-                                                <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="412" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="UJE-Ld-3lJ">
-                                                        <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="handleDeleteSelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="988-qb-NQe"/>
+                                                            <action selector="deleteSelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="0AP-VO-DzE"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="trash" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="XVI-gt-wmV" userLabel="Icon">
-                                                        <rect key="frame" x="26.5" y="6" width="24" height="30"/>
+                                                        <rect key="frame" x="34.5" y="6" width="24" height="30"/>
                                                         <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                         <constraints>
                                                             <constraint firstAttribute="width" constant="24" id="ZZx-mx-H5s"/>
@@ -57,7 +229,7 @@
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
                                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Delete" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="vWm-Ed-XTt" userLabel="Label">
-                                                        <rect key="frame" x="0.0" y="31" width="76.5" height="25"/>
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="CfN-hZ-xbN"/>
                                                         </constraints>
@@ -81,17 +253,17 @@
                                                     <constraint firstAttribute="trailing" secondItem="UJE-Ld-3lJ" secondAttribute="trailing" id="zYH-rD-1lj"/>
                                                 </constraints>
                                             </view>
-                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="2AY-97-AlQ" userLabel="Replace Selection Button">
-                                                <rect key="frame" x="86.5" y="0.0" width="76.5" height="60"/>
+                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="2AY-97-AlQ" userLabel="Update Selection Button">
+                                                <rect key="frame" x="515" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="K2e-BW-0gn">
-                                                        <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="handleReplaceSelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="365-Yk-yiI"/>
+                                                            <action selector="updateSelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="K39-ua-72U"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="arrow.2.squarepath" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="p34-3q-yvH" userLabel="Icon">
-                                                        <rect key="frame" x="26.5" y="9" width="24" height="26"/>
+                                                        <rect key="frame" x="34.5" y="9" width="24" height="26"/>
                                                         <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                         <constraints>
                                                             <constraint firstAttribute="width" constant="24" id="0WL-3O-ElP"/>
@@ -99,8 +271,8 @@
                                                         </constraints>
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
-                                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Replace" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="OVe-zS-Sok" userLabel="Label">
-                                                        <rect key="frame" x="0.0" y="31" width="76.5" height="25"/>
+                                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Update" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="OVe-zS-Sok" userLabel="Label">
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="s4n-Te-4ig"/>
                                                         </constraints>
@@ -124,17 +296,17 @@
                                                     <constraint firstItem="K2e-BW-0gn" firstAttribute="width" secondItem="2AY-97-AlQ" secondAttribute="width" id="xe9-ay-tud"/>
                                                 </constraints>
                                             </view>
-                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="R9L-Ix-9gI" userLabel="Cancel Replace Selection Button">
-                                                <rect key="frame" x="173" y="0.0" width="76.5" height="60"/>
+                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="R9L-Ix-9gI" userLabel="Cancel Update Selection Button">
+                                                <rect key="frame" x="618" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="pJl-CQ-HgM">
-                                                        <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="handleCancelReplaceSelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="Bkq-r5-2l3"/>
+                                                            <action selector="cancelUpdateSelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="wFf-ZK-md9"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="xmark" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="3L8-Gn-5kk" userLabel="Icon">
-                                                        <rect key="frame" x="26.5" y="10.5" width="24" height="23"/>
+                                                        <rect key="frame" x="34.5" y="10.5" width="24" height="23"/>
                                                         <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="24" id="FeW-6Q-BDZ"/>
@@ -143,7 +315,7 @@
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
                                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Cancel" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="GPE-Ki-HOF" userLabel="Label">
-                                                        <rect key="frame" x="0.0" y="31" width="76.5" height="25"/>
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="DAv-qg-Wc7"/>
                                                         </constraints>
@@ -168,16 +340,16 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="yaf-vd-hBM" userLabel="Copy Selection Button">
-                                                <rect key="frame" x="259.5" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="721" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="UJC-Kv-0oe">
-                                                        <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="handleCopySelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="KwT-5u-ze3"/>
+                                                            <action selector="copySelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="V2M-1t-c61"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="doc.on.doc" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="nHb-Zz-WWd" userLabel="Icon">
-                                                        <rect key="frame" x="26.5" y="5.5" width="24" height="33"/>
+                                                        <rect key="frame" x="34.5" y="5.5" width="24" height="33"/>
                                                         <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="24" id="2Ks-6a-utz"/>
@@ -186,7 +358,7 @@
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
                                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Copy" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="IF7-We-sP8" userLabel="Label">
-                                                        <rect key="frame" x="0.0" y="31" width="76.5" height="25"/>
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="jGH-ng-yL8"/>
                                                         </constraints>
@@ -211,16 +383,16 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="n9G-RS-caI" userLabel="Cut Selection Button">
-                                                <rect key="frame" x="346" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="824" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="crV-xP-kSW">
-                                                        <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="handleCutSelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="61o-eC-L8L"/>
+                                                            <action selector="cutSelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="Xa0-U4-J9x"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="scissors" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="9aK-ol-jJJ" userLabel="Icon">
-                                                        <rect key="frame" x="26.5" y="8.5" width="24" height="27"/>
+                                                        <rect key="frame" x="34.5" y="8.5" width="24" height="27"/>
                                                         <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="24" id="XS3-v5-yn1"/>
@@ -229,7 +401,7 @@
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
                                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Cut" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="R0w-M6-JAJ" userLabel="Label">
-                                                        <rect key="frame" x="0.0" y="31" width="76.5" height="25"/>
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="bF6-ug-f5w"/>
                                                         </constraints>
@@ -254,16 +426,16 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="llz-Gj-MCS" userLabel="Increase Rate Button">
-                                                <rect key="frame" x="432.5" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="927" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="GnD-E8-QyV">
-                                                        <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="handleIncreaseRateSelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="0gw-4f-hGE"/>
+                                                            <action selector="increaseRateSelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="O3m-QU-VoW"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="arrowtriangle.left.and.line.vertical.and.arrowtriangle.right" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="lIk-qb-Emu" userLabel="Icon">
-                                                        <rect key="frame" x="26.5" y="7.5" width="24" height="28.5"/>
+                                                        <rect key="frame" x="34.5" y="7.5" width="24" height="28.5"/>
                                                         <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="24" id="TVx-bD-uKe"/>
@@ -272,7 +444,7 @@
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
                                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Increase Rate" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="yWN-aL-nt3" userLabel="Label">
-                                                        <rect key="frame" x="0.0" y="31" width="76.5" height="25"/>
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="wts-LD-qbb"/>
                                                         </constraints>
@@ -297,16 +469,16 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="uEe-RB-u37" userLabel="Decrease Rate Button">
-                                                <rect key="frame" x="519" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="1030" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="6dP-qr-sNy">
-                                                        <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="handleDecreaseRateSelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="RVy-Cw-4cX"/>
+                                                            <action selector="decreaseRateSelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="Rp7-kk-yPp"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="arrowtriangle.right.and.line.vertical.and.arrowtriangle.left" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="U2u-D3-ugI" userLabel="Icon">
-                                                        <rect key="frame" x="26.5" y="7.5" width="24" height="28.5"/>
+                                                        <rect key="frame" x="34.5" y="7.5" width="24" height="28.5"/>
                                                         <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                         <constraints>
                                                             <constraint firstAttribute="width" constant="24" id="IQJ-mE-1ae"/>
@@ -315,7 +487,7 @@
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
                                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Decrease Rate" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="KcI-Q7-myU" userLabel="Label">
-                                                        <rect key="frame" x="0.0" y="31" width="76.5" height="25"/>
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="oXV-GW-oiQ"/>
                                                         </constraints>
@@ -339,60 +511,17 @@
                                                     <constraint firstAttribute="trailing" secondItem="6dP-qr-sNy" secondAttribute="trailing" id="zdv-nT-Os2"/>
                                                 </constraints>
                                             </view>
-                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="L3s-u8-MH4" userLabel="Export Selection Button">
-                                                <rect key="frame" x="605.5" y="0.0" width="76.5" height="60"/>
-                                                <subviews>
-                                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Jpa-Jq-u8I">
-                                                        <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
-                                                        <connections>
-                                                            <action selector="handleExportSelection:" destination="BYZ-38-t0r" eventType="touchUpInside" id="Nbc-7A-e9j"/>
-                                                        </connections>
-                                                    </button>
-                                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="square.and.arrow.up" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="87c-Fo-yRm" userLabel="Icon">
-                                                        <rect key="frame" x="26.5" y="6" width="24" height="30"/>
-                                                        <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                                                        <constraints>
-                                                            <constraint firstAttribute="width" constant="24" id="qcw-mL-e6B"/>
-                                                            <constraint firstAttribute="height" constant="24" id="tvI-32-cUU"/>
-                                                        </constraints>
-                                                        <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
-                                                    </imageView>
-                                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Export" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="IoR-tA-JmH" userLabel="Label">
-                                                        <rect key="frame" x="0.0" y="31" width="76.5" height="25"/>
-                                                        <constraints>
-                                                            <constraint firstAttribute="height" constant="25" id="csP-BK-AQH"/>
-                                                        </constraints>
-                                                        <fontDescription key="fontDescription" type="system" pointSize="11"/>
-                                                        <color key="textColor" systemColor="systemGray5Color"/>
-                                                        <nil key="highlightedColor"/>
-                                                    </label>
-                                                </subviews>
-                                                <constraints>
-                                                    <constraint firstAttribute="bottom" secondItem="Jpa-Jq-u8I" secondAttribute="bottom" id="64a-Y5-76i"/>
-                                                    <constraint firstItem="IoR-tA-JmH" firstAttribute="centerX" secondItem="L3s-u8-MH4" secondAttribute="centerX" id="Aap-Yv-gag"/>
-                                                    <constraint firstItem="87c-Fo-yRm" firstAttribute="top" secondItem="L3s-u8-MH4" secondAttribute="top" constant="10" id="BBV-Bp-gqj"/>
-                                                    <constraint firstItem="Jpa-Jq-u8I" firstAttribute="width" secondItem="L3s-u8-MH4" secondAttribute="width" id="BzZ-27-q15"/>
-                                                    <constraint firstItem="87c-Fo-yRm" firstAttribute="centerX" secondItem="L3s-u8-MH4" secondAttribute="centerX" id="MUl-vO-qk0"/>
-                                                    <constraint firstItem="Jpa-Jq-u8I" firstAttribute="height" secondItem="L3s-u8-MH4" secondAttribute="height" id="Ukt-hz-xAP"/>
-                                                    <constraint firstAttribute="bottom" secondItem="IoR-tA-JmH" secondAttribute="bottom" constant="4" id="fBa-hf-3EQ"/>
-                                                    <constraint firstItem="Jpa-Jq-u8I" firstAttribute="top" secondItem="L3s-u8-MH4" secondAttribute="top" id="iEb-qN-J3a"/>
-                                                    <constraint firstItem="Jpa-Jq-u8I" firstAttribute="leading" secondItem="L3s-u8-MH4" secondAttribute="leading" id="im1-e7-YJC"/>
-                                                    <constraint firstAttribute="height" constant="60" id="n9s-4c-Y0E"/>
-                                                    <constraint firstAttribute="trailing" secondItem="Jpa-Jq-u8I" secondAttribute="trailing" id="paX-03-GRZ"/>
-                                                    <constraint firstItem="IoR-tA-JmH" firstAttribute="width" secondItem="L3s-u8-MH4" secondAttribute="width" id="toa-Ug-M8n"/>
-                                                </constraints>
-                                            </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="81X-ao-BrY" userLabel="Move Here Button">
-                                                <rect key="frame" x="692" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="1133" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="qJL-mn-r2t">
-                                                        <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="handleMoveHere:" destination="BYZ-38-t0r" eventType="touchUpInside" id="81p-Un-NUu"/>
+                                                            <action selector="moveHere:" destination="BYZ-38-t0r" eventType="touchUpInside" id="L1Q-GC-tNP"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="scope" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="DjH-LK-xVk" userLabel="Icon">
-                                                        <rect key="frame" x="26.5" y="6" width="24" height="32"/>
+                                                        <rect key="frame" x="34.5" y="6" width="24" height="32"/>
                                                         <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="24" id="Gx1-7y-bWz"/>
@@ -401,7 +530,7 @@
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
                                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Move Here" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="nhE-If-7yB" userLabel="Label">
-                                                        <rect key="frame" x="0.0" y="31" width="76.5" height="25"/>
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="ID5-7E-jV6"/>
                                                         </constraints>
@@ -426,17 +555,17 @@
                                                     <constraint firstItem="qJL-mn-r2t" firstAttribute="height" secondItem="81X-ao-BrY" secondAttribute="height" id="vkP-Sq-jB2"/>
                                                 </constraints>
                                             </view>
-                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="PeZ-QO-LMy" userLabel="Run Note Button">
-                                                <rect key="frame" x="778.5" y="0.0" width="76.5" height="60"/>
+                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="PeZ-QO-LMy" userLabel="Run Button">
+                                                <rect key="frame" x="1236" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="5Is-lr-xL8">
-                                                        <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="handleRunNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="IJu-ss-Zyl"/>
+                                                            <action selector="run:" destination="BYZ-38-t0r" eventType="touchUpInside" id="1mU-VZ-HQc"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="hare" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="ygu-E3-MBV" userLabel="Icon">
-                                                        <rect key="frame" x="26.5" y="6.5" width="24" height="30"/>
+                                                        <rect key="frame" x="34.5" y="6.5" width="24" height="30"/>
                                                         <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                         <constraints>
                                                             <constraint firstAttribute="width" constant="24" id="5z6-V0-6Vv"/>
@@ -445,7 +574,7 @@
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
                                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Run Note" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="pVH-ge-cnw" userLabel="Label">
-                                                        <rect key="frame" x="0.0" y="31" width="76.5" height="25"/>
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="dHe-De-cf4"/>
                                                         </constraints>
@@ -469,17 +598,17 @@
                                                     <constraint firstItem="5Is-lr-xL8" firstAttribute="height" secondItem="PeZ-QO-LMy" secondAttribute="height" id="wrf-GT-mh0"/>
                                                 </constraints>
                                             </view>
-                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="aiq-7G-8JT" userLabel="Pause Note Button">
-                                                <rect key="frame" x="865" y="0.0" width="76.5" height="60"/>
+                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="aiq-7G-8JT" userLabel="Pause Button">
+                                                <rect key="frame" x="1339" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="tNa-nV-25q">
-                                                        <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="handlePauseNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="mUQ-jq-Vkc"/>
+                                                            <action selector="pause:" destination="BYZ-38-t0r" eventType="touchUpInside" id="uTI-f7-Ecz"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="pause" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="POB-Jj-82d" userLabel="Icon">
-                                                        <rect key="frame" x="26.5" y="10.5" width="24" height="23.5"/>
+                                                        <rect key="frame" x="34.5" y="10.5" width="24" height="23.5"/>
                                                         <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                         <constraints>
                                                             <constraint firstAttribute="width" constant="24" id="8tS-0R-nSP"/>
@@ -488,7 +617,7 @@
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
                                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Pause Note" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="nYW-Cl-m24" userLabel="Label">
-                                                        <rect key="frame" x="0.0" y="31" width="76.5" height="25"/>
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="CHF-rn-2Zk"/>
                                                         </constraints>
@@ -512,17 +641,17 @@
                                                     <constraint firstAttribute="bottom" secondItem="tNa-nV-25q" secondAttribute="bottom" id="y4x-bg-tTg"/>
                                                 </constraints>
                                             </view>
-                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="t5M-tA-0Yi" userLabel="Last Commit Button">
-                                                <rect key="frame" x="951.5" y="0.0" width="76.5" height="60"/>
+                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="t5M-tA-0Yi" userLabel="Play Commit Button">
+                                                <rect key="frame" x="1442" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="mQR-1F-zVh">
-                                                        <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="handleLastCommit:" destination="BYZ-38-t0r" eventType="touchUpInside" id="96I-zV-xZi"/>
+                                                            <action selector="playCommit:" destination="BYZ-38-t0r" eventType="touchUpInside" id="piG-ci-ll5"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="square.3.stack.3d.top.fill" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="JsU-cU-SXd" userLabel="Icon">
-                                                        <rect key="frame" x="26.5" y="7" width="24" height="30"/>
+                                                        <rect key="frame" x="34.5" y="7" width="24" height="30"/>
                                                         <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                         <constraints>
                                                             <constraint firstAttribute="width" constant="24" id="eje-xP-VJh"/>
@@ -530,8 +659,8 @@
                                                         </constraints>
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
-                                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Last Commit" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="zi0-0d-hnv" userLabel="Label">
-                                                        <rect key="frame" x="0.0" y="31" width="76.5" height="25"/>
+                                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Play Commit" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="zi0-0d-hnv" userLabel="Label">
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="d92-5a-t7j"/>
                                                         </constraints>
@@ -556,16 +685,16 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="88v-ju-wHm" userLabel="Pause Echo Button">
-                                                <rect key="frame" x="1038" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="1545" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="4qB-HF-2wj">
-                                                        <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="handlePauseEcho:" destination="BYZ-38-t0r" eventType="touchUpInside" id="abc-0W-7Id"/>
+                                                            <action selector="pauseEcho:" destination="BYZ-38-t0r" eventType="touchUpInside" id="jG6-2S-Ljh"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="pause.circle" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="NXk-VM-Iog" userLabel="Icon">
-                                                        <rect key="frame" x="26.5" y="8" width="24" height="28"/>
+                                                        <rect key="frame" x="34.5" y="8" width="24" height="28"/>
                                                         <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="24" id="AxJ-Ui-RmH"/>
@@ -574,7 +703,7 @@
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
                                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Pause Echo" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="ZSK-Kx-Ts9" userLabel="Label">
-                                                        <rect key="frame" x="0.0" y="31" width="76.5" height="25"/>
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="1cb-c5-jJx"/>
                                                         </constraints>
@@ -598,17 +727,17 @@
                                                     <constraint firstAttribute="trailing" secondItem="4qB-HF-2wj" secondAttribute="trailing" id="xFu-lB-jFe"/>
                                                 </constraints>
                                             </view>
-                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="j9F-d2-jUG" userLabel="Preview Clipboard Button">
-                                                <rect key="frame" x="1124.5" y="0.0" width="76.5" height="60"/>
+                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="j9F-d2-jUG" userLabel="Inspect Clipboard Button">
+                                                <rect key="frame" x="1648" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="X22-8f-tve">
-                                                        <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="handlePreviewClipboard:" destination="BYZ-38-t0r" eventType="touchUpInside" id="l4y-VD-ekE"/>
+                                                            <action selector="inspectClipboard:" destination="BYZ-38-t0r" eventType="touchUpInside" id="PQo-wo-rBU"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="arrow.right.doc.on.clipboard" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="2Rm-yo-liY" userLabel="Icon">
-                                                        <rect key="frame" x="26.5" y="5.5" width="24" height="33"/>
+                                                        <rect key="frame" x="34.5" y="5.5" width="24" height="33"/>
                                                         <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                         <constraints>
                                                             <constraint firstAttribute="width" constant="24" id="UI7-tj-zv1"/>
@@ -616,8 +745,8 @@
                                                         </constraints>
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
-                                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Clipboard" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="YZS-SF-jxE" userLabel="Label">
-                                                        <rect key="frame" x="0.0" y="31" width="76.5" height="25"/>
+                                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Inspect Clipboard" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="YZS-SF-jxE" userLabel="Label">
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="VR7-rA-0cJ"/>
                                                         </constraints>
@@ -642,16 +771,16 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="MC4-GC-75X" userLabel="Skip Backward Button">
-                                                <rect key="frame" x="1211" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="1751" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="nVT-bq-2Zl">
-                                                        <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="handleSkipBackward:" destination="BYZ-38-t0r" eventType="touchUpInside" id="nFs-Ki-v92"/>
+                                                            <action selector="skipBackward:" destination="BYZ-38-t0r" eventType="touchUpInside" id="XDY-1g-VJZ"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="gobackward" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="VfE-pU-eGe" userLabel="Icon">
-                                                        <rect key="frame" x="26.5" y="6" width="24" height="30"/>
+                                                        <rect key="frame" x="34.5" y="6" width="24" height="30"/>
                                                         <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="24" id="2Cm-WM-S6v"/>
@@ -660,7 +789,7 @@
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
                                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Backward" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="2MM-46-aHJ" userLabel="Label">
-                                                        <rect key="frame" x="0.0" y="31" width="76.5" height="25"/>
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="3dM-Ie-gQY"/>
                                                         </constraints>
@@ -685,16 +814,16 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="JlL-cG-24s" userLabel="Skip Forward Button">
-                                                <rect key="frame" x="1297.5" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="1854" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="ce3-uz-QGs">
-                                                        <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="handleSkipForward:" destination="BYZ-38-t0r" eventType="touchUpInside" id="1o9-bU-6TK"/>
+                                                            <action selector="skipForward:" destination="BYZ-38-t0r" eventType="touchUpInside" id="BsR-hf-6dN"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="goforward" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="fh7-f4-fCr" userLabel="Icon">
-                                                        <rect key="frame" x="26.5" y="6" width="24" height="30"/>
+                                                        <rect key="frame" x="34.5" y="6" width="24" height="30"/>
                                                         <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                         <constraints>
                                                             <constraint firstAttribute="width" constant="24" id="SwD-Uo-FIt"/>
@@ -703,7 +832,7 @@
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
                                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Forward" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="BfV-Od-HVz" userLabel="Label">
-                                                        <rect key="frame" x="0.0" y="31" width="76.5" height="25"/>
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="0nj-kz-euO"/>
                                                         </constraints>
@@ -728,16 +857,16 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="YBi-jc-AO8" userLabel="Playback Rate Button">
-                                                <rect key="frame" x="1384" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="1957" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="yCt-AL-5fA">
-                                                        <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="handlePlaybackRate:" destination="BYZ-38-t0r" eventType="touchUpInside" id="Xk5-xI-ASM"/>
+                                                            <action selector="playbackRate:" destination="BYZ-38-t0r" eventType="touchUpInside" id="hWB-KG-34u"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="memories" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="PXL-kv-zfB" userLabel="Icon">
-                                                        <rect key="frame" x="26.5" y="8" width="24" height="28"/>
+                                                        <rect key="frame" x="34.5" y="8" width="24" height="28"/>
                                                         <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                         <constraints>
                                                             <constraint firstAttribute="width" constant="24" id="gl1-CW-xGK"/>
@@ -746,7 +875,7 @@
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
                                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Playback Rate" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="O38-dH-eUs" userLabel="Label">
-                                                        <rect key="frame" x="0.0" y="31" width="76.5" height="25"/>
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="wYt-hi-L73"/>
                                                         </constraints>
@@ -771,16 +900,16 @@
                                                 </constraints>
                                             </view>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="6Wt-Ih-DqE" userLabel="Echo Rate Button">
-                                                <rect key="frame" x="1470.5" y="0.0" width="76.5" height="60"/>
+                                                <rect key="frame" x="2060" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="STn-Gi-zZL">
-                                                        <rect key="frame" x="0.0" y="0.0" width="76.5" height="60"/>
+                                                        <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="handleEchoRate:" destination="BYZ-38-t0r" eventType="touchUpInside" id="Z1f-1q-u1h"/>
+                                                            <action selector="echoRate:" destination="BYZ-38-t0r" eventType="touchUpInside" id="TZf-HA-0gp"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="gauge" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="BhW-4e-yzO" userLabel="Icon">
-                                                        <rect key="frame" x="26.5" y="8" width="24" height="28"/>
+                                                        <rect key="frame" x="34.5" y="8" width="24" height="28"/>
                                                         <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="24" id="3HU-Fh-Ied"/>
@@ -789,7 +918,7 @@
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
                                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Echo Rate" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="cHx-eA-Iiq" userLabel="Label">
-                                                        <rect key="frame" x="0.0" y="31" width="76.5" height="25"/>
+                                                        <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="Dkh-uJ-431"/>
                                                         </constraints>
@@ -839,18 +968,18 @@
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="1.0" textAlignment="right" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="VQr-2O-kOR" userLabel="Transformation Label">
                                 <rect key="frame" x="362.5" y="698" width="31.5" height="29"/>
                                 <fontDescription key="fontDescription" type="system" weight="medium" pointSize="24"/>
-                                <color key="textColor" systemColor="systemOrangeColor"/>
+                                <color key="textColor" red="0.85882352941176465" green="0.53725490196078429" blue="0.29411764705882354" alpha="1" colorSpace="calibratedRGB"/>
                                 <nil key="highlightedColor"/>
                             </label>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="C#4" textAlignment="right" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="nkY-JO-vng" userLabel="Pitch Label">
                                 <rect key="frame" x="347" y="743" width="47" height="29"/>
                                 <fontDescription key="fontDescription" type="system" weight="medium" pointSize="24"/>
-                                <color key="textColor" systemColor="systemRedColor"/>
+                                <color key="textColor" red="0.82745098039215681" green="0.098039215686274508" blue="0.0" alpha="1" colorSpace="calibratedRGB"/>
                                 <nil key="highlightedColor"/>
                             </label>
                             <view contentMode="scaleToFill" preservesSuperviewLayoutMargins="YES" translatesAutoresizingMaskIntoConstraints="NO" id="NP2-Ys-Ufm" userLabel="Sound Intensity Indicator">
                                 <rect key="frame" x="409" y="88" width="5" height="774"/>
-                                <color key="backgroundColor" systemColor="systemRedColor"/>
+                                <color key="backgroundColor" red="0.82745098039215681" green="0.098039215686274508" blue="0.0" alpha="1" colorSpace="calibratedRGB"/>
                                 <constraints>
                                     <constraint firstAttribute="height" constant="774" id="3IS-Ev-EYg"/>
                                     <constraint firstAttribute="width" constant="5" id="9Xe-oI-BIq"/>
@@ -865,7 +994,7 @@
                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Sod-kC-6f1">
                                                 <rect key="frame" x="0.0" y="0.0" width="32.5" height="70"/>
                                                 <connections>
-                                                    <action selector="handleStartNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="Eeh-A1-gpN"/>
+                                                    <action selector="startNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="GeF-al-c37"/>
                                                 </connections>
                                             </button>
                                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="mic" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="XJK-54-0Ri" userLabel="Icon">
@@ -903,14 +1032,13 @@
                                             <constraint firstItem="Sod-kC-6f1" firstAttribute="width" secondItem="qmX-8T-RmB" secondAttribute="width" id="x1g-gR-T9j"/>
                                         </constraints>
                                     </view>
-                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="104-Bb-akr" userLabel="Continue Note Button">
+                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="104-Bb-akr" userLabel="Resume Note Button">
                                         <rect key="frame" x="42.5" y="0.0" width="32.5" height="70"/>
                                         <subviews>
                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="tPU-o1-GWr">
                                                 <rect key="frame" x="0.0" y="0.0" width="32.5" height="70"/>
                                                 <connections>
-                                                    <action selector="handleResumeNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="dgJ-h8-XPc"/>
-                                                    <action selector="handleStartNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="gLf-FZ-OMm"/>
+                                                    <action selector="resumeNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="B8Q-3z-ekx"/>
                                                 </connections>
                                             </button>
                                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="mic" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="pAU-E2-XHV" userLabel="Icon">
@@ -954,7 +1082,7 @@
                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Euc-q5-RLq">
                                                 <rect key="frame" x="0.0" y="0.0" width="32" height="70"/>
                                                 <connections>
-                                                    <action selector="handleEditNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="uO6-W3-3hg"/>
+                                                    <action selector="editNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="PWp-JJ-VOD"/>
                                                 </connections>
                                             </button>
                                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="pencil" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="Vzr-gT-dNw" userLabel="Icon">
@@ -998,7 +1126,7 @@
                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Y0X-aX-rJJ">
                                                 <rect key="frame" x="0.0" y="0.0" width="32.5" height="70"/>
                                                 <connections>
-                                                    <action selector="handleStopListeningNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="JUi-sK-MOw"/>
+                                                    <action selector="stopListeningNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="ES3-WE-AuW"/>
                                                 </connections>
                                             </button>
                                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="hand.raised" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="Tpv-w9-cMz" userLabel="Icon">
@@ -1036,13 +1164,13 @@
                                             <constraint firstItem="zvc-u8-v90" firstAttribute="width" secondItem="U63-yq-ZMN" secondAttribute="width" id="zyO-E6-Q5s"/>
                                         </constraints>
                                     </view>
-                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Lt6-DB-dya" userLabel="Play Note Button">
+                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Lt6-DB-dya" userLabel="Play Button">
                                         <rect key="frame" x="169.5" y="0.0" width="32.5" height="70"/>
                                         <subviews>
                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="7nd-0g-Rfb">
                                                 <rect key="frame" x="0.0" y="0.0" width="32.5" height="70"/>
                                                 <connections>
-                                                    <action selector="handlePlayNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="CIi-H7-diw"/>
+                                                    <action selector="play:" destination="BYZ-38-t0r" eventType="touchUpInside" id="wtd-i0-AMz"/>
                                                 </connections>
                                             </button>
                                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="play" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="qqt-to-w7y" userLabel="Icon">
@@ -1080,13 +1208,13 @@
                                             <constraint firstItem="7nd-0g-Rfb" firstAttribute="top" secondItem="Lt6-DB-dya" secondAttribute="top" id="sgG-K0-zgq"/>
                                         </constraints>
                                     </view>
-                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="4yS-ds-3sg" userLabel="Stop Playing Note Button">
+                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="4yS-ds-3sg" userLabel="Stop Playing Button">
                                         <rect key="frame" x="212" y="0.0" width="32.5" height="70"/>
                                         <subviews>
                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="mf8-WR-YbV">
                                                 <rect key="frame" x="0.0" y="0.0" width="32.5" height="70"/>
                                                 <connections>
-                                                    <action selector="handleStopPlayingNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="h5n-ND-Ezs"/>
+                                                    <action selector="stopPlaying:" destination="BYZ-38-t0r" eventType="touchUpInside" id="rbX-Tt-4xy"/>
                                                 </connections>
                                             </button>
                                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="stop" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="4ox-l1-8Qk" userLabel="Icon">
@@ -1124,13 +1252,13 @@
                                             <constraint firstAttribute="bottom" secondItem="mf8-WR-YbV" secondAttribute="bottom" id="tEW-OG-lCJ"/>
                                         </constraints>
                                     </view>
-                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="cnb-5X-cDY" userLabel="Echo Note Button">
+                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="cnb-5X-cDY" userLabel="Echo Button">
                                         <rect key="frame" x="254.5" y="0.0" width="32.5" height="70"/>
                                         <subviews>
                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="2IC-YU-dM2">
                                                 <rect key="frame" x="0.0" y="0.0" width="32.5" height="70"/>
                                                 <connections>
-                                                    <action selector="handleEchoNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="KDv-ex-99u"/>
+                                                    <action selector="echo:" destination="BYZ-38-t0r" eventType="touchUpInside" id="xSg-5m-JoU"/>
                                                 </connections>
                                             </button>
                                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="ear" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="BtA-px-RdP" userLabel="Icon">
@@ -1174,7 +1302,7 @@
                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="YBC-YE-QZJ">
                                                 <rect key="frame" x="0.0" y="0.0" width="32" height="70"/>
                                                 <connections>
-                                                    <action selector="handleStopEcho:" destination="BYZ-38-t0r" eventType="touchUpInside" id="pY9-Tq-xDH"/>
+                                                    <action selector="stopEcho:" destination="BYZ-38-t0r" eventType="touchUpInside" id="Edh-sb-LOT"/>
                                                 </connections>
                                             </button>
                                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="stop.circle" catalog="system" adjustsImageSizeForAccessibilityContentSizeCategory="YES" translatesAutoresizingMaskIntoConstraints="NO" id="2wT-25-b3P" userLabel="Icon">
@@ -1212,13 +1340,13 @@
                                             <constraint firstItem="YBC-YE-QZJ" firstAttribute="height" secondItem="TIs-yf-gNU" secondAttribute="height" id="xOL-aG-HCb"/>
                                         </constraints>
                                     </view>
-                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="H0L-Fd-gxp" userLabel="Walk Note Button">
+                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="H0L-Fd-gxp" userLabel="Walk Button">
                                         <rect key="frame" x="339" y="0.0" width="32.5" height="70"/>
                                         <subviews>
                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="AlJ-so-8Wq">
                                                 <rect key="frame" x="0.0" y="0.0" width="32.5" height="70"/>
                                                 <connections>
-                                                    <action selector="handleWalkNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="cQX-uB-HfC"/>
+                                                    <action selector="walk:" destination="BYZ-38-t0r" eventType="touchUpInside" id="BqA-Va-PQ6"/>
                                                 </connections>
                                             </button>
                                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="tortoise" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="wNQ-JZ-Rz3" userLabel="Icon">
@@ -1256,13 +1384,13 @@
                                             <constraint firstItem="AlJ-so-8Wq" firstAttribute="height" secondItem="H0L-Fd-gxp" secondAttribute="height" id="yLd-XM-fjy"/>
                                         </constraints>
                                     </view>
-                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="pir-kT-Cor" userLabel="Export Note Button">
+                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="pir-kT-Cor" userLabel="Export Button">
                                         <rect key="frame" x="381.5" y="0.0" width="32.5" height="70"/>
                                         <subviews>
                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="8eb-f6-ndY">
                                                 <rect key="frame" x="0.0" y="0.0" width="32.5" height="70"/>
                                                 <connections>
-                                                    <action selector="handleExportNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="Vm4-0D-i0E"/>
+                                                    <action selector="export:" destination="BYZ-38-t0r" eventType="touchUpInside" id="iJp-c1-lu0"/>
                                                 </connections>
                                             </button>
                                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="square.and.arrow.up" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="Y96-EQ-Zps" userLabel="Icon">
@@ -1315,7 +1443,7 @@
                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="FJZ-Jn-kxE">
                                                 <rect key="frame" x="0.0" y="0.0" width="60" height="60"/>
                                                 <connections>
-                                                    <action selector="handleExitSlider:" destination="BYZ-38-t0r" eventType="touchUpInside" id="dgw-78-SpL"/>
+                                                    <action selector="exitSlider:" destination="BYZ-38-t0r" eventType="touchUpInside" id="3Dg-r8-xIv"/>
                                                 </connections>
                                             </button>
                                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="chevron.left" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="38d-SY-P9d" userLabel="Icon">
@@ -1406,33 +1534,33 @@
                     </view>
                     <navigationItem key="navigationItem" id="3OJ-C9-X31"/>
                     <connections>
-                        <outlet property="cancelReplaceSelectionButton" destination="R9L-Ix-9gI" id="qjD-Xv-UoX"/>
+                        <outlet property="cancelUpdateSelectionButton" destination="R9L-Ix-9gI" id="OKa-Hh-Jd5"/>
                         <outlet property="commandBar" destination="NJR-7J-DET" id="Wvi-Il-cAZ"/>
                         <outlet property="commandBarPositionTop" destination="XiN-oJ-bqa" id="hdo-Bu-g2c"/>
                         <outlet property="copySelectionButton" destination="yaf-vd-hBM" id="BE5-Bd-06A"/>
                         <outlet property="cutSelectionButton" destination="n9G-RS-caI" id="wMt-6d-i0m"/>
                         <outlet property="decreaseRateButton" destination="uEe-RB-u37" id="tfN-Hd-476"/>
                         <outlet property="deleteSelectionButton" destination="W2T-VK-Ovs" id="jrm-oP-pwk"/>
+                        <outlet property="echoButton" destination="cnb-5X-cDY" id="yE5-GO-dxk"/>
                         <outlet property="echoRateButton" destination="6Wt-Ih-DqE" id="nxn-Rt-Z6K"/>
                         <outlet property="editNoteButton" destination="GcS-hv-4ky" id="GdW-Al-bxL"/>
                         <outlet property="exitSliderButton" destination="88x-K7-N2H" id="Hq4-2f-77G"/>
-                        <outlet property="exportNoteButton" destination="pir-kT-Cor" id="8Gh-hM-J4B"/>
-                        <outlet property="exportSelectionButton" destination="L3s-u8-MH4" id="ftA-8C-Sac"/>
+                        <outlet property="exitWalkRunButton" destination="WTY-vs-DOu" id="1td-9L-B5N"/>
+                        <outlet property="exportButton" destination="pir-kT-Cor" id="Xc6-tW-o6G"/>
+                        <outlet property="haltRunButton" destination="WWM-YB-zMH" id="pSz-5M-AQp"/>
                         <outlet property="increaseRateButton" destination="llz-Gj-MCS" id="iEd-VI-zIh"/>
-                        <outlet property="lastCommitButton" destination="t5M-tA-0Yi" id="PFr-NW-UtX"/>
+                        <outlet property="inspectClipboardButton" destination="j9F-d2-jUG" id="Rsb-E8-vR5"/>
                         <outlet property="menuBar" destination="Ht0-xa-6Fc" id="yYT-Qa-gcv"/>
                         <outlet property="menuBarPositionBottom" destination="qHf-DX-8bB" id="KJc-rD-1uH"/>
                         <outlet property="moveHereButton" destination="81X-ao-BrY" id="uXw-NW-rFz"/>
+                        <outlet property="pauseButton" destination="aiq-7G-8JT" id="GUk-Vt-gkK"/>
                         <outlet property="pauseEchoButton" destination="88v-ju-wHm" id="CLm-aP-rsk"/>
-                        <outlet property="pauseNoteButton" destination="aiq-7G-8JT" id="XbZ-tk-YEO"/>
                         <outlet property="pitchLabel" destination="nkY-JO-vng" id="aWJ-73-aAj"/>
-                        <outlet property="playEchoButton" destination="cnb-5X-cDY" id="SIQ-lK-28D"/>
-                        <outlet property="playNoteButton" destination="Lt6-DB-dya" id="aTh-Hu-6bS"/>
+                        <outlet property="playButton" destination="Lt6-DB-dya" id="6as-MT-AL0"/>
+                        <outlet property="playCommitButton" destination="t5M-tA-0Yi" id="UAF-kB-2HI"/>
                         <outlet property="playbackRateButton" destination="YBi-jc-AO8" id="aYQ-7g-Udv"/>
-                        <outlet property="previewClipboardButton" destination="j9F-d2-jUG" id="gOC-eR-a4m"/>
-                        <outlet property="replaceSelectionButton" destination="2AY-97-AlQ" id="6gk-NM-LXY"/>
                         <outlet property="resumeNoteButton" destination="104-Bb-akr" id="7e7-9b-Qk2"/>
-                        <outlet property="runNoteButton" destination="PeZ-QO-LMy" id="Moh-tB-hu5"/>
+                        <outlet property="runButton" destination="PeZ-QO-LMy" id="yNC-xK-lb0"/>
                         <outlet property="scrollView" destination="ztA-53-ezE" id="N6i-8m-TVc"/>
                         <outlet property="scrollViewPositionTop" destination="bLU-Q1-UJT" id="rXE-pm-GTS"/>
                         <outlet property="skipBackwardButton" destination="MC4-GC-75X" id="P9R-k7-pt9"/>
@@ -1440,19 +1568,23 @@
                         <outlet property="slider" destination="qhG-bk-gYr" id="nCY-IQ-yJa"/>
                         <outlet property="sliderView" destination="MXM-2I-uDb" id="kKj-Gh-pbt"/>
                         <outlet property="sliderViewPositionTop" destination="LpT-vj-HN5" id="Eb1-Uc-org"/>
+                        <outlet property="soundIntensityIndicator" destination="NP2-Ys-Ufm" id="f35-h9-3hf"/>
                         <outlet property="soundIntensityIndicatorHeight" destination="3IS-Ev-EYg" id="LZT-sD-gP3"/>
-                        <outlet property="soundIntensityIndicatorPositionBottom" destination="1ar-Pc-ScE" id="RtG-2C-7gu"/>
+                        <outlet property="soundIntensityIndicatorPositionBottom" destination="1ar-Pc-ScE" id="XIj-DG-lL3"/>
                         <outlet property="startNoteButton" destination="qmX-8T-RmB" id="9Jb-KI-Aka"/>
                         <outlet property="stopEchoButton" destination="TIs-yf-gNU" id="EMD-zn-4Bv"/>
                         <outlet property="stopListeningNoteButton" destination="U63-yq-ZMN" id="Lyt-gW-EYb"/>
-                        <outlet property="stopPlayingNoteButton" destination="4yS-ds-3sg" id="L9Q-sb-8Ef"/>
+                        <outlet property="stopPlayingButton" destination="4yS-ds-3sg" id="HJ5-My-jsH"/>
                         <outlet property="textView" destination="qWP-6t-6mG" id="yRH-2e-WnQ"/>
                         <outlet property="textViewPositionBottom" destination="kr2-Rn-fbP" id="Xuy-Ta-AEu"/>
                         <outlet property="textViewPositionTop" destination="wuz-Ap-m1F" id="Nsu-ad-Qiy"/>
                         <outlet property="transformationLabel" destination="VQr-2O-kOR" id="IHb-Ky-Lgw"/>
+                        <outlet property="updateSelectionButton" destination="2AY-97-AlQ" id="09C-I7-YTj"/>
                         <outlet property="wakePhraseLabel" destination="gtR-6I-crM" id="YJc-6U-Bmb"/>
                         <outlet property="wakePhraseSubtitleLabel" destination="Rxj-vn-QnZ" id="VGt-Nt-WLM"/>
-                        <outlet property="walkNoteButton" destination="H0L-Fd-gxp" id="8gN-je-mar"/>
+                        <outlet property="walkButton" destination="H0L-Fd-gxp" id="MZo-mJ-IhK"/>
+                        <outlet property="walkNextElementButton" destination="rSh-4Z-F1B" id="N5X-Js-wlk"/>
+                        <outlet property="walkPreviousElementButton" destination="diY-sg-ErT" id="JXi-SF-jAL"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="dkx-z0-nzr" sceneMemberID="firstResponder"/>
@@ -1480,6 +1612,8 @@
     </scenes>
     <resources>
         <image name="arrow.2.squarepath" catalog="system" width="128" height="89"/>
+        <image name="arrow.left" catalog="system" width="128" height="98"/>
+        <image name="arrow.right" catalog="system" width="128" height="98"/>
         <image name="arrow.right.doc.on.clipboard" catalog="system" width="116" height="128"/>
         <image name="arrowtriangle.left.and.line.vertical.and.arrowtriangle.right" catalog="system" width="128" height="87"/>
         <image name="arrowtriangle.right.and.line.vertical.and.arrowtriangle.left" catalog="system" width="128" height="89"/>
@@ -1503,6 +1637,7 @@
         <image name="square.and.arrow.up" catalog="system" width="115" height="128"/>
         <image name="stop" catalog="system" width="128" height="113"/>
         <image name="stop.circle" catalog="system" width="128" height="121"/>
+        <image name="stopwatch" catalog="system" width="121" height="128"/>
         <image name="tortoise" catalog="system" width="128" height="68"/>
         <image name="trash" catalog="system" width="121" height="128"/>
         <image name="xmark" catalog="system" width="128" height="113"/>
@@ -1517,12 +1652,6 @@
         </systemColor>
         <systemColor name="systemGray5Color">
             <color red="0.89803921568627454" green="0.89803921568627454" blue="0.91764705882352937" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
-        </systemColor>
-        <systemColor name="systemOrangeColor">
-            <color red="1" green="0.58431372549019611" blue="0.0" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
-        </systemColor>
-        <systemColor name="systemRedColor">
-            <color red="1" green="0.23137254901960785" blue="0.18823529411764706" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
     </resources>
 </document>

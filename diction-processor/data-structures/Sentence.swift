@@ -13,6 +13,7 @@ struct Sentence: CustomStringConvertible {
     var number: Int
     var text: String
     var timeRange: CMTimeRange
+    var noteRange: Range<Int>
     
     mutating func setNumber(value: Int) {
         number = value
@@ -22,6 +23,10 @@ struct Sentence: CustomStringConvertible {
         timeRange = value
     }
     
+    mutating func setNoteRange(value: Range<Int>) {
+        noteRange = value
+    }
+    
     mutating func setText(value: String) {
         text = value
     }
@@ -29,10 +34,11 @@ struct Sentence: CustomStringConvertible {
     static func ==(_ firstSentence: Sentence, _ secondSentence: Sentence) -> Bool {
         return firstSentence.number == secondSentence.number &&
             firstSentence.text == secondSentence.text &&
-            firstSentence.timeRange == secondSentence.timeRange
+            firstSentence.timeRange == secondSentence.timeRange &&
+            firstSentence.noteRange == secondSentence.noteRange
     }
     
     var description: String {
-        return "Sentence (\n\t\ttext: \(text)\n\t\tnumber: \(number)\n\t\ttimeRange: (\n\t\t\tstart: \(timeRange.start.seconds),\n\t\t\tend: \(timeRange.end.seconds),\n\t\t\tduration: \(timeRange.duration.seconds)\n\t\t)\n\t)"
+        return "Sentence (\n\t\ttext: \(text)\n\t\tnumber: \(number)\n\t\tnoteRange: \(noteRange)\n\t\ttimeRange: (\n\t\t\tstart: \(timeRange.start.seconds),\n\t\t\tend: \(timeRange.end.seconds),\n\t\t\tduration: \(timeRange.duration.seconds)\n\t\t)\n\t)"
     }
 }

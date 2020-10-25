@@ -15,6 +15,8 @@ class Utils {
     static let UNKNOWN: Double = -1
     static let SILENCE_SKIP_THRESHOLD = 0.1
     static let CURSOR_WIDTH = 2
+    static let CURSOR_TRANSITION_DURATION: TimeInterval = 0.15
+    static let TEXT_VIEW_SCROLL_TRANSITION_DURATION: TimeInterval = 0.3
     static let EMPTY_NSRANGE = NSRange(location: 0, length: 0)
     static var TALKING_POWER_DELTA: Double {
         if AVAudioSession.isHeadphonesConnected {
@@ -65,6 +67,10 @@ class Utils {
     static var DEFAULT_CURSOR_BLINK_RATE: TimeInterval = 0.53
     static var DEFAULT_CURSOR_BLINK_TRANSITION_DURATION: TimeInterval = 0.1
     static var DEFAULT_VIEW_TRANSITION_DURATION: TimeInterval = 0.3
+    static var WALKING_PERIOD_DURATION: TimeInterval = 3
+    static var WALKING_ECHO_DELAY_DURATION: TimeInterval = 1
+    static var WALKING_LOOP_BUFFER: TimeInterval = 0.5
+    static var WALKING_START_DELAY_DURATION: TimeInterval = 0.5
     static let DEFAULT_FIG_COUNT = 2
     static let TEMPORAL_DELTA = 0.01
     static let DEFAULT_SEGMENT_DURATION: Double = 100000 // Must be high enough such that no user will record a note of this duration
@@ -91,8 +97,18 @@ class Utils {
     static var SKIP_PLAYBACK_DURATION: Double = 10
     static var MENU_BAR_HEIGHT: CGFloat = 70
     static var COMMAND_BAR_HEIGHT: CGFloat = 60
-    static var COMMAND_BAR_BACKGROUND_COLOR: String = "#7771C2FF"
+    static var LINGUAL_PURPLE: String = "#7771C2FF"
+    static var LINGUAL_RED: String = "#D31900FF"
+    static var LINGUAL_ORANGE: String = "#D87736FF"
     static var SCROLL_VIEW_HEIGHT: CGFloat = 60
+    static var LISTENING_LAUNCH_DELAY: TimeInterval = 2
+    static var SOUND_INTENSITY_LATENCY: Int = 10
+    static var PLAYER_END_PLAYBACK_BUFFER: Double = 0.05 // We want to put it just before end. makes sure we don't seek to the exact end which causes the completion observer not to run
+    static var MINIMUM_REST_BETWEEN_VOICE_COMMANDS: TimeInterval = 0.7 // Determined experimentally
+    static var TEXT_VIEW_PADDING_TOP: CGFloat = 15
+    static var TEXT_VIEW_PADDING_BOTTOM: CGFloat = 80
+    static var TEXT_VIEW_PADDING_LEFT: CGFloat = 10
+    static var TEXT_VIEW_PADDING_RIGHT: CGFloat = 10
     
     static let pitchToFrequencyMap: [String : Double] = [
         "C0": 16,
@@ -517,51 +533,111 @@ class Utils {
         }
     }
     
-    public static func executeFeedback(visualMessage: String? = nil, audioMessage: String? = nil, note: Note, discardPrior: Bool = false) {
+    public static func executeFeedback(visualMessage: String? = nil, audioMessage: String? = nil, note: Note, discardPrior: Bool = false, withHaptics: Bool = false, delay: TimeInterval = 0.7) {
+        print("===== Execute Feedback =====")
         // Give visual feedback
-        if let visualMessage = visualMessage {
+        Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { timer in
+            if let visualMessage = visualMessage {
+                print("\tVisual Message: \(visualMessage)")
+                note.vc!.scheduleNotification(
+                    text: visualMessage,
+                    duration: 3
+                )
+                note.vc!.exhaustNotificationQueue()
+            }
+            
+            // Give audio feedback
+            if AVAudioSession.isHeadphonesConnected, let audioMessage = audioMessage {
+                print("\tAudio Message: \(audioMessage)")
+                // we don't run when !AVAudioSession.isHeadphonesConnected
+                // because we will will catch the words and process them
+                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+
+                let synthesizerItem = SynthesizerItem(
+                    synthesizer: note.vc!.speechSynthesizer,
+                    text: audioMessage,
+                    voice: voice,
+                    rate: note.vc!.echoRate,
+                    volume: note.vc!.playbackVolume
+                )
+
+                if discardPrior {
+                    note.vc!.emptySynthesizerQueue()
+                }
+
+                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                note.vc!.exhaustSynthesizerQueue()
+            }
+            
+            // Give haptic feedback
+            if withHaptics {
+                hapticEngine.success()
+            }
+        }
+    }
+    
+    public static func executeError(note: Note, text: String, voiceCommand: Bool = false, delay: TimeInterval = 0.7, handler: (() -> Void)? = nil) {
+        print("===== Error Feedback =====")
+        print("\tMessage: \(text)")
+        Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { timer in
+            if voiceCommand {
+                // Play Sound
+                soundEngine.voiceCommandDeny()
+            } else {
+                // Play Sound
+                soundEngine.error()
+            }
+            
+            
+            // Give visual feedback
             note.vc!.scheduleNotification(
-                text: visualMessage,
+                text: text,
                 duration: 3
             )
             note.vc!.exhaustNotificationQueue()
-        }
-        
-        // Give audio feedback
-        if AVAudioSession.isHeadphonesConnected, let audioMessage = audioMessage {
-            // we don't run when !AVAudioSession.isHeadphonesConnected
-            // because we will will catch the words and process them
-            let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
-
-            let synthesizerItem = SynthesizerItem(
-                synthesizer: note.vc!.speechSynthesizer,
-                text: audioMessage,
-                voice: voice,
-                rate: note.vc!.echoRate,
-                volume: note.vc!.playbackVolume
-            )
-
-            if discardPrior {
-                note.vc!.emptySynthesizerQueue()
+            
+            // Give haptic feedback
+            hapticEngine.error()
+            
+            let errorHandler: () -> Void  = {
+                // Give audio feedback
+                if AVAudioSession.isHeadphonesConnected {
+                    // we don't run when !AVAudioSession.isHeadphonesConnected
+                    // because we will will catch the words and process them
+                    let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc!)
+                    let synthesizerItem = SynthesizerItem(
+                        synthesizer: note.vc!.speechSynthesizer,
+                        text: text,
+                        voice: voice,
+                        rate: note.vc!.echoRate,
+                        volume: note.vc!.playbackVolume
+                    )
+                    
+                    note.vc!.emptySynthesizerQueue()
+                    note.vc!.synthesizerQueue.enqueue(synthesizerItem)
+                    note.vc!.exhaustSynthesizerQueue()
+                }
+                
+                // Execute handler
+                handler?()
             }
-
-            note.vc!.synthesizerQueue.enqueue(synthesizerItem)
-            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { timer in
-                note.vc!.exhaustSynthesizerQueue()
+            
+            if note.isListeningForCommands && !AVAudioSession.isHeadphonesConnected {
+                note.stopListeningForVoiceCommands(pause: true) {
+                    Utils.runError(note: note, handler: errorHandler)
+                }
+            } else if note.isListeningForSpeech && !AVAudioSession.isHeadphonesConnected {
+                note.stopListeningForSpeech(pause: true) {
+                    Utils.runError(note: note, handler: errorHandler)
+                }
+            } else {
+                Utils.runError(note: note, handler: errorHandler)
             }
         }
     }
     
     public static func setMainVolume(to volume: Float, note: Note) {
-        // Present Feedback
-        Utils.executeFeedback(
-            visualMessage: "Set Playback Volume",
-            audioMessage: "set volume to \(volume)",
-            note: note
-        )
-
         MPVolumeView.setVolume(volume)
-        print("volume: ", AVAudioSession.sharedInstance().outputVolume, volume)
     }
     
     // Use only if you don't have access to a Pitch object that has approximate frequency
@@ -1309,9 +1385,10 @@ class Utils {
     
     public static func initializeCursor(textView: UITextView, cursorView: UIView, font: UIFont) {
         // compute x and y positions
-        let textContainerPadding = textView.textContainer.lineFragmentPadding
-        let xPos = textView.frame.minX + textContainerPadding
-        let yPos = textView.frame.minY + textContainerPadding + ((font.lineHeight - font.pointSize) / 2)
+        let textContainerPadding: CGFloat = 0
+//        let textContainerPadding: CGFloat = textView.textContainer.lineFragmentPadding
+        let xPos = textView.frame.minX + textContainerPadding + Utils.TEXT_VIEW_PADDING_RIGHT
+        let yPos = textView.frame.minY + textContainerPadding + ((font.lineHeight - font.pointSize) / 2) + Utils.TEXT_VIEW_PADDING_TOP
         let width = Utils.CURSOR_WIDTH
 
         // Create a CGRect object which is used to render a rectangle.
@@ -1354,11 +1431,80 @@ class Utils {
         }
     }
     
+    public static func validSpeechPower(soundIntensityStream: [SoundIntensityDatum], backgroundNoise: Double) -> Bool {
+        let lastSoundIntensities = soundIntensityStream[max(0, soundIntensityStream.count - Utils.SOUND_INTENSITY_LATENCY)..<soundIntensityStream.count]
+        var largestSoundIntensity: Double?
+        for datum in lastSoundIntensities {
+            if largestSoundIntensity == nil || datum.power > largestSoundIntensity! {
+                largestSoundIntensity = datum.power
+            }
+        }
+        
+        if let largestSoundIntensity = largestSoundIntensity, largestSoundIntensity > backgroundNoise + Utils.TALKING_POWER_DELTA {
+            return true
+        }
+        
+        return false
+    }
+    
     // MARK: - Helper Functions
     
     private static func getDocumentsDirectory() -> URL {
         let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
         let documentsDirectory = paths[0]
         return documentsDirectory
+    }
+    
+    // Reference: https://learnappmaking.com/binary-search-swift-how-to/
+    // Must be ordered segments and conditional
+    public static func binarySearch(in segments: [NoteSegment], isLower: (_ segment: NoteSegment) -> Bool, isHigher: (_ segment: NoteSegment) -> Bool) -> NoteSegment? {
+        var left = 0
+        var right = segments.count - 1
+        
+        while left <= right {
+            let middle = Int(floor(Double(left + right) / 2.0))
+            
+            if isLower(segments[middle]) {
+                left = middle + 1
+            } else if isHigher(segments[middle]) {
+                right = middle - 1
+            } else {
+                return segments[middle]
+            }
+        }
+        
+        return nil
+    }
+    
+    // Reference: https://stackoverflow.com/questions/22663353/algorithm-to-remove-extreme-outliers-in-array/22663905
+    public static func cleanseSoundIntensityStream(soundIntensityStream: [SoundIntensityDatum]) -> [SoundIntensityDatum] {
+        // sort stream
+        let sortedSoundIntensityStream = soundIntensityStream.sorted {
+            $0.power < $1.power
+        }
+        
+        var sum: Double = 0     // stores sum of elements
+        var sumSquares: Double = 0; // stores sum of squares
+        var length: Double = 0
+        for i in 0..<sortedSoundIntensityStream.count {
+            if sortedSoundIntensityStream[i].power != Double.infinity && sortedSoundIntensityStream[i].power != Double.nan && sortedSoundIntensityStream[i].power != -Double.infinity  {
+                sum += sortedSoundIntensityStream[i].power
+                sumSquares += sortedSoundIntensityStream[i].power * sortedSoundIntensityStream[i].power
+                length += 1
+            }
+        }
+
+        let mean = sum / length;
+        let variance = sumSquares / length - mean * mean
+        let standardDev = sqrt(variance)
+
+        var filteredSoundIntensityStream = [SoundIntensityDatum]() // uses for data which is 3 standard deviations from the mean
+        for i in 0..<soundIntensityStream.count {
+            if soundIntensityStream[i].power > (mean - 3 * standardDev) && soundIntensityStream[i].power < (mean + 3 * standardDev) {
+                filteredSoundIntensityStream.append(soundIntensityStream[i])
+            }
+        }
+        
+        return filteredSoundIntensityStream
     }
 }

@@ -11,4 +11,8 @@ import Foundation
 enum DirectionType {
     case up
     case down
+    case left
+    case right
+    case previous
+    case next
 }

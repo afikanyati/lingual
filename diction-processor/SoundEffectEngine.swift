@@ -35,6 +35,8 @@ public final class SoundEffectEngine: NSObject {
     var dialogPlayer: AVAudioPlayer? = nil
     var isProcessing = false
     var isPlayingModalAmbience = false
+    var pan: Float = 0 // A value of –1.0 is full left, 0.0 is center, and 1.0 is full right.
+    var players = [AVAudioPlayer?]()
     
     private override init() {
         // Commit Buffer
@@ -42,7 +44,8 @@ public final class SoundEffectEngine: NSObject {
         let commitBufferURL = URL(fileURLWithPath: commitBufferPath)
 
         do {
-            commitBufferPlayer = try AVAudioPlayer(contentsOf: commitBufferURL)
+            self.commitBufferPlayer = try AVAudioPlayer(contentsOf: commitBufferURL)
+            self.players.append(self.commitBufferPlayer)
         } catch {
             print("===== [Error] There was a problem importing 'Commit Buffer' sound =====")
         }
@@ -52,7 +55,8 @@ public final class SoundEffectEngine: NSObject {
         let correctWakePhraseURL = URL(fileURLWithPath: correctWakePhrasePath)
 
         do {
-            correctWakePhrasePlayer = try AVAudioPlayer(contentsOf: correctWakePhraseURL)
+            self.correctWakePhrasePlayer = try AVAudioPlayer(contentsOf: correctWakePhraseURL)
+            self.players.append(self.correctWakePhrasePlayer)
         } catch {
             print("===== [Error] There was a problem importing 'Correct Wake Phrase' sound =====")
         }
@@ -62,7 +66,8 @@ public final class SoundEffectEngine: NSObject {
         let errorURL = URL(fileURLWithPath: errorPath)
 
         do {
-            errorPlayer = try AVAudioPlayer(contentsOf: errorURL)
+            self.errorPlayer = try AVAudioPlayer(contentsOf: errorURL)
+            self.players.append(self.errorPlayer)
         } catch {
             print("===== [Error] There was a problem importing 'Error' sound =====")
         }
@@ -72,7 +77,8 @@ public final class SoundEffectEngine: NSObject {
         let incorrectWakePhraseURL = URL(fileURLWithPath: incorrectWakePhrasePath)
 
         do {
-            incorrectWakePhrasePlayer = try AVAudioPlayer(contentsOf: incorrectWakePhraseURL)
+            self.incorrectWakePhrasePlayer = try AVAudioPlayer(contentsOf: incorrectWakePhraseURL)
+            self.players.append(self.incorrectWakePhrasePlayer)
         } catch {
             print("===== [Error] There was a problem importing 'Incorrect Wake Phrase' sound =====")
         }
@@ -82,7 +88,8 @@ public final class SoundEffectEngine: NSObject {
         let playURL = URL(fileURLWithPath: playPath)
 
         do {
-            playPlayer = try AVAudioPlayer(contentsOf: playURL)
+            self.playPlayer = try AVAudioPlayer(contentsOf: playURL)
+            self.players.append(self.playPlayer)
         } catch {
             print("===== [Error] There was a problem importing 'Play' sound =====")
         }
@@ -110,7 +117,8 @@ public final class SoundEffectEngine: NSObject {
         let repeatURL = URL(fileURLWithPath: repeatPath)
 
         do {
-            repeatPlayer = try AVAudioPlayer(contentsOf: repeatURL)
+            self.repeatPlayer = try AVAudioPlayer(contentsOf: repeatURL)
+            self.players.append(self.repeatPlayer)
         } catch {
             print("===== [Error] There was a problem importing 'Repeat' sound =====")
         }
@@ -120,7 +128,8 @@ public final class SoundEffectEngine: NSObject {
         let saveNoteURL = URL(fileURLWithPath: saveNotePath)
 
         do {
-            saveNotePlayer = try AVAudioPlayer(contentsOf: saveNoteURL)
+            self.saveNotePlayer = try AVAudioPlayer(contentsOf: saveNoteURL)
+            self.players.append(self.saveNotePlayer)
         } catch {
             print("===== [Error] There was a problem importing 'Save Note' sound =====")
         }
@@ -130,7 +139,8 @@ public final class SoundEffectEngine: NSObject {
         let startListeningURL = URL(fileURLWithPath: startListeningPath)
 
         do {
-            startListeningPlayer = try AVAudioPlayer(contentsOf: startListeningURL)
+            self.startListeningPlayer = try AVAudioPlayer(contentsOf: startListeningURL)
+            self.players.append(self.startListeningPlayer)
         } catch {
             print("===== [Error] There was a problem importing 'Start Listening' sound =====")
         }
@@ -140,7 +150,8 @@ public final class SoundEffectEngine: NSObject {
         let stopListeningURL = URL(fileURLWithPath: stopListeningPath)
 
         do {
-            stopListeningPlayer = try AVAudioPlayer(contentsOf: stopListeningURL)
+            self.stopListeningPlayer = try AVAudioPlayer(contentsOf: stopListeningURL)
+            self.players.append(self.stopListeningPlayer)
         } catch {
             print("===== [Error] There was a problem importing 'Stop Listening' sound =====")
         }
@@ -150,7 +161,8 @@ public final class SoundEffectEngine: NSObject {
         let voiceCommandAcceptURL = URL(fileURLWithPath: voiceCommandAcceptPath)
 
         do {
-            voiceCommandAcceptPlayer = try AVAudioPlayer(contentsOf: voiceCommandAcceptURL)
+            self.voiceCommandAcceptPlayer = try AVAudioPlayer(contentsOf: voiceCommandAcceptURL)
+            self.players.append(self.voiceCommandAcceptPlayer)
         } catch {
             print("===== [Error] There was a problem importing 'Voice Command Accept' sound =====")
         }
@@ -160,7 +172,8 @@ public final class SoundEffectEngine: NSObject {
         let voiceCommandDenyURL = URL(fileURLWithPath: voiceCommandDenyPath)
 
         do {
-            voiceCommandDenyPlayer = try AVAudioPlayer(contentsOf: voiceCommandDenyURL)
+            self.voiceCommandDenyPlayer = try AVAudioPlayer(contentsOf: voiceCommandDenyURL)
+            self.players.append(self.voiceCommandDenyPlayer)
         } catch {
             print("===== [Error] There was a problem importing 'Voice Command Deny' sound =====")
         }
@@ -170,7 +183,8 @@ public final class SoundEffectEngine: NSObject {
         let deleteURL = URL(fileURLWithPath: deletePath)
 
         do {
-            deletePlayer = try AVAudioPlayer(contentsOf: deleteURL)
+            self.deletePlayer = try AVAudioPlayer(contentsOf: deleteURL)
+            self.players.append(self.deletePlayer)
         } catch {
             print("===== [Error] There was a problem importing 'Delete' sound =====")
         }
@@ -180,17 +194,33 @@ public final class SoundEffectEngine: NSObject {
         let dialogURL = URL(fileURLWithPath: dialogPath)
 
         do {
-            dialogPlayer = try AVAudioPlayer(contentsOf: dialogURL)
+            self.dialogPlayer = try AVAudioPlayer(contentsOf: dialogURL)
+            self.players.append(self.dialogPlayer)
         } catch {
             print("===== [Error] There was a problem importing 'Dialog' sound =====")
         }
     }
     
-    func commitBuffer() { commitBufferPlayer?.play() }
-    func correctWakePhrase() { correctWakePhrasePlayer?.play() }
-    func error() { errorPlayer?.play() }
-    func incorrectWakePhrase() { incorrectWakePhrasePlayer?.play() }
-    func play() { playPlayer?.play() }
+    func commitBuffer() {
+        commitBufferPlayer?.prepareToPlay()
+        commitBufferPlayer?.play()
+    }
+    func correctWakePhrase() {
+        correctWakePhrasePlayer?.prepareToPlay()
+        correctWakePhrasePlayer?.play()
+    }
+    func error() {
+        errorPlayer?.prepareToPlay()
+        errorPlayer?.play()
+    }
+    func incorrectWakePhrase() {
+        incorrectWakePhrasePlayer?.prepareToPlay()
+        incorrectWakePhrasePlayer?.play()
+    }
+    func play() {
+        playPlayer?.prepareToPlay()
+        playPlayer?.play()
+    }
     func startProcessing() {
         processingPlayer?.play()
         self.isProcessing = true
@@ -207,12 +237,57 @@ public final class SoundEffectEngine: NSObject {
         modalAmbiencePlayer?.stop()
         self.isPlayingModalAmbience = false
     }
-    func repeatSegment() { repeatPlayer?.play() }
-    func saveNote() { saveNotePlayer?.play() }
-    func startListening() { startListeningPlayer?.play() }
-    func stopListening() { stopListeningPlayer?.play() }
-    func voiceCommandAccept() { voiceCommandAcceptPlayer?.play() }
-    func voiceCommandDeny() { voiceCommandDenyPlayer?.play() }
-    func delete() { deletePlayer?.play() }
-    func presentDialog() { dialogPlayer?.play() }
+    func repeatSegment() {
+        repeatPlayer?.prepareToPlay()
+        repeatPlayer?.play()
+    }
+    func saveNote() {
+        saveNotePlayer?.prepareToPlay()
+        saveNotePlayer?.play()
+    }
+    func startListening() {
+        startListeningPlayer?.prepareToPlay()
+        startListeningPlayer?.play()
+    }
+    func stopListening() {
+        stopListeningPlayer?.prepareToPlay()
+        stopListeningPlayer?.play()
+    }
+    func voiceCommandAccept() {
+        voiceCommandAcceptPlayer?.prepareToPlay()
+        voiceCommandAcceptPlayer?.play()
+    }
+    func voiceCommandDeny() {
+        voiceCommandDenyPlayer?.prepareToPlay()
+        voiceCommandDenyPlayer?.play()
+    }
+    func delete() {
+        deletePlayer?.prepareToPlay()
+        deletePlayer?.play()
+    }
+    func presentDialog() {
+        dialogPlayer?.prepareToPlay()
+        dialogPlayer?.play()
+    }
+    
+    // Reference: https://stackoverflow.com/questions/39088804/is-there-a-way-to-play-a-sound-note-in-only-one-ear-of-headphone-in-swift-2-0-us
+    func panLeft() {
+        for player in self.players {
+            player?.pan = -1.0
+        }
+    }
+    
+    // Reference: https://stackoverflow.com/questions/39088804/is-there-a-way-to-play-a-sound-note-in-only-one-ear-of-headphone-in-swift-2-0-us
+    func panRight() {
+        for player in self.players {
+            player?.pan = 1.0
+        }
+    }
+    
+    // Reference: https://stackoverflow.com/questions/39088804/is-there-a-way-to-play-a-sound-note-in-only-one-ear-of-headphone-in-swift-2-0-us
+    func panCenter() {
+        for player in self.players {
+            player?.pan = 0
+        }
+    }
 }

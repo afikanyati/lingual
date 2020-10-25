@@ -10,6 +10,7 @@ import Foundation
 import UIKit
 
 // Reference: https://www.hackingwithswift.com/example-code/uikit/how-to-generate-haptic-feedback-with-uifeedbackgenerator
+// Debugging: https://stackoverflow.com/questions/40801396/uiimpactfeedbackgenerator-not-working
 
 public let hapticEngine = HapticEngine.shared
 public final class HapticEngine: NSObject {
