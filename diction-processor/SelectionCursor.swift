@@ -822,7 +822,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
                 Utils.executeFeedback(
                     visualMessage: "Delete Commit",
                     audioMessage: "commit deleted",
-                    note: note,
                     withHaptics: true
                 )
             } else {
@@ -830,7 +829,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
                 Utils.executeFeedback(
                     visualMessage: "Delete Selection",
                     audioMessage: "selection deleted",
-                    note: note,
                     withHaptics: true
                 )
             }
@@ -870,8 +868,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             Utils.executeError(note: note, text: "Already updating selection.")
     
             note.startListeningForSpeech(
-                soundIntensityHandler: note.soundIntensityHandler,
-                pitchHandler: note.pitchHandler,
                 onStartHandler: handler
             )
             return
@@ -880,8 +876,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         let handleInitiateUpdateSelection = {
             // Start recording to update segment
             note.startListeningForSpeech(
-                soundIntensityHandler: note.soundIntensityHandler,
-                pitchHandler: note.pitchHandler,
                 onStartHandler: handler
             )
             
@@ -890,7 +884,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
                 Utils.executeFeedback(
                     visualMessage: "Redo Update",
                     audioMessage: "redo update selection.",
-                    note: note,
                     withHaptics: true
                 )
             } else {
@@ -898,7 +891,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
                 Utils.executeFeedback(
                     visualMessage: "Initiate Update",
                     audioMessage: "listening for update",
-                    note: note,
                     withHaptics: true
                 )
             }
@@ -958,7 +950,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         Utils.executeFeedback(
             visualMessage: "Confirm Update",
             audioMessage: "Update selection to '\(updateText)'. Accept, redo or cancel?",
-            note: note,
             withHaptics: true
         )
         
@@ -1008,7 +999,7 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             preferredStyle: .alert,
             actions: dialogActions
         )
-        Utils.presentDialog(dialogItem: dialogItem, vc: note.vc!)
+        Utils.presentDialog(dialogItem: dialogItem)
     }
     
     func acceptUpdateSelection(handler: (() -> Void)? = nil) {
@@ -1044,7 +1035,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         Utils.executeFeedback(
             visualMessage: "Updated!",
             audioMessage: "selection updated",
-            note: note,
             withHaptics: true
         )
         
@@ -1093,16 +1083,12 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             
             if !note.pausedListeningForSpeech {
                 note.stopListeningForSpeech(pause: true) {
-                    note.startListeningForVoiceCommands(
-                        soundIntensityHandler: note.vc!.soundIntensityHandler!,
-                        pitchHandler: note.vc!.pitchHandler!,
+                    viewController.startListeningForVoiceCommands(
                         onStartHandler: handler
                     )
                 }
             } else {
-                note.startListeningForVoiceCommands(
-                    soundIntensityHandler: note.vc!.soundIntensityHandler!,
-                    pitchHandler: note.vc!.pitchHandler!,
+                viewController.startListeningForVoiceCommands(
                     onStartHandler: handler
                 )
             }
@@ -1111,7 +1097,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             Utils.executeFeedback(
                 visualMessage: "Canceled!",
                 audioMessage: "selection update canceled",
-                note: note,
                 withHaptics: true
             )
 
@@ -1134,8 +1119,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     
     func copySelection() {
         print("===== Selection Cursor: Copy =====")
-        // prevent illegal updating
-        guard let note = self.note else { return }
 
         if let selectionSegments = self.selectionSegments {
             var duplicateSegments = [NoteSegment]()
@@ -1149,7 +1132,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         Utils.executeFeedback(
             visualMessage: "Copy Selection",
             audioMessage: "selection copied",
-            note: note,
             withHaptics: true
         )
         
@@ -1158,9 +1140,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
     
     func cutSelection() {
         print("===== Selection Cursor: Cut =====")
-        // prevent illegal updating
-        guard let note = self.note else { return }
-
         // copy selection
         self.copySelection()
         
@@ -1171,7 +1150,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         Utils.executeFeedback(
             visualMessage: "Cut Selection",
             audioMessage: "selection cut",
-            note: note,
             withHaptics: true
         )
 
@@ -1207,7 +1185,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             Utils.executeFeedback(
                 visualMessage: "Pasted!",
                 audioMessage: "selection pasted",
-                note: note,
                 withHaptics: true
             )
         } else if let note = self.note, self.clipboard == nil {
@@ -1225,7 +1202,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
         Utils.executeFeedback(
             visualMessage: "Exporting Selection",
             audioMessage: "exporting selection",
-            note: note,
             withHaptics: true
         )
 
@@ -1242,7 +1218,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
             Utils.executeFeedback(
                 visualMessage: "Selection Exported!",
                 audioMessage: "selection exported",
-                note: note,
                 withHaptics: true
             )
         }
@@ -1395,7 +1370,6 @@ public final class SelectionCursor: NSObject, UITextViewDelegate {
                 Utils.executeFeedback(
                     visualMessage: "Selection Removed!",
                     audioMessage: "selection remove",
-                    note: note,
                     withHaptics: true
                 )
             }

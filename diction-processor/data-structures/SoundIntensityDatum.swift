@@ -8,19 +8,37 @@
 
 import Foundation
 
-struct SoundIntensityDatum: CustomStringConvertible {
+class SoundIntensityDatum: CustomStringConvertible, NSCoding {
     var date: Date
     var power: Double
 
     var description: String {
         return "SoundIntensityDatum (\n\tdate: \(date)\n\tpower:\(power)\n)"
     }
+    
+    init(
+        date: Date,
+        power: Double
+    ) {
+        self.date = date
+        self.power = power
+    }
+    
+    func encode(with coder: NSCoder) {
+        coder.encode(self.date, forKey: "date")
+        coder.encode(self.power, forKey: "power")
+    }
+
+    required init?(coder: NSCoder) {
+        self.date = coder.decodeObject(forKey: "date") as! Date
+        self.power = coder.decodeObject(forKey: "power") as! Double
+    }
    
-    mutating func setDate(value: Date) {
+    func setDate(value: Date) {
         date = value
     }
 
-    mutating func setDecibels(value: Double) {
+    func setDecibels(value: Double) {
         power = value
     }
 }

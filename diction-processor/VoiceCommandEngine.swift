@@ -762,50 +762,137 @@ public final class VoiceCommandEngine: NSObject {
         return false
     }
     
-    func process(note: Note, query: String, handler: (() -> Void)? = nil) {
+//    command == "activate punctuation" ||
+//    command == "deactivate punctuation" ||
+//    command == "activate silences" ||
+//    command == "deactivate silences" ||
+//    command == "activate temporal suggestions" ||
+//    command == "deactivate temporal suggestions" ||
+//    command == "activate punctuation suggestions" ||
+//    command == "deactivate punctuation suggestions" ||
+//    command == "activate formatting suggestions" ||
+//    command == "deactivate formatting suggestions" ||
+//    command == "activate passive echo" ||
+//    command == "deactivate passive echo" ||
+//    command == "increase volume" ||
+//    command == "decrease volume" ||
+//    command == "increase echo rate" ||
+//    command == "decrease echo rate" ||
+//    command == "increase playback rate" ||
+//    command == "decrease playback rate" ||
+//    command == "redo" ||
+//    command == "inspect clipboard" ||
+//    command == "undo" ||
+//    command == "prompt for assistance" ||
+    
+    func isNoteVoiceCommand(command: String) -> Bool {
+        if (
+            command == "play note" ||
+            command == "pause note" ||
+            command == "start note" ||
+            command == "stop note" ||
+            command == "resume note" ||
+            command == "echo note" ||
+            command == "pause echo" ||
+            command == "stop echo" ||
+            command == "play previous sentence" ||
+            command == "echo previous sentence" ||
+            command == "accept update selection" ||
+            command == "cancel update selection" ||
+            command == "delete selection" ||
+            command == "update selection" ||
+            command == "copy selection" ||
+            command == "cut selection" ||
+            command == "increase selection rate" ||
+            command == "decrease selection rate" ||
+            command == "export note" ||
+            command == "export selection" ||
+            command == "pause playback" ||
+            command == "resume playback" ||
+            command == "resume echo" ||
+            command == "edit note" ||
+            command == "play commit" ||
+            command == "echo commit" ||
+            command == "select commit" ||
+            command == "walk commit" ||
+            command == "run commit" ||
+            command == "rollback commit" ||
+            command == "skip backward" ||
+            command == "skip forward" ||
+            command == "stop playback" ||
+            command == "open selection" ||
+            command == "remove selection" ||
+            command == "shift anchor left" ||
+            command == "shift anchor right" ||
+            command == "shift focus left" ||
+            command == "shift focus right" ||
+            command == "shift forward" ||
+            command == "shift backward" ||
+            command == "expand selection" ||
+            command == "reduce selection" ||
+            command == "run selection" ||
+            command == "walk selection" ||
+            command == "run note" ||
+            command == "walk note" ||
+            command == "next element" ||
+            command == "previous element" ||
+            command == "halt run" ||
+            command == "exit mode" ||
+            command == "pause" ||
+            command == "stop" ||
+            command == "paste clipboard" ||
+            command == "move here"
+        ) {
+            return true
+        }
+        
+        return false
+    }
+    
+    func process(detailView: DetailViewController, note: Note? = nil, query: String, handler: (() -> Void)? = nil) {
         print("===== Processing Voice Command =====")
         let query = query.lowercased()
         print("\tQuery: \"\(self.voiceCommandMapping[query] ?? query)\"")
         
         switch (self.voiceCommandMapping[query]) {
         case "play note":
-            note.vc!.handlePlay(voiceCommand: true, handler: handler)
+            detailView.handlePlay(voiceCommand: true, handler: handler)
         case "pause note":
-            note.vc!.handlePause(voiceCommand: true, handler: handler)
+            detailView.handlePause(voiceCommand: true, handler: handler)
         case "start note":
-            note.vc!.handleStartNote(voiceCommand: true, handler: handler)
+            detailView.handleStartNote(voiceCommand: true, handler: handler)
         case "stop note":
-            if note.isPlayingNote {
-                note.vc!.handleStopPlaying(voiceCommand: true, handler: handler)
+            if note!.isPlayingNote {
+                detailView.handleStopPlaying(voiceCommand: true, handler: handler)
             } else {
-                note.vc!.handleStopListeningNote(voiceCommand: true, handler: handler)
+                detailView.handleStopListeningNote(voiceCommand: true, handler: handler)
             }
         case "resume note":
-            note.vc!.handleResumeNote(voiceCommand: true, handler: handler)
+            detailView.handleResumeNote(voiceCommand: true, handler: handler)
         case "echo note":
-            note.vc!.handleEcho(voiceCommand: true, handler: handler)
+            detailView.handleEcho(voiceCommand: true, handler: handler)
         case "pause echo":
-            note.vc!.handlePauseEcho(voiceCommand: true, handler: handler)
+            detailView.handlePauseEcho(voiceCommand: true, handler: handler)
         case "stop echo":
-            note.vc!.handleStopEcho(voiceCommand: true, handler: handler)
+            detailView.handleStopEcho(voiceCommand: true, handler: handler)
         case "play previous sentence":
-            self.handlePlayPreviousSentence(note: note, handler: handler)
+            self.handlePlayPreviousSentence(detailView: detailView, note: note!, handler: handler)
         case "echo previous sentence":
-            self.handleEchoPreviousSentence(note: note, handler: handler)
+            self.handleEchoPreviousSentence(note: note!, handler: handler)
         case "activate punctuation":
             print("\tVoice Command: Activate Skip Punctuation")
             
             // Play Sound
             soundEngine.voiceCommandAccept()
 
-            note.setSkipPunctuation(to: false)
+            viewController.setWithSkipPunctuation(to: false)
             handler?()
         case "deactivate punctuation":
             print("\tVoice Command: Deactivate Skip Punctuation")
             // Play Sound
             soundEngine.voiceCommandAccept()
             
-            note.setSkipPunctuation(to: true)
+            viewController.setWithSkipPunctuation(to: true)
             handler?()
         case "activate silences":
             print("\tVoice Command: Activate Silence")
@@ -813,7 +900,7 @@ public final class VoiceCommandEngine: NSObject {
             // Play Sound
             soundEngine.voiceCommandAccept()
 
-            note.setOmitSilences(to: false)
+            viewController.setWithOmitSilences(to: false)
             handler?()
         case "deactivate silences":
             print("\tVoice Command: Deactivate Silence")
@@ -821,7 +908,7 @@ public final class VoiceCommandEngine: NSObject {
             // Play Sound
             soundEngine.voiceCommandAccept()
 
-            note.setOmitSilences(to: true)
+            viewController.setWithOmitSilences(to: true)
             handler?()
         case "activate temporal suggestions":
             print("\tVoice Command: Activate Temporal Suggestions")
@@ -829,7 +916,7 @@ public final class VoiceCommandEngine: NSObject {
             // Play Sound
             soundEngine.voiceCommandAccept()
 
-            note.setWithTemporalSuggestions(to: true)
+            viewController.setWithTemporalSuggestions(to: true)
             handler?()
         case "deactivate temporal suggestions":
             print("\tVoice Command: Deactivate Temporal Suggestions")
@@ -837,7 +924,7 @@ public final class VoiceCommandEngine: NSObject {
             // Play Sound
             soundEngine.voiceCommandAccept()
 
-            note.setWithTemporalSuggestions(to: false)
+            viewController.setWithTemporalSuggestions(to: false)
             handler?()
         case "activate punctuation suggestions":
             print("\tVoice Command: Activate Punctuation Suggestions")
@@ -845,7 +932,7 @@ public final class VoiceCommandEngine: NSObject {
             // Play Sound
             soundEngine.voiceCommandAccept()
         
-            note.setWithPunctuationSuggestions(to: true)
+            viewController.setWithPunctuationSuggestions(to: true)
             handler?()
         case "deactivate punctuation suggestions":
             print("\tVoice Command: Deactivate Punctuation Suggestions")
@@ -853,7 +940,7 @@ public final class VoiceCommandEngine: NSObject {
             // Play Sound
             soundEngine.voiceCommandAccept()
         
-            note.setWithPunctuationSuggestions(to: false)
+            viewController.setWithPunctuationSuggestions(to: false)
             handler?()
         case "activate formatting suggestions":
             print("\tVoice Command: Activate Formatting Suggestions")
@@ -861,7 +948,7 @@ public final class VoiceCommandEngine: NSObject {
             // Play Sound
             soundEngine.voiceCommandAccept()
             
-            note.setWithFormattingSuggestions(to: true)
+            viewController.setWithFormattingSuggestions(to: true)
             handler?()
         case "deactivate formatting suggestions":
             print("\tVoice Command: Deactivate Formatting Suggestions")
@@ -869,7 +956,7 @@ public final class VoiceCommandEngine: NSObject {
             // Play Sound
             soundEngine.voiceCommandAccept()
             
-            note.setWithFormattingSuggestions(to: false)
+            viewController.setWithFormattingSuggestions(to: false)
             handler?()
         case "activate passive echo":
             print("\tVoice Command: Activate Passive Echo")
@@ -877,7 +964,7 @@ public final class VoiceCommandEngine: NSObject {
             // Play Sound
             soundEngine.voiceCommandAccept()
             
-            note.setWithPassiveEcho(to: true)
+            viewController.setWithPassiveEcho(to: true)
             handler?()
         case "deactivate passive echo":
             print("\tVoice Command: Deactivate Passive Echo")
@@ -885,168 +972,168 @@ public final class VoiceCommandEngine: NSObject {
             // Play Sound
             soundEngine.voiceCommandAccept()
             
-            note.setWithPassiveEcho(to: false)
+            viewController.setWithPassiveEcho(to: false)
             handler?()
         case "increase volume":
             print("\tVoice Command: Increase Volume")
-            self.handleIncreaseVolume(note: note, handler: handler)
+            self.handleIncreaseVolume(note: note!, handler: handler)
         case "decrease volume":
             print("\tVoice Command: Decrease Volume")
-            self.handleDecreaseVolume(note: note, handler: handler)
+            self.handleDecreaseVolume(note: note!, handler: handler)
 //        case "adjust volume":
 //            startListeningForVolume(note: note)
         case "increase echo rate":
             print("\tVoice Command: Increase Echo Rate")
-            self.handleIncreaseEchoRate(note: note, handler: handler)
+            self.handleIncreaseEchoRate(note: note!, handler: handler)
         case "decrease echo rate":
             print("\tVoice Command: Decrease Echo Rate")
-            self.handleDecreaseEchoRate(note: note, handler: handler)
+            self.handleDecreaseEchoRate(note: note!, handler: handler)
         case "increase playback rate":
             print("\tVoice Command: Increase Playback Rate")
-            self.handleIncreasePlaybackRate(note: note, handler: handler)
+            self.handleIncreasePlaybackRate(note: note!, handler: handler)
         case "decrease playback rate":
             print("\tVoice Command: Decrease Playback Rate")
-            self.handleDecreasePlaybackRate(note: note, handler: handler)
+            self.handleDecreasePlaybackRate(note: note!, handler: handler)
         case "accept update selection":
             print("\tVoice Command: Accept Update Selection")
-            self.handleAcceptUpdateSelection(note: note, handler: handler)
+            self.handleAcceptUpdateSelection(note: note!, handler: handler)
         case "redo":
             if selectionCursor.hasSelection && selectionCursor.isUpdatingSelection && selectionCursor.isPromptingForUpdateAcceptance {
                 print("\tVoice Command: Redo Update Selection")
-                self.handleRedoUpdateSelection(note: note, handler: handler)
+                self.handleRedoUpdateSelection(note: note!, handler: handler)
             } else {
                 // Normal Redo
             }
         case "cancel update selection":
-            self.handleCancelUpdateSelection(note: note, handler: handler)
+            self.handleCancelUpdateSelection(note: note!, handler: handler)
         case "delete selection":
-            note.vc!.handleDeleteSelection(voiceCommand: true, handler: handler)
+            detailView.handleDeleteSelection(voiceCommand: true, handler: handler)
         case "update selection":
-            note.vc!.handleUpdateSelection(voiceCommand: true, handler: handler)
+            detailView.handleUpdateSelection(voiceCommand: true, handler: handler)
         case "copy selection":
-            note.vc!.handleCopySelection(voiceCommand: true, handler: handler)
+            detailView.handleCopySelection(voiceCommand: true, handler: handler)
         case "cut selection":
-            note.vc!.handleCutSelection(voiceCommand: true, handler: handler)
+            detailView.handleCutSelection(voiceCommand: true, handler: handler)
         case "increase selection rate":
-            note.vc!.handleIncreaseRateSelection(voiceCommand: true, handler: handler)
+            detailView.handleIncreaseRateSelection(voiceCommand: true, handler: handler)
         case "decrease selection rate":
-            note.vc!.handleDecreaseRateSelection(voiceCommand: true, handler: handler)
+            detailView.handleDecreaseRateSelection(voiceCommand: true, handler: handler)
         case "export note", "export selection":
-            note.vc!.handleExport(voiceCommand: true, handler: handler)
+            detailView.handleExport(voiceCommand: true, handler: handler)
         case "pause playback":
-            note.vc!.handlePause(voiceCommand: true, handler: handler)
+            detailView.handlePause(voiceCommand: true, handler: handler)
         case "resume playback":
-            self.handleResumePlayback(note: note, handler: handler)
+            self.handleResumePlayback(detailView: detailView, note: note!, handler: handler)
         case "resume echo":
-            note.vc!.handleEcho(voiceCommand: true, handler: handler)
+            detailView.handleEcho(voiceCommand: true, handler: handler)
         case "edit note":
-            note.vc!.handleEditNote(voiceCommand: true, handler: handler)
+            detailView.handleEditNote(voiceCommand: true, handler: handler)
         case "play commit":
-            note.vc!.handlePlayCommit(voiceCommand: true, handler: handler)
+            detailView.handlePlayCommit(voiceCommand: true, handler: handler)
         case "echo commit":
-            self.handleEchoCommit(note: note, handler: handler)
+            self.handleEchoCommit(detailView: detailView, note: note!, handler: handler)
         case "select commit":
-            self.handleSelectCommit(note: note, handler: handler)
+            self.handleSelectCommit(note: note!, handler: handler)
         case "walk commit":
-            self.handleWalkCommit(note: note, handler: handler)
+            self.handleWalkCommit(detailView: detailView, note: note!, handler: handler)
         case "run commit":
-            self.handleRunCommit(note: note, handler: handler)
+            self.handleRunCommit(detailView: detailView, note: note!, handler: handler)
         case "rollback commit":
-            self.handleRollbackCommit(note: note, handler: handler)
+            self.handleRollbackCommit(detailView: detailView, note: note!, handler: handler)
         case "inspect clipboard":
-            note.vc!.handleInspectClipboard(voiceCommand: true, handler: handler)
+            detailView.handleInspectClipboard(voiceCommand: true, handler: handler)
         case "skip backward":
-            note.vc!.handleSkipBackward(voiceCommand: true, handler: handler)
+            detailView.handleSkipBackward(voiceCommand: true, handler: handler)
         case "skip forward":
-            note.vc!.handleSkipForward(voiceCommand: true, handler: handler)
+            detailView.handleSkipForward(voiceCommand: true, handler: handler)
         case "stop playback":
-            note.vc!.handleStopPlaying(voiceCommand: true, handler: handler)
+            detailView.handleStopPlaying(voiceCommand: true, handler: handler)
         case "open selection":
-            self.handleOpenSelection(note: note, handler: handler)
+            self.handleOpenSelection(note: note!, handler: handler)
         case "remove selection":
-            self.handleRemoveSelection(note: note, handler: handler)
+            self.handleRemoveSelection(detailView: detailView, note: note!, handler: handler)
         case "shift anchor left":
-            self.handleShiftAnchor(direction: .left, note: note, handler: handler)
+            self.handleShiftAnchor(direction: .left, note: note!, handler: handler)
         case "shift anchor right":
-            self.handleShiftAnchor(direction: .right, note: note, handler: handler)
+            self.handleShiftAnchor(direction: .right, note: note!, handler: handler)
         case "shift focus left":
-            self.handleShiftFocus(direction: .left, note: note, handler: handler)
+            self.handleShiftFocus(direction: .left, note: note!, handler: handler)
         case "shift focus right":
-            self.handleShiftFocus(direction: .right, note: note, handler: handler)
+            self.handleShiftFocus(direction: .right, note: note!, handler: handler)
         case "shift forward":
-            self.handleShift(direction: .right, note: note, handler: handler)
+            self.handleShift(direction: .right, note: note!, handler: handler)
         case "shift backward":
-            self.handleShift(direction: .left, note: note, handler: handler)
+            self.handleShift(direction: .left, note: note!, handler: handler)
         case "expand selection":
-            self.handleExpandSelection(note: note, handler: handler)
+            self.handleExpandSelection(note: note!, handler: handler)
         case "reduce selection":
-            self.handleReduceSelection(note: note, handler: handler)
+            self.handleReduceSelection(note: note!, handler: handler)
         case "run selection":
             // Play Sound
             soundEngine.voiceCommandAccept()
             
             let selection = selectionCursor.selectionSegments
-            note.run(segments: selection, onStartHandler: handler)
+            note!.run(segments: selection, onStartHandler: handler)
         case "walk selection":
             // Play Sound
             soundEngine.voiceCommandAccept()
             
             let selection = selectionCursor.selectionSegments
-            note.walk(segments: selection, onStartHandler: handler)
+            note!.walk(segments: selection, onStartHandler: handler)
         case "run note":
             // Play Sound
             soundEngine.voiceCommandAccept()
             
-            note.run(onStartHandler: handler)
+            note!.run(onStartHandler: handler)
         case "walk note":
             // Play Sound
             soundEngine.voiceCommandAccept()
             
-            note.walk(onStartHandler: handler)
+            note!.walk(onStartHandler: handler)
         case "next element":
             // Play Sound
             soundEngine.voiceCommandAccept()
             
-            note.walkToNextSegment(handler: handler)
+            note!.walkToNextSegment(handler: handler)
         case "previous element":
             // Play Sound
             soundEngine.voiceCommandAccept()
             
-            note.walkToPreviousSegment(handler: handler)
+            note!.walkToPreviousSegment(handler: handler)
         case "halt run":
             // Play Sound
             soundEngine.voiceCommandAccept()
             
-            note.haltRun(handler: handler)
+            note!.haltRun(handler: handler)
         case "exit mode":
             // Play Sound
             soundEngine.voiceCommandAccept()
             
-            note.exitWalk(handler: handler)
+            note!.exitWalk(handler: handler)
         case "pause":
-            if note.isPlayingNote {
-                note.vc!.handlePause(voiceCommand: true, handler: handler)
-            } else if note.isPlayingEcho {
-                note.vc!.handlePauseEcho(voiceCommand: true, handler: handler)
-            } else if note.isRunningNote {
+            if note!.isPlayingNote {
+                detailView.handlePause(voiceCommand: true, handler: handler)
+            } else if note!.isPlayingEcho {
+                detailView.handlePauseEcho(voiceCommand: true, handler: handler)
+            } else if note!.isRunningNote {
                 // Play Sound
                 soundEngine.voiceCommandAccept()
 
-                note.haltRun(handler: handler)
+                note!.haltRun(handler: handler)
             }
         case "stop":
-            if note.isPlayingNote {
-                note.vc!.handleStopPlaying(voiceCommand: true, handler: handler)
-            } else if note.isPlayingEcho {
-                note.vc!.handleStopEcho(voiceCommand: true, handler: handler)
-            } else if note.isRunningNote {
+            if note!.isPlayingNote {
+                detailView.handleStopPlaying(voiceCommand: true, handler: handler)
+            } else if note!.isPlayingEcho {
+                detailView.handleStopEcho(voiceCommand: true, handler: handler)
+            } else if note!.isRunningNote {
                 // Play Sound
                 soundEngine.voiceCommandAccept()
                 
-                note.haltRun(handler: handler)
+                note!.haltRun(handler: handler)
             }
         case "paste clipboard":
-            note.vc!.handlePasteClipboard(voiceCommand: true, handler: handler)
+            detailView.handlePasteClipboard(voiceCommand: true, handler: handler)
         case "move here":
             // Play Sound
             soundEngine.voiceCommandAccept()
@@ -1066,14 +1153,13 @@ public final class VoiceCommandEngine: NSObject {
             // Give audio feedback
             Utils.executeFeedback(
                 visualMessage: "\"\(queryArray.count > 3 ? "\(queryArray.first!.lowercased())...\(queryArray.last!.lowercased())" : query)\"",
-                audioMessage: note.isListeningForCommands ? "\"\(queryArray.count > 3 ? "\(queryArray.first!.lowercased())...\(queryArray.last!.lowercased())" : query)\"" : nil,
-                note: note,
+                audioMessage: viewController.isListeningForCommands ? "\"\(queryArray.count > 3 ? "\(queryArray.first!.lowercased())...\(queryArray.last!.lowercased())" : query)\"" : nil,
                 discardPrior: true
             )
         }
     }
     
-    func handlePlayPreviousSentence(note: Note, handler: (() -> Void)? = nil) {
+    func handlePlayPreviousSentence(detailView: DetailViewController, note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Play Previous Sentence")
         if note.noteSegments.count == 0 {
             Utils.executeError(note: note, text: "Note is empty.", voiceCommand: true, handler: handler)
@@ -1096,15 +1182,15 @@ public final class VoiceCommandEngine: NSObject {
                 onStartHandler: {
                     DispatchQueue.main.async {
                         if !note.isListeningForSpeech {
-                            note.vc!.adjustCommandBar()
-                            note.vc!.adjustMenuBar()
+                            detailView.adjustCommandBar()
+                            detailView.adjustMenuBar()
                         }
                     }
                 },
                 secondElapseHandler: {
                     DispatchQueue.main.async {
                         if !note.isListeningForSpeech {
-                            note.vc!.navigationItem.title = "\(Utils.formattedTime(time: Float(note.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(note.getDuration(filteredDuration: false).seconds)))"
+                            viewController.navigationItem.title = "\(Utils.formattedTime(time: Float(note.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(note.getDuration(filteredDuration: false).seconds)))"
                         }
                     }
                 },
@@ -1112,26 +1198,26 @@ public final class VoiceCommandEngine: NSObject {
                     DispatchQueue.main.async {
                         if let segment = note.getSegment(type: .current), segment.getText().count > 0 && segment.isActive(), let range = note.getSegmentTextRange(of: segment) {
                             // update text
-                            note.vc!.updateUIText(text: note.getText(), highlightRange: range, transformations: note.transformations)
+                            detailView.updateUIText(text: note.getText(), highlightRange: range, transformations: note.transformations)
                         }
                         
                         if let segment = note.previousBoundarySegment, let pitch = segment.getPitch() {
                             // update pitch
-                            note.vc!.pitchLabel.text = pitch.note.string
+                            viewController.pitchLabel?.text = pitch.note.string
                         }
                     }
                 }, onFinishHandler: {
                     DispatchQueue.main.async {
                         if !selectionCursor.hasSelection {
-                            note.vc!.updateUIText(text: note.getText(), transformations: note.transformations)
+                            detailView.updateUIText(text: note.getText(), transformations: note.transformations)
                         }
                         note.player.replaceCurrentItem(with: nil)
                         if !note.isListeningForSpeech {
-                            note.vc!.navigationItem.title = ""
+                            viewController.navigationItem.title = ""
                         }
                         
-                        note.vc!.adjustCommandBar()
-                        note.vc!.adjustMenuBar()
+                        detailView.adjustCommandBar()
+                        detailView.adjustMenuBar()
                         if note.pausedWalkingNote {
                             note.walk() {
                                 handler?()
@@ -1190,12 +1276,12 @@ public final class VoiceCommandEngine: NSObject {
     func setPlaybackRate(note: Note, to rate: Float, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Set Playback Rate")
         
-        note.vc!.setPlaybackRate(to: rate)
+        viewController.setPlaybackRate(to: rate)
         handler?()
     }
     
     func setEchoRate(note: Note, to rate: Float, handler: (() -> Void)? = nil) {
-        note.vc!.setEchoRate(to: rate)
+        viewController.setEchoRate(to: rate)
         handler?()
     }
     
@@ -1207,7 +1293,7 @@ public final class VoiceCommandEngine: NSObject {
     }
     
     func handleIncreaseVolume(note: Note, handler: (() -> Void)? = nil) {
-        let currentVolume = note.vc!.playbackVolume
+        let currentVolume = viewController.playbackVolume
         let newVolume = min(currentVolume + Utils.DISCRETE_VOLUME_DELTA, Utils.MAXIMUM_VOLUME).rounded(toPlaces: 2)
         if currentVolume < Utils.MAXIMUM_VOLUME {
             // Play Sound
@@ -1220,7 +1306,6 @@ public final class VoiceCommandEngine: NSObject {
                 Utils.executeFeedback(
                     visualMessage: "New volume: \(newVolume)",
                     audioMessage: "Volume increased to \(newVolume)",
-                    note: note,
                     withHaptics: true
                 )
                 
@@ -1232,7 +1317,7 @@ public final class VoiceCommandEngine: NSObject {
     }
     
     func handleDecreaseVolume(note: Note, handler: (() -> Void)? = nil) {
-        let currentVolume = note.vc!.playbackVolume
+        let currentVolume = viewController.playbackVolume
         let newVolume = max(currentVolume - Utils.DISCRETE_VOLUME_DELTA, Utils.MINIMUM_VOLUME).rounded(toPlaces: 2)
         if currentVolume > Utils.MINIMUM_VOLUME {
             // Play Sound
@@ -1244,9 +1329,7 @@ public final class VoiceCommandEngine: NSObject {
             ) {
                 Utils.executeFeedback(
                     visualMessage: "New volume: \(newVolume)",
-                    audioMessage: "Volume decreased to \(newVolume)",
-                    note: note,
-                    withHaptics: true
+                    audioMessage: "Volume decreased to \(newVolume)",                    withHaptics: true
                 )
                 
                 handler?()
@@ -1257,7 +1340,7 @@ public final class VoiceCommandEngine: NSObject {
     }
     
     func handleIncreaseEchoRate(note: Note, handler: (() -> Void)? = nil) {
-        let currentEchoRate = note.vc!.echoRate
+        let currentEchoRate = viewController.echoRate
         let newEchoRate = min(currentEchoRate + Utils.DISCRETE_ECHO_RATE_DELTA, Utils.MAXIMUM_ECHO_RATE).rounded(toPlaces: 2)
         if currentEchoRate < Utils.MAXIMUM_ECHO_RATE {
             // Play Sound
@@ -1270,7 +1353,6 @@ public final class VoiceCommandEngine: NSObject {
                 Utils.executeFeedback(
                     visualMessage: "Echo Rate: \(newEchoRate)",
                     audioMessage: "Echo Rate increased to \(newEchoRate)",
-                    note: note,
                     withHaptics: true
                 )
         
@@ -1282,7 +1364,7 @@ public final class VoiceCommandEngine: NSObject {
     }
     
     func handleDecreaseEchoRate(note: Note, handler: (() -> Void)? = nil) {
-        let currentEchoRate = note.vc!.echoRate
+        let currentEchoRate = viewController.echoRate
         let newEchoRate = max(currentEchoRate - Utils.DISCRETE_ECHO_RATE_DELTA, Utils.MINIMUM_ECHO_RATE).rounded(toPlaces: 2)
         if currentEchoRate > Utils.MINIMUM_ECHO_RATE {
             // Play Sound
@@ -1295,7 +1377,6 @@ public final class VoiceCommandEngine: NSObject {
                 Utils.executeFeedback(
                     visualMessage: "Echo Rate: \(newEchoRate)",
                     audioMessage: "Echo Rate decreased to \(newEchoRate)",
-                    note: note,
                     withHaptics: true
                 )
         
@@ -1307,7 +1388,7 @@ public final class VoiceCommandEngine: NSObject {
     }
     
     func handleIncreasePlaybackRate(note: Note, handler: (() -> Void)? = nil) {
-        let currentPlaybackRate = note.vc!.playbackRate
+        let currentPlaybackRate = viewController.playbackRate
         let newPlaybackRate = min(currentPlaybackRate + Utils.DISCRETE_PLAYBACK_DELTA, Utils.MAXIMUM_PLAYBACK_RATE).rounded(toPlaces: 2)
         if currentPlaybackRate < Utils.MAXIMUM_PLAYBACK_RATE {
             // Play Sound
@@ -1320,7 +1401,6 @@ public final class VoiceCommandEngine: NSObject {
                 Utils.executeFeedback(
                     visualMessage: "Playback Rate: \(newPlaybackRate)",
                     audioMessage: "Playback Rate increased to \(newPlaybackRate)x",
-                    note: note,
                     withHaptics: true
                 )
 
@@ -1332,7 +1412,7 @@ public final class VoiceCommandEngine: NSObject {
     }
     
     func handleDecreasePlaybackRate(note: Note, handler: (() -> Void)? = nil) {
-        let currentPlaybackRate = note.vc!.playbackRate
+        let currentPlaybackRate = viewController.playbackRate
         let newPlaybackRate = max(currentPlaybackRate - Utils.DISCRETE_PLAYBACK_DELTA, Utils.MINIMUM_PLAYBACK_RATE).rounded(toPlaces: 2)
         if currentPlaybackRate > Utils.MINIMUM_PLAYBACK_RATE {
             // Play Sound
@@ -1345,7 +1425,6 @@ public final class VoiceCommandEngine: NSObject {
                 Utils.executeFeedback(
                     visualMessage: "Playback Rate: \(newPlaybackRate)",
                     audioMessage: "Playback Rate decreased to \(newPlaybackRate)x",
-                    note: note,
                     withHaptics: true
                 )
 
@@ -1356,7 +1435,7 @@ public final class VoiceCommandEngine: NSObject {
         }
     }
     
-    func handleResumePlayback(note: Note, handler: (() -> Void)? = nil) {
+    func handleResumePlayback(detailView: DetailViewController, note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Resume Playback")
         
         if note.pausedListeningForSpeech {
@@ -1364,10 +1443,10 @@ public final class VoiceCommandEngine: NSObject {
             return
         }
         
-        note.vc!.handleStartNote(voiceCommand: true, handler: handler)
+        detailView.handleStartNote(voiceCommand: true, handler: handler)
     }
     
-    func handleEchoCommit(note: Note, handler: (() -> Void)? = nil) {
+    func handleEchoCommit(detailView: DetailViewController, note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Echo Commit")
 
         if note.committedBufferRanges.count == 0 {
@@ -1390,14 +1469,14 @@ public final class VoiceCommandEngine: NSObject {
                 segments: Array(lastCommit),
                 onStartHandler: {
                     DispatchQueue.main.async {
-                        note.vc!.adjustCommandBar()
-                        note.vc!.adjustMenuBar()
+                        detailView.adjustCommandBar()
+                        detailView.adjustMenuBar()
                     }
                 },
                 onFinishHandler: {
                     DispatchQueue.main.async {
-                        note.vc!.adjustCommandBar()
-                        note.vc!.adjustMenuBar()
+                        detailView.adjustCommandBar()
+                        detailView.adjustMenuBar()
                         if note.pausedWalkingNote {
                             note.walk() {
                                 handler?()
@@ -1472,7 +1551,7 @@ public final class VoiceCommandEngine: NSObject {
         handler?()
     }
     
-    func handleRollbackCommit(note: Note, handler: (() -> Void)? = nil) {
+    func handleRollbackCommit(detailView: DetailViewController, note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Rollback Commit")
 
         if note.committedBufferRanges.count == 0 {
@@ -1487,10 +1566,10 @@ public final class VoiceCommandEngine: NSObject {
         self.handleSelectCommit(note: note)
         
         // Delete current selection
-        note.vc!.handleDeleteSelection(voiceCommand: true, isCommit: true, handler: handler)
+        detailView.handleDeleteSelection(voiceCommand: true, isCommit: true, handler: handler)
     }
     
-    func handleWalkCommit(note: Note, handler: (() -> Void)? = nil) {
+    func handleWalkCommit(detailView: DetailViewController, note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Walk Commit")
 
         if note.committedBufferRanges.count == 0 {
@@ -1505,10 +1584,10 @@ public final class VoiceCommandEngine: NSObject {
         self.handleSelectCommit(note: note)
         
         // Walk current selection
-        note.vc!.handleWalk(voiceCommand: true, handler: handler)
+        detailView.handleWalk(voiceCommand: true, handler: handler)
     }
     
-    func handleRunCommit(note: Note, handler: (() -> Void)? = nil) {
+    func handleRunCommit(detailView: DetailViewController, note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Walk Commit")
 
         if note.committedBufferRanges.count == 0 {
@@ -1523,7 +1602,7 @@ public final class VoiceCommandEngine: NSObject {
         self.handleSelectCommit(note: note)
         
         // Run current selection
-        note.vc!.handleRun(voiceCommand: true, handler: handler)
+        detailView.handleRun(voiceCommand: true, handler: handler)
     }
     
     func handleOpenSelection(note: Note, handler: (() -> Void)? = nil) {
@@ -1564,7 +1643,6 @@ public final class VoiceCommandEngine: NSObject {
             
             Utils.executeFeedback(
                 visualMessage: "Selection Opened!",
-                note: note,
                 withHaptics: true
             )
             
@@ -1575,7 +1653,7 @@ public final class VoiceCommandEngine: NSObject {
         }
     }
     
-    func handleRemoveSelection(note: Note, handler: (() -> Void)? = nil) {
+    func handleRemoveSelection(detailView: DetailViewController, note: Note, handler: (() -> Void)? = nil) {
         print("\tVoice Command: Remove Selection")
 
         if !selectionCursor.hasSelection {
@@ -1588,8 +1666,8 @@ public final class VoiceCommandEngine: NSObject {
         
         selectionCursor.clearSelection(withFeedback: true) {
             DispatchQueue.main.async {
-                note.vc!.adjustCommandBar()
-                note.vc!.adjustMenuBar()
+                detailView.adjustCommandBar()
+                detailView.adjustMenuBar()
             }
         }
         
@@ -1602,7 +1680,7 @@ public final class VoiceCommandEngine: NSObject {
             soundEngine.voiceCommandAccept()
 
             // Dismiss Dialog
-            Utils.dismissDialog(vc: note.vc!)
+            Utils.dismissDialog()
             
             // Turn off ambient track
             soundEngine.stopModalAmbience()
@@ -1629,7 +1707,7 @@ public final class VoiceCommandEngine: NSObject {
             soundEngine.voiceCommandAccept()
 
             // Dismiss Dialog
-            Utils.dismissDialog(vc: note.vc!)
+            Utils.dismissDialog()
             
             // Turn off ambient track
             soundEngine.stopModalAmbience()
@@ -1658,7 +1736,7 @@ public final class VoiceCommandEngine: NSObject {
             soundEngine.voiceCommandAccept()
 
             // Dismiss Dialog
-            Utils.dismissDialog(vc: note.vc!)
+            Utils.dismissDialog()
             
             // Turn off ambient track
             soundEngine.stopModalAmbience()
@@ -1703,7 +1781,6 @@ public final class VoiceCommandEngine: NSObject {
             if withFeedback {
                 Utils.executeFeedback(
                     visualMessage: "Selection Updated!",
-                    note: note,
                     withHaptics: true
                 )
             }
@@ -1744,7 +1821,6 @@ public final class VoiceCommandEngine: NSObject {
             if withFeedback {
                 Utils.executeFeedback(
                     visualMessage: "Selection Updated!",
-                    note: note,
                     withHaptics: true
                 )
             }
@@ -1784,11 +1860,11 @@ public final class VoiceCommandEngine: NSObject {
 //    func startListeningForVolume(note: Note) {
 //        if note.isListeningForSpeech {
 //            note.stopListeningForSpeech() {
-//                note.vc!.startListeningForVolume()
+//                viewController.startListeningForVolume()
 //            }
 //        } else if note.isListeningForCommands {
 //            note.stopListeningForVoiceCommands() {
-//                note.vc!.startListeningForVolume()
+//                viewController.startListeningForVolume()
 //            }
 //        }
 //    }

@@ -18,6 +18,8 @@
 		8B3B529D2539016A00B2BEDB /* modal-ambience.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8B3B529C2539016A00B2BEDB /* modal-ambience.wav */; };
 		8B3BC5BF24F882F9004FCD7B /* SelectionChangeType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B3BC5BE24F882F9004FCD7B /* SelectionChangeType.swift */; };
 		8B5C3A1D252B93A000A4DCA7 /* UITextView+NoActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B5C3A1C252B93A000A4DCA7 /* UITextView+NoActions.swift */; };
+		8B5C59E025451F1000420080 /* NoteTableViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B5C59DF25451F1000420080 /* NoteTableViewController.swift */; };
+		8B5C59E52545214600420080 /* DetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B5C59E42545214600420080 /* DetailViewController.swift */; };
 		8B669B5F24B0127E00D5996B /* Date+Subtract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B5E24B0127E00D5996B /* Date+Subtract.swift */; };
 		8B669B6124B012A900D5996B /* AVAudioSession+Headphones.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B6024B012A900D5996B /* AVAudioSession+Headphones.swift */; };
 		8B669B6324B012F500D5996B /* AVPlayer+Playback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B669B6224B012F500D5996B /* AVPlayer+Playback.swift */; };
@@ -151,6 +153,8 @@
 		8B3B529C2539016A00B2BEDB /* modal-ambience.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "modal-ambience.wav"; sourceTree = "<group>"; };
 		8B3BC5BE24F882F9004FCD7B /* SelectionChangeType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionChangeType.swift; sourceTree = "<group>"; };
 		8B5C3A1C252B93A000A4DCA7 /* UITextView+NoActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITextView+NoActions.swift"; sourceTree = "<group>"; };
+		8B5C59DF25451F1000420080 /* NoteTableViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteTableViewController.swift; sourceTree = "<group>"; };
+		8B5C59E42545214600420080 /* DetailViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailViewController.swift; sourceTree = "<group>"; };
 		8B669B5E24B0127E00D5996B /* Date+Subtract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Subtract.swift"; sourceTree = "<group>"; };
 		8B669B6024B012A900D5996B /* AVAudioSession+Headphones.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AVAudioSession+Headphones.swift"; sourceTree = "<group>"; };
 		8B669B6224B012F500D5996B /* AVPlayer+Playback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AVPlayer+Playback.swift"; sourceTree = "<group>"; };
@@ -475,6 +479,8 @@
 				8BEC136924906FF30056E767 /* SceneDelegate.swift */,
 				8BEC136B24906FF30056E767 /* ViewController.swift */,
 				8BD595C6249AE45D000B3127 /* Note.swift */,
+				8B5C59DF25451F1000420080 /* NoteTableViewController.swift */,
+				8B5C59E42545214600420080 /* DetailViewController.swift */,
 				8B09CDFF24932E4E001EC02D /* NoteSegment.swift */,
 				8BB6859D24E60F0000F3285B /* SelectionCursor.swift */,
 				8B669B6824B01AF600D5996B /* Utils.swift */,
@@ -710,6 +716,7 @@
 				8B766F5B24AC2AB200D41A13 /* FFTTransformer.swift in Sources */,
 				8B766F4F24AC2AB200D41A13 /* Transformer.swift in Sources */,
 				8B766F4924AC2AB200D41A13 /* Estimator.swift in Sources */,
+				8B5C59E025451F1000420080 /* NoteTableViewController.swift in Sources */,
 				8B24440224DB6F4A0050C959 /* HapticEngine.swift in Sources */,
 				8BB685A624EA0FC400F3285B /* NotificationItem.swift in Sources */,
 				8B766F5C24AC2AB200D41A13 /* QuadradicEstimator.swift in Sources */,
@@ -760,6 +767,7 @@
 				8BA3C35425293A80000B704B /* UIColor+hex.swift in Sources */,
 				8BA3055B24C920DA0056E4DF /* SynthesizerItem.swift in Sources */,
 				8BD595C7249AE45D000B3127 /* Note.swift in Sources */,
+				8B5C59E52545214600420080 /* DetailViewController.swift in Sources */,
 				8B766F4A24AC2AB200D41A13 /* YINUtil.swift in Sources */,
 				8B766F5324AC2AB200D41A13 /* OutputSignalTracker.swift in Sources */,
 				8B66BFE0253BD17F0085A94F /* VoiceCommandDatum.swift in Sources */,

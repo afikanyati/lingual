@@ -9,26 +9,52 @@
 import Foundation
 import AVFoundation
 
-struct Sentence: CustomStringConvertible {
+class Sentence: CustomStringConvertible, NSCoding {
     var number: Int
     var text: String
     var timeRange: CMTimeRange
     var noteRange: Range<Int>
     
-    mutating func setNumber(value: Int) {
-        number = value
+    init(
+        number: Int,
+        text: String,
+        timeRange: CMTimeRange,
+        noteRange: Range<Int>
+    ) {
+        self.number = number
+        self.text = text
+        self.timeRange = timeRange
+        self.noteRange = noteRange
     }
     
-    mutating func setTimeRange(value: CMTimeRange) {
-        timeRange = value
+    func encode(with coder: NSCoder) {
+        coder.encode(self.number, forKey: "number")
+        coder.encode(self.text, forKey: "text")
+        coder.encode(self.timeRange, forKey: "timeRange")
+        coder.encode(self.noteRange, forKey: "noteRange")
     }
     
-    mutating func setNoteRange(value: Range<Int>) {
-        noteRange = value
+    required init?(coder: NSCoder) {
+        self.number = Int(truncatingIfNeeded: coder.decodeInt64(forKey: "number"))
+        self.text = coder.decodeObject(forKey: "text") as! String
+        self.timeRange = coder.decodeObject(forKey: "timeRange") as! CMTimeRange
+        self.noteRange = coder.decodeObject(forKey: "noteRange") as! Range<Int>
     }
     
-    mutating func setText(value: String) {
-        text = value
+   func setNumber(value: Int) {
+        self.number = value
+    }
+    
+    func setTimeRange(value: CMTimeRange) {
+        self.timeRange = value
+    }
+    
+    func setNoteRange(value: Range<Int>) {
+        self.noteRange = value
+    }
+    
+    func setText(value: String) {
+        self.text = value
     }
     
     static func ==(_ firstSentence: Sentence, _ secondSentence: Sentence) -> Bool {

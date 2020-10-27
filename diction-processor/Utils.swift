@@ -12,6 +12,9 @@ import AVFoundation
 import MediaPlayer
 
 class Utils {
+    static let DEFAULT_USE_ON_DEVICE_RECOGNITION = true
+    static let MALE_LOWEST_VOICED_SPEECH_FREQUENCY: Double = 82
+    static let FEMALE_HIGHEST_VOICED_SPEECH_FREQUENCY: Double = 1047
     static let UNKNOWN: Double = -1
     static let SILENCE_SKIP_THRESHOLD = 0.1
     static let CURSOR_WIDTH = 2
@@ -109,6 +112,8 @@ class Utils {
     static var TEXT_VIEW_PADDING_BOTTOM: CGFloat = 80
     static var TEXT_VIEW_PADDING_LEFT: CGFloat = 10
     static var TEXT_VIEW_PADDING_RIGHT: CGFloat = 10
+    static var ENTRY_ITEM_PREVIEW_CHAR_COUNT = 30
+    static let MIN_SEED_INTENSITY_POINTS = 15
     
     static let pitchToFrequencyMap: [String : Double] = [
         "C0": 16,
@@ -217,14 +222,14 @@ class Utils {
         }
         
         // Normalize Segments
-        if note.omitSilences {
+        if viewController.withOmitSilences {
             print("\tRemove silences and voice command segments...")
         } else {
             print("\tRemove voice command segments...")
         }
         let normalizedExportSegments = Utils.cleanseSegments(
             segments: note.noteSegments,
-            omitSilences: note.omitSilences,
+            omitSilences: viewController.withOmitSilences,
             omitVoiceCommands: true,
             omitDeleted: true
         )
@@ -238,7 +243,7 @@ class Utils {
         // Normalize Transformations
         var normalizedTransformations = [NoteTransformation]()
         if note.transformations.count > 0 {
-            if note.omitSilences {
+            if viewController.withOmitSilences {
                 print("\tRecompute transformation without silences and voice command segments")
             } else {
                 print("\tRecompute transformation without voice command segments...")
@@ -248,7 +253,7 @@ class Utils {
                 transformations: note.transformations,
                 segments: normalizedExportSegments,
                 segmentIndexMap: normalizedSegmentIndexMap,
-                omitSilences: note.omitSilences,
+                omitSilences: viewController.withOmitSilences,
                 omitVoiceCommands: true,
                 omitDeleted: true
             )
@@ -448,7 +453,7 @@ class Utils {
                     timescale: Int32(Note.defaultSegmentTimescale)
                 )
             )
-            let rate = firstPlayableSegment?.getRate() ?? note.vc!.playbackRate
+            let rate = firstPlayableSegment?.getRate() ?? viewController.playbackRate
             let rateWasSet = Utils.setPlayerRate(player: note.player, rate: rate)
             if rateWasSet {
                 print("\tPlayer rate was successfully set: ", rate)
@@ -525,7 +530,7 @@ class Utils {
     
     public static func runError(note: Note, handler: (() -> Void)?) {
         if !AVAudioSession.isHeadphonesConnected {
-            note.stopListeningForVoiceCommands(pause: true) {
+            viewController.stopListeningForVoiceCommands(pause: true) {
                 handler?()
             }
         } else {
@@ -533,17 +538,17 @@ class Utils {
         }
     }
     
-    public static func executeFeedback(visualMessage: String? = nil, audioMessage: String? = nil, note: Note, discardPrior: Bool = false, withHaptics: Bool = false, delay: TimeInterval = 0.7) {
+    public static func executeFeedback(visualMessage: String? = nil, audioMessage: String? = nil, discardPrior: Bool = false, withHaptics: Bool = false, delay: TimeInterval = 0.7) {
         print("===== Execute Feedback =====")
         // Give visual feedback
         Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { timer in
             if let visualMessage = visualMessage {
                 print("\tVisual Message: \(visualMessage)")
-                note.vc!.scheduleNotification(
+                viewController.scheduleNotification(
                     text: visualMessage,
                     duration: 3
                 )
-                note.vc!.exhaustNotificationQueue()
+                viewController.exhaustNotificationQueue()
             }
             
             // Give audio feedback
@@ -551,22 +556,22 @@ class Utils {
                 print("\tAudio Message: \(audioMessage)")
                 // we don't run when !AVAudioSession.isHeadphonesConnected
                 // because we will will catch the words and process them
-                let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc)
+                let voice = Utils.getSynthesizerVoice(withGender: .female)
 
                 let synthesizerItem = SynthesizerItem(
-                    synthesizer: note.vc!.speechSynthesizer,
+                    synthesizer: viewController.speechSynthesizer,
                     text: audioMessage,
                     voice: voice,
-                    rate: note.vc!.echoRate,
-                    volume: note.vc!.playbackVolume
+                    rate: viewController.echoRate,
+                    volume: viewController.playbackVolume
                 )
 
                 if discardPrior {
-                    note.vc!.emptySynthesizerQueue()
+                    viewController.emptySynthesizerQueue()
                 }
 
-                note.vc!.synthesizerQueue.enqueue(synthesizerItem)
-                note.vc!.exhaustSynthesizerQueue()
+                viewController.synthesizerQueue.enqueue(synthesizerItem)
+                viewController.exhaustSynthesizerQueue()
             }
             
             // Give haptic feedback
@@ -590,11 +595,11 @@ class Utils {
             
             
             // Give visual feedback
-            note.vc!.scheduleNotification(
+            viewController.scheduleNotification(
                 text: text,
                 duration: 3
             )
-            note.vc!.exhaustNotificationQueue()
+            viewController.exhaustNotificationQueue()
             
             // Give haptic feedback
             hapticEngine.error()
@@ -604,26 +609,26 @@ class Utils {
                 if AVAudioSession.isHeadphonesConnected {
                     // we don't run when !AVAudioSession.isHeadphonesConnected
                     // because we will will catch the words and process them
-                    let voice = Utils.getSynthesizerVoice(withGender: .female, vc: note.vc!)
+                    let voice = Utils.getSynthesizerVoice(withGender: .female)
                     let synthesizerItem = SynthesizerItem(
-                        synthesizer: note.vc!.speechSynthesizer,
+                        synthesizer: viewController.speechSynthesizer,
                         text: text,
                         voice: voice,
-                        rate: note.vc!.echoRate,
-                        volume: note.vc!.playbackVolume
+                        rate: viewController.echoRate,
+                        volume: viewController.playbackVolume
                     )
                     
-                    note.vc!.emptySynthesizerQueue()
-                    note.vc!.synthesizerQueue.enqueue(synthesizerItem)
-                    note.vc!.exhaustSynthesizerQueue()
+                    viewController.emptySynthesizerQueue()
+                    viewController.synthesizerQueue.enqueue(synthesizerItem)
+                    viewController.exhaustSynthesizerQueue()
                 }
                 
                 // Execute handler
                 handler?()
             }
             
-            if note.isListeningForCommands && !AVAudioSession.isHeadphonesConnected {
-                note.stopListeningForVoiceCommands(pause: true) {
+            if viewController.isListeningForCommands && !AVAudioSession.isHeadphonesConnected {
+                viewController.stopListeningForVoiceCommands(pause: true) {
                     Utils.runError(note: note, handler: errorHandler)
                 }
             } else if note.isListeningForSpeech && !AVAudioSession.isHeadphonesConnected {
@@ -940,7 +945,7 @@ class Utils {
         return dateFormatter.string(from: Date(timeIntervalSince1970: date))
     }
     
-    public static func getSynthesizerVoice(withGender gender: Gender? = nil, vc: UIViewController? = nil) -> AVSpeechSynthesisVoice? {
+    public static func getSynthesizerVoice(withGender gender: Gender? = nil) -> AVSpeechSynthesisVoice? {
         var synthesizerVoice: AVSpeechSynthesisVoice?
         voicesLoop: for voice in AVSpeechSynthesisVoice.speechVoices() {
             if (Locale.current.regionCode == "AU") && (gender == .male || gender == nil) && (voice.name == "Lee (Enhanced)" && voice.quality == .enhanced) {
@@ -978,7 +983,7 @@ class Utils {
         
         if let synthesizerVoice = synthesizerVoice {
             return synthesizerVoice
-        } else if let vc = vc {
+        } else {
             var voiceName = "Tom"
             voicesLoop: for voice in AVSpeechSynthesisVoice.speechVoices() {
                 if (Locale.current.regionCode == "AU") && (gender == .male || gender == nil) && (voice.name == "Lee (Enhanced)" && voice.quality == .enhanced) {
@@ -1028,7 +1033,7 @@ class Utils {
             alertController.addAction(cancelAction)
 
             DispatchQueue.main.async {
-                vc.present(alertController, animated: true, completion: nil)
+                viewController.present(alertController, animated: true, completion: nil)
             }
         }
         
@@ -1402,7 +1407,7 @@ class Utils {
         cursorView.frame = frame
     }
     
-    public static func presentDialog(dialogItem: DialogItem, vc: UIViewController) {
+    public static func presentDialog(dialogItem: DialogItem) {
         // Play Sound
         soundEngine.presentDialog()
         
@@ -1421,13 +1426,13 @@ class Utils {
             dialog.addAction(alertAction)
         }
         DispatchQueue.main.async {
-            vc.present(dialog, animated: true)
+            viewController.present(dialog, animated: true)
         }
     }
     
-    public static func dismissDialog(vc: UIViewController) {
+    public static func dismissDialog() {
         DispatchQueue.main.async {
-            vc.dismiss(animated: true)
+            viewController.dismiss(animated: true)
         }
     }
     
@@ -1445,6 +1450,32 @@ class Utils {
         }
         
         return false
+    }
+    
+    public static func isValidVoiceCommand(detailView: DetailViewController, query: String) -> (Bool, String?, Int?) {
+        if let (type, numWordsBeforeVoiceCommand) = voiceCommandEngine.includesCommand(passage: query) {
+            // Determine if voice command is well spaced from previous voice command
+            if let note = detailView.note, let lastVoiceCommand = note.voiceCommandStream.last, note.isListeningForSpeech && lastVoiceCommand.type == type && Date() < lastVoiceCommand.date.addingTimeInterval(Utils.MINIMUM_REST_BETWEEN_VOICE_COMMANDS) {
+                // Likely too close to last voice command that was the same voice command
+                return (false, type, numWordsBeforeVoiceCommand)
+            } else if !selectionCursor.hasSelection && voiceCommandEngine.isSelectionVoiceCommand(command: type) {
+                // Attempting to use selection voice command without selection
+                return (false, type, numWordsBeforeVoiceCommand)
+            } else if let note = detailView.note, type == "stop" && !note.isPlayingNote && !note.isPlayingEcho && !note.isRunningNote {
+                // User said stop when no stoppable mode was active
+                return (false, type, numWordsBeforeVoiceCommand)
+            } else if detailView.note == nil && voiceCommandEngine.isNoteVoiceCommand(command: type) {
+                // Attemping to call note voice command when no note set
+                return (false, type, numWordsBeforeVoiceCommand)
+            } else {
+                // Well spaced from last voice command
+                // or no previous voice commands captured
+                return (true, type, numWordsBeforeVoiceCommand)
+            }
+        } else {
+            // Is an invalid voice command
+            return (false, nil, nil)
+        }
     }
     
     // MARK: - Helper Functions

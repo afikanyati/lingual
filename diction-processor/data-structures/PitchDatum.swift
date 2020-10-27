@@ -8,19 +8,44 @@
 
 import Foundation
 
-struct PitchDatum {
+class PitchDatum: NSObject, NSCoding {
     var date: Date
-    var pitch: Pitch
+    var pitch: Pitch?
+    
+    func encode(with coder: NSCoder) {
+        coder.encode(self.date, forKey: "date")
+        coder.encode(self.pitch?.frequency, forKey: "pitchFrequency")
+    }
+    
+    init(
+        date: Date,
+        pitch: Pitch?
+    ) {
+        self.date = date
+        self.pitch = pitch
+    }
+    
+    required init?(coder: NSCoder) {
+        self.date = coder.decodeObject(forKey: "date") as! Date
+        let frequency = coder.decodeObject(forKey: "pitchFrequency") as? Double
+        if let frequency = frequency {
+            do {
+                self.pitch = try Pitch(frequency: frequency)
+            } catch {
+                print("\t[Error] There was a problem reproducing PitchDatum pitch")
+            }
+        }
+    }
 
-    var description: String {
-        return "PitchDatum {\n\tdate: \(date)\n\tpitch:\(pitch)\n}"
+    override var description: String {
+        return "PitchDatum {\n\tdate: \(date)\n\tpitch:\(String(describing: pitch))\n}"
     }
    
-   mutating func setDate(value: Date) {
-       date = value
+   func setDate(value: Date) {
+        self.date = value
    }
    
-   mutating func setPitch(value: Pitch) {
-       pitch = value
+   func setPitch(value: Pitch) {
+        self.pitch = value
    }
 }
