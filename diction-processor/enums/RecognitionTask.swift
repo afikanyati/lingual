@@ -11,4 +11,5 @@ import Foundation
 enum RecognitionTask {
     case SPEECH
     case VOICE_COMMAND
+    case WAKE_PHRASE
 }

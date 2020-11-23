@@ -12,16 +12,44 @@ import AVFoundation
 import NaturalLanguage
 
 // https://remotepossibilities.wordpress.com/2013/03/10/when-you-speak-how-often-and-how-long-should-you-pause-the-answer-try-1-2-3/
-let COMMA_PAUSE_DURATION_MULTIPLIER: Double = 2
-let NEW_SENTENCE_PAUSE_DURATION_MULTIPLIER: Double = 4
-let NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER: Double = 6 // Very nice
 let MAX_SEMANTICALLY_SIMILAR_WORDS = 5
 
 class NoteSegment: AVCompositionTrackSegment, NSCoding {
+    // ===== IMPORTANT =====
+    // - When you add new properties to a NoteSegment, make sure to
+    // handle these in the following places:
+    // 1) NoteSegment Property section
+    // 2) NoteSegment.duplicate()
+    // 3) NoteSegment.init(coder: NSCoder)
+    // 4) NoteSegment.decode(with:)
+    // 5) NoteSegment.description
+    // 6) Note.normalizeSegments
+    // 7) Utils.cleanseSegments
+    // 8) Any other place where we manipulate NoteSegment objects
+    //
+    // - The above relates specifically the transfer of state when we create new NoteSegments
+    // and doesn't factor all the places where we instantiate a new one.
+    // - If the property will be an intializer argument, make sure to add it to these places too:
+    // 1) Note.processTranscriptSegment
+    //
+    // - Make sure to create a getter method instead of exposing the variable itself
+    
+    // MARK: - ViewController References
+    weak var viewController: ViewController?
+    
+    // MARK: - Identity Properties
+    
     /// Stores a unique identifier for note
     internal var uid: String
+    /// Stores UID of segment clip
+    internal var clipUID: String
+    /// Stores speaker uid of segment clip
+    internal var speakerUID: String
     /// Reference to it's parent note
     weak private(set) var note: Note?
+    
+    // MARK: - General Properties
+    
     /// The date when note was created
     internal var dateCreated: TimeInterval
     /// The date when note was last modified
@@ -38,7 +66,7 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
     private var effectiveDuration: CMTime {
         let baseDuration = Float(self.timeMapping.source.duration.seconds)
         let trueDuration = rate * baseDuration
-        return CMTimeMake(value: Int64(Note.defaultSegmentTimescale * Double (trueDuration)), timescale: Int32(Note.defaultSegmentTimescale))
+        return CMTimeMake(value: Int64(Utils.DEFAULT_SEGMENT_TIMESCALE * Double (trueDuration)), timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE))
     }
     /// An array of similarly sounding words.
     private var phoneticallySimilarWords : [String]
@@ -81,7 +109,9 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
     private var voiceCommandWord: Bool
     /// Schedules visual or audio notification once index is set
     private var scheduleNotificationSearch: Bool = false
+    
     // MARK: - Cached Properties
+    
     /// Stores a cached version of getText() method
     private(set) var cachedText: String?
     /// Stores arguments of last getText() call
@@ -109,7 +139,10 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
     ///     - sentimentScore: Scores text as positive, negative, or neutral based on its sentiment polarity.
     init(
         note: Note? = nil,
+        speakerUID: String,
+        rate: Float = 1.0,
         word: String,
+        clipUID: String,
         trackURL: URL, // Cannot be replaced. Read Only
         trackID: CMPersistentTrackID,
         phoneticallySimilarWords: [String]?,
@@ -120,11 +153,13 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
         nameType: NLTag?,
         lemma: NLTag?,
         sentimentScore: [ScaleUnitType: Float]?,
+        withPunctuationSuggestions: Bool,
         utterPunctuationSuggestion: Bool = false,
         voiceCommandWord: Bool = false,
         deleted: Bool = false
     ) {
         self.uid = UUID().uuidString
+        self.clipUID = clipUID
         self.dateCreated = Date().timeIntervalSince1970
         self.dateModified = Date().timeIntervalSince1970
         self.word = word
@@ -134,10 +169,11 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
         self.lemma = lemma
         self.voiceCommandWord = voiceCommandWord
         self.deleted = deleted
+        self.rate = rate.rounded(toPlaces: 1)
+        self.speakerUID = speakerUID
         
         if let note = note {
             self.note = note
-            self.rate = viewController.playbackRate.rounded(toPlaces: 1)
         }
         
         if let sentimentScore = sentimentScore {
@@ -162,19 +198,19 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
             targetTimeRange: targetTimeRange
         )
         
-        if AVAudioSession.isHeadphonesConnected && viewController.withPunctuationSuggestions && utterPunctuationSuggestion && !voiceCommandWord && !deleted && self.isSilence() && self.suggestsNewParagraph() {
+        if AVAudioSession.isHeadphonesConnected && withPunctuationSuggestions && utterPunctuationSuggestion && !voiceCommandWord && !deleted && self.isSilence() && self.suggestsNewParagraph() {
             // Received newline punctuation suggestion
             // Headphones are connected
             self.scheduleNotificationSearch = true
-        } else if !AVAudioSession.isHeadphonesConnected && viewController.withPunctuationSuggestions && utterPunctuationSuggestion && !voiceCommandWord && !deleted && self.isSilence() && self.suggestsNewParagraph() {
+        } else if !AVAudioSession.isHeadphonesConnected && withPunctuationSuggestions && utterPunctuationSuggestion && !voiceCommandWord && !deleted && self.isSilence() && self.suggestsNewParagraph() {
             // Received newline punctuation suggestion
             // Headphones not are connected
             self.scheduleNotificationSearch = true
-        } else if AVAudioSession.isHeadphonesConnected && viewController.withPunctuationSuggestions && utterPunctuationSuggestion && !voiceCommandWord && !deleted && self.isSilence() && self.suggestsNewSentence() {
+        } else if AVAudioSession.isHeadphonesConnected && withPunctuationSuggestions && utterPunctuationSuggestion && !voiceCommandWord && !deleted && self.isSilence() && self.suggestsNewSentence() {
             // Received new sentence punctuation suggestion
             // Headphones are connected
             self.scheduleNotificationSearch = true
-        } else if !AVAudioSession.isHeadphonesConnected && viewController.withPunctuationSuggestions && utterPunctuationSuggestion && !voiceCommandWord && !deleted && self.isSilence() && self.suggestsNewSentence() {
+        } else if !AVAudioSession.isHeadphonesConnected && withPunctuationSuggestions && utterPunctuationSuggestion && !voiceCommandWord && !deleted && self.isSilence() && self.suggestsNewSentence() {
             // Received new sentence punctuation suggestion
             // Headphones not are connected
             self.scheduleNotificationSearch = true
@@ -185,7 +221,9 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
     
     func encode(with coder: NSCoder) {
         coder.encode(self.uid, forKey: "uid")
+        coder.encode(self.clipUID, forKey: "clipUID")
         coder.encode(self.note, forKey: "note")
+        coder.encode(self.speakerUID, forKey: "speakerUID")
         coder.encode(self.dateCreated, forKey: "dateCreated")
         coder.encode(self.dateModified, forKey: "dateModified")
         coder.encode(self.index, forKey: "index")
@@ -193,7 +231,11 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
         coder.encode(self.word, forKey: "word")
         coder.encode(self.rate, forKey: "rate")
         coder.encode(self.phoneticallySimilarWords, forKey: "phoneticallySimilarWords")
-        coder.encode(self.semanticallySimilarWords, forKey: "semanticallySimilarWords")
+        var semanticallySimilarWords = [String: Double]()
+        for word in self.semanticallySimilarWords {
+            semanticallySimilarWords[word.0] = word.1
+        }
+        coder.encode(semanticallySimilarWords, forKey: "semanticallySimilarWords")
         coder.encode(self.tokenType, forKey: "tokenType")
         coder.encode(self.lexicalClass, forKey: "lexicalClass")
         coder.encode(self.nameType, forKey: "nameType")
@@ -201,20 +243,49 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
         coder.encode(self.backgroundNoise, forKey: "backgroundNoise")
         coder.encode(self.power, forKey: "power")
         coder.encode(self.sentence, forKey: "sentence")
-        coder.encode(self.sentimentScore, forKey: "sentimentScore")
-        coder.encode(self.pitch?.frequency, forKey: "pitchFrequency")
+        let sentimentScore: [String: Float] = [
+            "word": self.sentimentScore[.word]!,
+            "sentence": self.sentimentScore[.sentence]!,
+            "all": self.sentimentScore[.all]!
+        ]
+        coder.encode(sentimentScore, forKey: "sentimentScore")
+        if let frequency = self.pitch?.frequency {
+            coder.encode(frequency, forKey: "pitchFrequency")
+        }
         coder.encode(self.avgPauseDuration, forKey: "avgPauseDuration")
         coder.encode(self.speakingRate, forKey: "speakingRate")
         coder.encode(self.voiceCommandWord, forKey: "voiceCommandWord")
-        coder.encode(self.sourceURL, forKey: "trackURL")
+        coder.encode(self.sourceURL?.lastPathComponent, forKey: "trackURL")
         coder.encode(self.sourceTrackID, forKey: "trackID")
-        coder.encode(self.timeMapping.source, forKey: "sourceTimeRange")
-        coder.encode(self.timeMapping.target, forKey: "targetTimeRange")
+        let sourceTimeRange: [String: [String: Int]] = [
+            "start": [
+                "value": Int(self.timeMapping.source.start.value),
+                "timescale": Int(self.timeMapping.source.start.timescale)
+            ],
+            "end": [
+                "value": Int(self.timeMapping.source.end.value),
+                "timescale": Int(self.timeMapping.source.end.timescale)
+            ]
+        ]
+        coder.encode(sourceTimeRange, forKey: "sourceTimeRange")
+        let targetTimeRange: [String: [String: Int]] = [
+            "start": [
+                "value": Int(self.timeMapping.target.start.value),
+                "timescale": Int(self.timeMapping.target.start.timescale)
+            ],
+            "end": [
+                "value": Int(self.timeMapping.target.end.value),
+                "timescale": Int(self.timeMapping.target.end.timescale)
+            ]
+        ]
+        coder.encode(targetTimeRange, forKey: "targetTimeRange")
     }
     
     required init?(coder: NSCoder) {
         self.uid = coder.decodeObject(forKey: "uid") as! String
+        self.clipUID = coder.decodeObject(forKey: "clipUID") as! String
         self.note = coder.decodeObject(forKey: "note") as! Note?
+        self.speakerUID = coder.decodeObject(forKey: "speakerUID") as! String
         self.dateCreated = coder.decodeDouble(forKey: "dateCreated")
         self.dateModified = coder.decodeDouble(forKey: "dateModified")
         self.index = Int(truncatingIfNeeded: coder.decodeInt64(forKey: "index"))
@@ -222,7 +293,10 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
         self.word = coder.decodeObject(forKey: "word") as! String
         self.rate = coder.decodeFloat(forKey: "rate")
         self.phoneticallySimilarWords = coder.decodeObject(forKey: "phoneticallySimilarWords") as! [String]
-        self.semanticallySimilarWords = coder.decodeObject(forKey: "semanticallySimilarWords") as! [(String, NLDistance)]
+        let semanticallySimilarWords = coder.decodeObject(forKey: "semanticallySimilarWords") as! [String: Double]
+        for word in semanticallySimilarWords.keys {
+            self.semanticallySimilarWords.append((word, semanticallySimilarWords[word]!))
+        }
         self.tokenType = coder.decodeObject(forKey: "tokenType") as! NLTag?
         self.lexicalClass = coder.decodeObject(forKey: "lexicalClass") as! NLTag?
         self.nameType = coder.decodeObject(forKey: "nameType") as! NLTag?
@@ -230,9 +304,14 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
         self.backgroundNoise = coder.decodeDouble(forKey: "backgroundNoise")
         self.power = coder.decodeDouble(forKey: "power")
         self.sentence = coder.decodeObject(forKey: "sentence") as! Sentence
-        self.sentimentScore = coder.decodeObject(forKey: "sentimentScore") as! [ScaleUnitType:Float]
-        let frequency = coder.decodeDouble(forKey: "pitchFrequency") as Double?
-        if let frequency = frequency {
+        let sentimentScore = coder.decodeObject(forKey: "sentimentScore") as! [String:Float]
+        self.sentimentScore = [
+            .word: sentimentScore["word"]!,
+            .sentence: sentimentScore["sentence"]!,
+            .all: sentimentScore["all"]!
+        ]
+        let frequency = coder.decodeDouble(forKey: "pitchFrequency")
+        if frequency > 0 {
             do {
                 self.pitch = try Pitch(frequency: frequency)
             } catch {
@@ -242,10 +321,30 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
         self.avgPauseDuration = coder.decodeDouble(forKey: "avgPauseDuration")
         self.speakingRate = coder.decodeDouble(forKey: "speakingRate")
         self.voiceCommandWord = coder.decodeBool(forKey: "voiceCommandWord")
-        let trackURL: URL = coder.decodeObject(forKey: "trackURL") as! URL
+        let trackURL = Utils.getFileURL(of: coder.decodeObject(forKey: "trackURL") as! String)
         let trackID: CMPersistentTrackID = coder.decodeInt32(forKey: "trackID")
-        let sourceTimeRange: CMTimeRange = coder.decodeObject(forKey: "sourceTimeRange") as! CMTimeRange
-        let targetTimeRange: CMTimeRange = coder.decodeObject(forKey: "targetTimeRange") as! CMTimeRange
+        let storedSourceTimeRange = coder.decodeObject(forKey: "sourceTimeRange") as! [String: [String: Int]]
+        let sourceTimeRange = CMTimeRangeFromTimeToTime(
+            start: CMTimeMake(
+                value: Int64(storedSourceTimeRange["start"]!["value"]!),
+                timescale: Int32(storedSourceTimeRange["start"]!["timescale"]!)
+            ),
+            end: CMTimeMake(
+                value: Int64(storedSourceTimeRange["end"]!["value"]!),
+                timescale: Int32(storedSourceTimeRange["end"]!["timescale"]!)
+            )
+        )
+        let storedTargetTimeRange = coder.decodeObject(forKey: "targetTimeRange") as! [String: [String: Int]]
+        let targetTimeRange = CMTimeRangeFromTimeToTime(
+            start: CMTimeMake(
+                value: Int64(storedTargetTimeRange["start"]!["value"]!),
+                timescale: Int32(storedTargetTimeRange["start"]!["timescale"]!)
+            ),
+            end: CMTimeMake(
+                value: Int64(storedTargetTimeRange["end"]!["value"]!),
+                timescale: Int32(storedTargetTimeRange["end"]!["timescale"]!)
+            )
+        )
         super.init(
             url: trackURL,
             trackID: trackID,
@@ -254,9 +353,14 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
         )
     }
     
+    deinit {
+        // remove notification observers
+        NotificationCenter.default.removeObserver(self)
+    }
+    
     // update for new properties
     override var description: String {
-        return "NoteSegment {\n\tuid: \(self.uid) \n\tdateCreated: \(Utils.getDateString(date: self.dateCreated) ?? "nil") \n\tdateModified: \(Utils.getDateString(date: self.dateModified) ?? "nil") \n\tisDeleted: \(self.deleted) \n\trawWord: '\(self.word)' \n\tdisplayedWord: '\(self.getText(withTemporalSuggestions: viewController.withTemporalSuggestions, withPunctuationSuggestions: viewController.withPunctuationSuggestions, withFormattingSuggestions: viewController.withFormattingSuggestions, strictlyAsWord: viewController.withTextStrictlyAsWords, withSpacePrefix: true))' \n\tsourceURL: \(self.sourceURL!.lastPathComponent) \n\trate: \(self.rate) \n\teffectiveDuration: \(self.effectiveDuration.seconds) \n\tpitch: \(self.pitch?.note.string ?? "nil") \n\tsourceTimeRange: (\n\t\tstart: \(self.timeMapping.source.start.seconds),\n\t\tend: \(self.timeMapping.source.end.seconds),\n\t\tduration: \(self.timeMapping.source.duration.seconds)\n\t) \n\ttargetTimeRange: (\n\t\tstart: \(self.timeMapping.target.start.seconds),\n\t\tend: \(self.timeMapping.target.end.seconds),\n\t\tduration: \(self.timeMapping.target.duration.seconds)\n\t) \n\tindex: \(self.index) \n\tphoneticallySimilarWords: \(String(describing: self.phoneticallySimilarWords)) \n\ttokenType: \(self.tokenType ?? NLTag(rawValue: "nil")) \n\tlexicalClass: \(self.lexicalClass ?? NLTag(rawValue: "nil")) \n\tnameType: \(self.nameType ?? NLTag(rawValue: "nil")) \n\tlemma: \(self.lemma ?? NLTag(rawValue: "nil")) \n\tbackgroundNoise: \(self.backgroundNoise) \n\tpower: \(self.power) \n\tavgNotePower: \(self.avgNotePower) \n\tsentence: \(String(describing: self.sentence)) \n\tsentimentScore: \(String(describing: self.sentimentScore)) \n\tisSilence: \(self.isSilence()) \n\tisPunctuation: \(self.isPunctuation()) \n\tisEmphasized: \(self.isEmphasized()) \n\tisNumber: \(self.isNumber()) \n\tisHomophone: \(self.isHomophone()) \n\tisSentenceTerminator: \(self.isSentenceTerminator()) \n\tisVoiceCommandWord: \(self.voiceCommandWord) \n\tavgPauseDuration: \(self.avgPauseDuration) \n\tspeakingRate: \(self.speakingRate)\n}"
+        return "NoteSegment {\n\tuid: \(self.uid) \n\tclipUID: \(self.clipUID) \n\tspeakerUID: \(self.speakerUID) \n\tdateCreated: \(Utils.getDateString(date: self.dateCreated) ?? "nil") \n\tdateModified: \(Utils.getDateString(date: self.dateModified) ?? "nil") \n\tisDeleted: \(self.deleted) \n\trawWord: '\(self.word)' \n\tdisplayedWord: '\(self.getText(withTemporalSuggestions: self.note!.state?.withTemporalSuggestions ?? Utils.DEFAULT_WITH_TEMPORAL_SUGGESTIONS, withPunctuationSuggestions: self.note!.state?.withPunctuationSuggestions ?? Utils.DEFAULT_WITH_PUNCTUATION_SUGGESTIONS, withFormattingSuggestions: self.note!.state?.withFormattingSuggestions ?? Utils.DEFAULT_WITH_FORMATTING_SUGGESTIONS, strictlyAsWord: self.note!.state?.withTextStrictlyAsWords ?? Utils.DEFAULT_WITH_TEXT_STRICTLY_AS_WORDS, withSpacePrefix: true))' \n\tsourceURL: \(self.sourceURL!.lastPathComponent) \n\trate: \(self.rate) \n\teffectiveDuration: \(self.effectiveDuration.seconds) \n\tpitch: \(self.pitch?.note.string ?? "nil") \n\tsourceTimeRange: (\n\t\tstart: \(self.timeMapping.source.start.seconds),\n\t\tend: \(self.timeMapping.source.end.seconds),\n\t\tduration: \(self.timeMapping.source.duration.seconds)\n\t) \n\ttargetTimeRange: (\n\t\tstart: \(self.timeMapping.target.start.seconds),\n\t\tend: \(self.timeMapping.target.end.seconds),\n\t\tduration: \(self.timeMapping.target.duration.seconds)\n\t) \n\tindex: \(self.index) \n\tphoneticallySimilarWords: \(String(describing: self.phoneticallySimilarWords)) \n\ttokenType: \(self.tokenType ?? NLTag(rawValue: "nil")) \n\tlexicalClass: \(self.lexicalClass ?? NLTag(rawValue: "nil")) \n\tnameType: \(self.nameType ?? NLTag(rawValue: "nil")) \n\tlemma: \(self.lemma ?? NLTag(rawValue: "nil")) \n\tbackgroundNoise: \(self.backgroundNoise) \n\tpower: \(self.power) \n\tavgNotePower: \(self.avgNotePower) \n\tsentence: \(String(describing: self.sentence)) \n\tsentimentScore: \(String(describing: self.sentimentScore)) \n\tisSilence: \(self.isSilence()) \n\tisPunctuation: \(self.isPunctuation()) \n\tisEmphasized: \(self.isEmphasized()) \n\tisNumber: \(self.isNumber()) \n\tisHomophone: \(self.isHomophone()) \n\tisSentenceTerminator: \(self.isSentenceTerminator()) \n\tisVoiceCommandWord: \(self.voiceCommandWord) \n\tavgPauseDuration: \(self.avgPauseDuration) \n\tspeakingRate: \(self.speakingRate)\n}"
     }
     
     // strong object equavalence
@@ -273,6 +377,8 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
             firstSegment.timeMapping.target.start == secondSegment.timeMapping.target.start &&
             firstSegment.timeMapping.target.end == secondSegment.timeMapping.target.end &&
             firstSegment.getUID() == secondSegment.getUID() &&
+            firstSegment.getClipUID() == secondSegment.getClipUID() &&
+            firstSegment.getSpeakerUID() == secondSegment.getSpeakerUID() &&
             firstSegment.getDateCreated() == secondSegment.getDateCreated() &&
             firstSegment.getDateModified() == secondSegment.getDateModified() &&
             firstSegment.isDeleted() == secondSegment.isDeleted() &&
@@ -654,7 +760,7 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
             return cachedIsSentenceTerminator
         }
 
-        let withPunctuationSuggestions = viewController.withPunctuationSuggestions
+        let withPunctuationSuggestions = self.note?.state?.withPunctuationSuggestions ?? false
 
         var previousWordIsValidLastSentenceWord = false
         var previousWordIsSentenceTerminator = false
@@ -815,6 +921,10 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
         return self.speakingRate
     }
     
+    func getSpeakerUID() -> String {
+        return self.speakerUID
+    }
+    
     func setSpeakingRate(rate: Double) {
         self.speakingRate = rate
         
@@ -895,6 +1005,10 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
         return self.uid
     }
     
+    func getClipUID() -> String {
+        return self.clipUID
+    }
+    
     func setUID(uid: String) {
         self.uid = uid
         
@@ -917,7 +1031,9 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
     
     func duplicate(newNote: Note? = nil, timeRange: CMTimeRange? = nil, withNewUID: Bool = false) -> NoteSegment {
         let duplicateSegment = NoteSegment(
+            speakerUID: self.speakerUID,
             word: self.word,
+            clipUID: self.clipUID,
             trackURL: self.sourceURL!,
             trackID: newNote != nil ? newNote!.tracks[0].trackID : self.sourceTrackID,
             phoneticallySimilarWords: self.getPhoneticallySimilarWords(),
@@ -927,7 +1043,9 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
             lexicalClass: self.lexicalClass,
             nameType: self.nameType,
             lemma: self.lemma,
-            sentimentScore: self.sentimentScore
+            sentimentScore: self.sentimentScore,
+            withPunctuationSuggestions: false,
+            voiceCommandWord: self.voiceCommandWord
         )
         
         // Set UID
@@ -992,64 +1110,74 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
     func runNotificationSearch() {
         self.scheduleNotificationSearch = false
 
-        if let note = self.note, note.isListeningForSpeech && !note.isExporting && note.stagedSpeechCommand == nil && AVAudioSession.isHeadphonesConnected && viewController.withPunctuationSuggestions && !self.voiceCommandWord && !self.deleted && self.isSilence() && self.suggestsNewParagraph() && self.isCommitted() && self.index >= 0 && (self.index + 1) < note.noteSegments.count && !note.noteSegments[self.index + 1].isVoiceCommandWord() {
+        if let note = self.note, note.speechRecognition.isListeningForSpeech && !note.noteManager.isExportingNote && AVAudioSession.isHeadphonesConnected && note.state.withPunctuationSuggestions && !self.voiceCommandWord && !self.deleted && self.isSilence() && self.suggestsNewParagraph() && self.isCommitted() && self.index >= 0 && (self.index + 1) < note.noteSegments.count && !note.noteSegments[self.index + 1].isVoiceCommandWord() {
+            print("===== Note Segment: Run Notification Search =====")
+            print("\tNote Segment is a new line. Present audio feedback")
             // Received newline punctuation suggestion
             // Headphones are connected
             
             // Give audio feedback
-            let voice = Utils.getSynthesizerVoice(withGender: .female)
+            let voice = Utils.getSynthesizerVoice(
+                withGender: .female
+            )
             let synthesizerItem = SynthesizerItem(
-                synthesizer: viewController.speechSynthesizer,
+                synthesizer: note.speechSynthesis.speechSynthesizer,
                 text: "New line.",
                 voice: voice,
-                rate: viewController.echoRate,
-                volume: viewController.playbackVolume
+                rate: note.speechSynthesis.echoRate,
+                volume: Utils.playbackVolume
             )
-            viewController.synthesizerQueue.enqueue(synthesizerItem)
+            note.speechSynthesis.synthesizerQueue.enqueue(synthesizerItem)
             // We intentionally do not exhaust queue here to it happens before passive echo if it has it
-            if viewController.withPassiveEcho {
-                viewController.exhaustSynthesizerQueue()
+            if !note.state.withPassiveEcho {
+                note.speechSynthesis.exhaustSynthesizerQueue()
             }
-        } else if let note = self.note, note.isListeningForSpeech && !note.isExporting && note.stagedSpeechCommand == nil && AVAudioSession.isHeadphonesConnected && viewController.withPunctuationSuggestions && !self.voiceCommandWord && !self.deleted && self.isSilence() && self.suggestsNewSentence() && self.isCommitted() && self.index >= 0 && (self.index + 1) < note.noteSegments.count && !note.noteSegments[self.index + 1].isVoiceCommandWord() {
+        } else if let note = self.note, note.speechRecognition.isListeningForSpeech && !note.noteManager.isExportingNote && AVAudioSession.isHeadphonesConnected && note.state.withPunctuationSuggestions && !self.voiceCommandWord && !self.deleted && self.isSilence() && self.suggestsNewSentence() && self.isCommitted() && self.index >= 0 && (self.index + 1) < note.noteSegments.count && !note.noteSegments[self.index + 1].isVoiceCommandWord() {
+            print("===== Note Segment: Run Notification Search =====")
+            print("\tNote Segment is a new sentence. Present audio feedback")
             // Received new sentence punctuation suggestion
             // Headphones are connected
             
             // Give audiio feedback
-            let voice = Utils.getSynthesizerVoice(withGender: .female)
+            let voice = Utils.getSynthesizerVoice(
+                withGender: .female
+            )
             let synthesizerItem = SynthesizerItem(
-                synthesizer: viewController.speechSynthesizer,
+                synthesizer: note.speechSynthesis.speechSynthesizer,
                 text: "New sentence.",
                 voice: voice,
-                rate: viewController.echoRate,
-                volume: viewController.playbackVolume
+                rate: note.speechSynthesis.echoRate,
+                volume: Utils.playbackVolume
             )
-            viewController.synthesizerQueue.enqueue(synthesizerItem)
+            note.speechSynthesis.synthesizerQueue.enqueue(synthesizerItem)
             // We intentionally do not exhaust queue here to it happens before passive echo if it has it
-            if !viewController.withPassiveEcho {
-                viewController.exhaustSynthesizerQueue()
+            if !note.state.withPassiveEcho {
+                note.speechSynthesis.exhaustSynthesizerQueue()
             }
         }
         
-        if let note = self.note, note.isListeningForSpeech && !note.isExporting && note.stagedSpeechCommand == nil && viewController.withPunctuationSuggestions && !self.voiceCommandWord && !self.deleted && self.isSilence() && self.suggestsNewParagraph() && self.isCommitted() && self.index >= 0 && (self.index + 1) < note.noteSegments.count && !note.noteSegments[self.index + 1].isVoiceCommandWord() {
+        if let note = self.note, note.speechRecognition.isListeningForSpeech && !note.noteManager.isExportingNote && note.state.withPunctuationSuggestions && !self.voiceCommandWord && !self.deleted && self.isSilence() && self.suggestsNewParagraph() && self.isCommitted() && self.index >= 0 && (self.index + 1) < note.noteSegments.count && !note.noteSegments[self.index + 1].isVoiceCommandWord() {
+            print("\tNote Segment is a new line. Present visual feedback")
             // Received newline punctuation suggestion
             // Headphones not are connected
             
             // Give visual feedback
-            viewController.scheduleNotification(
+            note.notifications.scheduleNotification(
                 text: "New line suggestion.",
                 duration: 3
             )
-            viewController.exhaustNotificationQueue()
-        } else if let note = self.note, note.isListeningForSpeech && !note.isExporting && note.stagedSpeechCommand == nil && viewController.withPunctuationSuggestions && !self.voiceCommandWord && !self.deleted && self.isSilence() && self.suggestsNewSentence() && self.isCommitted() && self.index >= 0 && (self.index + 1) < note.noteSegments.count && !note.noteSegments[self.index + 1].isVoiceCommandWord() {
+            note.notifications.exhaustNotificationQueue()
+        } else if let note = self.note, note.speechRecognition.isListeningForSpeech && !note.noteManager.isExportingNote && note.state.withPunctuationSuggestions && !self.voiceCommandWord && !self.deleted && self.isSilence() && self.suggestsNewSentence() && self.isCommitted() && self.index >= 0 && (self.index + 1) < note.noteSegments.count && !note.noteSegments[self.index + 1].isVoiceCommandWord() {
+            print("\tNote Segment is a new line. Present visual feedback")
             // Received new sentence punctuation suggestion
             // Headphones not are connected
             
             // Give visual feedback
-            viewController.scheduleNotification(
+            note.notifications.scheduleNotification(
                 text: "New sentence suggestion.",
                 duration: 3
             )
-            viewController.exhaustNotificationQueue()
+            note.notifications.exhaustNotificationQueue()
         }
     }
     
@@ -1071,7 +1199,7 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
         if self.isSilence() {
             let duration = self.timeMapping.target.duration.seconds
             let isFirstSegment = self.timeMapping.target.start == CMTime.zero
-            if duration > NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER && (includingFirstSegment || !isFirstSegment) {
+            if duration > Utils.NEW_PARAGRAPH_PAUSE_DURATION && (includingFirstSegment || !isFirstSegment) {
                 return true
             }
         }
@@ -1084,7 +1212,7 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
         if self.isSilence() {
             let duration = self.timeMapping.target.duration.seconds
             let isFirstSegment = self.timeMapping.target.start == CMTime.zero
-            if duration > NEW_SENTENCE_PAUSE_DURATION_MULTIPLIER && (includingFirstSegment || !isFirstSegment) {
+            if duration > Utils.NEW_SENTENCE_PAUSE_DURATION && (includingFirstSegment || !isFirstSegment) {
                 return true
             }
         }
@@ -1097,7 +1225,7 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
         if self.isSilence() {
             let duration = self.timeMapping.target.duration.seconds
             let isFirstSegment = self.timeMapping.target.start == CMTime.zero
-            if duration > COMMA_PAUSE_DURATION_MULTIPLIER && (includingFirstSegment || !isFirstSegment) {
+            if duration > Utils.COMMA_PAUSE_DURATION && (includingFirstSegment || !isFirstSegment) {
                 return true
             }
         }

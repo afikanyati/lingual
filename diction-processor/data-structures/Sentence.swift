@@ -9,7 +9,7 @@
 import Foundation
 import AVFoundation
 
-class Sentence: CustomStringConvertible, NSCoding {
+class Sentence: NSObject, NSCoding {
     var number: Int
     var text: String
     var timeRange: CMTimeRange
@@ -30,15 +30,40 @@ class Sentence: CustomStringConvertible, NSCoding {
     func encode(with coder: NSCoder) {
         coder.encode(self.number, forKey: "number")
         coder.encode(self.text, forKey: "text")
-        coder.encode(self.timeRange, forKey: "timeRange")
-        coder.encode(self.noteRange, forKey: "noteRange")
+        let timeRange: [String: [String: Int]] = [
+            "start": [
+                "value": Int(self.timeRange.start.value),
+                "timescale": Int(self.timeRange.start.timescale)
+            ],
+            "end": [
+                "value": Int(self.timeRange.end.value),
+                "timescale": Int(self.timeRange.end.timescale)
+            ]
+        ]
+        coder.encode(timeRange, forKey: "timeRange")
+        let noteDictRange: [String:Int] = [
+            "startIndex": self.noteRange.startIndex,
+            "endIndex": self.noteRange.endIndex
+        ]
+        coder.encode(noteDictRange, forKey: "noteRange")
     }
     
     required init?(coder: NSCoder) {
         self.number = Int(truncatingIfNeeded: coder.decodeInt64(forKey: "number"))
         self.text = coder.decodeObject(forKey: "text") as! String
-        self.timeRange = coder.decodeObject(forKey: "timeRange") as! CMTimeRange
-        self.noteRange = coder.decodeObject(forKey: "noteRange") as! Range<Int>
+        let timeRange = coder.decodeObject(forKey: "timeRange") as! [String: [String: Int]]
+        self.timeRange = CMTimeRangeFromTimeToTime(
+            start: CMTimeMake(
+                value: Int64(timeRange["start"]!["value"]!),
+                timescale: Int32(timeRange["start"]!["timescale"]!)
+            ),
+            end: CMTimeMake(
+                value: Int64(timeRange["end"]!["value"]!),
+                timescale: Int32(timeRange["end"]!["timescale"]!)
+            )
+        )
+        let noteDictRange = coder.decodeObject(forKey: "noteRange") as! [String:Int]
+        self.noteRange = noteDictRange["startIndex"]!..<noteDictRange["endIndex"]!
     }
     
    func setNumber(value: Int) {
@@ -64,7 +89,7 @@ class Sentence: CustomStringConvertible, NSCoding {
             firstSentence.noteRange == secondSentence.noteRange
     }
     
-    var description: String {
+    override var description: String {
         return "Sentence (\n\t\ttext: \(text)\n\t\tnumber: \(number)\n\t\tnoteRange: \(noteRange)\n\t\ttimeRange: (\n\t\t\tstart: \(timeRange.start.seconds),\n\t\t\tend: \(timeRange.end.seconds),\n\t\t\tduration: \(timeRange.duration.seconds)\n\t\t)\n\t)"
     }
 }

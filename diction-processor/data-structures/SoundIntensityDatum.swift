@@ -8,11 +8,11 @@
 
 import Foundation
 
-class SoundIntensityDatum: CustomStringConvertible, NSCoding {
+class SoundIntensityDatum: NSObject, NSCoding {
     var date: Date
     var power: Double
 
-    var description: String {
+    override var description: String {
         return "SoundIntensityDatum (\n\tdate: \(date)\n\tpower:\(power)\n)"
     }
     

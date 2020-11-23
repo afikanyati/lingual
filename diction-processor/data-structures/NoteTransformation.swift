@@ -34,22 +34,39 @@ class NoteTransformation: NSObject, NSCoding {
         }
     }
     
+    // Reference: https://stackoverflow.com/questions/36154590/how-to-encode-int-as-an-optional-using-nscoding
     func encode(with coder: NSCoder) {
-        coder.encode(self.type, forKey: "type")
+        coder.encode(self.type.rawValue, forKey: "type")
         coder.encode(self.uids, forKey: "uids")
         coder.encode(self.text, forKey: "text")
-        coder.encode(self.value, forKey: "value")
-        coder.encode(self.textRange, forKey: "textRange")
-        coder.encode(self.noteRange, forKey: "noteRange")
+        if let value = self.value {
+            coder.encode(value, forKey: "value")
+        }
+        let textRange: [String:Int] = [
+            "location": self.textRange.location,
+            "length": self.textRange.length
+        ]
+        coder.encode(textRange, forKey: "textRange") // Can't handle NSRange objects
+        let noteRange: [String:Int] = [
+            "lowerBound": self.noteRange.lowerBound,
+            "upperBound": self.noteRange.upperBound
+        ]
+        coder.encode(noteRange, forKey: "noteRange") // Can't handle ClosedRange objects
     }
     
     required init?(coder: NSCoder) {
-        self.type = coder.decodeObject(forKey: "type") as! TransformationType
+        self.type = TransformationType.fromRawValue(rawValue: Int(truncatingIfNeeded: coder.decodeInt64(forKey: "type")))!
         self.uids = coder.decodeObject(forKey: "uids") as! [String: Int]
         self.text = coder.decodeObject(forKey: "text") as! String
-        self.value = coder.decodeObject(forKey: "value") as! Float?
-        self.textRange = coder.decodeObject(forKey: "textRange") as! NSRange
-        self.noteRange = coder.decodeObject(forKey: "noteRange") as! ClosedRange<Int>
+        if coder.containsValue(forKey: "value") {
+            self.value = coder.decodeFloat(forKey: "value")
+        } else {
+            self.value = nil
+        }
+        let textRange = coder.decodeObject(forKey: "textRange") as! [String:Int]
+        self.textRange = NSRange(location: textRange["location"]!, length: textRange["length"]!)
+        let noteRange = coder.decodeObject(forKey: "noteRange") as! [String:Int]
+        self.noteRange = noteRange["lowerBound"]!...noteRange["upperBound"]!
     }
     
     override var description: String {

@@ -1,0 +1,818 @@
+//
+//  ModelController.swift
+//  diction-processor
+//
+//  Created by Afika Nyati on 10/31/20.
+//  Copyright © 2020 Afika Nyati. All rights reserved.
+//
+
+import UIKit
+import Speech
+import Foundation
+import AVFoundation
+
+class StateManager: NSObject {
+    // MARK: - Notifications
+    
+    static let onFetchedNotes = Notification.Name(Notifications.onFetchedNotes.rawValue)
+    
+    // MARK: - App Modules
+    
+    var storageManager: StorageManager
+    var notifications: NotificationEngine
+    var uiManager: UIManager
+    
+    // MARK: - User Settings
+    
+    /// Specifies whether speech recognition should use on-device compute or cloud compute
+    private(set) var withOnDeviceRecognition = Utils.DEFAULT_WITH_ON_DEVICE_RECOGNITION
+    /// Specifies whether note will present visual indications of temporal silences on screen
+    private(set) var withTemporalSuggestions = Utils.DEFAULT_WITH_TEMPORAL_SUGGESTIONS
+    /// Specifies whether note will present punctuation suggestions based on duration of silences
+    private(set) var withPunctuationSuggestions = Utils.DEFAULT_WITH_PUNCTUATION_SUGGESTIONS
+    /// Specifies whether note will present emphasis suggestions based on fluctuating sound intensity of speaker
+    private(set) var withFormattingSuggestions = Utils.DEFAULT_WITH_FORMATTING_SUGGESTIONS
+    /// Specifies whether note will only present written language as words (versus numerals or punctuation symbols)
+    private(set) var withTextStrictlyAsWords = Utils.DEFAULT_WITH_TEXT_STRICTLY_AS_WORDS
+    /// Specifies whether note text will contain capitalized words
+    private(set) var withCapitalization = Utils.DEFAULT_WITH_CAPITALIZATION
+    /// Specifies whether segments corresponding to punctuation should be skipped
+    private(set) var withSkipPunctuation = Utils.DEFAULT_WITH_SKIP_PUNCTUATION
+    /// Specifies whether segments corresponding to silences should be skipped
+    private(set) var withOmitSilences = Utils.DEFAULT_WITH_OMIT_SILENCES
+    /// Specifies whether passive echo should execute when headphones are connected
+    private(set) var withPassiveEcho = Utils.DEFAULT_WITH_PASSIVE_ECHO
+    
+    // MARK: - Telemetry
+    
+    private(set) var appOpens = [TimeInterval]()
+    
+    // MARK: - General
+    
+    private(set) var appActivated = false
+    private(set) var mainViewReady = false
+    private(set) var detailViewReady = false
+    private(set) var noteTableViewReady = false
+    private(set) var playedStartupSound = false
+    private(set) var font = UIFont.systemFont(ofSize: Utils.DEFAULT_FONT_SIZE)
+    
+    // MARK: - Notes
+    
+    private(set) var notes = [Note]()
+    var activeNotes: [Note] {
+        let activeNotes = self.notes.filter { !$0.isDeleted }
+        return activeNotes.reversed()
+    }
+    private(set) var clips = [String: Set<String>]()
+    private(set) var speaker = Speaker(uid: UUID().uuidString, device: UIDevice.current.name)
+    
+    // MARK: - Playback
+    
+    /// Stores the current playback rate of note playback
+    private(set) var _playbackRate: Float = Utils.DEFAULT_PLAYBACK_RATE
+    private(set) var _echoRate: Float = Utils.DEFAULT_ECHO_RATE
+    
+    // MARK: - Initialization and Deinitialization
+    
+    init(storageManager: StorageManager, notifications: NotificationEngine, uiManager: UIManager) {
+        print("===== State Manager : Initialization =====")
+        self.storageManager = storageManager
+        self.notifications = notifications
+        self.uiManager = uiManager
+        
+        super.init()
+
+        self.configureNotificationObservers()
+        self.fetchStoredState()
+        self.incrementOpenCount()
+        
+        // We set punctuation suggestions
+        // 1) if punctuation suggestions and temporal suggestions are true, we handle it in if-statement
+        if self.withPunctuationSuggestions && self.withTemporalSuggestions {
+            // Inform that only one view mode may be active in any given moment
+            self.setWithTemporalSuggestions(to: false)
+
+            let dialogActions = [
+                DialogAction(
+                    title: "Continue",
+                    voiceCommand: "continue",
+                    style: .cancel,
+                    handler: nil
+                )
+            ]
+            
+            let dialogItem = DialogItem(
+                title: "Conflicting View Modes",
+                message: "You've attemped to activate both punctuation and temporal suggestions. Only one can be active at a time, so we've activated punctuation suggestions only.",
+                preferredStyle: .alert,
+                actions: dialogActions
+            )
+            self.uiManager.presentDialog(
+                dialogItem: dialogItem
+            )
+        }
+    }
+    
+    deinit {
+        // remove notification observers
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    // MARK: - Validation
+    
+    func checkRep() {
+        var result = true
+        
+        // on device recognition always on
+        result = result && self.withOnDeviceRecognition
+        
+        if !result {
+            fatalError("===== [Error] State Manager Representation Invariants were broken =====")
+        }
+    }
+    
+    // MARK: - Notifications
+    
+    func configureNotificationObservers() {
+        let notificationCenter = NotificationCenter.default
+        
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(self.appGainsFocus),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+        
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(self.appLosesFocus),
+            name: UIApplication.willResignActiveNotification,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onWakePhraseDetected(notification:)),
+            name: SpeechRecognitionEngine.onWakePhraseDetected,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onViewDidLoad(notification:)),
+            name: ViewController.onDidLoad,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onNoteTableViewDidLoad(notification:)),
+            name: NoteTableViewController.onDidLoad,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onDetailViewDidLoad(notification:)),
+            name: DetailViewController.onDidLoad,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onViewWillDisappear(notification:)),
+            name: ViewController.onWillDisappear,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onNoteTableViewWillDisappear(notification:)),
+            name: NoteTableViewController.onWillDisappear,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onDetailViewWillDisappear(notification:)),
+            name: DetailViewController.onWillDisappear,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onProcessedVoiceCommand(notification:)),
+            name: VoiceCommandEngine.onProcessedVoiceCommand,
+            object: nil
+        )
+        
+        // StorageManager
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onFetchedStoredState(notification:)),
+            name: StorageManager.onFetchedStoredState,
+            object: nil
+        )
+    }
+    
+    @objc func appGainsFocus() {
+        print("===== State Manager: App Gains Focus =====")
+    }
+    
+    @objc func appLosesFocus() {
+        print("===== State Manager: App Lost Focus =====")
+        // Will occur when open control center
+    }
+    
+    @objc func onWakePhraseDetected(notification: Notification) {
+        print("===== State Manager: On Wake Phrase Detected =====")
+        self.setAppActive(as: true)
+    }
+    
+    @objc func onViewDidLoad(notification: Notification) {
+        print("===== State Manager: On View Did Load =====")
+        if !self.playedStartupSound {
+            // Play Startup Sound
+            soundEngine.startup()
+            self.playedStartupSound = true
+        }
+        
+        self.mainViewReady = true
+    }
+    
+    @objc func onNoteTableViewDidLoad(notification: Notification) {
+        print("===== State Manager: On Note Table View Did Load =====")
+        self.noteTableViewReady = true
+    }
+    
+    @objc func onDetailViewDidLoad(notification: Notification) {
+        print("===== State Manager: On Detail View Did Load =====")
+        self.detailViewReady = true
+    }
+    
+    @objc func onViewWillDisappear(notification: Notification) {
+        print("===== State Manager: On View Will Disappear =====")
+        self.mainViewReady = false
+    }
+    
+    @objc func onNoteTableViewWillDisappear(notification: Notification) {
+        print("===== State Manager: On Note Table View Will Disappear =====")
+        self.noteTableViewReady = false
+    }
+    
+    @objc func onDetailViewWillDisappear(notification: Notification) {
+        print("===== State Manager: On Detail View Will Disappear =====")
+        self.detailViewReady = false
+    }
+    
+    @objc func onProcessedVoiceCommand(notification: Notification) {
+        print("===== State Manager: On Processed Voice Command =====")
+        let command = notification.userInfo!["command"] as! String
+        var handler: (() -> Void)?
+        if notification.userInfo!["handler"] != nil {
+            handler = notification.userInfo!["handler"] as? () -> Void
+        }
+        
+        switch (command) {
+        case "activate punctuation":
+            print("\tVoice Command: Activate Skip Punctuation")
+            
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+
+            self.setWithSkipPunctuation(to: false)
+            handler?()
+        case "deactivate punctuation":
+            print("\tVoice Command: Deactivate Skip Punctuation")
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+            
+            self.setWithSkipPunctuation(to: true)
+            handler?()
+        case "activate silences":
+            print("\tVoice Command: Activate Silence")
+            
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+
+            self.setWithOmitSilences(to: false)
+            handler?()
+        case "deactivate silences":
+            print("\tVoice Command: Deactivate Silence")
+            
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+
+            self.setWithOmitSilences(to: true)
+            handler?()
+        case "activate temporal suggestions":
+            print("\tVoice Command: Activate Temporal Suggestions")
+
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+
+            self.setWithTemporalSuggestions(to: true)
+            handler?()
+        case "deactivate temporal suggestions":
+            print("\tVoice Command: Deactivate Temporal Suggestions")
+
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+
+            self.setWithTemporalSuggestions(to: false)
+            handler?()
+        case "activate punctuation suggestions":
+            print("\tVoice Command: Activate Punctuation Suggestions")
+            
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+        
+            self.setWithPunctuationSuggestions(to: true)
+            handler?()
+        case "deactivate punctuation suggestions":
+            print("\tVoice Command: Deactivate Punctuation Suggestions")
+            
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+        
+            self.setWithPunctuationSuggestions(to: false)
+            handler?()
+        case "activate formatting suggestions":
+            print("\tVoice Command: Activate Formatting Suggestions")
+            
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+            
+            self.setWithFormattingSuggestions(to: true)
+            handler?()
+        case "deactivate formatting suggestions":
+            print("\tVoice Command: Deactivate Formatting Suggestions")
+            
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+            
+            self.setWithFormattingSuggestions(to: false)
+            handler?()
+        case "activate passive echo":
+            print("\tVoice Command: Activate Passive Echo")
+            
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+            
+            self.setWithPassiveEcho(to: true)
+            handler?()
+        case "deactivate passive echo":
+            print("\tVoice Command: Deactivate Passive Echo")
+            
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+            
+            self.setWithPassiveEcho(to: false)
+            handler?()
+        case "increase volume":
+            print("\tVoice Command: Increase Volume")
+            self.handleIncreaseVolume(
+                handler: handler
+            )
+        case "decrease volume":
+            print("\tVoice Command: Decrease Volume")
+            self.handleDecreaseVolume(
+                handler: handler
+            )
+//        case "adjust volume":
+//            startListeningForVolume(note: note)
+        default:
+            // Do nothing
+            break
+        }
+    }
+    
+    @objc func onFetchedStoredState(notification: Notification) {
+        print("===== State Manager: On Fetch Stored State =====")
+        // Notes
+        self.notes = notification.userInfo!["notes"] as? [Note] ?? [Note]()
+        
+        // User Settings
+        self.speaker = notification.userInfo!["speaker"] as? Speaker ?? Speaker(uid: UUID().uuidString, device: UIDevice.current.name)
+        self.withOnDeviceRecognition = notification.userInfo!["withOnDeviceRecognition"] as? Bool ?? Utils.DEFAULT_WITH_ON_DEVICE_RECOGNITION
+        self.withTemporalSuggestions = notification.userInfo!["withTemporalSuggestions"] as? Bool ?? Utils.DEFAULT_WITH_TEMPORAL_SUGGESTIONS
+        self.withPunctuationSuggestions = notification.userInfo!["withPunctuationSuggestions"] as? Bool ?? Utils.DEFAULT_WITH_PUNCTUATION_SUGGESTIONS
+        self.withFormattingSuggestions = notification.userInfo!["withFormattingSuggestions"] as? Bool ?? Utils.DEFAULT_WITH_FORMATTING_SUGGESTIONS
+        self.withTextStrictlyAsWords = notification.userInfo!["withTextStrictlyAsWords"] as? Bool ?? Utils.DEFAULT_WITH_TEXT_STRICTLY_AS_WORDS
+        self.withCapitalization = notification.userInfo!["withCapitalization"] as? Bool ?? Utils.DEFAULT_WITH_CAPITALIZATION
+        self.withSkipPunctuation = notification.userInfo!["withSkipPunctuation"] as? Bool ?? Utils.DEFAULT_WITH_SKIP_PUNCTUATION
+        self.withOmitSilences = notification.userInfo!["withOmitSilences"] as? Bool ?? Utils.DEFAULT_WITH_OMIT_SILENCES
+        self.withPassiveEcho = notification.userInfo!["withPassiveEcho"] as? Bool ?? Utils.DEFAULT_WITH_PASSIVE_ECHO
+        self._playbackRate = notification.userInfo!["playbackRate"] as? Float ?? Utils.DEFAULT_PLAYBACK_RATE
+        self._echoRate = notification.userInfo!["echoRate"] as? Float ?? Utils.DEFAULT_ECHO_RATE
+        if let fontSize = notification.userInfo!["fontSize"] as? CGFloat {
+            self.font = UIFont.systemFont(ofSize: fontSize)
+        } else {
+            self.font = UIFont.systemFont(ofSize: Utils.DEFAULT_FONT_SIZE)
+        }
+
+        // App Opens
+        self.appOpens = notification.userInfo!["appOpens"] as? [TimeInterval] ?? [TimeInterval]()
+        
+        NotificationCenter.default.post(
+            name: StateManager.onFetchedNotes,
+            object: nil,
+            userInfo: [:]
+        )
+        
+        checkRep()
+    }
+    
+    // MARK: - Methods
+    
+    func incrementOpenCount() {
+        print("===== State Manager: Increment Open Count =====")
+        self.appOpens.append(Date().timeIntervalSince1970)
+        self.storageManager.save(state: self)
+        
+        checkRep()
+    }
+    
+    func fetchStoredState() {
+        print("===== State Manager: Fetch Stored State  =====")
+        self.storageManager.fetch()
+        
+        checkRep()
+    }
+    
+    func save() {
+        print("===== State Manager: Save  =====")
+        self.storageManager.save(state: self)
+        
+        checkRep()
+    }
+    
+    // MARK: - Setters
+    
+    func setAppActive(as value: Bool) {
+        print("===== State Manager: Set App Active: \(value)  =====")
+        self.appActivated = value
+        
+        checkRep()
+    }
+    
+    func setPlaybackRate(to rate: Float) {
+        print("===== State Manager: Set Playback Rate: \(rate.rounded(toPlaces: 2)) =====")
+        
+        if rate > self._playbackRate {
+            self.notifications.executeFeedback(
+                visualMessage: "Increase Playback Rate: \(rate.rounded(toPlaces: 2))",
+                audioMessage: "increased rate to \(rate.rounded(toPlaces: 2))",
+                discardPrior: true,
+                withHaptics: true
+            )
+        } else if rate < self._playbackRate {
+            self.notifications.executeFeedback(
+                visualMessage: "Decrease Playback Rate: \(rate.rounded(toPlaces: 2))",
+                audioMessage: "decreased rate to \(rate.rounded(toPlaces: 2))",
+                discardPrior: true,
+                withHaptics: true
+            )
+        }
+        
+        self._playbackRate = rate
+        
+        self.save()
+        checkRep()
+    }
+    
+    // Implementing real-time rate change: https://stackoverflow.com/questions/25499803/how-to-change-speech-rate-during-speaking-using-avspeechsynthesizer-in-ios-7
+    func setEchoRate(to rate: Float) {
+        print("===== State Manager: Set Echo Rate: \(rate.rounded(toPlaces: 2)) =====")
+        
+        if rate > self._echoRate {
+            self.notifications.executeFeedback(
+                visualMessage: "Increase Echo Rate: \(rate.rounded(toPlaces: 2))",
+                audioMessage: "increased echo to \(rate.rounded(toPlaces: 2))",
+                discardPrior: true,
+                withHaptics: true
+            )
+        } else if rate < self._echoRate {
+            self.notifications.executeFeedback(
+                visualMessage: "Decrease Echo Rate: \(rate.rounded(toPlaces: 2))",
+                audioMessage: "decreased echo to \(rate.rounded(toPlaces: 2))",
+                discardPrior: true,
+                withHaptics: true
+            )
+        }
+        
+        self._echoRate = rate
+        
+        self.save()
+        checkRep()
+    }
+    
+    // Audio variable
+    func setWithSkipPunctuation(to skip: Bool) {
+        print("===== State Manager: Set With Skip Punctuation: \(skip) =====")
+        self.withSkipPunctuation = skip
+        
+        if self.withSkipPunctuation {
+            // Present Feedback
+            self.notifications.executeFeedback(
+                visualMessage: "Skip Punctuation",
+                audioMessage: "skip punctuation activated",
+                withHaptics: true
+            )
+        } else {
+            // Present Feedback
+            self.notifications.executeFeedback(
+                visualMessage: "Include Punctuation",
+                audioMessage: "skip punctuation deactivated",
+                withHaptics: true
+            )
+        }
+        
+        self.save()
+        checkRep()
+    }
+    
+    // Audio variable
+    func setWithOmitSilences(to skip: Bool) {
+        print("===== State Manager: Set With Omit Silences: \(skip)  =====")
+        self.withOmitSilences = skip
+        
+        if self.withOmitSilences {
+            // Present Feedback
+            self.notifications.executeFeedback(
+                visualMessage: "Activate Silences",
+                audioMessage: "silences activated",
+                withHaptics: true
+            )
+        } else {
+            // Present Feedback
+            self.notifications.executeFeedback(
+                visualMessage: "Deactivate Silences",
+                audioMessage: "silences deactivated",
+                withHaptics: true
+            )
+        }
+        
+        self.save()
+        checkRep()
+    }
+    
+    // Audio variable
+    func setWithPassiveEcho(to value: Bool) {
+        print("===== State Manager: Set With Passive Echo: \(value) =====")
+        self.withPassiveEcho = value
+        
+        if self.withPassiveEcho {
+            // Present Feedback
+            self.notifications.executeFeedback(
+                visualMessage: "Activate Passive Echo",
+                audioMessage: "passive echo activated",
+                withHaptics: true
+            )
+        } else {
+            // Present Feedback
+            self.notifications.executeFeedback(
+                visualMessage: "Deactivate Passive Echo",
+                audioMessage: "passive echo deactivated",
+                withHaptics: true
+            )
+        }
+        
+        self.save()
+        checkRep()
+    }
+    
+    // Visual variable
+    func setWithTemporalSuggestions(to value: Bool) {
+        print("===== State Manager: Set With Temporal Suggestions: \(value)  =====")
+        self.withTemporalSuggestions = value
+        
+        // We can only have one suggestion type on at a time
+        // Deactivate punctuation suggestions if active
+        if value && self.withPunctuationSuggestions {
+            self.withTemporalSuggestions = false
+        }
+        
+        // Make sure new setting is reflecting visually
+        // TODO => UPDATE NOTE DETAIL
+        
+        if self.withTemporalSuggestions {
+            // Present Feedback
+            self.notifications.executeFeedback(
+                visualMessage: "Activate Temporal Suggestions",
+                audioMessage: "temporal suggestions activated",
+                withHaptics: true
+            )
+        } else {
+            // Present Feedback
+            self.notifications.executeFeedback(
+                visualMessage: "Deactivate Temporal Suggestions",
+                audioMessage: "temporal suggestions deactivated",
+                withHaptics: true
+            )
+        }
+        
+        self.save()
+        checkRep()
+    }
+    
+    // Visual variable
+    func setWithPunctuationSuggestions(to value: Bool) {
+        print("===== State Manager: Set With Punctuation Suggestions: \(value) =====")
+        self.withPunctuationSuggestions = value
+        
+        // We can only have one suggestion type on at a time
+        // Deactivate space suggestions if active
+        if value && self.withTemporalSuggestions {
+            self.withTemporalSuggestions = false
+        }
+        
+        // Make sure new setting is reflecting visually
+        // TODO => UPDATE NOTE DETAIL
+        
+        if self.withPunctuationSuggestions {
+            // Present Feedback
+            self.notifications.executeFeedback(
+                visualMessage: "Activate Punctuation Suggestions",
+                audioMessage: "punctuation suggestions activated",
+                withHaptics: true
+            )
+        } else {
+            // Present Feedback
+            self.notifications.executeFeedback(
+                visualMessage: "Deactivate Punctuation Suggestions",
+                audioMessage: "punctuation suggestions deactivated",
+                withHaptics: true
+            )
+        }
+        
+        self.save()
+        checkRep()
+    }
+    
+    // Visual variable
+    func setWithFormattingSuggestions(to value: Bool) {
+        print("===== State Manager: Set With Formatting Suggestions: \(value) =====")
+        self.withFormattingSuggestions = value
+        
+        // Make sure new setting is reflecting visually
+        // TODO => UPDATE NOTE DETAIL
+        
+        if self.withFormattingSuggestions {
+            // Present Feedback
+            self.notifications.executeFeedback(
+                visualMessage: "Activate Formatting Suggestions",
+                audioMessage: "formatting suggestions activated",
+                withHaptics: true
+            )
+        } else {
+            // Present Feedback
+            self.notifications.executeFeedback(
+                visualMessage: "Deactivate Formatting Suggestions",
+                audioMessage: "formatting suggestions deactivated",
+                withHaptics: true
+            )
+        }
+        
+        self.save()
+        checkRep()
+    }
+    
+    // Visual variable
+    func setWithTextStrictlyAsWords(to value: Bool) {
+        print("===== State Manager: Set With Text Strictly As Words: \(value) =====")
+        self.withTextStrictlyAsWords = value
+        
+        // Make sure new setting is reflecting visually
+        // TODO => UPDATE NOTE DETAIL
+        
+        self.save()
+        checkRep()
+    }
+    
+    // Visual variable
+    func setWithCapitalization(to value: Bool) {
+        print("===== State Manager: Set With Capitalization: \(value) =====")
+        self.withCapitalization = value
+        
+        // Make sure new setting is reflecting visually
+        // TODO => UPDATE NOTE DETAIL
+        
+        self.save()
+        checkRep()
+    }
+    
+    func appendNote(note: Note) -> Int {
+        print("===== State Manager: Append Note  =====")
+        self.notes.append(note)
+        
+        self.save()
+        checkRep()
+        
+        return 0 // we add notes in reverse order
+    }
+    
+    func setClip(clipUID: String, noteUID: String) {
+        print("===== State Manager: Set Clip =====")
+        if self.clips[clipUID] != nil {
+            print("\tInserted note uid into existing clip set...")
+            self.clips[clipUID]?.insert(noteUID)
+        } else {
+            print("\tCreated new clip set for clip uid...")
+            let noteSet: Set = [noteUID]
+            self.clips[clipUID] = noteSet
+        }
+    }
+    
+    func setSpeakerPitch(to pitch: Pitch?) {
+//        print("===== State Manager: Set Speaker Pitch =====")
+//        print("\tSet to: ", pitch?.note.string ?? "nil")
+        self.speaker.setSpeakerPitch(to: pitch)
+    }
+    
+    // MARK: - Voice Commands
+    
+    func handleIncreaseVolume(
+        handler: (() -> Void)? = nil
+    ) {
+        print("===== State Manager: Hanlde Increase Volume  =====")
+        let currentVolume = Utils.playbackVolume
+        let newVolume = min(currentVolume + Utils.DISCRETE_VOLUME_DELTA, Utils.MAXIMUM_VOLUME).rounded(toPlaces: 2)
+        if currentVolume < Utils.MAXIMUM_VOLUME {
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+            Utils.setMainVolume(to: newVolume)
+
+            self.notifications.executeFeedback(
+                visualMessage: "Volume increase: \(newVolume)",
+                audioMessage: "Volume increased to \(newVolume)",
+                withHaptics: true
+            )
+            
+            handler?()
+        } else {
+            self.notifications.executeError(
+                text: "Volume already at maximum.",
+                voiceCommand: true,
+                handler: handler
+            )
+        }
+        
+        checkRep()
+    }
+    
+    func handleDecreaseVolume(
+        handler: (() -> Void)? = nil
+    ) {
+        print("===== State Manager: Handle Decrease Volume =====")
+        let currentVolume = Utils.playbackVolume
+        let newVolume = max(currentVolume - Utils.DISCRETE_VOLUME_DELTA, Utils.MINIMUM_VOLUME).rounded(toPlaces: 2)
+        if currentVolume > Utils.MINIMUM_VOLUME {
+            // Play Sound
+            soundEngine.voiceCommandAccept()
+            Utils.setMainVolume(to: newVolume)
+            
+            self.notifications.executeFeedback(
+                visualMessage: "Volume decrease: \(newVolume)",
+                audioMessage: "Volume decreased to \(newVolume)",
+                withHaptics: true
+            )
+            
+            handler?()
+        } else {
+            self.notifications.executeError(
+                text: "Volume already at minimum.",
+                voiceCommand: true,
+                handler: handler
+            )
+        }
+        
+        checkRep()
+    }
+    
+    // MARK: - Helpers
+    
+    func manageClipRemoval(note: Note) {
+        for clipUID in note.clips {
+            guard var clipNotes = self.clips[clipUID] else {
+                print("[Error] There was a problem removing note clips from state. Clip UID \(clipUID) doesn't exist.")
+                return
+            }
+            
+            guard !clipNotes.contains(note.uid) else {
+                print("[Error] There was a problem removing note clips from state. Clip UID \(clipUID) isn't associated with note UID \(note.uid).")
+                return
+            }
+            
+            if clipNotes.count > 1 {
+                // Remove noteUID from clipNotes
+                clipNotes.remove(note.uid)
+                
+                // Set as new clipNotes for clipUID
+                self.clips[clipUID] = clipNotes
+            } else {
+                // noteUID is the last uid associated with clip
+                // remove clip from clips tracker
+                self.clips.removeValue(forKey: clipUID)
+                
+                // Delete Clip
+                let filePath = Utils.getFileURL(of: "\(note.filename)-\(clipUID)\(note.fileType)").absoluteString
+                Utils.deleteExistingFile(atPath: filePath)
+            }
+        }
+        
+        checkRep()
+    }
+}

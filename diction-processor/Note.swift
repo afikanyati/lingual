@@ -12,12 +12,22 @@ import AVFoundation
 import NaturalLanguage
 
 class Note: AVMutableComposition, NSCoding {
-    // MARK: - Static Properties
-    /// Stores the timescale used to scale the values specified for CMTime objects
-    static let defaultSegmentTimescale = Double(10000)
+    // MARK: - Notifications
+    static let onRequestToUpdateView = Notification.Name(Notifications.onRequestToUpdateView.rawValue)
+    static let onNoteListenUpdate = Notification.Name(Notifications.onNoteListenUpdate.rawValue)
+    static let onNoteListenStop = Notification.Name(Notifications.onNoteListenStop.rawValue)
+    static let onNoteComplete = Notification.Name(Notifications.onNoteComplete.rawValue)
+    static let onNoteCommittedBuffer = Notification.Name(Notifications.onNoteCommittedBuffer.rawValue)
     
-    // MARK: - General Properties
-    private(set) var detailView: DetailViewController?
+    // MARK: - App Modules
+    var state: StateManager!
+    var speechSynthesis: SpeechSynthesisEngine!
+    var speechRecognition: SpeechRecognitionEngine!
+    var speechPlayer: SpeechPlayerEngine!
+    var pitchRecognition: PitchRecognitionEngine!
+    var notifications: NotificationEngine!
+    var selectionCursor: SelectionCursor!
+    var noteManager: NoteManager!
 
     // MARK: - Composition Properties
     /// Stores a unique identifier for note
@@ -41,12 +51,16 @@ class Note: AVMutableComposition, NSCoding {
             }
         }
     }
+    /// Stores the time range of the note
+    public var timeRange: CMTimeRange {
+        return CMTimeRangeMake(start: CMTime.zero, duration: self.getDuration())
+    }
     /// The date when note was created
     private(set) var dateCreated: TimeInterval = Date().timeIntervalSince1970
     /// The date when note was last modified
     private(set) var dateModified: TimeInterval = Date().timeIntervalSince1970
-    /// Stores information about the speaker
-    private(set) var speaker: Speaker
+    /// Stores the creator's uid
+    private(set) var creatorUID: String
     /// Stores a list of high-level representation of note segments
     private(set) var noteSegments: [NoteSegment] = [NoteSegment]()
     /// Stores a list of high-level representation of note segments in staging (before committed to noteSegments)
@@ -63,8 +77,6 @@ class Note: AVMutableComposition, NSCoding {
     private(set) var startTime: CMTime = CMTime.zero // When we remove or add we change this
     /// Stores the ending time of the note
     private(set) var endTime: CMTime = CMTime.zero // When we remove or add we change this
-    /// Stores whether note is currently being exported
-    private(set) var isExporting = false
     /// Stores the number of sentences in the note
     public var numSentences: Int {
         var sentenceCount = Int(Utils.UNKNOWN)
@@ -114,134 +126,24 @@ class Note: AVMutableComposition, NSCoding {
 
         return speakingRate
     }
-    /// Stores a temporary voice command handler that runs once listening has stopped
-    private(set) var tempVoiceCommandHandler: (() -> Void)?
-    /// Stores the temporary staged speech command
-    private(set) var stagedSpeechCommand: String?
-    /// Stores handlers to be executed when note is played
-    private var observerContext = [String: (() -> Void)]()
-    
+
     // MARK: - Recording Properties
-    /// Stores the bus from which audio input will be extracted
-    let recordBus: AVAudioNodeBus = 0
     /// Stores whether note is authorized to listen for speech. This is typically false when then source filetype is .m4a vs. .caf, which happens on note export
     private(set) var authorizedToListenForSpeech = false
     /// Stores a count of the number of unique clips that have been recording throughout note (factors recording breaks due to voice commands)
-    private(set) var clipCount: Int = 0
-    /// Stores a reference to the shared audio session object
-    var recordingSession = AVAudioSession.sharedInstance()
+    private(set) var clips: Set<String> = []
+    /// Stores the current clip UID
+    private(set) var currentClipUID: String?
     /// Stores a reference to the moment current note clip started listening
     public var recordStartDate: Date?
     /// Stores the total duration of time across segments capturing during the current listening clip
     private var accumulatedDuration = TimeInterval(0)
     /// Stores a reference to the audio file where listening buffers are being saved to
     public var recordFile: AVAudioFile?
-    /// Stores a stream of sound intensity values received throughout the process of listening
-    var soundIntensityStream = [SoundIntensityDatum]()
-    /// Stores a reference to the note's pitch engine which computes pitch values in real-time
-    private lazy var pitchEngine: PitchEngine = { [weak self] in
-        let config = Config(
-            bufferSize: 1024,
-            estimationStrategy: .yin
-        )
-        let pitchEngine = PitchEngine(config: config, delegate: self)
-        pitchEngine.levelThreshold = viewController.minPower
-        return pitchEngine
-    }()
-    /// Stores a stream of pitch values received throughout the process of listening
-    private(set) var pitchStream = [PitchDatum]()
-    /// Stores a handler to be executed when a new listening buffer is received and processed
-    private(set) var onListenUpdate: ((_ text: String, _ highlightRange: NSRange?, _ bufferRange: NSRange?) -> Void)?
-    /// Stores a handler to be executed when listening has stopped
-    private(set) var onListenStop: (() -> Void)?
-    
-    // MARK: - Speech Recognition Properties
-    /// Stores a reference to note's audio engine used for speech recognition
-    private var audioEngine = AVAudioEngine()
-    /// Stores a reference to the note's speech recognizer object
-    private let speechRecognizer: SFSpeechRecognizer? = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
-    /// Stores a reference to the audio buffer used by the speech recognition system to process listening buffer blocks
-    private var request: SFSpeechAudioBufferRecognitionRequest?
-    /// Stores a reference to the speech recognition task object
-    private var recognitionTask: SFSpeechRecognitionTask?
-    /// Specifies whether note is currently listening for speech
-    @objc dynamic private(set) var isListeningForSpeech = false
-    /// Specifies whether note has paused listening for speech (active, but paused vs. inactive)
-    @objc dynamic private(set) var pausedListeningForSpeech = false
-    /// Specifies whether note has been paused listening for speech by user
-    private(set) var userInitiatedPausedListeningForSpeech = false
-    /// Indicates whether we have to execute listening for speech handler in isListeningForSpeech method
-    private var executedListeningForSpeechStartHandler = true
-    /// Stores a list of voice commands executed
-    var voiceCommandStream = [VoiceCommandDatum]()
-    /// Indicates whether we have processed a voice command early
-    private(set) var earlyVoiceCommandDetection = false
-    /// Stores the number of words that occur before a voice command in it's buffer
-    private(set) var numWordsBeforeVoiceCommand: Int = 0
-    
-    // MARK: - Speech Synthesis Properties
-    /// Specifies whether echo is currently playing
-    public var isPlayingEcho = false
-    /// Specifies whether passive echo is currently playing
-    public var isPlayingPassiveEcho = false
-    /// Specifies whether echo is currently paused (active, but paused vs. inactive)
-    public var pausedEcho: Bool {
-        return viewController.speechSynthesizer.isPaused
-    }
-    /// Stores a handler to be executed when note is complete
-    private(set) var onComplete: (() -> Void)?
-    /// Schedules a temporary handler to be executed when echo is complete
-    private(set) var scheduleTempOnEchoFinishHandler: ((_ handler: @escaping () -> Void) -> Void)?
-    /// Range of last echo of note segments
-    private(set) var lastEchoSegmentRange: Range<Int>?
-    
-    // MARK: - Audio Playback Properties
-    /// Stores a reference to the note's player object
-    private(set) var player = AVPlayer()
-    /// Stores a reference to a timer that begins next iteration of looping player
-    private var playerLoopTimer: Timer?
-    /// Stores a reference to the playback observer that executes after each segment
-    public var boundaryObserverToken: Any?
-    /// Stores a reference to the playback observer that executes each second
-    public var timerObserverToken: Any?
-    /// Stores a reference to the playback observer that executes when playback is complete
-    public var completionObserverToken: Any?
-    /// Stores a reference to the last segment processed during note playback. Prevents repeat processing.
-    private(set) var previousBoundarySegment: NoteSegment?
-    /// Specifies whether note is currently playing
-    public var isPlayingNote: Bool {
-        return player.isPlaying
-    }
-    /// Specifies whether note is currently paused
-    private(set) var pausedPlayingNote = false
-    /// Specifies whether note is currently running
-    private(set) var isRunningNote = false
-    /// Specifies whether note is currently walking
-    @objc dynamic private(set) var isWalkingNote = false
-    /// Specifies whether note is currently paused walking
-    private(set) var pausedWalkingNote = false
-    /// Specifies whether note is currently paused running
-    private(set) var pausedRunningNote = false
-    /// Specifies whether note is currently walking
-    private(set) var walkingRange: Range<Int>?
-    /// Specifies whether note is currently walking
-    private(set) var walkingIndex: Int = 0
-    /// Stores a reference to a timer that drives walking loop behavior
-    private var walkingTimer: Timer?
-    /// Stores a reference to a timer that drives delay of walk loop intiation
-    private var walkLoopDelayTimer: Timer?
-    /// Stores a reference to a timer that drives delayed echo while walking
-    private var echoDelayTimer: Timer?
-    /// Stores a reference to a timer that drives passage running
-    private var runningTimer: Timer?
-    /// Specifies whether playing external segments
-    private(set) var isPlayingExternalSegments = false
-    /// Specifies the time value at which note playback should begin
-    private(set) var startPlaybackAt: CMTime?
-    /// Specifies the time value at which note playback should end
-    private(set) var stopPlaybackAt: CMTime?
-    /// Stores segments currently being played by note
-    private(set) var playbackRange: Range<Int>?
+    /// Stores whether clip is deleted
+    private(set) var isDeleted = false
+    /// Stores the timestamp when we last started listening
+    private(set) var lastStartedListeningTimestamp: TimeInterval?
 
     // MARK: - Cached Properties
     /// Stores a cached version of the note's duration
@@ -271,56 +173,24 @@ class Note: AVMutableComposition, NSCoding {
     ///     - vc: Suppliess a reference to the main view controller
     ///     - filename: Supplies the filename of the note
     ///     - fileType: Suppliess the filetype of the source URL
-    ///     - speaker: Suppliess information about the speaker
+    ///     - creatorUID: Supplies the creator's uid
     ///     - segments: Supplies an optional array of note segments to seed the note
-    ///     - onListenUpdate: Supplies a handler to be executed when a new listening buffer is received and processed
-    ///     - onListenStop: Supplies a handler to be executed when listening has stopped
     ///     - onComplete: Supplies a handler to be executed when note is complete.
-    ///     - scheduleTempOnEchoFinishHandler: Schedules a temporary handler to be executed when echo is complete
     init(
         uid: String,
         filename: String,
         fileType: AVFileType? = nil,
-        speaker: Speaker,
-        segments: [NoteSegment]? = nil,
-        onListenUpdate: ((_ text: String, _ highlightRange: NSRange?, _ bufferRange: NSRange?) -> Void)? = nil,
-        onListenStop: (() -> Void)? = nil,
-        onComplete: (() -> Void)? = nil,
-        scheduleTempOnEchoFinishHandler: ((_ handler: @escaping () -> Void) -> Void)? = nil
+        creatorUID: String,
+        segments: [NoteSegment]? = nil
     ) {
-        print("===== Instantiating new note: \(filename) =====")
+        print("===== Note: Initialization =====")
+        print("\tFilename: ", filename)
         self.uid = uid
         self.filename = filename
-        self.speaker = speaker
-        self.onListenUpdate = onListenUpdate
-        self.onListenStop = onListenStop
-        self.onComplete = onComplete
-        self.scheduleTempOnEchoFinishHandler = scheduleTempOnEchoFinishHandler
+        self.creatorUID = creatorUID
         
-        // We set punctuation suggestions
-        // 1) if punctuation suggestions and temporal suggestions are true, we handle it in if-statement
-        if viewController.withPunctuationSuggestions && viewController.withTemporalSuggestions {
-            // Inform that only one view mode may be active in any given moment
-            viewController.setWithTemporalSuggestions(to: false)
-
-            let dialogActions = [
-                DialogAction(title: "Close", style: .cancel, handler: nil)
-            ]
-            
-            let dialogItem = DialogItem(
-                title: "Conflicting View Modes",
-                message: "You've attemped to activate both punctuation and temporal suggestions. Only one can be active at a time, so we've activated punctuation suggestions only.",
-                preferredStyle: .alert,
-                actions: dialogActions
-            )
-            Utils.presentDialog(dialogItem: dialogItem)
-        }
-
         super.init()
-
-        // Ask for permissions
-        viewController.requestPermissions()
-
+        
         // Add track
         self.addMutableTrack(
             withMediaType: .audio,
@@ -340,9 +210,6 @@ class Note: AVMutableComposition, NSCoding {
             self.endTime = segments.last!.timeMapping.target.end
             self.setSegments(segments: segments, replaceNoteDetails: true)
         }
-        
-        // Check Rep Invariant
-        checkRep()
     }
     
     func encode(with coder: NSCoder) {
@@ -351,24 +218,28 @@ class Note: AVMutableComposition, NSCoding {
         coder.encode(self._fileType, forKey: "fileType")
         coder.encode(self.dateCreated, forKey: "dateCreated")
         coder.encode(self.dateModified, forKey: "dateModified")
-        coder.encode(self.speaker, forKey: "speaker")
+        coder.encode(self.creatorUID, forKey: "creatorUID")
         coder.encode(self.noteSegments, forKey: "noteSegments")
         coder.encode(self.segmentIndexMap, forKey: "segmentIndexMap")
         coder.encode(self.deletedSegmentIndexMap, forKey: "deletedSegmentIndexMap")
-        coder.encode(self.committedBufferRanges, forKey: "committedBufferRanges")
+        var committedBufferRanges = [[String:Int]]()
+        for range in self.committedBufferRanges {
+            let dictRange: [String:Int] = [
+                "startIndex": range.startIndex,
+                "endIndex": range.endIndex
+            ]
+            committedBufferRanges.append(dictRange)
+        }
+        coder.encode(committedBufferRanges, forKey: "committedBufferRanges") // Can't handle Range objects
         coder.encode(self.transformations, forKey: "transformations")
+        print("TRANSFORMATIONS IN: ", self.transformations)
         coder.encode(self.authorizedToListenForSpeech, forKey: "authorizedToListenForSpeech")
-        coder.encode(self.clipCount, forKey: "clipCount")
-        coder.encode(self.soundIntensityStream, forKey: "soundIntensityStream")
-        coder.encode(self.pitchStream, forKey: "pitchStream")
-        coder.encode(self.voiceCommandStream, forKey: "voiceCommandStream")
+        coder.encode(self.clips, forKey: "clips")
         coder.encode(self.views, forKey: "views")
         coder.encode(self.plays, forKey: "plays")
         coder.encode(self.textExports, forKey: "textExports")
         coder.encode(self.audioExports, forKey: "audioExports")
-
-        // onListenUpdate: ((_ text: String, _ highlightRange: NSRange?, _ bufferRange: NSRange?) -> Void)?
-        // onListenStop: (() -> Void)?
+        coder.encode(self.isDeleted, forKey: "isDeleted")
     }
     
     required init?(coder: NSCoder) {
@@ -377,59 +248,58 @@ class Note: AVMutableComposition, NSCoding {
         self._fileType = coder.decodeObject(forKey: "fileType") as! AVFileType
         self.dateCreated = coder.decodeDouble(forKey: "dateCreated")
         self.dateModified = coder.decodeDouble(forKey: "dateModified")
-        self.speaker = coder.decodeObject(forKey: "speaker") as! Speaker
+        self.creatorUID = coder.decodeObject(forKey: "creatorUID") as! String
         self.noteSegments = coder.decodeObject(forKey: "noteSegments") as! [NoteSegment]
         self.segmentIndexMap = coder.decodeObject(forKey: "segmentIndexMap") as! [String: Int]
         self.deletedSegmentIndexMap = coder.decodeObject(forKey: "deletedSegmentIndexMap") as! [String: Int]
-        self.committedBufferRanges = coder.decodeObject(forKey: "committedBufferRanges") as! [Range<Int>]
+        if let committedBufferDictRanges = coder.decodeObject(forKey: "committedBufferRanges") as? [[String:Int]] {
+            var committedBufferRanges = [Range<Int>]()
+            for dictRange in committedBufferDictRanges {
+                let range = dictRange["startIndex"]!..<dictRange["endIndex"]!
+                committedBufferRanges.append(range)
+            }
+            self.committedBufferRanges = committedBufferRanges
+        }
         self.transformations = coder.decodeObject(forKey: "transformations") as! [NoteTransformation]
+        print("TRANSFORMATIONS OUT: ", self.transformations)
         self.authorizedToListenForSpeech = coder.decodeBool(forKey: "authorizedToListenForSpeech")
-        self.clipCount = Int(truncatingIfNeeded: coder.decodeInt64(forKey: "clipCount"))
-        self.soundIntensityStream = coder.decodeObject(forKey: "soundIntensityStream") as! [SoundIntensityDatum]
-        self.pitchStream = coder.decodeObject(forKey: "pitchStream") as! [PitchDatum]
-        self.voiceCommandStream = coder.decodeObject(forKey: "voiceCommandStream") as! [VoiceCommandDatum]
+        self.clips = coder.decodeObject(forKey: "clips") as! Set<String>
         self.startTime = self.noteSegments.count > 0 ? self.noteSegments.first!.timeMapping.target.start : CMTime.zero
         self.endTime = self.noteSegments.count > 0 ? self.noteSegments.last!.timeMapping.target.end : CMTime.zero
         self.views = coder.decodeObject(forKey: "views") as! [TimeInterval]
         self.plays = coder.decodeObject(forKey: "plays") as! [TimeInterval]
         self.textExports = coder.decodeObject(forKey: "textExports") as! [TimeInterval]
         self.audioExports = coder.decodeObject(forKey: "audioExports") as! [TimeInterval]
-        
-        // We set punctuation suggestions
-        // 1) if punctuation suggestions and temporal suggestions are true, we handle it in if-statement
-        if viewController.withPunctuationSuggestions && viewController.withTemporalSuggestions {
-            // Inform that only one view mode may be active in any given moment
-            viewController.setWithTemporalSuggestions(to: false)
-
-            let dialogActions = [
-                DialogAction(title: "Close", style: .cancel, handler: nil)
-            ]
-            
-            let dialogItem = DialogItem(
-                title: "Conflicting View Modes",
-                message: "You've attemped to activate both punctuation and temporal suggestions. Only one can be active at a time, so we've activated punctuation suggestions only.",
-                preferredStyle: .alert,
-                actions: dialogActions
-            )
-            Utils.presentDialog(dialogItem: dialogItem)
-        }
+        self.isDeleted = coder.decodeBool(forKey: "isDeleted")
         
         super.init()
         
-        // Ask for permissions
-        viewController.requestPermissions()
+        // Add track
+        self.addMutableTrack(
+            withMediaType: .audio,
+            preferredTrackID: Int32(kCMPersistentTrackID_Invalid)
+        )
         
         // Configure Observers
         self.configureNotificationObservers()
         
-        // Check Rep Invariant
-        checkRep()
+        // Make sure segments are set in underlying track
+        if self.noteSegments.count > 0 {
+            self.setSegments(
+                segments: self.noteSegments,
+                replaceNoteDetails: true,
+                saveToLowLevelRepr: true
+            )
+        }
     }
     
-    deinit {}
+    deinit {
+        // remove notification observers
+        NotificationCenter.default.removeObserver(self)
+    }
     
     public override var description: String {
-        return "Note {\n\tfilename: \(self.filename) \n\tfileType: \(self.fileType) \n\tdateCreated: \(Utils.getDateString(date: self.dateCreated) ?? "nil") \n\tdateModified: \(Utils.getDateString(date: self.dateModified) ?? "nil") \n\tspeaker: \(self.speaker) \n\tnoteSegments: \(self.noteSegments) \n\tnoteBuffer: \(self.noteBuffer) \n\tsegmentIndexMap: \(self.segmentIndexMap) \n\tdeletedSegmentIndexMap: \(self.deletedSegmentIndexMap) \n\tcommittedBufferRanges: \(String(describing: self.committedBufferRanges)) \n\ttransformations: \(self.transformations) \n\tstartTime: \(self.startTime) \n\tendTime: \(self.endTime) \n\tduration: \(self.getDuration()) \n\tisExporting: \(self.isExporting) \n\tnumSentences: \(self.numSentences) \n\tlanguage: \(String(describing: self.language)) \n\tavgSpeakingRate: \(self.avgSpeakingRate) \n\tauthorizedToListenForSpeech: \(self.authorizedToListenForSpeech) \n\tclipCount: \(self.clipCount) \n\trecordStartDate: \(String(describing: self.recordStartDate)) \n\taccumulatedDuration: \(self.accumulatedDuration) \n\tsoundIntensityStream: \(self.soundIntensityStream) \n\tpitchStream: \(self.pitchStream) \n\tisListeningForSpeech: \(self.isListeningForSpeech) \n\tpausedListeningForSpeech: \(self.pausedListeningForSpeech) \n\tuserInititatedPausedListeningForSpeech: \(self.userInitiatedPausedListeningForSpeech) \n\texecutedListeningForSpeechStartHandler: \(self.executedListeningForSpeechStartHandler) \n\tvoiceCommandStream: \(self.voiceCommandStream) \n\tearlyVoiceCommandDetection: \(self.earlyVoiceCommandDetection) \n\tisPlayingEcho: \(self.isPlayingEcho) \n\tisPlayingPassiveEcho: \(self.isPlayingPassiveEcho) \n\tpausedEcho: \(self.pausedEcho) \n\tpreviousBoundarySegment: \(String(describing: self.previousBoundarySegment)) \n\tisPlayingNote: \(self.isPlayingNote) \n\tpausedPlayingNote: \(self.pausedPlayingNote) \n\tisRunningNote: \(self.isRunningNote) \n\tisWalkingNote: \(self.isWalkingNote) \n\tpausedWalkingNote: \(self.pausedWalkingNote) \n\tpausedRunningNote: \(self.pausedRunningNote) \n\twalkingRange: \(String(describing: self.walkingRange)) \n\twalkingIndex: \(self.walkingIndex) \n\tstartPlaybackAt: \(String(describing: self.startPlaybackAt)) \n\tstopPlaybackAt: \(String(describing: self.stopPlaybackAt)) \n\tplaybackRange: \(String(describing: self.playbackRange))\n}"
+        return "Note {\n\tfilename: \(self.filename) \n\tfileType: \(self.fileType) \n\tdateCreated: \(Utils.getDateString(date: self.dateCreated) ?? "nil") \n\tdateModified: \(Utils.getDateString(date: self.dateModified) ?? "nil") \n\tcreatorUID: \(self.creatorUID) \n\tnoteSegments: \(self.noteSegments) \n\tnoteBuffer: \(self.noteBuffer) \n\tsegmentIndexMap: \(self.segmentIndexMap) \n\tdeletedSegmentIndexMap: \(self.deletedSegmentIndexMap) \n\tcommittedBufferRanges: \(String(describing: self.committedBufferRanges)) \n\ttransformations: \(self.transformations) \n\tstartTime: \(self.startTime) \n\tendTime: \(self.endTime) \n\tduration: \(self.getDuration()) \n\tnumSentences: \(self.numSentences) \n\tlanguage: \(String(describing: self.language)) \n\tavgSpeakingRate: \(self.avgSpeakingRate) \n\tauthorizedToListenForSpeech: \(self.authorizedToListenForSpeech) \n\tclips: \(self.clips) \n\trecordStartDate: \(String(describing: self.recordStartDate)) \n\taccumulatedDuration: \(self.accumulatedDuration) \n\tisDeleted: \(self.isDeleted)\n}"
     }
     
     // MARK: - Configuration Methods
@@ -438,84 +308,225 @@ class Note: AVMutableComposition, NSCoding {
         print("===== Configure Note Audio Write File =====")
         do {
             try recordFile = AVAudioFile(
-                forWriting: Utils.getFileURL(of: "\(self.filename)-\(self.clipCount)\(self.fileType)"),
-                settings: audioEngine.inputNode.inputFormat(forBus: self.recordBus).settings
+                forWriting: Utils.getFileURL(of: "\(self.filename)-\(self.currentClipUID!)\(self.fileType)"),
+                settings: self.speechRecognition.audioEngine.inputNode.inputFormat(forBus: self.speechRecognition.recordBus).settings
             )
             authorizedToListenForSpeech = true
-            print("\tSource URL for writing note successfully created: \(self.filename)-\(self.clipCount)\(self.fileType)")
+            print("\tSource URL for writing note successfully created: \(self.filename)-\(self.currentClipUID!)\(self.fileType)")
         } catch {
             print("\t[Error] There was a problem instantiating the record file")
         }
     }
     
+    // MARK: - Notifications
+    
     func configureNotificationObservers() {
-        print("===== Configure Notification Observers =====")
+        print("===== Note: Configure Notification Observers =====")
         let notificationCenter = NotificationCenter.default
         
+        // SpeechRecognitionEngine
         notificationCenter.addObserver(
             self,
-            selector: #selector(handleAudioSessionRouteChange),
-            name: AVAudioSession.routeChangeNotification,
+            selector: #selector(onStartListeningForSpeech(notification:)),
+            name: SpeechRecognitionEngine.onStartedListeningForSpeech,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onStoppedListeningForSpeech(notification:)),
+            name: SpeechRecognitionEngine.onStoppedListeningForSpeech,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onBufferItem(notification:)),
+            name: SpeechRecognitionEngine.onBufferItem,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onSpeechUpdate(notification:)),
+            name: SpeechRecognitionEngine.onSpeechUpdate,
             object: nil
         )
     }
     
-    @objc func handleAudioSessionRouteChange(notification: Notification) {
-        guard let userInfo = notification.userInfo,
-            let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
-            let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else {
-                return
-        }
+    @objc func onStartListeningForSpeech(notification: Notification) {
+        if self.noteManager == nil || self.isDeleted || noteManager.currentNote == nil || (self.noteManager!.currentNote != nil && self.noteManager!.currentNote!.uid != self.uid) { return }
+        print("===== Note \(self.uid): On Start Listening For Speech =====")
+        
+        // Create and save new clip used to create unique track URLs to write audio into
+        self.generateNewClip()
+        
+        // Reset accumulated Duration for next clip capture
+        self.accumulatedDuration = TimeInterval(0)
+        
+        // Capture last started listening timestamp
+        self.lastStartedListeningTimestamp = Date().timeIntervalSince1970
 
-        // Switch over the route change reason.
-        switch reason {
-        case .newDeviceAvailable: // New device found.
-            print("===== New Audio Device Found =====")
-            // Reset listening for wake word
-            DispatchQueue.main.async {
-                if self.isListeningForSpeech {
-                    self.stop() {[weak self] in
-                        self?.startListeningForSpeech()
-                    }
-                } else {
-                    // Re-initiate Audio Engine to mend broken graph
-                    self.audioEngine = AVAudioEngine()
-                }
+        // Configure Audio Write File
+        self.configureAudioWriteFile()
+        
+        if !self.authorizedToListenForSpeech {
+            print("\t[Error] There was a problem while starting to listen for speech. Note is not authorized to listen.")
+            return
+        }
+        
+        // Begin new record start date
+        if self.speechRecognition.isListeningForSpeech && self.recordStartDate == nil {
+            // We place this here so we start tracking recording from the first buffer chunk we receive
+            self.recordStartDate = Date()
+        }
+        
+        // Check rep invariant
+        self.handleMutation()
+        self.checkRep()
+    }
+    
+    @objc func onBufferItem(notification: Notification) {
+        if self.noteManager == nil || self.isDeleted || (self.noteManager != nil && self.noteManager!.currentNote == nil) || (self.noteManager != nil && self.noteManager!.currentNote != nil && self.noteManager!.currentNote!.uid != self.uid) { return }
+
+        if let noteManager = self.noteManager, let recordFile = self.recordFile, let note = noteManager.currentNote, note.uid == self.uid && self.speechRecognition.isListeningForSpeech {
+//            print("===== Note: On Buffer Item =====")
+            let buffer = notification.userInfo!["buffer"] as! AVAudioPCMBuffer
+            
+            // Write buffer data to audio file
+            do {
+                try recordFile.write(from: buffer)
+            } catch {
+                print("\t[Error] There was a problem writing speech to file")
             }
-        case .oldDeviceUnavailable: // Old device removed.
-            print("===== Old Audio Device Removed =====")
-            // Reset listening for wake word
-            DispatchQueue.main.async {
-                if self.isListeningForSpeech {
-                    self.stop() {[weak self] in
-                        self?.startListeningForSpeech()
-                    }
-                } else {
-                    // Re-initiate Audio Engine to mend broken graph
-                    self.audioEngine = AVAudioEngine()
-                }
-            }
-        default: ()
+            
+//            // Check rep invariant
+//            self.handleMutation()
+//            self.checkRep()
         }
     }
+    
+    @objc func onSpeechUpdate(notification: Notification) {
+        if self.noteManager == nil || self.tracks.count == 0 || self.isDeleted || self.noteManager!.currentNote == nil || (self.noteManager!.currentNote != nil && self.noteManager!.currentNote!.uid != self.uid) { return }
+        print("===== Note \(self.uid): On Speech Update =====")
+        
+        let transcription = notification.userInfo!["transcription"] as! SFTranscription
+        let isVoiceCommand = notification.userInfo!["isVoiceCommand"] as! Bool
+        let voiceCommandType = notification.userInfo!["voiceCommandType"] as? String
+        let numWordsBeforeVoiceCommand = notification.userInfo!["numWordsBeforeVoiceCommand"] as? Int
+        let isFinalTranscription = notification.userInfo!["isFinalTranscription"] as! Bool
+
+        if self.speechRecognition.isListeningForSpeech || (isVoiceCommand && voiceCommandType == "stop note") {
+            print("\tProcessing transcript...")
+            self.performTranscriptionUpdate(transcription)
+            print("\tBuffer: ", self.noteBuffer.map { $0.getText() })
+        }
+        
+        if self.selectionCursor.isUpdatingSelection && !self.selectionCursor.isPromptingForUpdateAcceptance && !isVoiceCommand && isFinalTranscription {
+            // we don't let voice command in here, because it is likely a "cancel" voice command
+            print("\tProcess selection update...")
+            // we need to set this early to avoid second call (from didFinish) to trigger
+            // in latency time between first call and setting this property
+            self.selectionCursor.setIsPromptingForUpdateAcceptance(to: true)
+            // handle update selection
+            if !self.speechRecognition.pausedListeningForSpeech {
+                // make sure paused
+                self.speechRecognition.pauseListeningForSpeech() {
+                    self.selectionCursor.handleUpdateSelection(segments: self.noteBuffer)
+                }
+            } else {
+                self.selectionCursor.handleUpdateSelection(segments: self.noteBuffer)
+            }
+        } else if isFinalTranscription && !self.selectionCursor.isUpdatingSelection && (self.speechRecognition.isListeningForSpeech || (isVoiceCommand && voiceCommandType == "stop note") || self.speechRecognition.pausedListeningForSpeech) {
+            print("\tReceived final transcript. Commit buffer.")
+            
+            // Commit Speech
+            if self.noteBuffer.count > 0 {
+                // We want to process voice commands before we commit so we avoid punctuation suggestions being formed for new segments
+                if let numWordsBeforeVoiceCommand = numWordsBeforeVoiceCommand, isVoiceCommand {
+                    print("\tProcess voice command...")
+                    self.processVoiceCommandSegments(
+                        command: transcription.formattedString,
+                        numWordsBeforeVoiceCommand: numWordsBeforeVoiceCommand
+                    )
+                }
+                
+                // commit buffer
+                if !self.speechRecognition.pausedListeningForSpeech {
+                    // Play Sound
+                    soundEngine.commitBuffer()
+
+                    self.commitBuffer()
+                    
+                    // trigger commit notification
+                    if !AVAudioSession.isHeadphonesConnected && !isVoiceCommand {
+                        self.triggerBufferCommitNotification()
+                    }
+                } else {
+                    self.clearBuffer()
+                }
+                
+                // ***** IMPORTANT *****
+                // iOS14 has made it such that the duration in a single continguous on-device recognition session
+                // does not reset after every didFinishRecognition. As a result, we do not have to accumulate durations
+                if #available(iOS 14.0, *) {
+                    // do nothing
+                } else {
+                    self.accumulatedDuration = max(0, Date().timeIntervalSince(self.recordStartDate!) - Utils.TRANSCRIPTION_LATENCY_DURATION)
+                }
+            }
+            
+            NotificationCenter.default.post(
+                name: Note.onNoteCommittedBuffer,
+                object: nil,
+                userInfo: [:]
+            )
+        } else if self.recordStartDate != nil {
+            print("\tDo not commit buffer.")
+            if let numWordsBeforeVoiceCommand = numWordsBeforeVoiceCommand, isVoiceCommand && (self.speechRecognition.isListeningForSpeech || voiceCommandType == "stop note" || self.speechRecognition.pausedListeningForSpeech) && self.noteSegments.count > 0 {
+                print("\tProcess voice command...")
+                self.processVoiceCommandSegments(
+                    command: transcription.formattedString,
+                    numWordsBeforeVoiceCommand: numWordsBeforeVoiceCommand
+                )
+            }
+            
+            // Don't keep buffer if we're not listening
+            if self.speechRecognition.pausedListeningForSpeech {
+                self.clearBuffer()
+            }
+        }
+        
+        if !self.selectionCursor.isUpdatingSelection {
+            // execute listen update handler
+            let text = self.getText()
+            self.handleOnSpeechUpdate(text: text)
+        }
+        
+        // Save finished app
+        if !self.speechRecognition.isListeningForSpeech && self.noteSegments.count > 0 && self.recordStartDate != nil {
+            print("\tProcess note finishing...")
+            self.handleFinish(normalize: true)
+        }
+    }
+    
+    @objc func onStoppedListeningForSpeech(notification: Notification) {
+//        if let noteManager = self.noteManager, self.isDeleted || noteManager.currentNote == nil || (noteManager.currentNote != nil && noteManager.currentNote!.uid != self.uid) { return }
+//
+//        print("===== Note \(self.uid): On Stopped Listening For Speech =====")
+    }
+    
+    // MARK: - Validation
     
     func checkRep() {
         var result = true
         
         // segmentIndexMap and noteSegments length must be the same
         result = result && self.segmentIndexMap.count == self.noteSegments.count
-        // print("segmentIndexMap and noteSegments length must be the same: ", self.segmentIndexMap.count, self.noteSegments.count)
-        // print("current result: ", result)
+//         print("segmentIndexMap and noteSegments length must be the same: ", self.segmentIndexMap.count, self.noteSegments.count)
+//         print("current result: ", result)
         
         // dateModified must be after dateCreated
         result = result && self.dateModified >= self.dateCreated
-        // print("dateModified must be after dateCreated: ", self.dateModified, self.dateCreated)
-        // print("current result: ", result)
-
-        // only isListeningForSpeech or isListeningForCommands should be active
-        result = result && !(self.isListeningForSpeech && viewController.isListeningForCommands && !self.pausedListeningForSpeech)
-//        print("only isListeningForSpeech or isListeningForCommands should be active: ", !(self.isListeningForSpeech && self.isListeningForCommands))
-//        print("current result: ", result)
+//         print("dateModified must be after dateCreated: ", self.dateModified, self.dateCreated)
+//         print("current result: ", result)
 
         // startTime must be in front of endTime
         result = result && self.endTime >= self.startTime
@@ -550,17 +561,7 @@ class Note: AVMutableComposition, NSCoding {
 //            print("duration of first track should be the same as underlying track segments: ", CMTimeSubtract(self.noteSegments.last!.timeMapping.target.end, self.noteSegments.first!.timeMapping.target.start) == CMTimeSubtract(lastSegment.timeMapping.target.end, firstSegment.timeMapping.target.start), CMTimeSubtract(self.noteSegments.last!.timeMapping.target.end, self.noteSegments.first!.timeMapping.target.start).seconds, CMTimeSubtract(lastSegment.timeMapping.target.end, firstSegment.timeMapping.target.start).seconds)
 //            print("current result: ", result)
         }
-
-        // make sure paused listening for speech only occurs if listening for speech
-        result = result && ((self.isListeningForSpeech && !self.pausedListeningForSpeech) || (self.isListeningForSpeech && self.pausedListeningForSpeech) || (!self.isListeningForSpeech && !self.pausedListeningForSpeech))
-//        print("make sure paused listening for speech  only occurs if listening for speech: ", (self.isListeningForSpeech && !self.pausedListeningForSpeech), (self.isListeningForSpeech && self.pausedListeningForSpeech), (!self.isListeningForSpeech && !self.pausedListeningForSpeech))
-//        print("current result: ", result)
         
-        // make sure paused listening for commands only occurs if listening for commands
-        result = result && ((viewController.isListeningForCommands && !viewController.pausedListeningForCommands) || (viewController.isListeningForCommands && viewController.pausedListeningForCommands) || (!viewController.isListeningForCommands && !viewController.pausedListeningForCommands))
-//        print("make sure paused listening for speech  only occurs if listening for commands: ", (self.isListeningForCommands && !self.pausedListeningForCommands), (self.isListeningForCommands && self.pausedListeningForCommands), (!self.isListeningForCommands && !self.pausedListeningForCommands))
-//        print("current result: ", result)
-
         if !result {
             fatalError("===== [Error] Note Representation Invariants were broken =====")
         }
@@ -568,596 +569,9 @@ class Note: AVMutableComposition, NSCoding {
     
     // MARK: - Speech Listening Methods
     
-    func startListeningForSpeech(
-        onStartHandler: (() -> Void)? = nil
-    ) {
-        print("===== Starting Listening for Speech =====")
-
-        // Make sure we're not listening for voice commands or speech already
-        if viewController.isListeningForCommands {
-            viewController.stopListeningForVoiceCommands() {
-                self.startListeningForSpeech(
-                    onStartHandler: onStartHandler
-                )
-            }
-            
-            return
-        } else if self.isListeningForSpeech && !self.pausedListeningForSpeech {
-            Utils.executeError(note: self, text: "Note already started.", handler: onStartHandler)
-            return
-        }
-        
-        if (self.isPlayingEcho && !self.pausedEcho) || self.isPlayingPassiveEcho {
-            // Stop active echo
-            self.stopEcho(omitFeedback: true)
-        }
-        
-        if self.isPlayingNote && !self.pausedPlayingNote {
-            // stop active playback
-            self.stop()
-        }
-        
-        if !self.pausedListeningForSpeech {
-            // Play Sound
-            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
-                soundEngine.startListening()
-            }
-        }
-        
-        if (!self.isListeningForSpeech || self.pausedListeningForSpeech) {
-            // A transcription can be in progress before call to startSpeechRecognition if
-            // Apple servers ended dictation session
-            // It cannot be if after a continguous clause was completed while on-device recognition
-            if !self.isListeningForSpeech {
-                self.isListeningForSpeech = true
-            }
-
-            viewController.setLastRecognitionTask(task: RecognitionTask.SPEECH)
-        }
-        
-        // remove paused commands flag
-        // must be placed after soundEngine call
-        // to prevent always executing startListening sound effect
-        // remove paused listening flag
-        if self.pausedListeningForSpeech {
-            self.pausedListeningForSpeech = false
-        }
-        
-        if self.userInitiatedPausedListeningForSpeech {
-            self.userInitiatedPausedListeningForSpeech = false
-        }
-
-        if viewController.pausedListeningForCommands {
-            viewController.setPausedListeningForCommands(paused: false)
-        }
-        
-        // flag to run start handler
-        self.executedListeningForSpeechStartHandler = false
-        
-        // Visually indicate app is listening
-        DispatchQueue.main.async {
-            viewController.activateListeningIndicator(
-                withRecording: true,
-                withStopListeningButton: true
-            )
-        }
-        
-        // if we have segments in first track, it implies this is n > 1
-        // recording session
-        // We must prepare a new track if it's not there
-        print("\tIncrementing note clip count from \(self.clipCount) to \(self.clipCount + 1)...")
-        // Increment clip count used to create unique track URLs to write audio into
-        self.clipCount += 1
-        
-        // Reset accumulated Duration for next clip capture
-        self.accumulatedDuration = TimeInterval(0)
-
-        // Configure Audio Write File
-        self.configureAudioWriteFile()
-        
-        if !self.authorizedToListenForSpeech {
-            print("\t[Error] There was a problem while starting to listen for speech. Note is not authorized to listen.")
-            return
-        }
-        
-        // Activate Pitch Recognition
-        pitchEngine.start()
-        
-        // Make sure any previous recognition tasks are finished
-        if recognitionTask != nil {
-            recognitionTask?.finish()
-            recognitionTask = nil
-        }
-
-        let node = audioEngine.inputNode
-        let recordingFormat = node.outputFormat(forBus: self.recordBus)
-        print("===== Recording Info ===== \n\tSoftware Format: \(recordingFormat.sampleRate)\n\tHardware Format: \(AVAudioSession.sharedInstance().sampleRate) \n\tInput Latency: \(recordingSession.inputLatency.rounded(toPlaces: 5)) \n\tOutput Latency: \(recordingSession.outputLatency.rounded(toPlaces: 5)) \n\tIOBufferDuration: \(recordingSession.ioBufferDuration.rounded(toPlaces: 5))")
-        
-//        let recordSettings: [String : AnyObject] = [
-//            AVSampleRateKey : NSNumber(value: Float(16000)),
-//            AVFormatIDKey : NSNumber(value: Int32(kAudioFormatMPEG4AAC)),
-//            AVNumberOfChannelsKey : NSNumber(value: 1),
-//            AVEncoderAudioQualityKey : NSNumber(value: Int32(AVAudioQuality.low.rawValue))
-//        ]
-        
-        // Set up values for speech recognition
-        request = SFSpeechAudioBufferRecognitionRequest()
-        request!.shouldReportPartialResults = true
-        request!.requiresOnDeviceRecognition = false // Set to false by default, but conditionally changed below
-
-        // Tap into microphone bus to receive and process audio input buffers
-        node.installTap(onBus: self.recordBus, bufferSize: 1024, format: recordingFormat) { [unowned self] (buffer, _) in
-            // Capture buffer
-            self.request!.append(buffer)
-
-            DispatchQueue.main.async {
-                if self.audioEngine.isRunning {
-                    if self.recordStartDate == nil {
-                        // Place after onStartHandler so notification not overwritten by UITimer
-                        // Present Feedback
-                        Utils.executeFeedback(
-                            visualMessage: "Start Note",
-                            audioMessage: "note started",
-                            withHaptics: true,
-                            delay: 1.2
-                        )
-                    }
-                    
-                    // Begin new record start date
-                    if self.isListeningForSpeech && self.recordStartDate == nil {
-                        // We place this here so we start tracking recording from the first buffer chunk we receive
-                        self.recordStartDate = Date()
-                    }
-                    
-                    if !self.executedListeningForSpeechStartHandler {
-                        self.executedListeningForSpeechStartHandler = true
-                        onStartHandler?()
-                    }
-                }
-            }
-            
-            // Handle sound intensity and pitch information
-            DispatchQueue.main.async {
-                // Sound Intensity
-                let power = Utils.computeSoundIntensity(buffer: buffer)
-                if let power = power, let detailView = self.detailView {
-                    let datum = SoundIntensityDatum(date: Date(), power: power)
-                    self.soundIntensityStream.append(datum)
-                    detailView.soundIntensityHandler?(power)
-                }
-                
-                // Pitch
-                if let detailView = self.detailView, let lastPitchDatum = self.pitchStream.last, !self.isPlayingNote {
-                    detailView.pitchHandler?(lastPitchDatum)
-                }
-            }
-            
-            // Write buffer data to audio file
-            do {
-                try self.recordFile!.write(from: buffer)
-            } catch {
-                print("\t[Error] There was a problem writing speech to file")
-            }
-        }
-        
-        // Prepare and start audio engine
-        audioEngine.prepare()
-        do {
-            try audioEngine.start()
-        } catch {
-            print("\t[Error] There was a problem starting speech recognition")
-        }
-        
-        let handleRecognizer = {
-            print("\tUsing On-Device Recognition")
-            self.request!.requiresOnDeviceRecognition = true
-            
-            print("\tLoad contextual strings")
-            self.request!.contextualStrings = [
-                "play note",
-                "pause note",
-                "create note",
-                "new note",
-                "start note",
-                "start a note",
-                "stop note",
-                "resume note",
-                "continue note",
-                "echo note",
-                "play echo",
-                "start echo",
-                "pause echo",
-                "stop echo",
-                "play last sentence",
-                "play previous sentence",
-                "echo last sentence",
-                "echo previous sentence",
-                "ecko last sentence",
-                "ecko previous sentence",
-                "activate punctuation",
-                "turn on punctuation",
-                "deactivate punctuation",
-                "turn off punctuation",
-                "activate silences",
-                "turn on silences",
-                "deactivate silences",
-                "turn off silences",
-                "activate temporal suggestions",
-                "turn on temporal suggestions",
-                "deactivate temporal suggestions",
-                "turn off temporal suggestions",
-                "activate punctuation suggestions",
-                "turn on punctuation suggestions",
-                "deactivate punctuation suggestions",
-                "turn off punctuation suggestions",
-                "activate formatting suggestions",
-                "turn on formatting suggestions",
-                "deactivate formatting suggestions",
-                "turn off formatting suggestions",
-                "activate passive echo",
-                "turn on passive echo",
-                "deactivate passive echo",
-                "turn off passive echo",
-                "turn volume up",
-                "turn volume down",
-                "increase volume",
-                "decrease volume",
-                "adjust volume up",
-                "adjust volume down",
-                "volume up",
-                "volume down",
-                "turn echo rate up",
-                "turn echo rate down",
-                "increase echo rate",
-                "decrease echo rate",
-                "adjust echo rate up",
-                "adjust echo rate down",
-                "echo rate up",
-                "echo rate down",
-                "turn playback rate up",
-                "turn playback rate down",
-                "increase playback rate",
-                "decrease playback rate",
-                "adjust playback rate up",
-                "adjust playback rate down",
-                "playback rate up",
-                "playback rate down",
-                "delete",
-                "delete selection",
-                "update",
-                "update selection",
-                "copy",
-                "copy selection",
-                "cut",
-                "cut selection",
-                "increase rate",
-                "increase selection rate",
-                "decrease rate",
-                "decrease selection rate",
-                "export",
-                "export selection",
-                "move here",
-                "place cursor",
-                "run",
-                "run selection",
-                "walk",
-                "walk selection",
-                "run note",
-                "walk note",
-                "pause playback",
-                "resume playback",
-                "continue playback",
-                "resume echo",
-                "continue echo",
-                "edit note",
-                "play last commit",
-                "play last comment",
-                "echo last commit",
-                "echo last comment",
-                "ecko last commit",
-                "ecko last comment",
-                "walk commit",
-                "walk comment",
-                "run commit",
-                "run comment",
-                "play commit",
-                "play comment",
-                "echo commit",
-                "echo comment",
-                "ecko commit",
-                "ecko comment",
-                "preview clipboard",
-                "check clipboard",
-                "inspect clipboard",
-                "play clipboard",
-                "skip backward",
-                "skip back",
-                "skip forward",
-                "skip ahead",
-                "stop playback",
-                "export note",
-                "accept",
-                "except",
-                "redo",
-                "cancel",
-                "start selection",
-                "begin selection",
-                "open selection",
-                "make selection",
-                "add selection",
-                "next",
-                "forward",
-                "right",
-                "up",
-                "previous",
-                "last",
-                "backward",
-                "left",
-                "down",
-                "freeze",
-                "freeze run",
-                "stop",
-                "stop run",
-                "halt",
-                "holt",
-                "halt run",
-                "holt run",
-                "pause",
-                "pause run",
-                "remove selection",
-                "clear selection",
-                "undo",
-                "redo",
-                "exit",
-                "select commit",
-                "select comment",
-                "delete commit",
-                "delete comment",
-                "reverse commit",
-                "reverse comment",
-                "rollback commit",
-                "shift start in",
-                "shift start out",
-                "shift starts in",
-                "shift starts out",
-                "shift start right",
-                "shift start left",
-                "shift starts right",
-                "shift starts left",
-                "shift beginning in",
-                "shift beginning out",
-                "shift beginning right",
-                "shift beginning left",
-                "shift anchor in",
-                "shift anchor out",
-                "shift anchor right",
-                "shift anchor left",
-                "shift end in",
-                "shift end out",
-                "shift end left",
-                "shift end right",
-                "shift ending in",
-                "shift ending out",
-                "shift ending left",
-                "shift ending right",
-                "shift finish in",
-                "shift finish out",
-                "shift finish left",
-                "shift finish right",
-                "shift focus in",
-                "shift focus out",
-                "shift focus left",
-                "shift focus right",
-                "shift right",
-                "shift forward",
-                "shift up",
-                "shift left",
-                "shift backward",
-                "shift down",
-                "move start in",
-                "move start out",
-                "move starts in",
-                "move starts out",
-                "move start right",
-                "move start left",
-                "move starts right",
-                "move starts left",
-                "move beginning in",
-                "move beginning out",
-                "move beginning right",
-                "move beginning left",
-                "move anchor in",
-                "move anchor out",
-                "move anchor right",
-                "move anchor left",
-                "move end in",
-                "move end out",
-                "move end left",
-                "move end right",
-                "move ending in",
-                "move ending out",
-                "move ending left",
-                "move ending right",
-                "move finish in",
-                "move finish out",
-                "move finish left",
-                "move finish right",
-                "move focus in",
-                "move focus out",
-                "move focus left",
-                "move focus right",
-                "move right",
-                "move forward",
-                "move up",
-                "move left",
-                "move backward",
-                "move down",
-                "expand selection",
-                "expand",
-                "reduce selection",
-                "reduce",
-                "paste selection",
-                "paste clipboard",
-                "help",
-                "play",
-                "echo"
-            ]
-            
-            if let speechRecognizer = self.speechRecognizer, !speechRecognizer.isAvailable {
-                print("\tSpeech Recognizer is not available")
-                return
-            }
-            
-            // Check rep invariant
-            self.handleMutation()
-            self.checkRep()
-            
-            // Let speech recognizer know we're performing dictation or voice commands
-            self.speechRecognizer?.defaultTaskHint = .dictation
-            self.recognitionTask = self.speechRecognizer?.recognitionTask(with: self.request!, delegate: self)
-        }
-
-        if let speechRecognizer = self.speechRecognizer, viewController.withOnDeviceRecognition && speechRecognizer.supportsOnDeviceRecognition {
-            handleRecognizer()
-        } else {
-            // check again after a second
-            Timer.scheduledTimer(withTimeInterval: Utils.LISTENING_LAUNCH_DELAY, repeats: false) { timer in
-                if let speechRecognizer = self.speechRecognizer, viewController.withOnDeviceRecognition && speechRecognizer.supportsOnDeviceRecognition {
-                    handleRecognizer()
-                    
-                } else {
-                    // Present error
-                    let dialogActions = [
-                        DialogAction(title: "Close", style: .cancel, handler: nil)
-                    ]
-                    
-                    let dialogItem = DialogItem(
-                        title: "Unable to initiate Voice Recognition",
-                        message: "Lingual relies on on-device recognition to deliver a the best user experience. Your device does not support it.",
-                        preferredStyle: .alert,
-                        actions: dialogActions
-                    )
-                    Utils.presentDialog(dialogItem: dialogItem)
-                }
-            }
-        }
-    }
-    
-    func pauseListeningForSpeech(onPauseHandler: (() -> Void)? = nil) {
-        if !self.isListeningForSpeech {
-            Utils.executeError(note: self, text: "No ongoing note.", handler: onPauseHandler)
-            return
-        }
-        
-        // Present Feedback
-        Utils.executeFeedback(
-            visualMessage: "Pause Note",
-            audioMessage: "note paused",
-            withHaptics: true
-        )
-
-        print("===== Pause Listening for Speech =====")
-        
-        if !self.pausedListeningForSpeech {
-            self.pausedListeningForSpeech = true
-        }
-        
-        if !self.userInitiatedPausedListeningForSpeech {
-            self.userInitiatedPausedListeningForSpeech = true
-        }
-        
-        let node = audioEngine.inputNode
-        node.removeTap(onBus: self.recordBus)
-        
-        audioEngine.pause()
-        
-        viewController.startListeningForVoiceCommands(
-            onStartHandler: {
-                // When this is not in the main thread, the recognition task doesn't end correctly
-                // which prevents us from receiving the final transcription.
-                DispatchQueue.main.async {
-                    self.recognitionTask?.finish() // don't wrap in if statement because it is sometimes not .running
-                    self.request!.endAudio() // don't add a request = nil because it results in request not being there sometimes.
-                    self.pitchEngine.stop()
-                    viewController.activateListeningIndicator(
-                        withRecording: false,
-                        withStopListeningButton: true
-                    )
-                    onPauseHandler?() // Needs to be outside DispatchQueue.main.async so it doesn't accidentally wrap two DispatchQueue.main.async if handler has one
-                }
-            }
-        )
-    }
-    
-    // make sure onStophandler is not also wrapped in DispatchQueue.main.async
-    func stopListeningForSpeech(pause: Bool = false, onStopHandler: (() -> Void)? = nil) {
-        if !self.isListeningForSpeech {
-            Utils.executeError(note: self, text: "No ongoing note.", handler: onStopHandler)
-            return
-        }
-        
-        if !pause {
-            // Present Feedback
-            Utils.executeFeedback(
-                visualMessage: "Stop Note",
-                audioMessage: "note stopped",
-                withHaptics: true
-            )
-        }
-
-        if pause {
-            print("===== Pausing Listening for Speech =====")
-        } else {
-            print("===== Stopping Listening for Speech =====")
-        }
-        
-        if isListeningForSpeech && !pause {
-            if self.isListeningForSpeech {
-                self.isListeningForSpeech = false
-            }
-
-            if self.pausedListeningForSpeech {
-                self.pausedListeningForSpeech = false
-            }
-        } else if pause {
-            if !self.pausedListeningForSpeech {
-                self.pausedListeningForSpeech = true
-            }
-        }
-
-        // Play Sound
-        // soundEngine.stopListening()
-        
-        let node = audioEngine.inputNode
-        node.removeTap(onBus: self.recordBus)
-        
-        if pause {
-            audioEngine.pause()
-        } else {
-            audioEngine.stop()
-        }
-
-        // When this is not in the main thread, the recognition task doesn't end correctly
-        // which prevents us from receiving the final transcription.
-        DispatchQueue.main.async {
-            self.recognitionTask?.finish() // don't wrap in if statement because it is sometimes not .running
-            self.request!.endAudio() // don't add a request = nil because it results in request not being there sometimes.
-            self.pitchEngine.stop()
-            viewController.activateListeningIndicator(
-                withRecording: false,
-                withStopListeningButton: !self.isListeningForSpeech
-            )
-            onStopHandler?() // Needs to be outside DispatchQueue.main.async so it doesn't accidentally wrap two DispatchQueue.main.async if handler has one
-        }
-        
-        if !self.isListeningForSpeech  {
-            // execute listen stop handler only if end of note
-            // If handler is called after text selection while listening, it removes the selection. Hence why we abort
-            self.onListenStop?()
-        }
-    }
-    
     func performTranscriptionUpdate(_ transcription: SFTranscription) {
+        print("===== Note: Perform Transcription Update =====")
+        print("Transcript Text: ", transcription.formattedString)
         for (index, segment) in transcription.segments.enumerated() {
             processTranscriptSegment(
                 segment: segment,
@@ -1215,51 +629,59 @@ class Note: AVMutableComposition, NSCoding {
                 // First temporary segment
                 
                 // Set source timestamp
-                sourceTimestamp = floor(Note.defaultSegmentTimescale * Utils.DEFAULT_SEGMENT_DURATION)
+                sourceTimestamp = floor(Utils.DEFAULT_SEGMENT_TIMESCALE * Utils.DEFAULT_SEGMENT_DURATION)
                 
                 // Set duration
-                duration = floor(Note.defaultSegmentTimescale * Utils.DEFAULT_SEGMENT_DURATION)
+                duration = floor(Utils.DEFAULT_SEGMENT_TIMESCALE * Utils.DEFAULT_SEGMENT_DURATION)
             } else {
                 // Set source timestamp
-                sourceTimestamp = floor(Note.defaultSegmentTimescale * (Double(transcriptionIndex + 1) * Utils.DEFAULT_SEGMENT_DURATION))
+                sourceTimestamp = floor(Utils.DEFAULT_SEGMENT_TIMESCALE * (Double(transcriptionIndex + 1) * Utils.DEFAULT_SEGMENT_DURATION))
                 
                 // Set duration
-                duration = floor(Note.defaultSegmentTimescale * Utils.DEFAULT_SEGMENT_DURATION)
+                duration = floor(Utils.DEFAULT_SEGMENT_TIMESCALE * Utils.DEFAULT_SEGMENT_DURATION)
             }
         } else {
             // enters here when we get the final transcript which has timestamp data
             
             // Set source timestamp
             sourceTimestamp = self.accumulatedDuration + segment.timestamp > 0 ?
-                    floor(Note.defaultSegmentTimescale * (self.accumulatedDuration + segment.timestamp))
+                    floor(Utils.DEFAULT_SEGMENT_TIMESCALE * (self.accumulatedDuration + segment.timestamp))
                 :
                     0
             
             // Set duration
-            duration = segment.duration > 0 ? floor(Note.defaultSegmentTimescale * segment.duration) : 0
+            duration = segment.duration > 0 ? floor(Utils.DEFAULT_SEGMENT_TIMESCALE * segment.duration) : 0
         }
         
         let phoneticallySimilarWords = segment.alternativeSubstrings
         
+        guard let currentClipUID = self.currentClipUID else {
+            print("\t[Error] There was a problem processing segment. Missing Clip UID")
+            return
+        }
         let noteSegment = NoteSegment(
             note: self,
+            speakerUID: self.creatorUID,
             word: word,
-            trackURL: Utils.getFileURL(of: "\(self.filename)-\(self.clipCount)\(self.fileType)"),
+            clipUID: currentClipUID,
+            trackURL: Utils.getFileURL(of: "\(self.filename)-\(currentClipUID)\(self.fileType)"),
             trackID: self.tracks[0].trackID,
             phoneticallySimilarWords: phoneticallySimilarWords,
             sourceTimeRange: CMTimeRangeMake(
-                start: CMTimeMake(value: Int64(sourceTimestamp), timescale: Int32(Note.defaultSegmentTimescale)),
-                duration: CMTimeMake(value: Int64(duration), timescale: Int32(Note.defaultSegmentTimescale))
+                start: CMTimeMake(value: Int64(sourceTimestamp), timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)),
+                duration: CMTimeMake(value: Int64(duration), timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE))
             ),
             targetTimeRange: CMTimeRangeMake( // This will be properly set in normalize Segments
-                start: CMTimeMake(value: Int64(sourceTimestamp), timescale: Int32(Note.defaultSegmentTimescale)),
-                duration: CMTimeMake(value: Int64(duration), timescale: Int32(Note.defaultSegmentTimescale))
+                start: CMTimeMake(value: Int64(sourceTimestamp), timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)),
+                duration: CMTimeMake(value: Int64(duration), timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE))
             ),
             tokenType: segmentTags["tokenType"]!,
             lexicalClass: segmentTags["lexicalClass"]!,
             nameType: segmentTags["nameType"]!,
             lemma: segmentTags["lemma"]!,
-            sentimentScore: sentiment ?? nil
+            sentimentScore: sentiment ?? nil,
+            withPunctuationSuggestions: self.state.withPunctuationSuggestions,
+            voiceCommandWord: false
         )
         
         
@@ -1276,9 +698,13 @@ class Note: AVMutableComposition, NSCoding {
             if oldSegment != noteSegment {
                 // determine if we need to replace selection values
                 // prevent replacing selection values if we're processing a selection update
-                let replaceSelectionAnchor = oldSegment == selectionCursor.anchor && !selectionCursor.isUpdatingSelection
-                let replaceSelectionFocus = oldSegment == selectionCursor.focus && !selectionCursor.isUpdatingSelection
-                let replaceSelectionCachedAnchor = oldSegment == selectionCursor.cachedAnchor && !selectionCursor.isUpdatingSelection
+                let replaceSelectionAnchor = oldSegment == self.selectionCursor.anchor && !self.selectionCursor.isUpdatingSelection
+                let replaceSelectionFocus = oldSegment == self.selectionCursor.focus && !self.selectionCursor.isUpdatingSelection
+                let replaceSelectionCachedAnchor = oldSegment == self.selectionCursor.cachedAnchor && !self.selectionCursor.isUpdatingSelection
+                
+                // Transfer voice command status
+                let isVoiceCommandWord = oldSegment.isVoiceCommandWord()
+                noteSegment.setIsVoiceCommandWord(to: isVoiceCommandWord)
                 
                 // set updated segments
                 bufferSegments[transcriptionIndex] = noteSegment
@@ -1286,17 +712,17 @@ class Note: AVMutableComposition, NSCoding {
                 
                 // update selection anchor
                 if replaceSelectionAnchor {
-                    selectionCursor.setAnchor(segment: self.noteBuffer[transcriptionIndex])
+                    self.selectionCursor.setAnchor(segment: self.noteBuffer[transcriptionIndex])
                 }
                 
                 // update selection focus
                 if replaceSelectionFocus {
-                    selectionCursor.setFocus(segment: self.noteBuffer[transcriptionIndex])
+                    self.selectionCursor.setFocus(segment: self.noteBuffer[transcriptionIndex])
                 }
                 
                 // update selection cached anchor
                 if replaceSelectionCachedAnchor {
-                    selectionCursor.setCachedAnchor(segment: self.noteBuffer[transcriptionIndex])
+                    self.selectionCursor.setCachedAnchor(segment: self.noteBuffer[transcriptionIndex])
                 }
                 
                 self.handleMutation()
@@ -1322,7 +748,7 @@ class Note: AVMutableComposition, NSCoding {
         saveToLowLevelRepr: Bool = false,
         returnSegments: Bool = false
     ) -> [NoteSegment]? {
-        print("===== Normalizing Segments =====")
+        print("===== Note: Normalize Segments =====")
         var lastEnd = CMTime.zero
         var normalizedSegments = [NoteSegment]()
         var silenceIndices = [Int]()
@@ -1333,10 +759,15 @@ class Note: AVMutableComposition, NSCoding {
             segs = segments
         }
         
+        guard let currentClipUID = self.currentClipUID else {
+            print("\t[Error] There was a problem normalizing segments. Missing Clip UID")
+            return nil
+        }
+        
         for (index, segment) in segs.enumerated() {
             if segment.timeMapping[normalizeType].start.seconds != lastEnd.seconds {
                 if segment.timeMapping[normalizeType].start.seconds > lastEnd.seconds && !segment.isSilence() {
-                    let trackURL = Utils.getFileURL(of: "\(self.filename)-\(self.clipCount)\(self.fileType)")
+                    let trackURL = Utils.getFileURL(of: "\(self.filename)-\(currentClipUID)\(self.fileType)")
 
                     if let lastCommittedSegment = self.noteSegments.last, index == 0 && segments != nil && segments!.first! != self.noteSegments.first! && self.noteSegments.count > 0 && normalizeType == .source && lastCommittedSegment.sourceURL!.absoluteString == trackURL.absoluteString {
                         // first segment is silence
@@ -1351,7 +782,9 @@ class Note: AVMutableComposition, NSCoding {
                     // Add a silent segment in front of current segment to account for early time
                     let silentSegment = NoteSegment(
                         note: self,
+                        speakerUID: self.creatorUID,
                         word: "",
+                        clipUID: currentClipUID,
                         trackURL: trackURL,
                         trackID: self.tracks[0].trackID,
                         phoneticallySimilarWords: [],
@@ -1374,7 +807,9 @@ class Note: AVMutableComposition, NSCoding {
                         nameType: nil,
                         lemma: nil,
                         sentimentScore: nil, // silences have no sentiment
-                        utterPunctuationSuggestion: true // give feedback that we're on a new sentence or paragraph.
+                        withPunctuationSuggestions: self.state.withPunctuationSuggestions,
+                        utterPunctuationSuggestion: true, // give feedback that we're on a new sentence or paragraph.
+                        voiceCommandWord: segment.isVoiceCommandWord()
                     )
                     
                     // Segment Sound intensity
@@ -1385,16 +820,16 @@ class Note: AVMutableComposition, NSCoding {
                         // Import sound intensity
                         let power = segment.getPower()
                         segment.setPower(power: power)
-                    } else if self.soundIntensityStream.count > 0 {
+                    } else if self.speechRecognition.soundIntensityStream.count > 0 {
                         // Add sound intensities
-                        let datum = getRecordingSoundIntensityDatum(timestamp: startOfSegmentDuration)
+                        let datum = self.speechRecognition.getRecordingSoundIntensityDatum(timestamp: startOfSegmentDuration)
                         segment.setPower(power: datum.power.rounded(toPlaces: Utils.SOUND_INTENSITY_SIG_FIG_COUNT))
                     }
 
                     // Silence Sound Intensity/Background Noise
-                    if self.soundIntensityStream.count > 0 {
+                    if self.speechRecognition.soundIntensityStream.count > 0 {
                         let startOfSilenceDuration: Double = lastEnd.seconds
-                        let backgroundNoise = getRecordingSoundIntensityDatum(timestamp: startOfSilenceDuration)
+                        let backgroundNoise = self.speechRecognition.getRecordingSoundIntensityDatum(timestamp: startOfSilenceDuration)
                         silentSegment.setPower(power: backgroundNoise.power.rounded(toPlaces: Utils.SOUND_INTENSITY_SIG_FIG_COUNT))
                     }
                     
@@ -1402,9 +837,9 @@ class Note: AVMutableComposition, NSCoding {
                     if let pitch = segment.getPitch() {
                         // Import pitch
                         segment.setPitch(pitch: pitch)
-                    } else if self.pitchStream.count > 0 {
+                    } else if self.pitchRecognition.pitchStream.count > 0 {
                         // Add pitch
-                        let pitch = getRecordingPitch(timestamp: startOfSegmentDuration)
+                        let pitch = self.pitchRecognition.getRecordingPitch(timestamp: startOfSegmentDuration)
                         if let p = pitch.pitch {
                             segment.setPitch(pitch: p)
                         }
@@ -1435,7 +870,9 @@ class Note: AVMutableComposition, NSCoding {
                     CMTimeRangeMake(start: segment.timeMapping.target.start, duration: newDuration)
                     let modifiedSegment = NoteSegment(
                         note: self,
+                        speakerUID: segment.getSpeakerUID(),
                         word: segment.getText(),
+                        clipUID: currentClipUID,
                         trackURL: segment.sourceURL!,
                         trackID: segment.sourceTrackID,
                         phoneticallySimilarWords: segment.getPhoneticallySimilarWords(),
@@ -1446,6 +883,7 @@ class Note: AVMutableComposition, NSCoding {
                         nameType: segment.getNameType(),
                         lemma: segment.getLemma(),
                         sentimentScore: segment.getSentiment(),
+                        withPunctuationSuggestions: self.state.withPunctuationSuggestions,
                         voiceCommandWord: segment.isVoiceCommandWord(),
                         deleted: segment.isDeleted()
                     )
@@ -1457,9 +895,9 @@ class Note: AVMutableComposition, NSCoding {
                         // Import sound intensity
                         let power = segment.getPower()
                         modifiedSegment.setPower(power: power)
-                    } else if self.soundIntensityStream.count > 0 {
+                    } else if self.speechRecognition.soundIntensityStream.count > 0 {
                         // Add sound intensities
-                        let datum = getRecordingSoundIntensityDatum(timestamp: startOfSilenceDuration)
+                        let datum = self.speechRecognition.getRecordingSoundIntensityDatum(timestamp: startOfSilenceDuration)
                         modifiedSegment.setPower(power: datum.power.rounded(toPlaces: Utils.SOUND_INTENSITY_SIG_FIG_COUNT))
                     }
                     
@@ -1489,7 +927,9 @@ class Note: AVMutableComposition, NSCoding {
                     // segment overlaps with previous segment, shift it forwards
                     let normalizedSegment = NoteSegment(
                         note: self,
+                        speakerUID: segment.getSpeakerUID(),
                         word: segment.getText(),
+                        clipUID: currentClipUID,
                         trackURL: segment.sourceURL!,
                         trackID: segment.sourceTrackID,
                         phoneticallySimilarWords: segment.getPhoneticallySimilarWords(),
@@ -1512,6 +952,7 @@ class Note: AVMutableComposition, NSCoding {
                         nameType: segment.getNameType(),
                         lemma: segment.getLemma(),
                         sentimentScore: segment.getSentiment(),
+                        withPunctuationSuggestions: self.state.withPunctuationSuggestions,
                         voiceCommandWord: segment.isVoiceCommandWord(),
                         deleted: segment.isDeleted()
                     )
@@ -1523,9 +964,9 @@ class Note: AVMutableComposition, NSCoding {
                         // Import sound intensity
                         let power = segment.getPower()
                         normalizedSegment.setPower(power: power)
-                    } else if self.soundIntensityStream.count > 0 {
+                    } else if self.speechRecognition.soundIntensityStream.count > 0 {
                         // Add sound intensities
-                        let datum = getRecordingSoundIntensityDatum(timestamp: startOfSegmentDuration)
+                        let datum = self.speechRecognition.getRecordingSoundIntensityDatum(timestamp: startOfSegmentDuration)
                         segment.setPower(power: datum.power.rounded(toPlaces: Utils.SOUND_INTENSITY_SIG_FIG_COUNT))
                     }
                     
@@ -1533,9 +974,9 @@ class Note: AVMutableComposition, NSCoding {
                     if let pitch = segment.getPitch() {
                         // Import pitch
                         normalizedSegment.setPitch(pitch: pitch)
-                    } else if self.pitchStream.count > 0 {
+                    } else if self.pitchRecognition.pitchStream.count > 0 {
                         // Add pitch
-                        let pitch = getRecordingPitch(timestamp: startOfSegmentDuration)
+                        let pitch = self.pitchRecognition.getRecordingPitch(timestamp: startOfSegmentDuration)
                         if let p = pitch.pitch {
                             segment.setPitch(pitch: p)
                         }
@@ -1607,7 +1048,7 @@ class Note: AVMutableComposition, NSCoding {
             segment.setIndex(index: index)
             
             // Set backgroundNoise
-            let datum = self.getRecordingSoundIntensityDatum(timestamp: segment.timeMapping.target.start.seconds)
+            let datum = self.speechRecognition.getRecordingSoundIntensityDatum(timestamp: segment.timeMapping.target.start.seconds)
             segment.setBackgroundNoise(noise: datum.power.rounded(toPlaces: Utils.SOUND_INTENSITY_SIG_FIG_COUNT))
 
             // Set avgPauseDuration
@@ -1622,7 +1063,9 @@ class Note: AVMutableComposition, NSCoding {
                 // segment overlaps with previous segment, shift it forwards
                 let shiftedSegment = NoteSegment(
                     note: self,
+                    speakerUID: segment.getSpeakerUID(),
                     word: segment.getText(),
+                    clipUID: currentClipUID,
                     trackURL: segment.sourceURL!,
                     trackID: segment.sourceTrackID,
                     phoneticallySimilarWords: segment.getPhoneticallySimilarWords(),
@@ -1636,6 +1079,7 @@ class Note: AVMutableComposition, NSCoding {
                     nameType: segment.getNameType(),
                     lemma: segment.getLemma(),
                     sentimentScore: segment.getSentiment(),
+                    withPunctuationSuggestions: self.state.withPunctuationSuggestions,
                     voiceCommandWord: segment.isVoiceCommandWord(),
                     deleted: segment.isDeleted()
                 )
@@ -1647,9 +1091,9 @@ class Note: AVMutableComposition, NSCoding {
                     // Import sound intensity
                     let power = segment.getPower()
                     shiftedSegment.setPower(power: power)
-                } else if self.soundIntensityStream.count > 0 {
+                } else if self.speechRecognition.soundIntensityStream.count > 0 {
                     // Add sound intensities
-                    let datum = getRecordingSoundIntensityDatum(timestamp: startOfSegmentDuration)
+                    let datum = self.speechRecognition.getRecordingSoundIntensityDatum(timestamp: startOfSegmentDuration)
                     segment.setPower(power: datum.power.rounded(toPlaces: Utils.SOUND_INTENSITY_SIG_FIG_COUNT))
                 }
                 
@@ -1657,9 +1101,9 @@ class Note: AVMutableComposition, NSCoding {
                 if let pitch = segment.getPitch() {
                     // Import pitch
                     shiftedSegment.setPitch(pitch: pitch)
-                } else if self.pitchStream.count > 0 {
+                } else if self.pitchRecognition.pitchStream.count > 0 {
                     // Add pitch
-                    let pitch = getRecordingPitch(timestamp: startOfSegmentDuration)
+                    let pitch = self.pitchRecognition.getRecordingPitch(timestamp: startOfSegmentDuration)
                     if let p = pitch.pitch {
                         segment.setPitch(pitch: p)
                     }
@@ -1705,14 +1149,18 @@ class Note: AVMutableComposition, NSCoding {
     
     func commitBuffer() {
         guard self.noteBuffer.count > 0 else { return }
-        print("===== Commit Buffer =====")
+        print("===== Note: Commit Buffer =====")
 
         // duplicate note tracks
         print("\tDuplicating buffer segments...")
+        var bufferText = "\tBuffer Segments: "
         var segments = [NoteSegment]()
         for segment in self.noteBuffer {
+            bufferText += "'\(segment.getText())', "
             segments.append(segment.duplicate())
         }
+        
+        print(bufferText)
         
         print("\tIdentifying insert time...")
         var insertTime: CMTime
@@ -1720,7 +1168,7 @@ class Note: AVMutableComposition, NSCoding {
         var cachedAnchorIndex = Int(Utils.UNKNOWN)
         var numSegmentsBehindCursorBeforeInsertion: Int
         var numSegmentsAheadCursorBeforeInsertion: Int
-        if let cachedAnchor = selectionCursor.cachedAnchor {
+        if let cachedAnchor = self.selectionCursor.cachedAnchor {
             print("\tInsert time identified to be at cached anchor...")
             // Get cached anchor
             cachedAnchorIndex = cachedAnchor.getIndex()
@@ -1745,13 +1193,13 @@ class Note: AVMutableComposition, NSCoding {
         }
         
         var oldAnchor: NoteSegment?
-        if let anchor = selectionCursor.anchor {
+        if let anchor = self.selectionCursor.anchor {
             print("\tSelection anchor identified: ", anchor.getText())
             oldAnchor = anchor.duplicate()
         }
         
         var oldFocus: NoteSegment?
-        if let focus = selectionCursor.focus {
+        if let focus = self.selectionCursor.focus {
             print("\tSelection focus identified...")
             oldFocus = focus.duplicate()
         }
@@ -1768,28 +1216,30 @@ class Note: AVMutableComposition, NSCoding {
             returnSegments: true
         )
         
-        var lastBufferWordIndex = Int(Utils.UNKNOWN)
-        for (index, segment) in normalizedSegments!.reversed().enumerated() {
-            if !segment.isSilence() && !segment.isVoiceCommandWord() && !segment.isDeleted() {
-                lastBufferWordIndex = normalizedSegments!.count - index
-                break
-            }
+        let lastBufferWordIndex = Utils.getNoteNthLastSegmentIndex(
+            segments: normalizedSegments!,
+            selectionCursor: self.selectionCursor,
+            n: 0
+        ).1
+        if let lastBufferWordIndex = lastBufferWordIndex {
+            print("\tLast Buffer Word Index: ", lastBufferWordIndex)
         }
         
+        print("\tInserting buffer segments...")
         self.insertPassage(
             segments: normalizedSegments!,
             at: insertTime
         )
         
-        if updateCachedAnchor {
-            let lastNormalizedWord = self.noteSegments[cachedAnchorIndex + lastBufferWordIndex]
+        if let lastBufferWordIndex = lastBufferWordIndex, updateCachedAnchor && cachedAnchorIndex != Int(Utils.UNKNOWN) {
+            let lastNormalizedWord = self.noteSegments[cachedAnchorIndex + lastBufferWordIndex + 1] // We add one because we want the last buffer word to be the new index
             print("\tUpdating cached anchor...")
             
             for segment in self.noteSegments {
                 if segment.getUID() == lastNormalizedWord.getUID() {
                     // update cached anchor
                     print("\tUpdating cached anchor in selection: ", segment.getText())
-                    selectionCursor.setCachedAnchor(segment: segment)
+                    self.selectionCursor.setCachedAnchor(segment: segment)
                 }
             }
         }
@@ -1800,7 +1250,7 @@ class Note: AVMutableComposition, NSCoding {
                 if segment.getUID() == oldAnchor.getUID() {
                     // update anchor
                     print("\tUpdated anchor segment in selection cursor: ", segment.getText())
-                    selectionCursor.setAnchor(segment: segment)
+                    self.selectionCursor.setAnchor(segment: segment)
                 }
             }
         }
@@ -1811,7 +1261,7 @@ class Note: AVMutableComposition, NSCoding {
                 if segment.getUID() == oldFocus.getUID() {
                     // update focus
                     print("\tUpdated focus segment in selection cursor: ", segment.getText())
-                    selectionCursor.setAnchor(segment: segment)
+                    self.selectionCursor.setAnchor(segment: segment)
                 }
             }
         }
@@ -1819,12 +1269,96 @@ class Note: AVMutableComposition, NSCoding {
         // Set range of last buffer
         print("\tSet last buffer range in note properties...")
         let numNormalizedBufferSegments = self.noteSegments.count - (numSegmentsBehindCursorBeforeInsertion + numSegmentsAheadCursorBeforeInsertion)
+        print("\tLast Buffer Range: ", numSegmentsBehindCursorBeforeInsertion..<(numSegmentsBehindCursorBeforeInsertion + numNormalizedBufferSegments))
         self.committedBufferRanges.append(numSegmentsBehindCursorBeforeInsertion..<(numSegmentsBehindCursorBeforeInsertion + numNormalizedBufferSegments))
     }
     
     func clearBuffer() {
-        print("===== Clear Buffer =====")
+        print("===== Note: Clear Buffer =====")
         self.noteBuffer = []
+    }
+    
+    func handleSave() {
+        print("===== Note: Handle Save =====")
+        
+        if let speechRecognition = self.speechRecognition, speechRecognition.isListeningForSpeech {
+            print("\tHandle intermediate saving...")
+            self.state.save()
+        }
+    }
+    
+    func handleFinish(normalize: Bool = false) {
+        print("===== Note: Handle Finish =====")
+        print("\tHandle final saving...")
+        // Completion of speech recognition section
+        if soundEngine.isProcessing {
+            print("\tSound Engine playing 'Processing Sound'. Turning off..")
+            soundEngine.stopProcessing()
+        }
+        
+        let onFinishHandler: (() -> Void) = { [weak self] in
+            // We previously had these in stopListeningForSpeech, but clearing these
+            // to soon affects normalization, which rquires recordStartDate to date PitchDatum and SoundIntensityDatum
+            self?.accumulatedDuration = TimeInterval(0)
+            self?.recordStartDate = nil
+            self?.clearBuffer()
+            self?.selectionCursor.setAnchor()
+            self?.selectionCursor.setFocus()
+            self?.selectionCursor.setCachedAnchor()
+            self?.state.save()
+            
+            // Feedback
+            self?.notifications.executeFeedback(
+                visualMessage: "Saved!",
+                audioMessage: "note saved",
+                withHaptics: true,
+                delay: 1.0
+            )
+
+            self!.speechRecognition.startListeningForVoiceCommands() { [weak self] in
+                print("Final Note Segments: ", self!.noteSegments)
+                print("Final Note Transformations: ", self!.transformations)
+                NotificationCenter.default.post(
+                    name: Note.onNoteComplete,
+                    object: nil,
+                    userInfo: [ "text": self!.getText()]
+                )
+            }
+        }
+        
+        NotificationCenter.default.post(
+            name: Note.onNoteListenStop,
+            object: nil,
+            userInfo: [ "text": self.getText()]
+        )
+        
+        if self.noteBuffer.count > 0 {
+            print("\tNote buffer has uncommitted segments. Trash them.")
+            print("\tClearing note buffer...")
+            self.clearBuffer()
+            if normalize {
+                print("\tNormalizing \(self.noteSegments.count) segments before saving note.")
+                let _ = self.normalizeSegments(
+                    normalizeType: .target,
+                    saveSegments: true,
+                    saveToLowLevelRepr: true
+                )
+            }
+            onFinishHandler()
+        } else if self.noteSegments.count > 0 {
+            // No need to normalize segments or export note if we haven't captured anything meaningful
+            if normalize {
+                print("\tNormalizing \(self.noteSegments.count) segments before saving note.")
+                let _ = self.normalizeSegments(
+                    normalizeType: .target,
+                    saveSegments: true,
+                    saveToLowLevelRepr: true
+                )
+            }
+            onFinishHandler()
+        } else {
+            onFinishHandler()
+        }
     }
     
     // MARK: - Listening Method Helpers
@@ -1835,7 +1369,7 @@ class Note: AVMutableComposition, NSCoding {
 
         // Determine note string
         var wholeText: String
-        if let cachedAnchor = selectionCursor.cachedAnchor {
+        if let cachedAnchor = self.selectionCursor.cachedAnchor {
             wholeText = segmentText.count == 1 && segmentText.first!.isPunctuation ?
                 self.getText(until: cachedAnchor.timeMapping.target.start) + segmentText + " \(self.getText(from: cachedAnchor.timeMapping.target.start))"
         :
@@ -1854,7 +1388,7 @@ class Note: AVMutableComposition, NSCoding {
         // Compute noteSegments array
         var noteSegments: [NoteSegment]? = nil
         var index: Int?
-        if let anchor = selectionCursor.anchor, anchor.getIndex() != Int(Utils.UNKNOWN) {
+        if let anchor = self.selectionCursor.anchor, anchor.getIndex() != Int(Utils.UNKNOWN) {
             // insert buffer at the correct place based on cursor position
             noteSegments = self.noteSegments
             let anchorIndex = anchor.getIndex()
@@ -1946,32 +1480,6 @@ class Note: AVMutableComposition, NSCoding {
         return segmentRange
     }
     
-    func getRecordingSoundIntensityDatum(timestamp: Double) -> SoundIntensityDatum {
-        var datum: SoundIntensityDatum
-        var i = 0
-        var datumTimestamp = soundIntensityStream[i].date - recordStartDate! - Utils.TRANSCRIPTION_LATENCY_DURATION
-        repeat {
-            datumTimestamp = soundIntensityStream[i].date - recordStartDate! - Utils.TRANSCRIPTION_LATENCY_DURATION
-            datum = soundIntensityStream[i]
-            i += 1
-        } while datumTimestamp < timestamp && i < soundIntensityStream.count
-        
-        return datum
-    }
-    
-    func getRecordingPitch(timestamp: Double) -> PitchDatum {
-        var pitch: PitchDatum
-        var i = 0
-        var datumTimestamp = pitchStream[i].date - recordStartDate! - Utils.TRANSCRIPTION_LATENCY_DURATION
-        repeat {
-            datumTimestamp = pitchStream[i].date - recordStartDate! - Utils.TRANSCRIPTION_LATENCY_DURATION
-            pitch = pitchStream[i]
-            i += 1
-        } while datumTimestamp < timestamp && i < pitchStream.count
-        
-        return pitch
-    }
-    
     // MARK: - Text Methods
     
     func getText(
@@ -2008,11 +1516,11 @@ class Note: AVMutableComposition, NSCoding {
             noteSegments = segments
         }
         
-        if let cachedAnchor = selectionCursor.cachedAnchor, noteSegments == nil && cachedAnchor.getIndex() != Int(Utils.UNKNOWN) {
+        if let selectionCursor = self.selectionCursor, let cachedAnchor = selectionCursor.cachedAnchor, noteSegments == nil && cachedAnchor.getIndex() != Int(Utils.UNKNOWN) {
             noteSegments = self.noteSegments
             
             // insert buffer at the correct place based on cursor position
-            if !selectionCursor.isUpdatingSelection {
+            if !self.selectionCursor.isUpdatingSelection {
                 // We don't want to factor buffer which has speech that has yet to be accepted
                 // Would show up in seleectionCursor.selectionText
                 
@@ -2025,7 +1533,7 @@ class Note: AVMutableComposition, NSCoding {
             noteSegments = self.noteSegments
             
             // insert buffer at the end of segments
-            if !selectionCursor.isUpdatingSelection {
+            if let selectionCursor = self.selectionCursor, !selectionCursor.isUpdatingSelection {
                 // We don't want to factor buffer which has speech that has yet to be accepted
                 // Would show up in seleectionCursor.selectionText
                 
@@ -2033,44 +1541,46 @@ class Note: AVMutableComposition, NSCoding {
             }
         }
         
-        // We have been given a specific set of segments to compute on vs. multi segment tracks
-        var fromTimeSegmentIndex: Int?
-        var isSingleSegment = false
-//        print("segments: ", noteSegments!)
-        for (index, segment) in noteSegments!.enumerated()  {
-            if let untilTime = untilTime, fromTimeSegmentIndex != nil && segment.timeMapping.target.end > untilTime {
-                // We've seen all the segments we need to compute text
-                break
-            } else if let untilTime = untilTime, fromTimeSegmentIndex != nil && segment.timeMapping.target.end <= untilTime && !segment.isVoiceCommandWord() && !segment.isDeleted() {
-                let word = segment.getText(
-                    withTemporalSuggestions: viewController.withTemporalSuggestions,
-                    withPunctuationSuggestions: viewController.withPunctuationSuggestions,
-                    withFormattingSuggestions: viewController.withFormattingSuggestions,
-                    strictlyAsWord: viewController.withTextStrictlyAsWords,
-                    withCapitalization: viewController.withCapitalization,
-                    withSpacePrefix: true,
-                    forEcho: forEcho
-                )
-                
-                text += word
-            } else if (segment.timeMapping.target.start >= fromTime || fromTimeSegmentIndex != nil) && !isSingleSegment && !segment.isVoiceCommandWord() && !segment.isDeleted() {
-                if fromTimeSegmentIndex == nil && segment.timeMapping.target.start >= fromTime  {
-                    fromTimeSegmentIndex = index
-                    isSingleSegment = segment.timeMapping.target.start == fromTime && segment.timeMapping.target.end == untilTime
-                }
-
-                if fromTimeSegmentIndex != nil {
+        if let noteSegments = noteSegments {
+            // We have been given a specific set of segments to compute on vs. multi segment tracks
+            var fromTimeSegmentIndex: Int?
+            var isSingleSegment = false
+    //        print("segments: ", noteSegments!)
+            for (index, segment) in noteSegments.enumerated()  {
+                if let untilTime = untilTime, fromTimeSegmentIndex != nil && segment.timeMapping.target.end > untilTime {
+                    // We've seen all the segments we need to compute text
+                    break
+                } else if let _ = self.state, let untilTime = untilTime, fromTimeSegmentIndex != nil && segment.timeMapping.target.end <= untilTime && !segment.isVoiceCommandWord() && !segment.isDeleted() {
                     let word = segment.getText(
-                        withTemporalSuggestions: viewController.withTemporalSuggestions,
-                        withPunctuationSuggestions: viewController.withPunctuationSuggestions,
-                        withFormattingSuggestions: viewController.withFormattingSuggestions,
-                        strictlyAsWord: viewController.withTextStrictlyAsWords,
-                        withCapitalization: viewController.withCapitalization,
+                        withTemporalSuggestions: self.state.withTemporalSuggestions,
+                        withPunctuationSuggestions: self.state.withPunctuationSuggestions,
+                        withFormattingSuggestions: self.state.withFormattingSuggestions,
+                        strictlyAsWord: self.state.withTextStrictlyAsWords,
+                        withCapitalization: self.state.withCapitalization,
                         withSpacePrefix: true,
                         forEcho: forEcho
                     )
                     
                     text += word
+                } else if (segment.timeMapping.target.start >= fromTime || fromTimeSegmentIndex != nil) && !isSingleSegment && !segment.isVoiceCommandWord() && !segment.isDeleted() {
+                    if fromTimeSegmentIndex == nil && segment.timeMapping.target.start >= fromTime  {
+                        fromTimeSegmentIndex = index
+                        isSingleSegment = segment.timeMapping.target.start == fromTime && segment.timeMapping.target.end == untilTime
+                    }
+
+                    if let _ = self.state, fromTimeSegmentIndex != nil {
+                        let word = segment.getText(
+                            withTemporalSuggestions: self.state.withTemporalSuggestions,
+                            withPunctuationSuggestions: self.state.withPunctuationSuggestions,
+                            withFormattingSuggestions: self.state.withFormattingSuggestions,
+                            strictlyAsWord: self.state.withTextStrictlyAsWords,
+                            withCapitalization: self.state.withCapitalization,
+                            withSpacePrefix: true,
+                            forEcho: forEcho
+                        )
+                        
+                        text += word
+                    }
                 }
             }
         }
@@ -2080,7 +1590,9 @@ class Note: AVMutableComposition, NSCoding {
         
         // make sure first letter is capitalized
         // not capitalized when we're dealing with expresssions that come from chopped up notesRange
-        text = viewController.withCapitalization ? text.capitalizeFirstLetter() : text
+        if let state = self.state {
+            text = state.withCapitalization ? text.capitalizeFirstLetter() : text
+        }
         
         // cache work
         if segments == nil && fromTime == CMTime.zero && untilTime == nil && text.count > 0 && segmentUIDSet.count > 0 {
@@ -2092,294 +1604,76 @@ class Note: AVMutableComposition, NSCoding {
         return text
     }
     
-    // MARK: - Player Methods
-    
-    func play(
-        from: CMTime? = nil,
-        to: CMTime? = nil,
-        onStartHandler: (() -> Void)? = nil,
-        secondElapseHandler: (() -> Void)? = nil,
-        segmentBoundaryHandler: (() -> Void)? = nil,
-        onFinishHandler: (() -> Void)? = nil
-    ) {
-        print("===== Note: Play =====")
-        
-        if self.noteSegments.count == 0 {
-            Utils.executeError(note: self, text: "Note is empty.", handler: onFinishHandler)
-            return
-        }
-        
-        // Stop ongoing echo
-        if self.isPlayingEcho || self.isPlayingPassiveEcho {
-            self.stopEcho(omitFeedback: true)
-        }
-        
-        if self.pausedPlayingNote {
-            print("\tNote was paused. Resume playback")
-            // Play Sound
-            if !self.isListeningForSpeech && !selectionCursor.hasSelection {
-                // should not play if we have a selection
-                soundEngine.play()
-            }
-            
-            self.pausedPlayingNote = false
-            self.isPlayingExternalSegments = false
-            
-            if viewController.speechSynthesizer.isSpeaking {
-                print("\tPause speech synthesizer to play speech audio.\n")
-                viewController.speechSynthesizer.stopSpeaking(at: .immediate)
-            }
-            
-            if viewController.isListeningForCommands && !AVAudioSession.isHeadphonesConnected {
-                viewController.stopListeningForVoiceCommands(pause: true) {
-                    self.player.play()
-                }
-            } else if self.isListeningForSpeech && !AVAudioSession.isHeadphonesConnected {
-                self.stopListeningForSpeech(pause: true) {
-                    self.player.play()
-                }
-            } else {
-                self.player.play()
-            }
-            
-            return
-        }
-        
-        print("\tInitiate new playback...")
-        let playHandler = {
-            // Play Sound
-            if !self.isListeningForSpeech && !selectionCursor.hasSelection {
-                // should not play if we have a selection
-                soundEngine.play()
-            }
-            
-            self.pausedPlayingNote = false
-            self.isPlayingExternalSegments = false
-            
-            if viewController.speechSynthesizer.isSpeaking {
-                print("\tPause speech synthesizer to play speech audio.\n")
-                viewController.speechSynthesizer.stopSpeaking(at: .immediate)
-            }
-
-            if onStartHandler != nil {
-                self.observerContext["onStartHandler"] = onStartHandler
-            }
-            
-            if secondElapseHandler != nil {
-                self.observerContext["secondElapseHandler"] = secondElapseHandler
-            }
-            
-            if segmentBoundaryHandler != nil {
-                self.observerContext["segmentBoundaryHandler"] = segmentBoundaryHandler
-            }
-            
-            if onFinishHandler != nil {
-                self.observerContext["onFinishHandler"] = onFinishHandler
-            }
-            
-            // Set Start and End Times
-            self.startPlaybackAt = from != nil ? from : self.startTime
-            self.stopPlaybackAt = to != nil ? to : self.endTime
-            self.playbackRange = 0..<self.noteSegments.count
-
-            // Run Player
-            let player = Utils.runPlayer(
-                note: self,
-                startTime: self.startPlaybackAt!,
-                volume: viewController.playbackVolume,
-                onStartHandler: onStartHandler
-            )
-            
-            // Handle Feedback
-            Utils.executeFeedback(
-                visualMessage: "Play",
-                withHaptics: true
-            )
-
-            if let player = player {
-                if let boundaryObserverToken = self.boundaryObserverToken {
-                    self.player.removeTimeObserver(boundaryObserverToken)
-                    self.boundaryObserverToken = nil
-                }
-                
-                if let completionObserverToken = self.completionObserverToken {
-                    self.player.removeTimeObserver(completionObserverToken)
-                    self.completionObserverToken = nil
-                }
-                
-                if let timerObserverToken = self.timerObserverToken {
-                    self.player.removeTimeObserver(timerObserverToken)
-                    self.timerObserverToken = nil
-                }
-                
-                self.player = player
-            }
-        }
-        
-        if viewController.isListeningForCommands && !AVAudioSession.isHeadphonesConnected {
-            viewController.stopListeningForVoiceCommands(pause: true) {
-                playHandler()
-            }
-        } else if self.isListeningForSpeech && !AVAudioSession.isHeadphonesConnected {
-            self.stopListeningForSpeech(pause: true) {
-                playHandler()
-            }
-        } else {
-            playHandler()
-        }
-    }
-    
-    func play(
+    public static func getText(
         segments: [NoteSegment],
-        onStartHandler: (() -> Void)? = nil,
-        secondElapseHandler: (() -> Void)? = nil,
-        segmentBoundaryHandler: (() -> Void)? = nil,
-        onFinishHandler: (() -> Void)? = nil
-    ) {
-        print("===== Play Note: Segments =====")
+        withTemporalSuggestions: Bool = false,
+        withPunctuationSuggestions: Bool = true,
+        withFormattingSuggestions: Bool = true,
+        strictlyAsWord: Bool = false,
+        withCapitalization: Bool = true,
+        withSpacePrefix: Bool = true,
+        forEcho: Bool = false
+    ) -> String {
+        var text = ""
 
-        let cleansedSegments = Utils.cleanseSegments(segments: segments)
-        let tempComposition = AVMutableComposition()
-        tempComposition.addMutableTrack(withMediaType: .audio, preferredTrackID: Int32(kCMPersistentTrackID_Invalid))
-        do {
-            try tempComposition.tracks[0].validateSegments(cleansedSegments)
-            tempComposition.tracks[0].segments = cleansedSegments
-        } catch {
-            print("===== There was a problem creating temporary mutable composition to preview clipboard =====")
-        }
-        
-        // Stop ongoing echo
-        if self.isPlayingEcho || self.isPlayingPassiveEcho {
-            self.stopEcho(omitFeedback: true)
-        }
-        
-        print("\tInitiate new playback...")
-        let playHandler = {
-            // Play Sound
-            if !self.isListeningForSpeech && !selectionCursor.hasSelection {
-                // should not play if we have a selection
-                soundEngine.play()
-            }
-            
-            self.pausedPlayingNote = false
-            self.isPlayingExternalSegments = true
-            
-            if viewController.speechSynthesizer.isSpeaking {
-                print("\tPause speech synthesizer to play speech audio.\n")
-                viewController.speechSynthesizer.stopSpeaking(at: .immediate)
-            }
-
-            if onStartHandler != nil {
-                self.observerContext["onStartHandler"] = onStartHandler
-            }
-            
-            if segmentBoundaryHandler != nil {
-                self.observerContext["segmentBoundaryHandler"] = segmentBoundaryHandler
-            }
-            
-            if secondElapseHandler != nil {
-                self.observerContext["secondElapseHandler"] = secondElapseHandler
-            }
-            
-            if onFinishHandler != nil {
-                self.observerContext["onFinishHandler"] = onFinishHandler
-            }
-            
-            // Set Start and End Times
-            self.startPlaybackAt = CMTime.zero
-            self.stopPlaybackAt = tempComposition.duration
-            self.playbackRange = segments.first!.getIndex()..<segments.last!.getIndex() + 1
-
-            // Run Player
-            let player = Utils.runPlayer(
-                composition: tempComposition,
-                note: self,
-                startTime: self.startPlaybackAt!,
-                volume: viewController.playbackVolume,
-                onStartHandler: onStartHandler
-            )
-            
-            // Handle Feedback
-            if !self.isWalkingNote && !self.isRunningNote {
-                Utils.executeFeedback(
-                    visualMessage: "Play",
-                    withHaptics: true
+        for segment in segments {
+            if !segment.isVoiceCommandWord() && !segment.isDeleted() {
+                let word = segment.getText(
+                    withTemporalSuggestions: withTemporalSuggestions,
+                    withPunctuationSuggestions: withPunctuationSuggestions,
+                    withFormattingSuggestions: withFormattingSuggestions,
+                    strictlyAsWord: strictlyAsWord,
+                    withCapitalization: withCapitalization,
+                    withSpacePrefix: withSpacePrefix,
+                    forEcho: forEcho
                 )
-            }
-
-            if let player = player {
-                if let boundaryObserverToken = self.boundaryObserverToken {
-                    self.player.removeTimeObserver(boundaryObserverToken)
-                    self.boundaryObserverToken = nil
-                }
                 
-                if let completionObserverToken = self.completionObserverToken {
-                    self.player.removeTimeObserver(completionObserverToken)
-                    self.completionObserverToken = nil
-                }
-                
-                if let timerObserverToken = self.timerObserverToken {
-                    self.player.removeTimeObserver(timerObserverToken)
-                    self.timerObserverToken = nil
-                }
-                
-                self.player = player
+                text += word
             }
         }
         
-        if viewController.isListeningForCommands && !AVAudioSession.isHeadphonesConnected {
-            viewController.stopListeningForVoiceCommands(pause: true) {
-                playHandler()
-            }
-        } else if self.isListeningForSpeech && !AVAudioSession.isHeadphonesConnected {
-            self.stopListeningForSpeech(pause: true) {
-                playHandler()
-            }
-        } else {
-            playHandler()
-        }
+        // Remove whitespaces on edges
+        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // make sure first letter is capitalized
+        // not capitalized when we're dealing with expresssions that come from chopped up notesRange
+        text = withCapitalization ? text.capitalizeFirstLetter() : text
+
+        return text
     }
     
+    // MARK: - Player Methods
+
     func playSentence(
         number: Int,
-        onStartHandler: (() -> Void)? = nil,
-        secondElapseHandler: (() -> Void)? = nil,
-        segmentBoundaryHandler: (() -> Void)? = nil,
         onFinishHandler: (() -> Void)? = nil
     ) {
-        print("===== Play Sentence: \(number) =====")
+        print("===== Note: Play Sentence: \(number) =====")
         
         // Get sentence details
         let sentenceDetails = self.getSentenceDetails(number: number)
         
-        self.play(
+        self.speechPlayer.play(
+            note: self,
             from: sentenceDetails!.timeRange.start,
             to: sentenceDetails!.timeRange.end,
-            onStartHandler: onStartHandler,
-            secondElapseHandler: secondElapseHandler,
-            segmentBoundaryHandler: segmentBoundaryHandler,
             onFinishHandler: onFinishHandler
         )
     }
 
     func playSentence(
         forTrackTime: CMTime,
-        onStartHandler: (() -> Void)? = nil,
-        secondElapseHandler: (() -> Void)? = nil,
-        segmentBoundaryHandler: (() -> Void)? = nil,
         onFinishHandler: (() -> Void)? = nil
     ) {
-        print("===== Play Sentence at: \(forTrackTime.seconds) =====")
+        print("===== Note: Play Sentence at: \(forTrackTime.seconds) =====")
 
         // Get sentence details
         let sentenceDetails = self.getSentenceDetails(forTrackTime: forTrackTime)
         
-        self.play(
+        self.speechPlayer.play(
+            note: self,
             from: sentenceDetails!.timeRange.start,
             to: sentenceDetails!.timeRange.end,
-            onStartHandler: onStartHandler,
-            secondElapseHandler: secondElapseHandler,
-            segmentBoundaryHandler: segmentBoundaryHandler,
             onFinishHandler: onFinishHandler
         )
     }
@@ -2390,200 +1684,37 @@ class Note: AVMutableComposition, NSCoding {
         soundEngine.repeatSegment()
 
         // Get current time
-        let currentTime = player.currentTime()
+        let currentTime = self.speechPlayer.getCurrentTime()
         
         // Get sentence details
         let sentenceDetails = getSentenceDetails(forTrackTime: currentTime)
         
         if let sentenceDetails = sentenceDetails {
-            playSentence(number: sentenceDetails.number)
+            self.playSentence(
+                number: sentenceDetails.number,
+                onFinishHandler: handler
+            )
         } else {
             print("\t[Error] There was a problem replaying current sentence")
         }
     }
     
-    func skip(to time: CMTime, handler: (() -> Void)? = nil) {
-        let currentSegment = self.getSegment(type: .current)
-        if let _ = currentSegment, self.isPlayingNote {
-            self.player.seek(
-                to: time,
-                toleranceBefore: CMTime.zero,
-                toleranceAfter: CMTime.zero
-            )
-            
-            // Handle Feedback
-            Utils.executeFeedback(
-                visualMessage: "Skip",
-                withHaptics: true
-            )
-        } else {
-            if self.noteSegments.count == 0 {
-                // havent recorded anything
-                Utils.executeError(note: self, text: "Note not playing.", handler: handler)
-            }
-        }
-    }
-    
-    func pause(handler: (() -> Void)? = nil) {
-        print("===== Pause Playing Note =====")
-        
-        player.pause()
-        self.pausedPlayingNote = true
-        
-        // Present Feedback
-        Utils.executeFeedback(
-            visualMessage: "Pause Playback",
-            withHaptics: true
-        )
-        
-        if !self.isListeningForSpeech && viewController.pausedListeningForCommands && !AVAudioSession.isHeadphonesConnected {
-            viewController.startListeningForVoiceCommands()
-        } else if self.isListeningForSpeech && (self.pausedListeningForSpeech || viewController.pausedListeningForCommands) && !AVAudioSession.isHeadphonesConnected {
-            self.startListeningForSpeech()
-        }
-
-        if self.playerLoopTimer != nil {
-            self.playerLoopTimer?.invalidate()
-        }
-        
-        if soundEngine.isProcessing {
-            soundEngine.stopProcessing()
-        }
-        
-        handler?()
-    }
-    
-    func stop(handler: (() -> Void)? = nil) {
-        print("===== Stop Playing Note =====")
-        player.pause()
-        player.seek(to: CMTime.zero)
-        player.replaceCurrentItem(with: nil)
-        
-        self.playerLoopTimer?.invalidate()
-
-        self.startPlaybackAt = nil
-        self.stopPlaybackAt = nil
-        self.playbackRange = nil
-        self.pausedPlayingNote = false
-        self.isPlayingExternalSegments = false
-        
-        if !self.isListeningForSpeech && viewController.pausedListeningForCommands && !AVAudioSession.isHeadphonesConnected {
-            viewController.startListeningForVoiceCommands()
-        } else if self.isListeningForSpeech && (self.pausedListeningForSpeech || viewController.pausedListeningForCommands) && !AVAudioSession.isHeadphonesConnected {
-            self.startListeningForSpeech()
-        }
-        
-        if soundEngine.isProcessing {
-            soundEngine.stopProcessing()
-        }
-        
-        // Handle Feedback
-        if !self.isWalkingNote && !self.isRunningNote {
-            Utils.executeFeedback(
-                visualMessage: "Stop Playback",
-                withHaptics: true
-            )
-        }
-
-        handler?()
-        if !selectionCursor.hasSelection {
-            self.handleOnListenUpdate(text: self.getText()) // Will trigger update to Command Bar
-        } else if let detailView = self.detailView {
-            detailView.adjustCommandBar()
-            detailView.adjustMenuBar()
-        }
-    }
-    
     // MARK: - Echo Methods
     // Computer understanding of the note
-    func startEcho(segments: [NoteSegment], allowPlayer: Bool = false, onStartHandler: (() -> Void)? = nil, onFinishHandler: (() -> Void)? = nil) {
-        print("===== Start Echo =====")
-        if player.isPlaying && !allowPlayer {
-            print("\tStop speech audio to play speech synthesizer")
-            self.stop()
-        }
-        
-        if self.noteSegments.count == 0 {
-            // havent recorded anything
-            Utils.executeError(note: self, text: "Note is empty.", handler: onStartHandler)
-            return
-        }
-        
-        // Give audio feedback
-        // *** The note playing is the audio feedback ***
-        
-        let executeEcho = {
-            // Play Sound
-            if !self.isListeningForSpeech {
-                soundEngine.play()
-            }
-            
-            // Give feedback
-            if !self.isWalkingNote && !self.isRunningNote {
-                Utils.executeFeedback(
-                    visualMessage: "Start Echo",
-                    withHaptics: true
-                )
-            }
-            
-            if self.pausedEcho {
-                // continue last echo
-                print("\tContinue existing echo utterance...")
-                viewController.speechSynthesizer.continueSpeaking()
-            } else {
-                // start new echo
-                print("\tInitiate new speech synthesizer utterance...")
-                
-                let text = self.getText(segments: segments)
-
-                let synthesizerItem = SynthesizerItem(
-                    synthesizer: viewController.speechSynthesizer,
-                    text: text,
-                    voice: Utils.getSynthesizerVoice(withGender: self.speaker.gender),
-                    rate: viewController.echoRate,
-                    volume: viewController.playbackVolume
-                )
-                
-                viewController.synthesizerQueue.enqueue(synthesizerItem)
-                viewController.exhaustSynthesizerQueue()
-                self.isPlayingEcho = true
-                
-                // cache range of echo segments
-                self.lastEchoSegmentRange = segments.first!.getIndex()..<segments.last!.getIndex() + 1
-                
-                if let onFinishHandler = onFinishHandler {
-                    self.scheduleTempOnEchoFinishHandler?(onFinishHandler)
-                }
-            
-                onStartHandler?()
-            }
-        }
-        
-        if (viewController.isListeningForCommands || self.isListeningForSpeech) && !AVAudioSession.isHeadphonesConnected {
-            viewController.stopListeningForVoiceCommands(pause: true) {
-                executeEcho()
-            }
-        } else if (viewController.isListeningForCommands || self.isListeningForSpeech) && AVAudioSession.isHeadphonesConnected {
-            executeEcho()
-        }
-    }
+    
     
     func echoSentence(
         forTrackTime: CMTime,
-        onStartHandler: (() -> Void)? = nil,
-        secondElapseHandler: (() -> Void)? = nil,
-        segmentBoundaryHandler: (() -> Void)? = nil,
         onFinishHandler: (() -> Void)? = nil
     ) {
-        print("===== Echo Sentence at: \(forTrackTime.seconds) =====")
+        print("===== Note: Echo Sentence at: \(forTrackTime.seconds) =====")
 
         // Get text
         let sentenceDetails = self.getSentenceDetails(forTrackTime: forTrackTime)
         
         if let sentenceDetails = sentenceDetails {
-            self.startEcho(
+            self.speechSynthesis.startEcho(
                 segments: Array(self.noteSegments[sentenceDetails.noteRange]),
-                onStartHandler: onStartHandler,
                 onFinishHandler: onFinishHandler
             )
         }
@@ -2591,93 +1722,18 @@ class Note: AVMutableComposition, NSCoding {
     
     func echoSentence(
         number: Int,
-        onStartHandler: (() -> Void)? = nil,
-        secondElapseHandler: (() -> Void)? = nil,
-        segmentBoundaryHandler: (() -> Void)? = nil,
         onFinishHandler: (() -> Void)? = nil
     ) {
-        print("===== Echo Sentence: \(number) =====")
+        print("===== Note: Echo Sentence: \(number) =====")
         
         let sentenceDetails = self.getSentenceDetails(number: number)
         
         if let sentenceDetails = sentenceDetails {
-            self.startEcho(
+            self.speechSynthesis.startEcho(
                 segments: Array(self.noteSegments[sentenceDetails.noteRange]),
-                onStartHandler: onStartHandler,
                 onFinishHandler: onFinishHandler
             )
         }
-    }
-    
-    func pauseEcho(handler: (() -> Void)? = nil) {
-        print("===== Pause Echo =====")
-        
-        // Present Feedback
-        Utils.executeFeedback(
-            visualMessage: "Pause Echo",
-            audioMessage: "echo paused",
-            withHaptics: true
-        )
-        
-        viewController.speechSynthesizer.pauseSpeaking(at: .immediate)
-        
-        Timer.scheduledTimer(withTimeInterval: 0.2, repeats: false) { timer in
-            // we delay handler so that pauseSpeaking can take effect before we
-            // process handler which might rely on paused state.
-            // e.g. startListeningForSpeech will stopEcho() if it encounters non-paused echo.
-            handler?()
-        }
-    }
-    
-    func stopEcho(omitFeedback: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Stop Echo =====")
-        
-        // Present Feedback
-        if !omitFeedback && !self.isWalkingNote && !self.isRunningNote {
-            Utils.executeFeedback(
-                visualMessage: "Stop Echo",
-                audioMessage: "echo stopped",
-                withHaptics: true
-            )
-        }
-        
-        viewController.speechSynthesizer.stopSpeaking(at: .immediate)
-        
-        self.isPlayingEcho = false
-        self.isPlayingPassiveEcho = false
-
-        handler?()
-        self.handleOnListenUpdate(text: self.getText())
-    }
-    
-    func handlePassiveEcho(text: String) {
-        print("===== Handle Passive Echo =====")
-        
-        // Stop existing echo
-        if viewController.speechSynthesizer.isSpeaking {
-            viewController.speechSynthesizer.stopSpeaking(at: .immediate)
-        }
-        
-        if player.isPlaying {
-            print("\tStop speech audio to play speech synthesizer")
-            self.stop()
-        }
-        
-        let echoText = text.trimTrailingPunctuation()
-        print("\techoing: \"\(echoText)\"")
-        
-        
-        let synthesizerItem = SynthesizerItem(
-            synthesizer: viewController.speechSynthesizer,
-            text: echoText,
-            voice: Utils.getSynthesizerVoice(withGender: self.speaker.gender),
-            rate: viewController.echoRate,
-            volume: viewController.playbackVolume
-        )
-        
-        viewController.synthesizerQueue.enqueue(synthesizerItem)
-        viewController.exhaustSynthesizerQueue()
-        self.isPlayingPassiveEcho = true
     }
     
     // MARK: - Mutating Methods
@@ -2685,14 +1741,15 @@ class Note: AVMutableComposition, NSCoding {
     // TRACKS MUST BE COLLAPSED INTO SINGLE TRACK TO USE THIS
     func trim(keeping: CMTimeRange, permanent: Bool = false, overwrite: Bool = false, onFinishHandler: (() -> Void)? = nil) {
         let keepRange = keeping
-        print("===== Trim Note keeping section starting: \(keepRange.start.seconds) until: \(keepRange.end.seconds) =====")
+        print("===== Note: Trim =====")
+        print("\tKeeping section starting: \(keepRange.start.seconds) until: \(keepRange.end.seconds)")
         if self.noteBuffer.count > 0 {
             print("===== There was a problem trimming note. Note buffer was not committed =====")
             return
         }
         
         // Present Feedback
-        Utils.executeFeedback(
+        self.notifications.executeFeedback(
             visualMessage: "Trim Note",
             audioMessage: "trimming note",
             withHaptics: true
@@ -2797,7 +1854,7 @@ class Note: AVMutableComposition, NSCoding {
                 segment.setIndex(index: index)
 
                 // Set background noise
-                let datum = self.getRecordingSoundIntensityDatum(timestamp: segment.timeMapping.target.start.seconds)
+                let datum = self.speechRecognition.getRecordingSoundIntensityDatum(timestamp: segment.timeMapping.target.start.seconds)
                 segment.setBackgroundNoise(noise: datum.power.rounded(toPlaces: Utils.SOUND_INTENSITY_SIG_FIG_COUNT))
 
                 // Set avgPauseDuration
@@ -2809,21 +1866,21 @@ class Note: AVMutableComposition, NSCoding {
                 // determine if we need to update selection cursor anchor
                 // we need to get these values early before we replace segments
                 // so that selection cursor doesn't lose reference to its anchor
-                if let _ = selectionCursor.anchor, segment.getUID() == selectionCursor.anchor!.getUID() && !segment.isDeleted() {
+                if let _ = self.selectionCursor.anchor, segment.getUID() == self.selectionCursor.anchor!.getUID() && !segment.isDeleted() {
                     replaceSelectionAnchor = true
                 }
                 
                 // determine if we need to update selection cursor focus
                 // we need to get these values early before we replace segments
                 // so that selection cursor doesn't lose reference to its focus
-                if let _ = selectionCursor.focus, segment.getUID() == selectionCursor.focus!.getUID() && !segment.isDeleted() {
+                if let _ = self.selectionCursor.focus, segment.getUID() == self.selectionCursor.focus!.getUID() && !segment.isDeleted() {
                     replaceSelectionFocus = true
                 }
                 
                 // determine if we need to update selection cursor cached anchor
                 // we need to get these values early before we replace segments
                 // so that selection cursor doesn't lose reference to its cached anchor
-                if let _ = selectionCursor.cachedAnchor, segment.getUID() == selectionCursor.cachedAnchor!.getUID() && !segment.isDeleted() {
+                if let _ = self.selectionCursor.cachedAnchor, segment.getUID() == self.selectionCursor.cachedAnchor!.getUID() && !segment.isDeleted() {
                     replaceSelectionCachedAnchor = true
                 }
             }
@@ -2842,11 +1899,12 @@ class Note: AVMutableComposition, NSCoding {
             
             print("\tExporting and modifying segments...")
             Utils.exportNote(
+                state: self.state,
                 note: self,
                 filename: self.filename,
                 fileType: self.fileType,
                 timeRange: keepRange
-            ) {
+            ) { noteURL in
                 // Handle Segments
                 handleSegments()
                 
@@ -2871,18 +1929,18 @@ class Note: AVMutableComposition, NSCoding {
                     // update selection properties
                     for seg in normalizedSegments {
                         // update selection anchor
-                        if replaceSelectionAnchor && seg.getUID() == selectionCursor.anchor!.getUID() {
-                            selectionCursor.setAnchor(segment: seg)
+                        if replaceSelectionAnchor && seg.getUID() == self.selectionCursor.anchor!.getUID() {
+                            self.selectionCursor.setAnchor(segment: seg)
                         }
                         
                         // update selection focus
-                        if replaceSelectionFocus && seg.getUID() == selectionCursor.focus!.getUID() {
-                            selectionCursor.setFocus(segment: seg)
+                        if replaceSelectionFocus && seg.getUID() == self.selectionCursor.focus!.getUID() {
+                            self.selectionCursor.setFocus(segment: seg)
                         }
                         
                         // update selection cached anchor
-                        if replaceSelectionCachedAnchor && seg.getUID() == selectionCursor.cachedAnchor!.getUID() {
-                            selectionCursor.setCachedAnchor(segment: seg)
+                        if replaceSelectionCachedAnchor && seg.getUID() == self.selectionCursor.cachedAnchor!.getUID() {
+                            self.selectionCursor.setCachedAnchor(segment: seg)
                         }
                     }
                 }
@@ -2942,18 +2000,18 @@ class Note: AVMutableComposition, NSCoding {
             // update selection properties
             for seg in self.noteSegments {
                 // update selection anchor
-                if replaceSelectionAnchor && seg.getUID() == selectionCursor.anchor!.getUID() {
-                    selectionCursor.setAnchor(segment: seg)
+                if replaceSelectionAnchor && seg.getUID() == self.selectionCursor.anchor!.getUID() {
+                    self.selectionCursor.setAnchor(segment: seg)
                 }
                 
                 // update selection focus
-                if replaceSelectionFocus && seg.getUID() == selectionCursor.focus!.getUID() {
-                    selectionCursor.setFocus(segment: seg)
+                if replaceSelectionFocus && seg.getUID() == self.selectionCursor.focus!.getUID() {
+                    self.selectionCursor.setFocus(segment: seg)
                 }
                 
                 // update selection cached anchor
-                if replaceSelectionCachedAnchor && seg.getUID() == selectionCursor.cachedAnchor!.getUID() {
-                    selectionCursor.setCachedAnchor(segment: seg)
+                if replaceSelectionCachedAnchor && seg.getUID() == self.selectionCursor.cachedAnchor!.getUID() {
+                    self.selectionCursor.setCachedAnchor(segment: seg)
                 }
             }
             
@@ -2971,7 +2029,7 @@ class Note: AVMutableComposition, NSCoding {
     
     // Mutates Segments
     func updateSegmentSentences(segments: [NoteSegment]) -> [NoteSegment] {
-        print("===== Update Segment Sentences =====")
+        print("===== Note: Update Segment Sentences =====")
         var currentSentenceNumber = 0
         var sentenceText = ""
         var sentenceStartTime = CMTime.zero
@@ -2989,11 +2047,11 @@ class Note: AVMutableComposition, NSCoding {
                 
                 if !segment.isVoiceCommandWord() && !segment.isDeleted() {
                     sentenceText += segment.getText(
-                        withTemporalSuggestions: viewController.withTemporalSuggestions,
-                        withPunctuationSuggestions: viewController.withPunctuationSuggestions,
-                        withFormattingSuggestions: viewController.withFormattingSuggestions,
-                        strictlyAsWord: viewController.withTextStrictlyAsWords,
-                        withCapitalization: viewController.withCapitalization,
+                        withTemporalSuggestions: self.state?.withTemporalSuggestions ?? Utils.DEFAULT_WITH_TEMPORAL_SUGGESTIONS,
+                        withPunctuationSuggestions: self.state?.withPunctuationSuggestions ?? Utils.DEFAULT_WITH_PUNCTUATION_SUGGESTIONS,
+                        withFormattingSuggestions: self.state?.withFormattingSuggestions ?? Utils.DEFAULT_WITH_FORMATTING_SUGGESTIONS,
+                        strictlyAsWord: self.state?.withTextStrictlyAsWords ?? Utils.DEFAULT_WITH_TEXT_STRICTLY_AS_WORDS,
+                        withCapitalization: self.state?.withCapitalization ?? Utils.DEFAULT_WITH_CAPITALIZATION,
                         withSpacePrefix: true
                     )
                 }
@@ -3024,11 +2082,11 @@ class Note: AVMutableComposition, NSCoding {
                 sentenceEndSegment = segment
                 sentenceEndTime = segment.timeMapping.target.start
                 sentenceText += segment.getText(
-                    withTemporalSuggestions: viewController.withTemporalSuggestions,
-                    withPunctuationSuggestions: viewController.withPunctuationSuggestions,
-                    withFormattingSuggestions: viewController.withFormattingSuggestions,
-                    strictlyAsWord: viewController.withTextStrictlyAsWords,
-                    withCapitalization: viewController.withCapitalization,
+                    withTemporalSuggestions: self.state?.withTemporalSuggestions ?? Utils.DEFAULT_WITH_TEMPORAL_SUGGESTIONS,
+                    withPunctuationSuggestions: self.state?.withPunctuationSuggestions ?? Utils.DEFAULT_WITH_PUNCTUATION_SUGGESTIONS,
+                    withFormattingSuggestions: self.state?.withFormattingSuggestions ?? Utils.DEFAULT_WITH_FORMATTING_SUGGESTIONS,
+                    strictlyAsWord: self.state?.withTextStrictlyAsWords ?? Utils.DEFAULT_WITH_TEXT_STRICTLY_AS_WORDS,
+                    withCapitalization: self.state?.withCapitalization ?? Utils.DEFAULT_WITH_CAPITALIZATION,
                     withSpacePrefix: true
                 )
                 let sentence = Sentence(
@@ -3054,11 +2112,11 @@ class Note: AVMutableComposition, NSCoding {
             } else if segment.isActive() {
                 // Add word to sentence
                 sentenceText += segment.getText(
-                    withTemporalSuggestions: viewController.withTemporalSuggestions,
-                    withPunctuationSuggestions: viewController.withPunctuationSuggestions,
-                    withFormattingSuggestions: viewController.withFormattingSuggestions,
-                    strictlyAsWord: viewController.withTextStrictlyAsWords,
-                    withCapitalization: viewController.withCapitalization,
+                    withTemporalSuggestions: self.state?.withTemporalSuggestions ?? Utils.DEFAULT_WITH_TEMPORAL_SUGGESTIONS,
+                    withPunctuationSuggestions: self.state?.withPunctuationSuggestions ?? Utils.DEFAULT_WITH_PUNCTUATION_SUGGESTIONS,
+                    withFormattingSuggestions: self.state?.withFormattingSuggestions ?? Utils.DEFAULT_WITH_FORMATTING_SUGGESTIONS,
+                    strictlyAsWord: self.state?.withTextStrictlyAsWords ?? Utils.DEFAULT_WITH_TEXT_STRICTLY_AS_WORDS,
+                    withCapitalization: self.state?.withCapitalization ?? Utils.DEFAULT_WITH_CAPITALIZATION,
                     withSpacePrefix: true
                 )
             } else {
@@ -3072,16 +2130,23 @@ class Note: AVMutableComposition, NSCoding {
     // time must be at a segment boundary to make everything work correctly
     // assumes buffer is empty
     func insertPassage(segments: [NoteSegment], at time: CMTime) {
-        print("===== Inserting Passage =====")
-        guard self.noteBuffer.count == 0 else {
-            print("\t[Error] There was a problem inserting passage. Buffer was not empty")
-            return
-        }
+        print("===== Note: Insert Passage =====")
+//        guard self.noteBuffer.count == 0 else {
+//            print("\t[Error] There was a problem inserting passage. Buffer was not empty")
+//            return
+//        }
         print("\tMerging argument segments into committed segments...")
         var updatedSegments = [NoteSegment]()
         var insertedSegments = false
         
+        // Add to state clips
+        for segment in segments {
+            // Handle segment clips
+            self.state.setClip(clipUID: segment.getClipUID(), noteUID: self.uid)
+        }
+        
         if self.noteSegments.count > 0 {
+            print("\tPlace within existing \(self.noteSegments.count) segments...")
             // if we have segments
             // find out where to insert passage
             for segment in self.noteSegments {
@@ -3100,13 +2165,18 @@ class Note: AVMutableComposition, NSCoding {
                 }
             }
         } else {
+            print("\tInserted segments are the first in note.")
             // we do not have segments yet
             // set passage as new segments
             updatedSegments = segments
         }
         
+        //
+        
         print("\tCleansing segments...")
-        let cleansedSegments = Utils.cleanseSegments(segments: updatedSegments)
+        let cleansedSegments = Utils.cleanseSegments(
+            segments: updatedSegments
+        )
 
         print("\tNormalizing segments...")
         let _ = self.normalizeSegments(
@@ -3117,7 +2187,9 @@ class Note: AVMutableComposition, NSCoding {
             saveToLowLevelRepr: true
         )
 
-        self.handleOnListenUpdate(text: self.getText())
+        if !self.selectionCursor.isUpdatingSelection {
+            self.handleOnSpeechUpdate(text: self.getText())
+        }
         
         print("\tSuccessfully inserted passage into note!")
     }
@@ -3125,11 +2197,11 @@ class Note: AVMutableComposition, NSCoding {
     // time must be at a segment boundary to make everything work correctly
     // assumes buffer is empty
     func removePassage(range: CMTimeRange) {
-        print("===== Removing Passage =====")
-        guard self.noteBuffer.count == 0 else {
-            print("\t[Error] There was a problem inserting passage. Buffer was not empty")
-            return
-        }
+        print("===== Note: Remove Passage =====")
+//        guard self.noteBuffer.count == 0 else {
+//            print("\t[Error] There was a problem removing passage. Buffer was not empty")
+//            return
+//        }
         print("\tFiltering out passage segments...")
         var updatedSegments = [NoteSegment]()
         
@@ -3152,35 +2224,37 @@ class Note: AVMutableComposition, NSCoding {
                 updatedSegments.append(segment)
                 
                 // Check if we need to update selection anchor
-                if let _ = selectionCursor.anchor, segment.getUID() == selectionCursor.anchor!.getUID() {
+                if let _ = self.selectionCursor.anchor, segment.getUID() == self.selectionCursor.anchor!.getUID() {
                     print("\tSelection cursor anchor requires updating...")
                     updateAnchor = true
                     // Clear anchor so we get no errors related to selectionRange
                     // When we update anchor when we have a selection, focus will be outdate and cause error
-                    selectionCursor.setAnchor()
+                    self.selectionCursor.setAnchor()
                 }
                 
                 // Check if we need to update selection focus
-                if let _ = selectionCursor.focus, segment.getUID() == selectionCursor.focus!.getUID() {
+                if let _ = self.selectionCursor.focus, segment.getUID() == self.selectionCursor.focus!.getUID() {
                     print("\tSelection cursor focus requires updating...")
                     updateFocus = true
                     // Clear focus so we get no errors related to selectionRange
                     // When we update focus when we have a selection, anchor will be outdate and cause error
-                    selectionCursor.setFocus()
+                    self.selectionCursor.setFocus()
                 }
                 
                 // Check if we need to update selection cached anchor
-                if let _ = selectionCursor.cachedAnchor, segment.getUID() == selectionCursor.cachedAnchor!.getUID() {
+                if let _ = self.selectionCursor.cachedAnchor, segment.getUID() == self.selectionCursor.cachedAnchor!.getUID() {
                     print("\tSelection cursor cached anchor requires updating...")
                     updateCachedAnchor = true
                     // Clear cached anchor
-                    selectionCursor.setCachedAnchor()
+                    self.selectionCursor.setCachedAnchor()
                 }
             }
         }
         
         print("\tCleansing segments...")
-        let cleansedSegments = Utils.cleanseSegments(segments: updatedSegments)
+        let cleansedSegments = Utils.cleanseSegments(
+            segments: updatedSegments
+        )
 
         print("\tNormalizing segments...")
         let _ = self.normalizeSegments(
@@ -3191,50 +2265,52 @@ class Note: AVMutableComposition, NSCoding {
             saveToLowLevelRepr: true
         )
         
-        let thresholdShiftDuration = 0.01 // A very small duration used to swing time to prior segment
         var segment: NoteSegment?
         if updateAnchor || updateFocus || updateCachedAnchor {
             print("\tSearching for replacement segment...")
-            segment = self.getSegment(
+            segment = self.speechPlayer.getSegment(
                 forTrackTime: CMTimeMake(
-                    value: Int64(Note.defaultSegmentTimescale * (max(0, beforeTime.seconds - thresholdShiftDuration))),
-                    timescale: Int32(Note.defaultSegmentTimescale)
+                    value: Int64(Utils.DEFAULT_SEGMENT_TIMESCALE * (max(0, beforeTime.seconds - Utils.TEMPORAL_DELTA))),
+                    timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
                 )
             )
             
             while segment != nil && segment!.timeMapping.target.start > CMTime.zero && (segment!.isVoiceCommandWord() || segment!.isDeleted() || segment!.isSilence()) {
                 let startTime = segment!.timeMapping.target.start
-                segment = self.getSegment(
+                segment = self.speechPlayer.getSegment(
                     forTrackTime: CMTimeMake(
-                        value: Int64(Note.defaultSegmentTimescale * (max(0, startTime.seconds - thresholdShiftDuration))),
-                        timescale: Int32(Note.defaultSegmentTimescale)
+                        value: Int64(Utils.DEFAULT_SEGMENT_TIMESCALE * (max(0, startTime.seconds - Utils.TEMPORAL_DELTA))),
+                        timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
                     )
                 )
             }
         }
         
-        if let segment = segment, updateAnchor {
+        if let segment = segment, updateAnchor && segment.isActive() {
             print("\tUpdating selection cursor anchor..")
-            selectionCursor.setAnchor(segment: segment)
+            self.selectionCursor.setAnchor(segment: segment)
         }
         
-        if let segment = segment, updateFocus {
+        if let segment = segment, updateFocus && segment.isActive() {
             print("\tUpdating selection cursor focus...")
-            selectionCursor.setFocus(segment: segment)
+            self.selectionCursor.setFocus(segment: segment)
         }
         
-        if let segment = segment, updateCachedAnchor {
+        if let segment = segment, updateCachedAnchor && segment.isActive() {
             print("\tUpdating selection cursor cached anchor...")
-            selectionCursor.setCachedAnchor(segment: segment)
+            self.selectionCursor.setCachedAnchor(segment: segment)
         }
         
-        self.handleOnListenUpdate(text: self.getText())
+        // we don't change text view in this mode, so text won't be available
+        if !self.selectionCursor.isUpdatingSelection {
+            self.handleOnSpeechUpdate(text: self.getText())
+        }
 
         print("\tSuccessfully removed passage from note!")
     }
     
     func updatePassage(segments: [NoteSegment], range: CMTimeRange) {
-        print("===== Updating Passage =====")
+        print("===== Note: Update Passage =====")
         print("\tRemoving current passsage from note...")
         self.removePassage(range: range)
         print("\tAdding new passage to note...")
@@ -3249,7 +2325,7 @@ class Note: AVMutableComposition, NSCoding {
         textRange: NSRange,
         noteRange: ClosedRange<Int>
     ) {
-        print("===== Handle Transformation =====")
+        print("===== Note: Handle Transformation =====")
         // Create transformation
         print("\tCreate initial transformation...")
         
@@ -3797,7 +2873,7 @@ class Note: AVMutableComposition, NSCoding {
         
         // Present Feedback
         if let value = value {
-            Utils.executeFeedback(
+            self.notifications.executeFeedback(
                 visualMessage: "Selection rate: \(value)x",
                 audioMessage: "Adjusted selection rate to \(value)x.",
                 withHaptics: true
@@ -3810,16 +2886,18 @@ class Note: AVMutableComposition, NSCoding {
     }
     
     func walk(segments: [NoteSegment]? = nil, runOverride: Bool = false, onStartHandler: (() -> Void)? = nil) {
-        print("===== Note: \(runOverride ? "Run" : "Walk") Object =====")
-        if (self.isWalkingNote && !self.pausedWalkingNote && !runOverride) || (segments != nil && segments!.count == 0) || (segments == nil && self.noteSegments.count == 0) {
+        print("===== Note: \(runOverride ? "Run" : "Walk") =====")
+        if (self.noteManager.isWalkingNote && !self.noteManager.pausedWalkingNote && !runOverride) || (segments != nil && segments!.count == 0) || (segments == nil && self.noteSegments.count == 0) {
             var text: String
-            if self.isWalkingNote && !self.pausedWalkingNote && !runOverride {
+            if self.noteManager.isWalkingNote && !self.noteManager.pausedWalkingNote && !runOverride {
                 text = "Already walking passage."
             } else {
                 text = "Note is empty"
             }
             
-            Utils.executeError(note: self, text: text)
+            self.notifications.executeError(
+                text: text
+            )
             
             return
         }
@@ -3827,311 +2905,298 @@ class Note: AVMutableComposition, NSCoding {
         // Get walking segments
         // if they are already set, it means we're starting from an existing walk
         // we likely have gone from walking to running
-        if let segments = segments, let firstSegment = segments.first, let lastSegment = segments.last, self.walkingRange == nil {
-            self.walkingRange = firstSegment.getIndex()..<lastSegment.getIndex() + 1
+        if let segments = segments, let firstSegment = segments.first, let lastSegment = segments.last, self.noteManager.walkingRange == nil {
+            // Set walking range
+            self.noteManager.setWalkingRange(range: firstSegment.getIndex()..<lastSegment.getIndex() + 1)
             
             // Set walking index
-            self.walkingIndex = 0
-        } else if self.walkingRange == nil {
-            self.walkingRange = 0..<self.noteSegments.count
+            self.noteManager.setWalkingIndex(index: 0)
+        } else if self.noteManager.walkingRange == nil {
+            // Set walking range
+            self.noteManager.setWalkingRange(range: 0..<self.noteSegments.count)
             
             // Set walking index
-            self.walkingIndex = 0
-        } else if let anchor = selectionCursor.anchor, let walkingRange = self.walkingRange, self.pausedWalkingNote || self.pausedRunningNote {
+            self.noteManager.setWalkingIndex(index: 0)
+        } else if let anchor = self.selectionCursor.anchor, let walkingRange = self.noteManager.walkingRange, self.noteManager.pausedWalkingNote || self.noteManager.pausedRunningNote {
             // We likely just updated walk segment
             // We must handle new index placement
             // We must handle segment expanding to multiple words
             // Decision: We keep selection on the first segment only
-            self.walkingIndex = anchor.getIndex() - self.noteSegments[walkingRange].first!.getIndex()
+            self.noteManager.setWalkingIndex(index: anchor.getIndex() - self.noteSegments[walkingRange].first!.getIndex())
         }
         
-        guard let walkingRange = self.walkingRange else {
-            self.walkingIndex = 0
-            self.walkingRange = nil
-            Utils.executeError(note: self, text: "Unable to start \(runOverride ? "running" : "walking").", handler: onStartHandler)
+        guard let walkingRange = self.noteManager.walkingRange else {
+            self.noteManager.setWalkingIndex(index: 0)
+            self.noteManager.setWalkingRange()
+            self.notifications.executeError(
+                text: "Unable to start \(runOverride ? "running" : "walking").",
+                handler: onStartHandler
+            )
             return
         }
         
-        var currentSegment: NoteSegment? = Array(self.noteSegments[walkingRange])[self.walkingIndex]
-        if let segment = currentSegment, let walkingRange = self.walkingRange, !segment.isActive() {
-            currentSegment = self.getSegment(segment: segment, segments: Array(self.noteSegments[walkingRange]), type: .next, isWord: true)
+        var currentSegment: NoteSegment? = Array(self.noteSegments[walkingRange])[self.noteManager.walkingIndex]
+        if let segment = currentSegment, let walkingRange = self.noteManager.walkingRange, !segment.isActive() {
+            currentSegment = self.speechPlayer.getSegment(segment: segment, segments: Array(self.noteSegments[walkingRange]), type: .next, isWord: true)
         }
         
         if let currentSegment = currentSegment {
             // Updating walking index
-            self.walkingIndex = currentSegment.getIndex() - Array(self.noteSegments[walkingRange]).first!.getIndex()
+            self.noteManager.setWalkingIndex(index: currentSegment.getIndex() - Array(self.noteSegments[walkingRange]).first!.getIndex())
 
             // Present Feedback
-            Utils.executeFeedback(
+            self.notifications.executeFeedback(
                 visualMessage: "\(runOverride ? "Run" : "Walk") activated!",
                 withHaptics: true
             )
             
             // Activate isWalkingNote if we don't have a run override
-            self.isWalkingNote = !runOverride
-            self.pausedWalkingNote = false
-            self.pausedRunningNote = false
+            self.noteManager.setIsWalkingNote(to: !runOverride)
+            self.noteManager.setPausedWalkingNote(to: false)
+            self.noteManager.setPausedRunningNote(to: false)
             
-            selectionCursor.setSelection(anchor: currentSegment, focus: currentSegment)
+            self.selectionCursor.setSelection(anchor: currentSegment, focus: currentSegment)
             
             // start looping walk
             if AVAudioSession.isHeadphonesConnected {
                 let makeStep = {
-                    self.play(
-                        segments: [currentSegment],
-                        segmentBoundaryHandler: { [weak self] in
-                            DispatchQueue.main.async {
-                                if let highlightRange = self?.getSegmentTextRange(of: currentSegment) {
-                                    // update text
-                                    self?.handleOnListenUpdate(text: self!.getText(), highlightRange: highlightRange)
-                                }
-                                
-                                // TODO: Show pitch
-                            }
-                        }, onFinishHandler: { [weak self] in
-                            // print("Successfully executed playback on finish handler")
-                            DispatchQueue.main.async {
-                                self?.handleOnListenUpdate(text: self!.getText())
-                            }
-                        }
-                    )
+                    self.speechPlayer.play(segments: [currentSegment])
                     
                     // Play echo
-                    self.echoDelayTimer = Timer.scheduledTimer(withTimeInterval: Utils.WALKING_ECHO_DELAY_DURATION * TimeInterval( 1 / viewController.playbackRate), repeats: false) { [weak self] timer in
-                        self?.startEcho(segments: [currentSegment])
+                    let echoDelayTimer = Timer.scheduledTimer(withTimeInterval: Utils.WALKING_ECHO_DELAY_DURATION * TimeInterval( 1 / self.speechPlayer.playbackRate), repeats: false) { [weak self] timer in
+                        self?.speechSynthesis.startEcho(segments: [currentSegment])
                     }
+                    
+                    self.noteManager.setEchoDelayTimer(timer: echoDelayTimer)
                 }
                 
-                self.walkLoopDelayTimer = Timer.scheduledTimer(withTimeInterval: Utils.WALKING_START_DELAY_DURATION, repeats: false) { [weak self] timer in
+                let walkLoopDelayTimer = Timer.scheduledTimer(withTimeInterval: Utils.WALKING_START_DELAY_DURATION, repeats: false) { [weak self] timer in
                     makeStep()
 
                     // Make sure that the repeat is at least as long as
                     let segmentDuration: TimeInterval = currentSegment.timeMapping.target.duration.seconds
                     let stepDuration: TimeInterval = max(segmentDuration + (segmentDuration - Utils.WALKING_ECHO_DELAY_DURATION + Utils.WALKING_LOOP_BUFFER), Utils.WALKING_ECHO_DELAY_DURATION + segmentDuration + Utils.WALKING_LOOP_BUFFER)
-                    self?.walkingTimer = Timer.scheduledTimer(withTimeInterval: max(stepDuration, Utils.WALKING_PERIOD_DURATION) * TimeInterval( 1 / viewController.playbackRate), repeats: true) { timer in
+                    let walkingTimer = Timer.scheduledTimer(withTimeInterval: max(stepDuration, Utils.WALKING_PERIOD_DURATION) * TimeInterval( 1 / self!.speechPlayer.playbackRate), repeats: true) { timer in
                         makeStep()
                     }
+                    
+                    self?.noteManager.setWalkingTimer(timer: walkingTimer)
                 }
+                
+                self.noteManager.setWalkLoopDelayTimer(timer: walkLoopDelayTimer)
             }
             
             // execute start handler
             onStartHandler?()
         } else {
             self.exitWalk()
-            Utils.executeError(note: self, text: "Unable to start \(runOverride ? "running" : "walking").", handler: onStartHandler)
+            self.notifications.executeError(
+                text: "Unable to start \(runOverride ? "running" : "walking").",
+                handler: onStartHandler
+            )
         }
     }
     
     func walkToPreviousSegment(runOverride: Bool = false, handler: (() -> Void)? = nil) {
         print("===== Note: \(runOverride ? "Run" : "Walk") To Previous Segment =====")
-        if !self.isWalkingNote && !self.isRunningNote {
+        if !self.noteManager.isWalkingNote && !self.noteManager.isRunningNote {
             var text: String
             text = "\(runOverride ? "Running" : "Walking") not active."
-            Utils.executeError(note: self, text: text)
+            self.notifications.executeError(
+                text: text
+            )
             return
         }
         
-        guard let walkingRange = self.walkingRange else {
-            Utils.executeError(note: self, text: "Unable to \(runOverride ? "run to" : "walk to") previous.", handler: handler)
+        guard let walkingRange = self.noteManager.walkingRange else {
+            self.notifications.executeError(
+                text: "Unable to \(runOverride ? "run to" : "walk to") previous.",
+                handler: handler
+            )
             self.exitWalk()
             return
         }
         
-        var currentSegment: NoteSegment? = Array(self.noteSegments[walkingRange])[self.walkingIndex]
-        if let segment = currentSegment, let walkingRange = self.walkingRange {
-            currentSegment = self.getSegment(segment: segment, segments: Array(self.noteSegments[walkingRange]), type: .previous, isWord: true)
+        var currentSegment: NoteSegment? = Array(self.noteSegments[walkingRange])[self.noteManager.walkingIndex]
+        if let segment = currentSegment, let walkingRange = self.noteManager.walkingRange {
+            currentSegment = self.speechPlayer.getSegment(segment: segment, segments: Array(self.noteSegments[walkingRange]), type: .previous, isWord: true)
         }
         
-        if let currentSegment = currentSegment, self.walkingIndex != (currentSegment.getIndex() - Array(self.noteSegments[walkingRange]).first!.getIndex()) {
+        if let currentSegment = currentSegment, self.noteManager.walkingIndex != (currentSegment.getIndex() - Array(self.noteSegments[walkingRange]).first!.getIndex()) {
             
             // Updating walking index
-            self.walkingIndex = currentSegment.getIndex() - Array(self.noteSegments[walkingRange]).first!.getIndex()
+            self.noteManager.setWalkingIndex(index: currentSegment.getIndex() - Array(self.noteSegments[walkingRange]).first!.getIndex())
 
             // Present Feedback
-            Utils.executeFeedback(
+            self.notifications.executeFeedback(
                 visualMessage: "Previous word",
                 withHaptics: true
             )
             
             // Stop previous walking loop
-            self.walkingTimer?.invalidate()
-            self.walkingTimer = nil
+            self.noteManager.setWalkingTimer()
             
             // Stop previous walking loop delay
-            self.walkLoopDelayTimer?.invalidate()
-            self.walkLoopDelayTimer = nil
+            self.noteManager.setWalkLoopDelayTimer()
 
             // Stop previous echo delay
-            self.echoDelayTimer?.invalidate()
-            self.echoDelayTimer = nil
+            self.noteManager.setEchoDelayTimer()
             
             // Stop playback
-            if self.isPlayingNote {
-                self.stop()
+            if self.speechPlayer.isPlayingNote {
+                self.speechPlayer.stop(withFeedback: false)
             }
             // Stop echo
-            if self.isPlayingEcho {
-                self.stopEcho(omitFeedback: true)
+            if self.speechSynthesis.isPlayingEcho {
+                self.speechSynthesis.stopEcho(withFeedback: false)
             }
             
-            selectionCursor.setSelection(anchor: currentSegment, focus: currentSegment)
+            self.selectionCursor.setSelection(anchor: currentSegment, focus: currentSegment)
             
             // start looping walk
             if AVAudioSession.isHeadphonesConnected {// play speech
                 let makeStep = {
-                    self.play(
-                        segments: [currentSegment],
-                        segmentBoundaryHandler: { [weak self] in
-                            DispatchQueue.main.async {
-                                if let highlightRange = self?.getSegmentTextRange(of: currentSegment) {
-                                    // update text
-                                    self?.handleOnListenUpdate(text: self!.getText(), highlightRange: highlightRange)
-                                }
-                                
-                                // TODO: Show pitch
-                            }
-                        }, onFinishHandler: { [weak self] in
-                            DispatchQueue.main.async {
-                                self?.handleOnListenUpdate(text: self!.getText())
-                            }
-                        }
-                    )
+                    self.speechPlayer.play(segments: [currentSegment])
                     
                     // Play echo
-                    self.echoDelayTimer = Timer.scheduledTimer(withTimeInterval: Utils.WALKING_ECHO_DELAY_DURATION * TimeInterval( 1 / viewController.playbackRate), repeats: false) { [weak self] timer in
-                        self?.startEcho(segments: [currentSegment])
+                    let echoDelayTimer = Timer.scheduledTimer(withTimeInterval: Utils.WALKING_ECHO_DELAY_DURATION * TimeInterval( 1 / self.speechPlayer.playbackRate), repeats: false) { [weak self] timer in
+                        self?.speechSynthesis.startEcho(segments: [currentSegment])
                     }
+                    
+                    self.noteManager.setEchoDelayTimer(timer: echoDelayTimer)
                 }
                 
-                self.walkLoopDelayTimer = Timer.scheduledTimer(withTimeInterval: Utils.WALKING_START_DELAY_DURATION, repeats: false) { [weak self] timer in
+                let walkLoopDelayTimer = Timer.scheduledTimer(withTimeInterval: Utils.WALKING_START_DELAY_DURATION, repeats: false) { [weak self] timer in
                     makeStep()
 
                     // Make sure that the repeat is at least as long as
                     let segmentDuration: TimeInterval = currentSegment.timeMapping.target.duration.seconds
                     let stepDuration: TimeInterval = max(segmentDuration + (segmentDuration - Utils.WALKING_ECHO_DELAY_DURATION + Utils.WALKING_LOOP_BUFFER), Utils.WALKING_ECHO_DELAY_DURATION + segmentDuration + Utils.WALKING_LOOP_BUFFER)
-                    self?.walkingTimer = Timer.scheduledTimer(withTimeInterval: max(stepDuration, Utils.WALKING_PERIOD_DURATION) * TimeInterval( 1 / viewController.playbackRate), repeats: true) { timer in
+                    let walkingTimer = Timer.scheduledTimer(withTimeInterval: max(stepDuration, Utils.WALKING_PERIOD_DURATION) * TimeInterval( 1 / self!.speechPlayer.playbackRate), repeats: true) { timer in
                         makeStep()
                     }
+                    
+                    self?.noteManager.setWalkingTimer(timer: walkingTimer)
                 }
+                
+                self.noteManager.setWalkLoopDelayTimer(timer: walkLoopDelayTimer)
             }
 
             // execute handler
             handler?()
         } else {
-            Utils.executeError(note: self, text: "At beginning of \(runOverride ? "running" : "walking") passage.", handler: handler)
+            self.notifications.executeError(
+                text: "At beginning of \(runOverride ? "running" : "walking") passage.",
+                handler: handler
+            )
         }
     }
     
     func walkToNextSegment(runOverride: Bool = false, handler: (() -> Void)? = nil) {
         print("===== Note: \(runOverride ? "Run" : "Walk") To Next Segment =====")
-        if !self.isWalkingNote && !self.isRunningNote {
+        if !self.noteManager.isWalkingNote && !self.noteManager.isRunningNote {
             var text: String
             text = "\(runOverride ? "Running" : "Walking") not active."
-            Utils.executeError(note: self, text: text)
+            self.notifications.executeError(
+                text: text
+            )
             return
         }
         
-        guard let walkingRange = self.walkingRange else {
-            Utils.executeError(note: self, text: "Unable to \(runOverride ? "run to" : "walk to") next.", handler: handler)
+        guard let walkingRange = self.noteManager.walkingRange else {
+            self.notifications.executeError(
+                text: "Unable to \(runOverride ? "run to" : "walk to") next.",
+                handler: handler
+            )
             self.exitWalk()
             return
         }
         
-        var currentSegment: NoteSegment? = Array(self.noteSegments[walkingRange])[self.walkingIndex]
-        if let segment = currentSegment, let walkingRange = self.walkingRange {
-            currentSegment = self.getSegment(segment: segment, segments: Array(self.noteSegments[walkingRange]), type: .next, isWord: true)
+        var currentSegment: NoteSegment? = Array(self.noteSegments[walkingRange])[self.noteManager.walkingIndex]
+        if let segment = currentSegment, let walkingRange = self.noteManager.walkingRange {
+            currentSegment = self.speechPlayer.getSegment(segment: segment, segments: Array(self.noteSegments[walkingRange]), type: .next, isWord: true)
         }
 
-        if let currentSegment = currentSegment, self.walkingIndex != (currentSegment.getIndex() - Array(self.noteSegments[walkingRange]).first!.getIndex()) {
+        if let currentSegment = currentSegment, self.noteManager.walkingIndex != (currentSegment.getIndex() - Array(self.noteSegments[walkingRange]).first!.getIndex()) {
             // Updating walking index
-            self.walkingIndex = currentSegment.getIndex() - Array(self.noteSegments[walkingRange]).first!.getIndex()
+            self.noteManager.setWalkingIndex(index: currentSegment.getIndex() - Array(self.noteSegments[walkingRange]).first!.getIndex())
 
             // Present Feedback
-            Utils.executeFeedback(
+            self.notifications.executeFeedback(
                 visualMessage: "Next word",
                 withHaptics: true
             )
             
             // Stop previous walking loop
-            self.walkingTimer?.invalidate()
-            self.walkingTimer = nil
+            self.noteManager.setWalkingTimer()
             
             // Stop previous walking loop delay
-            self.walkLoopDelayTimer?.invalidate()
-            self.walkLoopDelayTimer = nil
+            self.noteManager.setWalkLoopDelayTimer()
 
             // Stop previous echo delay
-            self.echoDelayTimer?.invalidate()
-            self.echoDelayTimer = nil
+            self.noteManager.setEchoDelayTimer()
 
             // Stop playback
-            if self.isPlayingNote {
-                self.stop()
+            if self.speechPlayer.isPlayingNote {
+                self.speechPlayer.stop(withFeedback: false)
             }
             // Stop echo
-            if self.isPlayingEcho {
-                self.stopEcho(omitFeedback: true)
+            if self.speechSynthesis.isPlayingEcho {
+                self.speechSynthesis.stopEcho(withFeedback: false)
             }
             
-            selectionCursor.setSelection(anchor: currentSegment, focus: currentSegment)
+            self.selectionCursor.setSelection(anchor: currentSegment, focus: currentSegment)
             
             // start looping walk
             if AVAudioSession.isHeadphonesConnected {
                 let makeStep = {
-                    self.play(
-                        segments: [currentSegment],
-                        segmentBoundaryHandler: { [weak self] in
-                            DispatchQueue.main.async {
-                                if let highlightRange = self?.getSegmentTextRange(of: currentSegment) {
-                                    // update text
-                                    self?.handleOnListenUpdate(text: self!.getText(), highlightRange: highlightRange)
-                                }
-                                
-                                // TODO: Show pitch
-                            }
-                        }, onFinishHandler: { [weak self] in
-                            DispatchQueue.main.async {
-                                self?.handleOnListenUpdate(text: self!.getText())
-                            }
-                        }
-                    )
+                    self.speechPlayer.play(segments: [currentSegment])
                     
                     // Play echo
-                    self.echoDelayTimer = Timer.scheduledTimer(withTimeInterval: Utils.WALKING_ECHO_DELAY_DURATION * TimeInterval( 1 / viewController.playbackRate), repeats: false) { [weak self] timer in
-                        self?.startEcho(segments: [currentSegment])
+                    let echoDelayTimer = Timer.scheduledTimer(withTimeInterval: Utils.WALKING_ECHO_DELAY_DURATION * TimeInterval( 1 / self.speechPlayer.playbackRate), repeats: false) { [weak self] timer in
+                        self?.speechSynthesis.startEcho(segments: [currentSegment])
                     }
+                    
+                    self.noteManager.setEchoDelayTimer(timer: echoDelayTimer)
                 }
                 
-                self.walkLoopDelayTimer = Timer.scheduledTimer(withTimeInterval: Utils.WALKING_START_DELAY_DURATION, repeats: false) { [weak self] timer in
+                let walkLoopDelayTimer = Timer.scheduledTimer(withTimeInterval: Utils.WALKING_START_DELAY_DURATION, repeats: false) { [weak self] timer in
                     makeStep()
 
                     // Make sure that the repeat is at least as long as
                     let segmentDuration: TimeInterval = currentSegment.timeMapping.target.duration.seconds
                     let stepDuration: TimeInterval = max(segmentDuration + (segmentDuration - Utils.WALKING_ECHO_DELAY_DURATION + Utils.WALKING_LOOP_BUFFER), Utils.WALKING_ECHO_DELAY_DURATION + segmentDuration + Utils.WALKING_LOOP_BUFFER)
-                    self?.walkingTimer = Timer.scheduledTimer(withTimeInterval: max(stepDuration, Utils.WALKING_PERIOD_DURATION) * TimeInterval( 1 / viewController.playbackRate), repeats: true) { timer in
+                    let walkingTimer = Timer.scheduledTimer(withTimeInterval: max(stepDuration, Utils.WALKING_PERIOD_DURATION) * TimeInterval( 1 / self!.speechPlayer.playbackRate), repeats: true) { timer in
                         makeStep()
                     }
+                    
+                    self?.noteManager.setWalkingTimer(timer: walkingTimer)
                 }
+                
+                self.noteManager.setWalkLoopDelayTimer(timer: walkLoopDelayTimer)
             }
             
             // execute handler
             handler?()
-        } else if self.isRunningNote {
+        } else if self.noteManager.isRunningNote {
             self.exitWalk(clearSelection: false)
         } else {
-            Utils.executeError(note: self, text: "At end of \(runOverride ? "running" : "walking") passage.", handler: handler)
+            self.notifications.executeError(
+                text: "At end of \(runOverride ? "running" : "walking") passage.",
+                handler: handler
+            )
         }
     }
     
     func run(segments: [NoteSegment]? = nil, onStartHandler: (() -> Void)? = nil) {
-        print("===== Note: Run =====")
-        
-        if self.isRunningNote && !self.pausedRunningNote {
-            Utils.executeError(note: self, text: "Already running passage.")
+        if self.noteManager.isRunningNote && !self.noteManager.pausedRunningNote {
+            self.notifications.executeError(
+                text: "Already running passage."
+            )
             return
         }
         
-        self.isRunningNote = true
+        self.noteManager.setIsRunningNote(to: true)
         
         // Start walk
         self.walk(segments: segments, runOverride: true, onStartHandler: onStartHandler)
@@ -4139,58 +3204,63 @@ class Note: AVMutableComposition, NSCoding {
         let avgSegmentDuration: TimeInterval = 0.5
         let runInterval: TimeInterval = max(avgSegmentDuration + (avgSegmentDuration - Utils.WALKING_ECHO_DELAY_DURATION + Utils.WALKING_LOOP_BUFFER), Utils.WALKING_ECHO_DELAY_DURATION + avgSegmentDuration + Utils.WALKING_LOOP_BUFFER)
         // start automated walking
-        self.runningTimer = Timer.scheduledTimer(withTimeInterval: runInterval + Utils.WALKING_START_DELAY_DURATION, repeats: true) { [weak self] timer in
-            if self!.walkingIndex + 1 < Array(self!.noteSegments[self!.walkingRange!]).count {
+        let runningTimer = Timer.scheduledTimer(withTimeInterval: runInterval + Utils.WALKING_START_DELAY_DURATION, repeats: true) { [weak self] timer in
+            if self!.noteManager.walkingIndex + 1 < Array(self!.noteSegments[self!.noteManager.walkingRange!]).count {
                 self?.walkToNextSegment(runOverride: true)
             } else {
-                self?.haltRun()
+                self?.pauseRun()
             }
         }
+        
+        self.noteManager.setRunningTimer(timer: runningTimer)
     }
     
-    func haltRun(handler: (() -> Void)? = nil) {
-        print("===== Note: Halt Run =====")
-        if !self.isRunningNote {
-            Utils.executeError(note: self, text: "Not running passage.")
+    func pauseRun(handler: (() -> Void)? = nil) {
+        print("===== Note: Pause Run =====")
+        if !self.noteManager.isRunningNote {
+            self.notifications.executeError(
+                text: "Not running passage."
+            )
             return
         }
         
-        if self.runningTimer == nil {
-            Utils.executeError(note: self, text: "Error halting run.")
+        if self.noteManager.runningTimer == nil {
+            self.notifications.executeError(
+                text: "Error pausing run."
+            )
             return
         }
         
         // Stop running timer
-        self.runningTimer?.invalidate()
-        self.runningTimer = nil
+        self.noteManager.setRunningTimer()
         
         // Stop previous walking loop
-        self.walkingTimer?.invalidate()
-        self.walkingTimer = nil
+        self.noteManager.setWalkingTimer()
         
         // Stop previous walking loop delay
-        self.walkLoopDelayTimer?.invalidate()
-        self.walkLoopDelayTimer = nil
+        self.noteManager.setWalkLoopDelayTimer()
 
         // Stop previous echo delay
-        self.echoDelayTimer?.invalidate()
-        self.echoDelayTimer = nil
+        self.noteManager.setEchoDelayTimer()
         
         // Stop playback
-        if self.isPlayingNote {
-            self.stop()
+        if self.speechPlayer.isPlayingNote {
+            self.speechPlayer.stop(withFeedback: false)
         }
 
         // Stop echo
-        if self.isPlayingEcho {
-            self.stopEcho(omitFeedback: true)
+        if self.speechSynthesis.isPlayingEcho {
+            self.speechSynthesis.stopEcho(withFeedback: false)
         }
         
         // Turn off running note
-        self.isRunningNote = false
+        self.noteManager.setIsRunningNote(to: false)
         
-        guard let walkingRange = self.walkingRange else {
-            Utils.executeError(note: self, text: "Unable to halt run.", handler: handler)
+        guard let walkingRange = self.noteManager.walkingRange else {
+            self.notifications.executeError(
+                text: "Unable to pause run.",
+                handler: handler
+            )
             self.exitWalk()
             return
         }
@@ -4199,51 +3269,59 @@ class Note: AVMutableComposition, NSCoding {
         self.walk(segments: Array(self.noteSegments[walkingRange]), onStartHandler: handler)
         
         // Present Feedback
-        Utils.executeFeedback(
-            visualMessage: "Run Halted!",
-            audioMessage: "Run halted to walk",
+        self.notifications.executeFeedback(
+            visualMessage: "Run Paused!",
+            audioMessage: "Run paused to walk",
             withHaptics: true
         )
     }
     
     func exitWalk(pause: Bool = false, clearSelection: Bool = true, withFeedback: Bool = true, handler: (() -> Void)? = nil) {
-        if self.isRunningNote {
+        if self.noteManager.isRunningNote {
             print("===== Note: Exit Run =====")
         } else {
             print("===== Note: Exit Walk =====")
         }
 
-        if !self.isWalkingNote && !self.isRunningNote {
-            Utils.executeError(note: self, text: "Not walking or running passage.")
+        if !self.noteManager.isWalkingNote && !self.noteManager.isRunningNote {
+            self.notifications.executeError(
+                text: "Not walking or running passage."
+            )
             return
         }
         
         if !pause {
-            self.walkingIndex = 0
-            self.walkingRange = nil
+            self.noteManager.setWalkingIndex(index: 0)
+            self.noteManager.setWalkingRange()
+        }
+        
+        // Stop current playback
+        if self.speechPlayer.isPlayingExternalSegments || self.speechPlayer.isPlayingNote {
+            self.speechPlayer.stop(withFeedback: false)
+        }
+        
+        // Stop currrent echo
+        if self.speechSynthesis.isPlayingEcho || self.speechSynthesis.isPlayingPassiveEcho {
+            self.speechSynthesis.stopEcho(withFeedback: false)
         }
         
         // Stop running timer
-        self.runningTimer?.invalidate()
-        self.runningTimer = nil
+        self.noteManager.setRunningTimer()
         
         // Stop previous walking loop
-        self.walkingTimer?.invalidate()
-        self.walkingTimer = nil
+        self.noteManager.setWalkingTimer()
         
         // Stop previous walking loop delay
-        self.walkLoopDelayTimer?.invalidate()
-        self.walkLoopDelayTimer = nil
+        self.noteManager.setWalkLoopDelayTimer()
         
         // Stop previous echo delay
-        self.echoDelayTimer?.invalidate()
-        self.echoDelayTimer = nil
+        self.noteManager.setEchoDelayTimer()
         
         let handleExitWalk = {
             var visualMessage: String?
             var audioMessage: String?
             if withFeedback {
-                if self.isRunningNote {
+                if self.noteManager.isRunningNote {
                     visualMessage = "Exit Run"
                     audioMessage = "run exited."
                 } else {
@@ -4252,56 +3330,116 @@ class Note: AVMutableComposition, NSCoding {
                 }
             }
             
-            if pause && self.isRunningNote {
-                self.pausedRunningNote = true
-            } else if pause && self.isWalkingNote {
-                self.pausedWalkingNote = true
+            if pause && self.noteManager.isRunningNote {
+                self.noteManager.setPausedRunningNote(to: true)
+            } else if pause && self.noteManager.isWalkingNote {
+                self.noteManager.setPausedWalkingNote(to: true)
             } else {
-                self.isRunningNote = false
-                self.isWalkingNote = false
+                self.noteManager.setIsWalkingNote(to: false)
+                self.noteManager.setIsRunningNote(to: false)
+                self.noteManager.setPausedRunningNote(to: false)
+                self.noteManager.setPausedWalkingNote(to: false)
             }
             
             if clearSelection {
                 // We only clear the focus so that the cursor remains at given location
-                selectionCursor.setFocus()
-                if !selectionCursor.isAtEndOfTextView {
+                self.selectionCursor.setFocus()
+                if !self.selectionCursor.isAtEndOfTextView {
                     // We cache the anchor if we're mid-note so that new content is added from given location
-                    selectionCursor.setCachedAnchor(segment: selectionCursor.anchor)
+                    self.selectionCursor.setCachedAnchor(segment: self.selectionCursor.anchor)
                 }
-            } else if let _ = selectionCursor.anchor, let _ = selectionCursor.focus, !pause {
+            } else if let _ = self.selectionCursor.anchor, let _ = self.selectionCursor.focus, !pause {
                 // Initiate looping selection behavior when we end walk
-                selectionCursor.playSelection(loop: true)
+                self.selectionCursor.playSelection(loop: true)
             }
             
             // Present Feedback
             if let visualMessage = visualMessage, let audioMessage = audioMessage, withFeedback {
-                Utils.executeFeedback(
+                self.notifications.executeFeedback(
                     visualMessage: visualMessage,
                     audioMessage: audioMessage,
                     withHaptics: true
                 )
             }
             
-            if let detailView = self.detailView, !clearSelection && !viewController.isListeningForCommands {
-                viewController.startListeningForVoiceCommands() {
+            if !clearSelection && !self.speechRecognition.isListeningForCommands {
+                self.speechRecognition.startListeningForVoiceCommands() {
                     handler?()
-                    detailView.adjustCommandBar()
-                    detailView.adjustMenuBar()
+                    // Notify observers of loading
+                    NotificationCenter.default.post(
+                        name: Note.onRequestToUpdateView,
+                        object: nil,
+                        userInfo: [:]
+                    )
                 }
-            } else if let detailView = self.detailView {
+            } else {
                 handler?()
-                detailView.adjustCommandBar()
-                detailView.adjustMenuBar()
+                // Notify observers of loading
+                NotificationCenter.default.post(
+                    name: Note.onRequestToUpdateView,
+                    object: nil,
+                    userInfo: [:]
+                )
             }
         }
         
         // Stop playback and echo
-        self.stop() {
-            self.stopEcho(omitFeedback: true) {
+        self.speechPlayer.stop(withFeedback: false) {
+            self.speechSynthesis.stopEcho(withFeedback: false) {
                 handleExitWalk()
             }
         }
     }
+    
+    func generateNewClip() {
+        self.currentClipUID = UUID().uuidString
+        self.clips.insert(self.currentClipUID!)
+        print("\tAdding new clip: ", self.currentClipUID!)
+        self.state.setClip(clipUID: self.currentClipUID!, noteUID: self.uid)
+    }
+    
+    // https://developer.apple.com/documentation/avfoundation/avassetexportpresetpassthrough
+    // https://stackoverflow.com/questions/58025109/exporting-mp3-with-avassetexportsession
+    // We do not compute sentences for segments here because the segments lack a reference to an note
+    // Without a reference to an note, they cannot compute getText correctly
+    // MUST HAVE A SINGLE COLLAPSED TRACK
+    func duplicate(onFinishHandler: @escaping (_ note: Note?) -> Void) {
+        print("===== Duplicate Note =====")
+        guard self.noteBuffer.count == 0 else {
+            print("\t[Error] There was a problem inserting passage. Buffer was not empty")
+            return
+        }
+
+        // Export Note
+        let uid = UUID().uuidString
+        let duplicateFilename = "note-\(uid)"
+        Utils.exportNote(
+            state: self.state,
+            note: self,
+            filename: duplicateFilename,
+            fileType: self.fileType,
+            timeRange: CMTimeRangeMake(start: CMTime.zero, duration: self.getDuration())
+        ) { noteURL in
+            let duplicateNote = Note(
+                uid: uid,
+                filename: duplicateFilename,
+                fileType: .m4a,
+                creatorUID: self.creatorUID,
+                segments: self.noteSegments // Will copy segments so there are not multiple pointers to a single segment
+            )
+                
+            // Set Date Created
+            duplicateNote.dateCreated = self.dateCreated
+            
+            // Set Date Modified
+            duplicateNote.dateModified = self.dateModified
+            
+            // Execute handler
+            onFinishHandler(duplicateNote)
+        }
+    }
+    
+    // MARK: - Telemetry
     
     func incrementViewCount() {
         self.views.append(Date().timeIntervalSince1970)
@@ -4321,8 +3459,6 @@ class Note: AVMutableComposition, NSCoding {
     
     // MARK: - Setters
     
-    
-    
     // We lack a checkRep here because we use it mid
     // operation in trimNote when the representation invariant is broken
     func setFileType(fileType: AVFileType) {
@@ -4337,7 +3473,7 @@ class Note: AVMutableComposition, NSCoding {
     // thus is a costly computation
     // TODO: Confirm that source and target don't affect setting segments to low-level representation
     func setSegments(segments: [NoteSegment], replaceNoteDetails: Bool = false, saveToLowLevelRepr: Bool = false) {
-        print("===== Set Segments =====")
+        print("===== Note: Set Segments =====")
         var setSegmentNote = false
         // set note reference in segments
         if segments.count > 0 && segments[0].note == nil {
@@ -4371,7 +3507,7 @@ class Note: AVMutableComposition, NSCoding {
         // attempt to replace segments
         do {
             // Compute segment sentences
-            let segmentsWithUpdatedSentences = updateSegmentSentences(segments: finalSegments)
+            let segmentsWithUpdatedSentences = self.updateSegmentSentences(segments: finalSegments)
             finalSegments = segmentsWithUpdatedSentences.count == finalSegments.count ? segmentsWithUpdatedSentences : finalSegments
             
             self.noteSegments = finalSegments
@@ -4392,18 +3528,18 @@ class Note: AVMutableComposition, NSCoding {
             self.segmentIndexMap = [:]
             self.deletedSegmentIndexMap = [:]
             for segment in self.noteSegments {
-                if let _ = selectionCursor.anchor, segment.getUID() == selectionCursor.anchor!.getUID() {
+                if let selectionCursor = self.selectionCursor, let anchor = selectionCursor.anchor, segment.getUID() == anchor.getUID() {
                     print("\tUpdating selection cursor anchor...")
-                    selectionCursor.setAnchor(segment: segment)
+                    self.selectionCursor.setAnchor(segment: segment)
                 }
                 
-                if let _ = selectionCursor.focus, segment.getUID() == selectionCursor.focus!.getUID() {
+                if let selectionCursor = self.selectionCursor, let focus = selectionCursor.focus, segment.getUID() == focus.getUID() {
                      print("\tUpdating selection cursor focus...")
-                    selectionCursor.setFocus(segment: segment)
+                    self.selectionCursor.setFocus(segment: segment)
                 }
-                if let _ = selectionCursor.cachedAnchor, segment.getUID() == selectionCursor.cachedAnchor!.getUID() {
+                if let selectionCursor = self.selectionCursor, let cachedAnchor = selectionCursor.cachedAnchor, segment.getUID() == cachedAnchor.getUID() {
                      print("\tUpdating selection cursor cached anchor...")
-                    selectionCursor.setCachedAnchor(segment: segment)
+                    self.selectionCursor.setCachedAnchor(segment: segment)
                 }
                 
                 // Add segment uid-index pair into segmentIndexMap
@@ -4417,15 +3553,22 @@ class Note: AVMutableComposition, NSCoding {
             }
 
             // Update transformations
-            self.transformations = Utils.cleanseTransformations(
-                transformations: self.transformations,
-                segments: self.noteSegments,
-                segmentIndexMap: self.segmentIndexMap,
-                omitSilences: false,
-                omitVoiceCommands: false,
-                omitDeleted: false
-            )
-            print("\tSuccessfully updated note segments!")
+            if let _ = self.state {
+                self.transformations = Utils.cleanseTransformations(
+                    transformations: self.transformations,
+                    segments: self.noteSegments,
+                    segmentIndexMap: self.segmentIndexMap,
+                    omitSilences: false,
+                    omitVoiceCommands: false,
+                    omitDeleted: false
+                )
+            }
+            print("\tSuccessfully updated \(self.noteSegments.count) note segments!")
+            print("\tSuccessfully updated \(self.transformations.count) note transformations!")
+            
+            // Save note
+            // We don't run handle save when note ended. We run it at the end of on speech update
+            self.handleSave()
         } catch {
             print("\t[Error] There was a problem updating note segments")
         }
@@ -4435,50 +3578,75 @@ class Note: AVMutableComposition, NSCoding {
         checkRep()
     }
     
-    func setViewController(vc: DetailViewController) {
-        self.detailView = vc
+    func setState(state: StateManager) {
+        print("===== Note: Set State =====")
+        self.state = state
+    }
+    
+    func setSpeechSynthesis(speechSynthesis: SpeechSynthesisEngine) {
+        print("===== Note: Set Speech Synthesis =====")
+        self.speechSynthesis = speechSynthesis
+    }
+    
+    func setSpeechRecognition(speechRecognition: SpeechRecognitionEngine) {
+        print("===== Note: Set Speech Recognition =====")
+        self.speechRecognition = speechRecognition
+    }
+    
+    func setSpeechPlayer(speechPlayer: SpeechPlayerEngine) {
+        print("===== Note: Set Speech Player =====")
+        self.speechPlayer = speechPlayer
+    }
+    
+    func setSelectionCursor(selectionCursor: SelectionCursor) {
+        print("===== Note: Set Selection Cursor =====")
+        self.selectionCursor = selectionCursor
+    }
+    
+    func setPitchRecognition(pitchRecognition: PitchRecognitionEngine) {
+        print("===== Note: Set Pitch Recognition  =====")
+        self.pitchRecognition = pitchRecognition
+    }
+    
+    func setNoteManager(noteManager: NoteManager) {
+        print("===== Note: Set Note Manager =====")
+        self.noteManager = noteManager
+    }
+    
+    func setNotifications(notifications: NotificationEngine) {
+        print("===== Note: Set Notifications =====")
+        self.notifications = notifications
+    }
+    
+    func setIsDeleted(to isDeleted: Bool) {
+        print("===== Note: Set Is Deleted =====")
+        self.isDeleted = isDeleted
     }
     
     // MARK: - Getters
     
-    // https://developer.apple.com/documentation/avfoundation/avassetexportpresetpassthrough
-    // https://stackoverflow.com/questions/58025109/exporting-mp3-with-avassetexportsession
-    // We do not compute sentences for segments here because the segments lack a reference to an note
-    // Without a reference to an note, they cannot compute getText correctly
-    // MUST HAVE A SINGLE COLLAPSED TRACK
-    func duplicate(onFinishHandler: @escaping (_ note: Note?) -> Void) {
-        print("===== Duplicate Note =====")
-        guard self.noteBuffer.count == 0 else {
-            print("\t[Error] There was a problem inserting passage. Buffer was not empty")
-            return
-        }
-
-        // Export Note
-        let uid = UUID().uuidString
-        let duplicateFilename = "note-\(uid)"
-        Utils.exportNote(
-            note: self,
-            filename: duplicateFilename,
-            fileType: self.fileType,
-            timeRange: CMTimeRangeMake(start: CMTime.zero, duration: self.getDuration())
-        ) {
-            let duplicateNote = Note(
-                uid: uid,
-                filename: duplicateFilename,
-                fileType: .m4a,
-                speaker: self.speaker,
-                segments: self.noteSegments // Will copy segments so there are not multiple pointers to a single segment
-            )
-                
-            // Set Date Created
-            duplicateNote.dateCreated = self.dateCreated
+    func getLastCommit() -> [NoteSegment]? {
+        var lastCommit: [NoteSegment]?
+        for range in self.committedBufferRanges.reversed() {
+            var allInactive = true
+            // search range for active word/s
+            for segment in self.noteSegments[range] {
+                if segment.isActive() {
+                    allInactive = false
+                    break
+                }
+            }
             
-            // Set Date Modified
-            duplicateNote.dateModified = self.dateModified
+            // Look at next range for active word/s
+            if allInactive {
+                continue
+            }
             
-            // Execute handler
-            onFinishHandler(duplicateNote)
+            lastCommit = Array(self.noteSegments[range])
+            return lastCommit
         }
+        
+        return nil
     }
     
     func getSentenceDetails(number: Int) -> Sentence? {
@@ -4570,27 +3738,27 @@ class Note: AVMutableComposition, NSCoding {
     }
     
     func extractSentence(type: SentencePosition, onFinishHandler: @escaping (_ sentence: Note?) -> Void) {
-        let currentTime = player.currentTime()
+        let currentTime = self.speechPlayer.getCurrentTime()
         self.extractSentence(forTrackTime: currentTime) { sentence in
             switch type {
             case .current:
                 onFinishHandler(sentence)
                 break
             case .previous:
-                let timestamp = floor(Note.defaultSegmentTimescale * (currentTime.seconds - Utils.TEMPORAL_DELTA))
+                let timestamp = floor(Utils.DEFAULT_SEGMENT_TIMESCALE * (currentTime.seconds - Utils.TEMPORAL_DELTA))
                 let previousTime = CMTimeMake(
                     value: Int64(timestamp),
-                    timescale: Int32(Note.defaultSegmentTimescale)
+                    timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
                 )
                 self.extractSentence(forTrackTime: previousTime) { sentence in
                     onFinishHandler(sentence)
                 }
                 break
             case .next:
-                let timestamp = floor(Note.defaultSegmentTimescale * (currentTime.seconds + Utils.TEMPORAL_DELTA))
+                let timestamp = floor(Utils.DEFAULT_SEGMENT_TIMESCALE * (currentTime.seconds + Utils.TEMPORAL_DELTA))
                 let nextTime = CMTimeMake(
                     value: Int64(timestamp),
-                    timescale: Int32(Note.defaultSegmentTimescale)
+                    timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
                 )
                 self.extractSentence(forTrackTime: nextTime) { sentence in
                     onFinishHandler(sentence)
@@ -4601,148 +3769,31 @@ class Note: AVMutableComposition, NSCoding {
         
     }
     
-    // Assumes playbackSegments are sorted in ascending order of index values
-    func getSegment(segment: NoteSegment? = nil, segments: [NoteSegment]? = nil, type: SegmentPosition, isWord: Bool = false, isCommitted: Bool = false) -> NoteSegment? {
-        var result: NoteSegment?
-        switch type {
-        case .current:
-            let currentTime = self.player.currentTime()
-            result = self.getSegment(forTrackTime: currentTime)
-        case .previous:
-            guard let segment = segment, let segments = segments else { return nil }
-            var currentSegmentIndex = segment.getIndex() - segments[0].getIndex()
-            if currentSegmentIndex - 1 >= 0 {
-                result = segments[currentSegmentIndex - 1]
-            } else {
-                // Input segment is the first element in the array
-                // We return it because there are no more previous segments
-                result = segment
-            }
-            
-            if isWord || isCommitted {
-                while let seg = result, (
-                    (isWord && (
-                        seg.isPunctuation() ||
-                        seg.isSilence() ||
-                        seg.isVoiceCommandWord() ||
-                        seg.isDeleted()
-                    )) ||
-                    (isCommitted && !seg.isCommitted())
-                ) && currentSegmentIndex - 1 >= 0 {
-                    currentSegmentIndex -= 1
-                    result = segments[currentSegmentIndex]
-                }
-            }
-        case .next:
-            guard let segment = segment, let segments = segments else { return nil }
-            var currentSegmentIndex = segment.getIndex() - segments[0].getIndex()
-            if currentSegmentIndex + 1 < segments.count {
-                result = segments[currentSegmentIndex + 1]
-            } else {
-                // Input segment is the last element in the array
-                // We return it because there are no more next segments
-                result = segment
-            }
-            
-            if isWord || isCommitted {
-                while let seg = result, (
-                    (isWord && (
-                        seg.isPunctuation() ||
-                        seg.isSilence() ||
-                        seg.isVoiceCommandWord() ||
-                        seg.isDeleted()
-                    )) ||
-                    (isCommitted && !seg.isCommitted())
-                ) && currentSegmentIndex + 1 < segments.count {
-                    currentSegmentIndex += 1
-                    result = segments[currentSegmentIndex]
-                }
-            }
-        }
-        
-        if let result = result, (isWord && (
-            result.isPunctuation() ||
-            result.isSilence() ||
-            result.isVoiceCommandWord() ||
-            result.isDeleted()
-        )) ||
-        (isCommitted && !result.isCommitted()) {
-            return nil
-        } else {
-            return result
-        }
-    }
-    
-    func getSegment(forTrackTime: CMTime) -> NoteSegment? {
-        if let playbackRange = self.playbackRange, self.isPlayingNote {
-            let segment = Utils.binarySearch(
-                in: Array(self.noteSegments[playbackRange]),
-                isLower: { segment in
-                    return segment.timeMapping.target.end < forTrackTime
-                },
-                isHigher: { segment in
-                    return segment.timeMapping.target.start > forTrackTime
-                }
-            )
-            return segment
-        } else {
-            // check committed segments
-            let seg = Utils.binarySearch(
-                in: self.noteSegments,
-                isLower: { segment in
-                    return segment.timeMapping.target.end < forTrackTime
-                },
-                isHigher: { segment in
-                    return segment.timeMapping.target.start > forTrackTime
-                }
-            )
-            
-            // Only return if we found it
-            if let seg = seg {
-                return seg
-            }
-            
-            // check buffer segments
-            let committedTrackLastSegment = self.noteSegments.last
-            if let committedTrackLastSegment = committedTrackLastSegment {
-                // We subtract because segments in track two do not factor time from track one
-                let boundaryTime = CMTimeSubtract(forTrackTime, committedTrackLastSegment.timeMapping.target.end)
-                let segment = Utils.binarySearch(
-                    in: self.noteBuffer,
-                    isLower: { segment in
-                        return segment.timeMapping.target.end < boundaryTime
-                    },
-                    isHigher: { segment in
-                        return segment.timeMapping.target.start > boundaryTime
-                    }
-                )
-                return segment
-            }
-        }
-        
-        return nil
-    }
-    
     // We use .lowercased() throughout the method because sometimes word is made uppercase if we have PunctuationSuggestions on which will capitalize on-demand
     // To elimate this we make everything lowercase
     func getSegmentTextRange(of segment: NoteSegment) -> NSRange? {
         var characterRange : NSRange
         let word = segment.getText(
-            withTemporalSuggestions: viewController.withTemporalSuggestions,
-            withPunctuationSuggestions: viewController.withPunctuationSuggestions,
-            withFormattingSuggestions: viewController.withFormattingSuggestions,
-            strictlyAsWord: viewController.withTextStrictlyAsWords,
-            withCapitalization: viewController.withCapitalization
+            withTemporalSuggestions: self.state.withTemporalSuggestions,
+            withPunctuationSuggestions: self.state.withPunctuationSuggestions,
+            withFormattingSuggestions: self.state.withFormattingSuggestions,
+            strictlyAsWord: self.state.withTextStrictlyAsWords,
+            withCapitalization: self.state.withCapitalization
         ).lowercased()
         let text = self.getText().lowercased()
         if word.count > 0 && segment.timeMapping.target.start.seconds == 0 && segment.isCommitted() && text.count >= word.count {
             characterRange = NSRange(location: 0, length: word.count)
         } else if word.count > 0 && text.count >= word.count {
-            let numProcessedChar = text.count - self.getText(from: segment.timeMapping.target.start).lowercased().count
+            let numUprocessedChar = self.getText(from: segment.timeMapping.target.start).lowercased().count
+            let numProcessedChar = text.count - numUprocessedChar
             let unprocessedTranscription = text.substring(fromIndex: numProcessedChar).lowercased()
             let substringRange = unprocessedTranscription.range(of: word)
-            let numCharToSubstring = unprocessedTranscription.count - unprocessedTranscription[substringRange!.lowerBound..<unprocessedTranscription.endIndex].count
-            characterRange = NSRange(location: numProcessedChar + numCharToSubstring, length: word.count)
+            if let substringRange = substringRange {
+                let numCharToSubstring = unprocessedTranscription.count - unprocessedTranscription[substringRange.lowerBound..<unprocessedTranscription.endIndex].count
+                characterRange = NSRange(location: numProcessedChar + numCharToSubstring, length: word.count)
+            } else {
+                return nil
+            }
         } else {
             return nil
         }
@@ -4756,11 +3807,11 @@ class Note: AVMutableComposition, NSCoding {
             return cachedBackgroundNoise
         }
         
-        if self.soundIntensityStream.count == 0 {
+        if self.speechRecognition.soundIntensityStream.count == 0 {
             return Double.infinity
         }
         
-        let soundIntensityStream = Utils.cleanseSoundIntensityStream(soundIntensityStream: self.soundIntensityStream)
+        let soundIntensityStream = Utils.cleanseSoundIntensityStream(soundIntensityStream: self.speechRecognition.soundIntensityStream)
         
         // Determine sound intensity with greatest frequency
         var counts = [Int: Int]()
@@ -4840,7 +3891,7 @@ class Note: AVMutableComposition, NSCoding {
             }
             return Double.infinity
         case .word:
-            if let segmentTrackTime = segmentTrackTime, let segment = self.getSegment(forTrackTime: segmentTrackTime) {
+            if let segmentTrackTime = segmentTrackTime, let segment = self.speechPlayer.getSegment(forTrackTime: segmentTrackTime) {
                 return segment.getPower()
             }
             break
@@ -4851,7 +3902,7 @@ class Note: AVMutableComposition, NSCoding {
     
     func getSentimentScore(type: ScaleUnitType = .word, sentenceNumber: Int? = nil, forTrackTime: CMTime? = nil) -> Float {
         print("===== Get Sentiment Score =====")
-        if let forTrackTime = forTrackTime, let segment = self.getSegment(forTrackTime: forTrackTime), let sentiment = segment.getSentimentScore(type: type) {
+        if let forTrackTime = forTrackTime, let segment = self.speechPlayer.getSegment(forTrackTime: forTrackTime), let sentiment = segment.getSentimentScore(type: type) {
             return sentiment
         }
 
@@ -4875,7 +3926,7 @@ class Note: AVMutableComposition, NSCoding {
                 !segment.isVoiceCommandWord() &&
                 !segment.isDeleted() &&
                 !(
-                    viewController.withOmitSilences &&
+                    self.state.withOmitSilences &&
                     segment.isSilence() &&
                     segment.timeMapping.target.duration.seconds > Utils.SILENCE_SKIP_THRESHOLD
                 ) {
@@ -4889,19 +3940,6 @@ class Note: AVMutableComposition, NSCoding {
         self.cachedDurationArgsSet = argumentSet
         
         return self.cachedDuration!
-    }
-    
-    func getDurationListening() -> Float {
-        // print("===== Get Duration Listening =====")
-        if self.pausedListeningForSpeech {
-            return Float(self.endTime.seconds)
-        } else if self.clipCount > 1 && self.recordStartDate != nil && self.noteSegments.count > 0 {
-            return Float(self.noteSegments.last!.timeMapping.target.end.seconds) + Float(Date().timeIntervalSince(self.recordStartDate!))
-        } else if self.recordStartDate != nil {
-            return Float(Date().timeIntervalSince(self.recordStartDate!))
-        }
-        
-        return 0
     }
     
     func getDateCreated() -> Date {
@@ -4920,225 +3958,358 @@ class Note: AVMutableComposition, NSCoding {
     
     func triggerBufferCommitNotification() {
         // Give visual feedback
-        DispatchQueue.main.async {
-            var firstBufferSegment: NoteSegment?
-            var lastBufferSegment: NoteSegment?
-            if self.noteBuffer.count > 0 {
-                // Find first buffer word
-                firstBufferSegment = self.noteBuffer.first!
-                if !firstBufferSegment!.isActive() {
-                    firstBufferSegment = self.getSegment(segment: firstBufferSegment, segments: self.noteBuffer, type: .next, isWord: true)
-                }
-                
-                // Find last buffer word
-                lastBufferSegment = self.noteBuffer.last!
-                if !lastBufferSegment!.isActive() {
-                    lastBufferSegment = self.getSegment(segment: lastBufferSegment, segments: self.noteBuffer, type: .previous, isWord: true)
-                }
-            } else if let lastBufferRange = self.committedBufferRanges.last {
-                let lastBuffer = self.noteSegments[lastBufferRange]
-                // Find first buffer word
-                firstBufferSegment = lastBuffer.first!
-                if !firstBufferSegment!.isActive() {
-                    
-                }
-                firstBufferSegment = self.getSegment(segment: firstBufferSegment, segments: Array(lastBuffer), type: .next, isWord: true)
-
-                // Find last buffer word
-                lastBufferSegment = lastBuffer.last!
-                if !lastBufferSegment!.isActive() {
-                    lastBufferSegment = self.getSegment(segment: lastBufferSegment, segments: Array(lastBuffer), type: .previous, isWord: true)
-                }
+        var firstBufferSegment: NoteSegment?
+        var lastBufferSegment: NoteSegment?
+        if self.noteBuffer.count > 0 {
+            // Find first buffer word
+            firstBufferSegment = self.noteBuffer.first!
+            if !firstBufferSegment!.isActive() {
+                firstBufferSegment = self.speechPlayer.getSegment(segment: firstBufferSegment, segments: self.noteBuffer, type: .next, isWord: true)
             }
             
-            if let firstBufferSegment = firstBufferSegment, let lastBufferSegment = lastBufferSegment, firstBufferSegment != lastBufferSegment {
-                Utils.executeFeedback(
-                    visualMessage: "\"\(firstBufferSegment.getText().lowercased())...\(lastBufferSegment.getText().lowercased())\" committed!",
-                    withHaptics: true
-                )
-            } else if let firstBufferSegment = firstBufferSegment, let lastBufferSegment = lastBufferSegment, firstBufferSegment == lastBufferSegment {
-                Utils.executeFeedback(
-                    visualMessage: "\"\(firstBufferSegment.getText().lowercased())\" committed!",
-                    withHaptics: true
-                )
-            } else {
-                print("===== [Error] There was a problem finding the first and last words of buffer =====")
+            // Find last buffer word
+            lastBufferSegment = self.noteBuffer.last!
+            if !lastBufferSegment!.isActive() {
+                lastBufferSegment = self.speechPlayer.getSegment(segment: lastBufferSegment, segments: self.noteBuffer, type: .previous, isWord: true)
             }
+        } else if let lastBufferRange = self.committedBufferRanges.last {
+            let lastBuffer = self.noteSegments[lastBufferRange]
+            // Find first buffer word
+            firstBufferSegment = lastBuffer.first!
+            if !firstBufferSegment!.isActive() {
+                
+            }
+            firstBufferSegment = self.speechPlayer.getSegment(segment: firstBufferSegment, segments: Array(lastBuffer), type: .next, isWord: true)
+
+            // Find last buffer word
+            lastBufferSegment = lastBuffer.last!
+            if !lastBufferSegment!.isActive() {
+                lastBufferSegment = self.speechPlayer.getSegment(segment: lastBufferSegment, segments: Array(lastBuffer), type: .previous, isWord: true)
+            }
+        }
+        
+        if let firstBufferSegment = firstBufferSegment, let lastBufferSegment = lastBufferSegment, firstBufferSegment != lastBufferSegment {
+            self.notifications.executeFeedback(
+                visualMessage: "\"\(firstBufferSegment.getText().lowercased())...\(lastBufferSegment.getText().lowercased())\" committed!",
+                withHaptics: true
+            )
+        } else if let firstBufferSegment = firstBufferSegment, let lastBufferSegment = lastBufferSegment, firstBufferSegment == lastBufferSegment {
+            self.notifications.executeFeedback(
+                visualMessage: "\"\(firstBufferSegment.getText().lowercased())\" committed!",
+                withHaptics: true
+            )
+        } else {
+            print("===== [Error] There was a problem finding the first and last words of buffer =====")
         }
         
         // Present Feedback
 //        hapticEngine.lightImpact()
-        Utils.executeFeedback(
+        self.notifications.executeFeedback(
             withHaptics: true
         )
     }
     
-    func prepareSpeechCommandHandler(command: String) {
-        self.stagedSpeechCommand = command.lowercased()
+    func processVoiceCommandSegments(command: String, numWordsBeforeVoiceCommand: Int) {
+        print("===== Note: Process Voice Command Segments =====")
+        print("\tSeeking lowest voice command index...")
+        
+        var lastBufferRange: Range<Int>
+        if self.noteBuffer.count > 0 {
+            print("\tSourcing segments from note buffer because we haven't committed yet.")
+            lastBufferRange = 0..<self.noteBuffer.count
+        } else {
+            print("\tSourcing segments from committed segments because buffer is empty.")
+            lastBufferRange = self.committedBufferRanges[self.committedBufferRanges.count - 1]
+        }
 
-        // We put it in a handler so we can run it when we receive final transcript
-        self.tempVoiceCommandHandler = {
-            print("===== Speech Command Handler =====")
-            
-            if !selectionCursor.isUpdatingSelection {
-                print("\tSeeking lowest voice command index...")
-                
-                let lastBufferRange = self.committedBufferRanges[self.committedBufferRanges.count - 1]
-                let voiceCommandBuffer = self.noteSegments[lastBufferRange]
-                var lowestCommandIndex: Int?
-                var numWordsEncountered: Int = 0
-                for i in voiceCommandBuffer.startIndex..<voiceCommandBuffer.endIndex {
-                    let segment = voiceCommandBuffer[i]
-                    if segment.isActive() && numWordsEncountered == self.numWordsBeforeVoiceCommand {
-                        print("\tFound lowest voice command index: \(i) of \(self.noteSegments.count - 1)")
-                        lowestCommandIndex = i
-                        break
-                    } else if segment.isActive() && numWordsEncountered < self.numWordsBeforeVoiceCommand {
-                        numWordsEncountered += 1
-                    }
+        var lowestCommandIndex: Int?
+        var numWordsEncountered: Int = 0
+        if self.noteBuffer.count > 0 {
+            for i in self.noteBuffer.startIndex..<self.noteBuffer.endIndex {
+                let segment = self.noteBuffer[i]
+                if segment.isActive() && numWordsEncountered == numWordsBeforeVoiceCommand {
+                    print("\tFound lowest voice command index: \(i) of \(self.noteBuffer.count - 1)")
+                    print("\tFound in note buffer...")
+                    lowestCommandIndex = i
+                    break
+                } else if segment.isActive() && numWordsEncountered < numWordsBeforeVoiceCommand {
+                    numWordsEncountered += 1
                 }
-                
-                if let lowestCommandIndex = lowestCommandIndex {
-                    print("\tFlipping every segment after lowest voice command index to be voice command word...")
-                    for index in lowestCommandIndex..<self.noteSegments.distance(to: lastBufferRange.endIndex) {
-                        // duplicate segment
-                        let duplicateSegment = self.noteSegments[index].duplicate()
-                        
-                        // determine if we need to replace selection values
-                        let replaceSelectionAnchor = duplicateSegment == selectionCursor.anchor
-                        let replaceSelectionFocus = duplicateSegment == selectionCursor.focus
-                        let replaceSelectionCachedAnchor = duplicateSegment == selectionCursor.cachedAnchor
-                        
-                        // set duplicate segment as voice command word
-                        duplicateSegment.setIsVoiceCommandWord(to: true)
-                        
-                        // set duplicate segment
-                        self.noteSegments[index] = duplicateSegment
-                        
-                        // update selection anchor
-                        if replaceSelectionAnchor {
-                            print("\tReplacing Selection Cursor Anchor with version that is not voice command word...")
-                            selectionCursor.setAnchor(segment: self.noteSegments[index])
-                        }
-                        
-                        // update selection focus
-                        if replaceSelectionFocus {
-                            print("\tReplacing Selection Cursor Focus with version that is voice command word...")
-                            selectionCursor.setFocus(segment: self.noteSegments[index])
-                        }
-                        
-                        // update selection cached anchor
-                        if replaceSelectionCachedAnchor {
-                            print("\tReplacing Selection Cursor Cached Anchor with version that is voice command word...")
-                            selectionCursor.setCachedAnchor(segment: self.noteSegments[index])
-                        }
-                    }
-                    
-                    // we can't have a voice command as the anchor
-                    var updateSelectionAnchor = false
-                    var lastBufferWordIndex = Int(Utils.UNKNOWN)
-                    if selectionCursor.cachedAnchor != nil && self.noteBuffer.count > 0 && !selectionCursor.cachedAnchor!.isCommitted() {
-                        print("\tBuffer non-empty and Cached Anchor detected to be buffer segment...")
-                        print("\tFind index of new anchor to use as new anchor value...")
-                        var lastBufferWord: NoteSegment?
-                        for (index, segment) in self.noteBuffer.reversed().enumerated() {
-                            if !segment.isSilence() && !segment.isVoiceCommandWord() && !segment.isDeleted() {
-                                lastBufferWord = segment
-                                lastBufferWordIndex = index
-                                print("\tFound new anchor index: ", lastBufferWordIndex)
-                                break
-                            }
-                        }
-                        
-                        if let currentAnchor = selectionCursor.anchor, let lastBufferWord = lastBufferWord {
-                            updateSelectionAnchor = currentAnchor.getUID() != lastBufferWord.getUID()
-                        }
-                    } else if selectionCursor.cachedAnchor != nil && self.noteBuffer.count == 0 {
-                        print("\tBuffer is empty and Cached Anchor detected to be committed segment...")
-                        print("\tFind index of new anchor to use as new anchor value...")
-                        let secondLastBufferRange = self.committedBufferRanges[self.committedBufferRanges.count - 2]
-                        let lastWordsBuffer = self.noteSegments[secondLastBufferRange]
-                        var lastBufferWord: NoteSegment?
-                        for (index, segment) in lastWordsBuffer.reversed().enumerated() {
-                            if !segment.isSilence() && !segment.isVoiceCommandWord() && !segment.isDeleted() {
-                                lastBufferWord = segment
-                                lastBufferWordIndex = self.noteSegments.distance(to: secondLastBufferRange.startIndex) + (lastWordsBuffer.count - index - 1)
-                                print("\tFound new anchor index: ", lastBufferWordIndex)
-                                break
-                            }
-                        }
-                        
-                        if let currentAnchor = selectionCursor.anchor, let lastBufferWord = lastBufferWord {
-                            updateSelectionAnchor = currentAnchor.getUID() != lastBufferWord.getUID()
-                        }
-                    } else {
-                        print("\tFind index of new anchor to use as new anchor value...")
-                        var lastBufferWord: NoteSegment?
-                        for (index, segment) in self.noteSegments.reversed().enumerated() {
-                            if !segment.isSilence() && !segment.isVoiceCommandWord() && !segment.isDeleted() {
-                                lastBufferWord = segment
-                                lastBufferWordIndex = self.noteSegments.count - index - 1
-                                print("\tFound new anchor index: ", lastBufferWordIndex)
-                                break
-                            }
-                        }
-                        
-                        if let currentAnchor = selectionCursor.anchor, let lastBufferWord = lastBufferWord {
-                            updateSelectionAnchor = currentAnchor.getUID() != lastBufferWord.getUID()
-                        }
-                    }
-                    
-                    if updateSelectionAnchor {
-                        print("\tSelection Anchor needs to be updated from voice command word: ", selectionCursor.anchor?.getText() ?? "nil")
-                    } else {
-                        print("\tIndex of new anchor not found. Abort updating selection cursor anchor...")
-                    }
-                    
-                    if updateSelectionAnchor && self.noteBuffer.count == 0 && lastBufferWordIndex != Int(Utils.UNKNOWN) {
-                        print("\tUpdating Selection Anchor...")
-                        let segment = self.noteSegments[lastBufferWordIndex]
-                        print("\tNew Selection Anchor: ", segment.getText())
-                        selectionCursor.setAnchor(segment: segment)
-                    } else if updateSelectionAnchor && self.noteBuffer.count > 0 && lastBufferWordIndex != Int(Utils.UNKNOWN) && !selectionCursor.cachedAnchor!.isCommitted()  {
-                        print("\tUpdating Selection Anchor...")
-                        let segment = self.noteBuffer[lastBufferWordIndex]
-                        print("\tNew Selection Anchor: ", segment.getText())
-                        selectionCursor.setAnchor(segment: segment)
-                    }
-                    
-                    self.numWordsBeforeVoiceCommand = 0
-                    
-                    self.handleMutation()
-                    self.checkRep()
-
-                    self.handleOnListenUpdate(text: self.getText())
-                    
-                    // Handle voice command
-                    self.handleVoiceCommand(command: command.lowercased())
-                }
-            } else {
-                // Handle voice command
-                self.handleVoiceCommand(command: command.lowercased())
             }
+        } else {
+            for i in Array(self.noteSegments[lastBufferRange]).startIndex..<Array(self.noteSegments[lastBufferRange]).endIndex {
+                let segment = Array(self.noteSegments[lastBufferRange])[i]
+                if segment.isActive() && numWordsEncountered == numWordsBeforeVoiceCommand {
+                    print("\tFound lowest voice command index: \(i) of \(Array(self.noteSegments[lastBufferRange]).count - 1)")
+                    print("\tFound in note committed segments...")
+                    lowestCommandIndex = i
+                    break
+                } else if segment.isActive() && numWordsEncountered < numWordsBeforeVoiceCommand {
+                    numWordsEncountered += 1
+                }
+            }
+        }
+        
+        var replaceSelectionAnchor = false
+        var replaceSelectionFocus = false
+        var replaceSelectionCachedAnchor = false
+        if let lowestCommandIndex = lowestCommandIndex {
+            print("\tFlipping every segment after lowest voice command index to be voice command word...")
+            let bufferSource = self.noteBuffer.count > 0 ? self.noteBuffer : Array(self.noteSegments[lastBufferRange])
+            for index in lowestCommandIndex..<bufferSource.distance(to: lastBufferRange.endIndex) {
+                // duplicate segment
+                let duplicateSegment = bufferSource[index].duplicate()
+                
+                // determine if we need to replace selection values
+                replaceSelectionAnchor = replaceSelectionAnchor || duplicateSegment == self.selectionCursor.anchor && self.selectionCursor.anchor != nil
+                replaceSelectionFocus = replaceSelectionFocus || duplicateSegment == self.selectionCursor.focus && self.selectionCursor.focus != nil
+                replaceSelectionCachedAnchor = replaceSelectionCachedAnchor || duplicateSegment == self.selectionCursor.cachedAnchor && self.selectionCursor.cachedAnchor != nil
+                
+                // set duplicate segment as voice command word
+                duplicateSegment.setIsVoiceCommandWord(to: true)
+                print("\t'\(duplicateSegment.getText())' == Voice Command")
+                
+                // set duplicate segment
+                if self.noteBuffer.count > 0 {
+                    self.noteBuffer[index] = duplicateSegment
+                } else {
+                    self.noteSegments[index] = duplicateSegment
+                }
+                
+                // update selection anchor
+                if duplicateSegment == self.selectionCursor.anchor {
+                    print("\tReplacing Selection Cursor Anchor with version that is not voice command word...")
+                    self.selectionCursor.setAnchor(segment: duplicateSegment)
+                }
+                
+                // update selection focus
+                if duplicateSegment == self.selectionCursor.focus {
+                    print("\tReplacing Selection Cursor Focus with version that is voice command word...")
+                    self.selectionCursor.setFocus(segment: duplicateSegment)
+                }
+                
+                // update selection cached anchor
+                if duplicateSegment == self.selectionCursor.cachedAnchor {
+                    print("\tReplacing Selection Cursor Cached Anchor with version that is voice command word...")
+                    self.selectionCursor.setCachedAnchor(segment: duplicateSegment)
+                }
+            }
+            
+            if let anchor = self.selectionCursor.anchor, replaceSelectionAnchor && self.noteBuffer.count > 0 && !anchor.isCommitted() {
+                print("\tReplacing anchor. We cannot have a voice command anchor.")
+                print("\tSearching in note buffer...")
+                var newAnchor: NoteSegment?
+                let newAnchorIndex = Utils.getNoteNthLastSegmentIndex(
+                    segments: Array(self.noteBuffer[0..<lowestCommandIndex]),
+                    selectionCursor: self.selectionCursor,
+                    n: 0
+                ).1
+                
+                if let newAnchorIndex = newAnchorIndex {
+                    newAnchor = Array(self.noteBuffer[0..<lowestCommandIndex])[newAnchorIndex]
+                    print("\tFound new anchor: ", newAnchor ?? "nil")
+                }
+                
+                if newAnchor == nil {
+                    print("\tUnable to find replacement anchor in buffer. Search in committed segments...")
+                    let segments = self.selectionCursor.cachedAnchor != nil ? Array(self.noteSegments[0..<self.selectionCursor.cachedAnchor!.getIndex() + 1]) : self.noteSegments // We add one because we want to include cached anchor
+                    let newAnchorIndex = Utils.getNoteNthLastSegmentIndex(
+                        segments: segments,
+                        selectionCursor: self.selectionCursor,
+                        n: 0
+                    ).1
+                    
+                    if let newAnchorIndex = newAnchorIndex {
+                        newAnchor = segments[newAnchorIndex]
+                        print("\tFound new anchor: ", newAnchor ?? "nil")
+                    }
+                }
+                
+                if let newAnchor = newAnchor {
+                    print("\tUpdating Selection Anchor...")
+                    self.selectionCursor.setAnchor(segment: newAnchor)
+                }
+            } else if let _ = self.selectionCursor.anchor, replaceSelectionAnchor {
+                print("\tReplacing anchor. We cannot have a voice command anchor.")
+                print("\tSearching in note committed segments...")
+                var newAnchor: NoteSegment?
+                let segments = self.selectionCursor.cachedAnchor != nil ? Array(self.noteSegments[0..<self.selectionCursor.cachedAnchor!.getIndex() + 1]) : self.noteSegments // We add one because we want to include cached anchor
+                let newAnchorIndex = Utils.getNoteNthLastSegmentIndex(
+                    segments: segments,
+                    selectionCursor: self.selectionCursor,
+                    n: 0
+                ).1
+                
+                if let newAnchorIndex = newAnchorIndex {
+                    newAnchor = segments[newAnchorIndex]
+                    print("\tFound new anchor: ", newAnchor ?? "nil")
+                }
+                
+                if let newAnchor = newAnchor {
+                    print("\tUpdating Selection Anchor...")
+                    self.selectionCursor.setAnchor(segment: newAnchor)
+                }
+            }
+            
+            print("\tClear focus...")
+            if !self.selectionCursor.hasSelection {
+                self.selectionCursor.setFocus()
+            }
+            
+            if let cachedAnchor = self.selectionCursor.cachedAnchor, replaceSelectionCachedAnchor && self.noteBuffer.count > 0 && !cachedAnchor.isCommitted() {
+                print("\tReplacing cached anchor. We cannot have a voice command cached anchor.")
+                print("\tSearching in note buffer...")
+                var newCachedAnchor: NoteSegment?
+                let newCachedAnchorIndex = Utils.getNoteNthLastSegmentIndex(
+                    segments: Array(self.noteBuffer[0..<cachedAnchor.getIndex() + 1]), // We add one because we want to include cached anchor
+                    selectionCursor: self.selectionCursor,
+                    n: 0
+                ).1
+                
+                if let newCachedAnchorIndex = newCachedAnchorIndex {
+                    newCachedAnchor = Array(self.noteBuffer[0..<cachedAnchor.getIndex() + 1])[newCachedAnchorIndex] // We add one because we want to include cached anchor
+                    print("\tFound new cached anchor: ", newCachedAnchor ?? "nil")
+                }
+                
+                if newCachedAnchor == nil {
+                    print("\tUnable to find replacement cached anchor in buffer. Search in committed segments...")
+                    let newCachedAnchorIndex = Utils.getNoteNthLastSegmentIndex(
+                        segments: self.noteSegments,
+                        selectionCursor: self.selectionCursor,
+                        n: 0
+                    ).1
+                    
+                    if let newCachedAnchorIndex = newCachedAnchorIndex {
+                        newCachedAnchor = self.noteSegments[newCachedAnchorIndex]
+                        print("\tFound new cached anchor: ", newCachedAnchor ?? "nil")
+                    }
+                }
+                
+                if let newCachedAnchor = newCachedAnchor {
+                    print("\tUpdating Selection Cached Anchor...")
+                    self.selectionCursor.setCachedAnchor(segment: newCachedAnchor)
+                }
+            } else if let cachedAnchor = self.selectionCursor.cachedAnchor, replaceSelectionCachedAnchor {
+                print("\tReplacing cached anchor. We cannot have a voice command anchor.")
+                print("\tSearching in note committed segments...")
+                var newCachedAnchor: NoteSegment?
+                let newCachedAnchorIndex = Utils.getNoteNthLastSegmentIndex(
+                    segments: Array(self.noteBuffer[0..<cachedAnchor.getIndex() + 1]), // We add one because we want to include cached anchor
+                    selectionCursor: self.selectionCursor,
+                    n: 0
+                ).1
+                
+                if let newCachedAnchorIndex = newCachedAnchorIndex {
+                    newCachedAnchor = Array(self.noteBuffer[0..<cachedAnchor.getIndex() + 1])[newCachedAnchorIndex] // We add one because we want to include cached anchor
+                    print("\tFound new cached anchor: ", newCachedAnchor ?? "nil")
+                }
+                
+                if let newCachedAnchor = newCachedAnchor {
+                    print("\tUpdating Selection Cached Anchor...")
+                    self.selectionCursor.setCachedAnchor(segment: newCachedAnchor)
+                }
+            }
+            
+            print("\tSegment count after processing voice commands: \(self.noteSegments.count) committed and \(self.noteBuffer.count) in buffer.")
+            self.handleMutation()
+            self.checkRep()
         }
     }
     
-    func handleOnListenUpdate(text: String, highlightRange: NSRange? = nil) {
-        if self.isListeningForSpeech && self.noteBuffer.count > 0, let firstBufferSegment = self.noteBuffer.first, let lastBufferSegment = self.noteBuffer.last, let firstBufferSegmentTextRange = self.getSegmentTextRange(of: firstBufferSegment), let lastBufferSegmentTextRange = self.getSegmentTextRange(of: lastBufferSegment) {
-            let bufferTextRange = NSRange(
-                location: firstBufferSegmentTextRange.location,
-                length: (lastBufferSegmentTextRange.location - firstBufferSegmentTextRange.location) + lastBufferSegmentTextRange.length
-            )
-            self.onListenUpdate?(text, highlightRange, bufferTextRange)
-        } else if viewController.isListeningForCommands && !pausedListeningForSpeech {
+    func handleOnSpeechUpdate(text: String, highlightRange: NSRange? = nil) {
+        print("===== Note: Handle On Listen Update =====")
+        
+        if self.noteBuffer.count > 0 {
+            // Find first buffer word
+            var firstBufferSegment = self.noteBuffer.first
+            if let segment = firstBufferSegment, !segment.isActive() {
+                firstBufferSegment = self.speechPlayer.getSegment(segment: segment, segments: self.noteBuffer, type: .next, isWord: true)
+            }
+            
+            // Find last buffer word
+            var lastBufferSegment = self.noteBuffer.last
+            if let segment = lastBufferSegment, !segment.isActive() {
+                lastBufferSegment = self.speechPlayer.getSegment(segment: segment, segments: self.noteBuffer, type: .previous, isWord: true)
+            }
+            
+            if self.speechRecognition.isListeningForSpeech && self.noteBuffer.count > 0, let firstBufferSegment = firstBufferSegment, let lastBufferSegment = lastBufferSegment, let firstBufferSegmentTextRange = self.getSegmentTextRange(of: firstBufferSegment), let lastBufferSegmentTextRange = self.getSegmentTextRange(of: lastBufferSegment), firstBufferSegment.isActive() && lastBufferSegment.isActive() {
+                let bufferRange = NSRange(
+                    location: firstBufferSegmentTextRange.location,
+                    length: (lastBufferSegmentTextRange.location - firstBufferSegmentTextRange.location) + lastBufferSegmentTextRange.length
+                )
+                
+                // Notify observers of note update
+                var userInfo: [String : Any] = [
+                    "text": text,
+                    "bufferRange": bufferRange,
+                    "transformations": self.transformations
+                ]
+                
+                if let highlightRange = highlightRange {
+                    userInfo["highlightRange"] = highlightRange
+                }
+                
+                NotificationCenter.default.post(
+                    name: Note.onNoteListenUpdate,
+                    object: nil,
+                    userInfo: userInfo
+                )
+            } else {
+                // Notify observers of note update
+                var userInfo: [String : Any] = [
+                    "text": text,
+                    "transformations": self.transformations
+                ]
+                
+                if let highlightRange = highlightRange {
+                    userInfo["highlightRange"] = highlightRange
+                }
+                
+                NotificationCenter.default.post(
+                    name: Note.onNoteListenUpdate,
+                    object: nil,
+                    userInfo: userInfo
+                )
+            }
+        } else if self.speechRecognition.isListeningForCommands && !self.speechRecognition.isListeningForSpeech && !self.speechRecognition.pausedListeningForSpeech && self.noteSegments.count == 0 {
             // All text is buffer text when listening for commands
-            let bufferTextRange = NSRange(
+            let bufferRange = NSRange(
                 location: 0,
                 length: text.count
             )
-            self.onListenUpdate?(text, highlightRange, bufferTextRange)
+            
+            // Notify observers of note update
+            var userInfo: [String : Any] = [
+                "text": text,
+                "bufferRange": bufferRange,
+                "transformations": self.transformations
+            ]
+            
+            if let highlightRange = highlightRange {
+                userInfo["highlightRange"] = highlightRange
+            }
+            
+            NotificationCenter.default.post(
+                name: Note.onNoteListenUpdate,
+                object: nil,
+                userInfo: userInfo
+            )
         } else {
-            self.onListenUpdate?(text, highlightRange, nil)
+            // Notify observers of note update
+            var userInfo: [String : Any] = [
+                "text": text,
+                "transformations": self.transformations
+            ]
+            
+            if let highlightRange = highlightRange {
+                userInfo["highlightRange"] = highlightRange
+            }
+            
+            NotificationCenter.default.post(
+                name: Note.onNoteListenUpdate,
+                object: nil,
+                userInfo: userInfo
+            )
         }
     }
     
@@ -5154,764 +4325,4 @@ class Note: AVMutableComposition, NSCoding {
         self.cachedDurationArgsSet = nil
         self.cachedBackgroundNoise = nil
     }
-    
-    func getLastCommit() -> [NoteSegment]? {
-        var lastCommit: [NoteSegment]?
-        for range in self.committedBufferRanges.reversed() {
-            var allInactive = true
-            // search range for active word/s
-            for segment in self.noteSegments[range] {
-                if segment.isActive() {
-                    allInactive = false
-                    break
-                }
-            }
-            
-            // Look at next range for active word/s
-            if allInactive {
-                continue
-            }
-            
-            lastCommit = Array(self.noteSegments[range])
-            return lastCommit
-        }
-        
-        return nil
-    }
-    
-    // MARK: - Key-Value Observer
-    
-    override func observeValue(
-        forKeyPath keyPath: String?,
-        of object: Any?,
-        change: [NSKeyValueChangeKey : Any]?,
-        context: UnsafeMutableRawPointer?
-    ){
-//        guard self.noteBuffer.count == 0 else {
-//            print("===== [Error] There was a problem inserting passage. Buffer was not empty =====")
-//        }
-
-        if keyPath == #keyPath(AVPlayerItem.status) {
-            let status: AVPlayerItem.Status
-            
-            // Get the status change from the change dictionary
-            if let statusNumber = change?[.newKey] as? NSNumber {
-                status = AVPlayerItem.Status(rawValue: statusNumber.intValue)!
-            } else {
-                status = .unknown
-            }
-            
-            // Switch over the status
-            switch status {
-            case .readyToPlay:
-                print("===== Playing Note =====")
-                let timeScale = CMTimeScale(NSEC_PER_SEC)
-                let time = CMTime(seconds: 1, preferredTimescale: timeScale)
-
-                if let _ = self.observerContext["secondElapseHandler"] {
-                    print("\tSet Playback Second Handler...")
-                    self.timerObserverToken = player.addPeriodicTimeObserver(forInterval: time, queue: .main) {time in
-                        self.handlePeriodicTimeObserver()
-                    }
-                }
-                
-                if let _ = self.observerContext["segmentBoundaryHandler"], let playbackRange = self.playbackRange, !selectionCursor.isLoopingSelection {
-                    print("\tSet Playback Segment Boundary Handler...")
-                    // if we have a selection, animating through each word removes it
-                    var boundaryTimes = [NSValue]()
-                    for segment in self.noteSegments[playbackRange] {
-                        boundaryTimes.append(NSValue(time: segment.timeMapping.target.start))
-                    }
-                    
-                    self.boundaryObserverToken = player.addBoundaryTimeObserver(forTimes: boundaryTimes, queue: .main) {
-                        self.handleBoundaryTimeObserver()
-                    }
-                }
-                
-                print("\tSet Playback Finish Handler...")
-                self.completionObserverToken = player.addBoundaryTimeObserver(forTimes: [NSValue(time: self.stopPlaybackAt!)], queue: .main) {
-                    self.handleCompletionObserver()
-                }
-                
-                // Start note
-                player.play()
-                
-                // Set player rate
-                let firstPlayableSegment = self.getSegment(
-                    forTrackTime: CMTimeMake(
-                        value: Int64(Note.defaultSegmentTimescale * (self.startPlaybackAt!.seconds + Utils.TEMPORAL_DELTA)),
-                        timescale: Int32(Note.defaultSegmentTimescale)
-                    )
-                )
-                let rate = firstPlayableSegment != nil && !self.isPlayingExternalSegments ? firstPlayableSegment!.getRate() * viewController.playbackRate : viewController.playbackRate
-                let rateWasSet = Utils.setPlayerRate(player: self.player, rate: rate)
-                if rateWasSet {
-                    print("\tPlayer rate was successfully set: ", rate)
-                } else {
-                    print("\t[Error] There was a problem setting player rate. Player had not been started yet.")
-                }
-                
-                if self.startPlaybackAt! == self.startTime && !self.isPlayingExternalSegments {
-                    print("\tPlaying from start of recording...")
-                } else {
-                    print("\tPlaying from \(self.startPlaybackAt!.seconds) seconds ...")
-                }
-                // Check to see if there is a silence at the start we need to skip
-                self.handleBoundaryTimeObserver(start: true)
-
-                if let onStartHandler = self.observerContext["onStartHandler"] {
-                    onStartHandler()
-                }
-            case .failed:
-                print("\t[Error] There was a problem making track ready to play: \(self.tracks[0].segments.first!.sourceURL!)")
-                if let error = player.currentItem!.error {
-                    print("\tMessage: \(error.localizedDescription)")
-                }
-
-                // Play Sound
-                soundEngine.error()
-                
-                // Give haptic feedback
-                hapticEngine.error()
-                
-                // wait for sound
-//                Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
-//                    fatalError()
-//                }
-                break
-            case .unknown:
-                // Play Sound
-                soundEngine.error()
-                
-                // Give haptic feedback
-                hapticEngine.error()
-                
-                // wait for sound
-//                Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
-//                    fatalError("\t[Error] Player not ready")
-//                }
-                break
-            @unknown default:
-                // Play Sound
-                soundEngine.error()
-                
-                // Give haptic feedback
-                hapticEngine.error()
-                
-                // wait for sound
-//                Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
-//                    fatalError("\t[Error] Unknown player status received")
-//                }
-            }
-        }
-    }
-    
-    func handlePeriodicTimeObserver() {
-        DispatchQueue.main.async {
-            if let secondElapseHandler = self.observerContext["secondElapseHandler"] {
-                secondElapseHandler()
-            }
-        }
-    }
-    
-    func handleBoundaryTimeObserver(start: Bool = false) {
-        let seekNextSegmentHandler: (_ segment: NoteSegment, _ conditional: Bool) -> Void = { segment, conditional in
-            if conditional && (
-                (viewController.withSkipPunctuation && segment.isPunctuation()) ||
-                (viewController.withOmitSilences && segment.isSilence() && segment.timeMapping.target.duration.seconds > Utils.SILENCE_SKIP_THRESHOLD) ||
-                segment.isVoiceCommandWord() ||
-                segment.isDeleted()
-            ), let nextWord = self.getSegment(segment: segment, segments: Array(self.noteSegments[self.playbackRange!]), type: .next, isWord: true) {
-                // skip to next segment
-                self.previousBoundarySegment = segment
-                self.player.seek(
-                    to: nextWord.timeMapping.target.start,
-                    toleranceBefore: CMTime.zero,
-                    toleranceAfter: CMTime.zero
-                )
-                
-                // Turn down volume to not hear stutters from voice command word
-                Utils.setPlayerVolume(player: self.player, volume: 0)
-            } else {
-                self.previousBoundarySegment = segment
-                
-                // Make sure volume is correctly set
-                if self.player.volume != viewController.playbackVolume {
-                    Utils.setPlayerVolume(player: self.player, volume: viewController.playbackVolume)
-                }
-            }
-            
-            // Make sure rate is correctly set
-            if self.player.rate != segment.getRate() {
-                let _ = Utils.setPlayerRate(player: self.player, rate: segment.getRate() * viewController.playbackRate)
-            }
-            
-            self.observerContext["segmentBoundaryHandler"]?()
-        }
-        
-        let seekEndPlaybackHandler: (_ segment: NoteSegment, _ conditional: Bool) -> Void = { segment, conditional in
-            if conditional && (
-                (viewController.withSkipPunctuation && segment.isPunctuation()) ||
-                (viewController.withOmitSilences && segment.isSilence() && segment.timeMapping.target.duration.seconds > Utils.SILENCE_SKIP_THRESHOLD) ||
-                segment.isVoiceCommandWord() ||
-                segment.isDeleted()
-            ) {
-                // skip to next segment
-                self.previousBoundarySegment = nil
-                self.player.seek(
-                    to: CMTimeMake(
-                        value: Int64(Note.defaultSegmentTimescale * (self.player.currentItem!.duration.seconds - Utils.PLAYER_END_PLAYBACK_BUFFER)),
-                        timescale: Int32(Note.defaultSegmentTimescale)
-                    ),
-                    toleranceBefore: CMTime.zero,
-                    toleranceAfter: CMTime.zero
-                )
-
-                // Turn down volume to not hear stutters from voice command word
-                Utils.setPlayerVolume(player: self.player, volume: 0)
-            } else {
-                self.previousBoundarySegment = segment
-                
-                // Make sure volume is correctly set
-                if self.player.volume != viewController.playbackVolume {
-                    Utils.setPlayerVolume(player: self.player, volume: viewController.playbackVolume)
-                }
-            }
-            
-            // Make sure rate is correctly set
-            if self.player.rate != segment.getRate() {
-                let _ = Utils.setPlayerRate(player: self.player, rate: segment.getRate() * viewController.playbackRate)
-            }
-            
-            self.observerContext["segmentBoundaryHandler"]?()
-        }
-        
-        let currentSegment = self.getSegment(type: .current)
-        if start {
-            let segment = Array(self.noteSegments[self.playbackRange!])[0]
-            seekNextSegmentHandler(segment, true)
-        } else if let segment = currentSegment, segment == self.noteSegments.last! || (
-            (
-                (viewController.withSkipPunctuation && segment.isPunctuation()) ||
-                (viewController.withOmitSilences && segment.isSilence() && segment.timeMapping.target.duration.seconds > Utils.SILENCE_SKIP_THRESHOLD) ||
-                segment.isVoiceCommandWord() ||
-                segment.isDeleted()
-            ) && self.getSegment(segment: segment, segments: Array(self.noteSegments[self.playbackRange!]), type: .next, isWord: true) == nil
-        ) {
-            // last segment of note
-            seekEndPlaybackHandler(segment, true)
-        } else if let segment = currentSegment {
-            // We do an equality check with the previous boundary to make sure we are strictly moving
-            // forward and not stuck in loop of playing an older segment
-            seekNextSegmentHandler(segment, self.previousBoundarySegment != nil && segment != previousBoundarySegment)
-        } else {
-            // Stop
-            self.previousBoundarySegment = nil
-            self.player.seek(
-                to: CMTimeMake(
-                    value: Int64(Note.defaultSegmentTimescale * (self.player.currentItem!.duration.seconds - Utils.PLAYER_END_PLAYBACK_BUFFER)),
-                    timescale: Int32(Note.defaultSegmentTimescale)
-                ),
-                toleranceBefore: CMTime.zero,
-                toleranceAfter: CMTime.zero
-            )
-
-            // Turn down volume to not hear stutters from voice command word
-            Utils.setPlayerVolume(player: self.player, volume: 0)
-            
-            self.observerContext["segmentBoundaryHandler"]?()
-        }
-    }
-    
-    func handleCompletionObserver() {
-        print("===== Completed Playing Note =====")
-
-        if let stopPlaybackAt = self.stopPlaybackAt, let startPlaybackAt = self.startPlaybackAt, selectionCursor.hasSelection && selectionCursor.isLoopingSelection && !self.isWalkingNote && !self.isRunningNote {
-            // Stop Playing
-            self.stop()
-            
-            let delayBetweenLooping = CMTimeSubtract(stopPlaybackAt, startPlaybackAt).seconds + 1
-            self.playerLoopTimer = Timer.scheduledTimer(withTimeInterval: delayBetweenLooping, repeats: false) { timer in
-                selectionCursor.playSelection(loop: true)
-            }
-        } else {
-            print("\tStop note.")
-            // Stop Playing
-            self.stop()
-            
-            if soundEngine.isProcessing {
-                soundEngine.stopProcessing()
-            }
-
-            // Play Finish Handler if present
-            self.observerContext["onFinishHandler"]?()
-        }
-
-        if let boundaryObserverToken = self.boundaryObserverToken {
-            self.player.removeTimeObserver(boundaryObserverToken)
-            self.boundaryObserverToken = nil
-            // print("===== Cleared Player Boundary Token =====")
-        }
-        
-        if let completionObserverToken = self.completionObserverToken {
-            self.player.removeTimeObserver(completionObserverToken)
-            self.completionObserverToken = nil
-            // print("===== Cleared Player Completion Token =====")
-        }
-        
-        if let timerObserverToken = self.timerObserverToken {
-            self.player.removeTimeObserver(timerObserverToken)
-            self.timerObserverToken = nil
-            // print("===== Cleared Player Timer Token =====")
-        }
-    }
-    
-    func handleVoiceCommand(command: String) {
-        if voiceCommandEngine.voiceCommandMapping[command] == "stop note" && AVAudioSession.isHeadphonesConnected {
-            voiceCommandEngine.process(detailView: self.detailView!, note: self, query: command) {
-                if !selectionCursor.hasSelection {
-                    self.handleOnListenUpdate(text: self.getText())
-                } else {
-                    self.detailView?.adjustCommandBar()
-                    self.detailView?.adjustMenuBar()
-                }
-            }
-        } else if !AVAudioSession.isHeadphonesConnected && (
-            voiceCommandEngine.voiceCommandMapping[command] == "play note" ||
-            voiceCommandEngine.voiceCommandMapping[command] == "play selection" ||
-            voiceCommandEngine.voiceCommandMapping[command] == "play previous sentence" ||
-            voiceCommandEngine.voiceCommandMapping[command] == "play commit"
-        ) {
-            // We don't have headphones connected, so we don't start listening until playback is complete
-            // If we listen immediately, the words will be heard and processed
-            voiceCommandEngine.process(detailView: self.detailView!, note: self, query: command) {
-                if self.pausedListeningForSpeech {
-                    // Start listening for speech again if paused
-                    // It won't be paused if the processed voice command was 'stop note'
-                    self.startListeningForSpeech() {
-                        if !selectionCursor.hasSelection {
-                            self.handleOnListenUpdate(text: self.getText())
-                        } else {
-                            self.detailView?.adjustCommandBar()
-                            self.detailView?.adjustMenuBar()
-                        }
-                    }
-                } else {
-                    if !selectionCursor.hasSelection {
-                        self.handleOnListenUpdate(text: self.getText())
-                    } else {
-                        self.detailView?.adjustCommandBar()
-                        self.detailView?.adjustMenuBar()
-                    }
-                }
-            }
-        } else if !AVAudioSession.isHeadphonesConnected && (
-            voiceCommandEngine.voiceCommandMapping[command] == "echo note"
-        ) {
-            // We don't have headphones connected, so we don't start listening until playback is complete
-            // If we listen immediately, the words will be heard and processed
-            voiceCommandEngine.process(detailView: self.detailView!, note: self, query: command) {
-                if !selectionCursor.hasSelection {
-                    self.handleOnListenUpdate(text: self.getText())
-                } else {
-                    self.detailView?.adjustCommandBar()
-                    self.detailView?.adjustMenuBar()
-                }
-            }
-        } else {
-            voiceCommandEngine.process(detailView: self.detailView!, note: self, query: command) {
-                let voiceCommand = voiceCommandEngine.voiceCommandMapping[command]
-                if (
-                    voiceCommand != "pause note" &&
-                    voiceCommand != "open selection" &&
-                    voiceCommand != "select commit" &&
-                    voiceCommand != "rollback commit" &&
-                    voiceCommand != "walk commit" &&
-                    voiceCommand != "run commit" &&
-                    voiceCommand != "walk selection" &&
-                    voiceCommand != "run selection" &&
-                    voiceCommand != "halt run" &&
-                    voiceCommand != "next element" &&
-                    voiceCommand != "previous element" &&
-                    voiceCommand != "exit mode" &&
-                    !selectionCursor.hasSelection
-                ) && self.pausedListeningForSpeech {
-                    // Start listening for speech again if paused
-                    // It won't be paused if the processed voice command was 'stop note'
-                    self.startListeningForSpeech() {
-                        if !selectionCursor.hasSelection {
-                            self.handleOnListenUpdate(text: self.getText())
-                        } else {
-                            self.detailView?.adjustCommandBar()
-                            self.detailView?.adjustMenuBar()
-                        }
-                    }
-                } else {
-                    if !selectionCursor.hasSelection {
-                        self.handleOnListenUpdate(text: self.getText())
-                    } else {
-                        self.detailView?.adjustCommandBar()
-                        self.detailView?.adjustMenuBar()
-                    }
-                }
-            }
-        }
-    }
 }
-
-// MARK: - Speech Recognition Delegate Extension
-
-extension Note: SFSpeechRecognitionTaskDelegate {
-    func speechRecognitionTaskFinishedReadingAudio(_ task: SFSpeechRecognitionTask) {
-        print("===== System is no longer accepting new speech input =====")
-        
-        // Play sound
-        soundEngine.error()
-        
-        // Give haptic feedback
-        hapticEngine.error()
-    }
-    
-    func speechRecognitionTaskWasCancelled(_ task: SFSpeechRecognitionTask) {
-        print("===== Note cancelled looking listening for new speech ===== ")
-        
-        // Play sound
-        soundEngine.error()
-        
-        // Give haptic feedback
-        hapticEngine.error()
-    }
-    
-    func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didFinishSuccessfully successfully: Bool) {
-        if !self.isListeningForSpeech && !viewController.withOnDeviceRecognition {
-            print("===== Note successfully finished listening for new speech =====")
-
-            self.onComplete?()
-        } else if let lastRecognitionTask = viewController.lastRecognitionTask, !self.isListeningForSpeech && viewController.withOnDeviceRecognition && lastRecognitionTask == RecognitionTask.SPEECH {
-            print("===== Note successfully finished listening for new speech =====")
-            // Completion of speech recognition section
-            if soundEngine.isProcessing {
-                print("\tSound Engine playing 'Processing Sound'. Turning off..")
-                soundEngine.stopProcessing()
-            }
-            
-            self.onComplete?()
-            
-            let onFinishHandler: (() -> Void) = { [weak self] in
-                self?.isExporting = false
-                // We previously had these in stopListeningForSpeech, but clearing these
-                // to soon affects normalization, which rquires recordStartDate to date PitchDatum and SoundIntensityDatum
-                self?.accumulatedDuration = TimeInterval(0)
-                self?.recordStartDate = nil
-                // Start voice commands
-                DispatchQueue.main.async {
-                    Utils.executeFeedback(
-                        visualMessage: "Saved!",
-                        audioMessage: "note saved",
-                        withHaptics: true,
-                        delay: 1.0
-                    )
-                    viewController.startListeningForVoiceCommands()
-                }
-            }
-            
-            if self.noteSegments.count > 0 {
-                // No need to normalize segments or export note if we haven't captured anything meaningful
-                let _ = self.normalizeSegments(
-                    normalizeType: .target,
-                    saveSegments: true,
-                    saveToLowLevelRepr: true
-                )
-                print("final segments: ", self.noteSegments)
-                Utils.executeFeedback(
-                    visualMessage: "Saving...",
-                    audioMessage: "saving note",
-                    withHaptics: true
-                )
-                // Export completed note
-                self.isExporting = true
-                Utils.exportNote(
-                    note: self,
-                    filename: self.filename,
-                    fileType: self.fileType,
-                    timeRange: CMTimeRangeMake(start: CMTime.zero, duration: self.getDuration()),
-                    onFinishHandler: onFinishHandler
-                )
-            } else {
-                onFinishHandler()
-            }
-        }
-    }
-    
-    func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didHypothesizeTranscription transcription: SFTranscription) {
-        DispatchQueue.main.async {
-            if self.isListeningForSpeech && !self.pausedListeningForSpeech && Utils.validSpeechPower(soundIntensityStream: self.soundIntensityStream, backgroundNoise: self.getBackgroundNoise()) {
-                print("===== Received hypothesis transcription: \(transcription.formattedString) =====")
-                // Stop Echo
-                if viewController.speechSynthesizer.isSpeaking {
-                    viewController.speechSynthesizer.stopSpeaking(at: .word)
-                }
-
-                self.performTranscriptionUpdate(transcription)
-                
-                if !selectionCursor.isUpdatingSelection && (self.isListeningForSpeech || self.noteSegments.count == 0) {
-                    let text = self.getText()
-                    // execute listen update handler
-                    self.handleOnListenUpdate(text: text)
-                }
-                
-                // Analyze for voice commands
-                let (isValidVoiceCommand, voiceCommandType, numWordsBeforeVoiceCommand) = Utils.isValidVoiceCommand(detailView: self.detailView!, query: transcription.formattedString)
-                
-                if let numWordsBeforeVoiceCommand = numWordsBeforeVoiceCommand, let voiceCommandType = voiceCommandType, isValidVoiceCommand {
-                    print("\tCommand Recognized!: \(transcription.formattedString)")
-                    // prepare voice command handler
-                    
-                    // Set early detection flag on
-                    self.earlyVoiceCommandDetection = true
-                    
-                    // Record how many words occur before voice command
-                    self.numWordsBeforeVoiceCommand = numWordsBeforeVoiceCommand
-                    
-                    // Capture Voice Command Datum
-                    let voiceCommandDatum = VoiceCommandDatum(
-                        date: Date(),
-                        utteredSpeech: transcription.formattedString,
-                        isValid: true,
-                        type: voiceCommandType
-                    )
-                    self.voiceCommandStream.append(voiceCommandDatum)
-
-                    self.prepareSpeechCommandHandler(command: transcription.formattedString)
-
-                    self.stopListeningForSpeech(pause: true)
-                }
-            }
-        }
-    }
-    
-    func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didFinishRecognition result: SFSpeechRecognitionResult) {
-        DispatchQueue.main.async {
-            let handleFinishRecognition = {
-                if !selectionCursor.isUpdatingSelection {
-                    // Play Sound
-                    soundEngine.commitBuffer()
-                }
-
-                // update segments
-                self.performTranscriptionUpdate(result.bestTranscription)
-                
-                // Analyze for voice commands
-                let (isValidVoiceCommand, voiceCommandType, numWordsBeforeVoiceCommand) = Utils.isValidVoiceCommand(detailView: self.detailView!, query: result.bestTranscription.formattedString)
-                
-                // trigger commit notification
-                if !AVAudioSession.isHeadphonesConnected && !selectionCursor.isUpdatingSelection && !self.earlyVoiceCommandDetection && !isValidVoiceCommand {
-                    self.triggerBufferCommitNotification()
-                }
-                
-                if !selectionCursor.isUpdatingSelection {
-                    // commit buffer
-                    self.commitBuffer()
-                    // execute listen update handler
-                    self.handleOnListenUpdate(text: self.getText())
-                }
-                
-                // Update duration
-                
-                // ***** IMPORTANT *****
-                // iOS14 has made it such that the duration in a single continguous on-device recognition session
-                // does not reset after every didFinishRecognition. As a result, we do not have to accumulate durations
-                if #available(iOS 14.0, *) {
-                    // do nothing
-                } else if !selectionCursor.isUpdatingSelection {
-                    self.accumulatedDuration = max(0, Date().timeIntervalSince(self.recordStartDate!) - Utils.TRANSCRIPTION_LATENCY_DURATION)
-                }
-
-                if let numWordsBeforeVoiceCommand = numWordsBeforeVoiceCommand, let voiceCommandType = voiceCommandType, isValidVoiceCommand && !self.earlyVoiceCommandDetection {
-                    print("\tCommand Recognized!: \(result.bestTranscription.formattedString)")
-                    // prepare voice command handler
-                    // must come before stopListeningForSpeech
-                    self.numWordsBeforeVoiceCommand = numWordsBeforeVoiceCommand
-                    
-                    // Capture Voice Command Datum
-                    let voiceCommandDatum = VoiceCommandDatum(
-                        date: Date(),
-                        utteredSpeech: result.bestTranscription.formattedString,
-                        isValid: true,
-                        type: voiceCommandType
-                    )
-                    self.voiceCommandStream.append(voiceCommandDatum)
-
-                    self.prepareSpeechCommandHandler(command: result.bestTranscription.formattedString)
-                    
-                    self.stopListeningForSpeech(pause: true)
-                    
-                    // Execute Voice Command Handler
-                    if let voiceCommandHandler = self.tempVoiceCommandHandler {
-                        voiceCommandHandler()
-                        self.tempVoiceCommandHandler = nil
-                        self.stagedSpeechCommand = nil
-                    }
-                } else if viewController.withPassiveEcho && AVAudioSession.isHeadphonesConnected && self.isListeningForSpeech && !self.pausedListeningForSpeech && !selectionCursor.isUpdatingSelection {
-                    // compute echo text range
-                    if let lastEchoSegmentRange = self.committedBufferRanges.last {
-                        self.lastEchoSegmentRange = lastEchoSegmentRange
-                    }
-                    
-                    if let lastEchoSegmentRange = self.lastEchoSegmentRange {
-                        let text = self.getText(segments: Array(self.noteSegments[lastEchoSegmentRange]))
-
-                        // Echo formatted String
-                        self.handlePassiveEcho(text: text)
-                        
-                        // Give haptic feedback
-                        hapticEngine.lightImpact()
-                    }
-                } else if selectionCursor.isUpdatingSelection {
-                    // handle update selection
-                    if !self.pausedListeningForSpeech {
-                        // make sure paused
-                        self.stopListeningForSpeech(pause: true) {
-                            viewController.startListeningForVoiceCommands() {
-                                selectionCursor.handleUpdateSelection(segments: self.noteBuffer)
-                            }
-                        }
-                    } else {
-                        viewController.startListeningForVoiceCommands() {
-                            selectionCursor.handleUpdateSelection(segments: self.noteBuffer)
-                        }
-                    }
-                }
-                
-                // Turns off early voice commmand detection flag
-                self.earlyVoiceCommandDetection = false
-            }
-            if self.isListeningForSpeech && !self.pausedListeningForSpeech && self.noteBuffer.count > 0 && !self.request!.requiresOnDeviceRecognition && !self.earlyVoiceCommandDetection {
-                print("===== Some words heard. Apple servers ended dictation session =====")
-                self.stopListeningForSpeech(pause: true) {
-                    handleFinishRecognition()
-                }
-            } else if self.isListeningForSpeech && !self.pausedListeningForSpeech && self.noteBuffer.count > 0 && self.request!.requiresOnDeviceRecognition &&  !self.earlyVoiceCommandDetection {
-                handleFinishRecognition()
-            } else if self.isListeningForSpeech && self.pausedListeningForSpeech && !viewController.isListeningForCommands && self.noteBuffer.count > 0 && self.request!.requiresOnDeviceRecognition && self.recordStartDate != nil && self.earlyVoiceCommandDetection {
-
-                self.performTranscriptionUpdate(result.bestTranscription)
-                
-                if !selectionCursor.isUpdatingSelection {
-                    // commit buffer
-                    self.commitBuffer()
-                    // execute listen update handler
-                    self.handleOnListenUpdate(text: self.getText())
-                }
-
-                // Execute Voice Command Handler
-                if let voiceCommandHandler = self.tempVoiceCommandHandler {
-                    voiceCommandHandler()
-                    self.tempVoiceCommandHandler = nil
-                    self.stagedSpeechCommand = nil
-                    self.earlyVoiceCommandDetection = false
-                }
-            }
-        }
-    }
-    
-    func speechRecognitionDidDetectSpeech(_ task: SFSpeechRecognitionTask) {
-        print("===== System has detected first incident of speech input =====")
-    }
-}
-
-// MARK: - Pitch Recognition Delegate Extension
-
-extension Note: PitchEngineDelegate {
-    func pitchEngine(_ pitchEngine: PitchEngine, didReceivePitch pitch: Pitch) {
-        if pitch.frequency >= Utils.MALE_LOWEST_VOICED_SPEECH_FREQUENCY && pitch.frequency <= Utils.FEMALE_HIGHEST_VOICED_SPEECH_FREQUENCY && self.soundIntensityStream.count > Utils.MIN_SEED_INTENSITY_POINTS && Utils.validSpeechPower(soundIntensityStream: self.soundIntensityStream, backgroundNoise: self.getBackgroundNoise()) {
-            let pitchDatum = PitchDatum(date: Date(), pitch: pitch)
-            self.pitchStream.append(pitchDatum)
-            
-            if self.speaker.pitch == nil {
-                let numPitches: Double = Double(self.pitchStream.count)
-
-                var pitchSum: Double = 0
-
-                for datum in self.pitchStream {
-                    if let pitch = datum.pitch {
-                        pitchSum += pitch.frequency
-                    }
-                }
-                
-                do {
-                    let avgPitch = try Pitch(frequency: pitchSum / numPitches)
-                    self.speaker.setSpeakerPitch(to: avgPitch)
-                } catch {
-                    print("===== [Error] There was a problem setting speaker pitch =====")
-                }
-            }
-        }
-    }
-
-    func pitchEngine(_ pitchEngine: PitchEngine, didReceiveError error: Error) {
-        // print("===== Pitch Error: \(error.localizedDescription)")
-    }
-
-    public func pitchEngineWentBelowLevelThreshold(_ pitchEngine: PitchEngine) {
-        // print("===== Pitch Engine below level threshold =====")
-    }
-}
-
-// Useful Links:
-
-// Transcription: https://developer.apple.com/documentation/speech/sftranscription
-// Segment: https://developer.apple.com/documentation/speech/sftranscriptionsegment
-
-// Behavior
-// App should continue to record when the phone is locked.
-
-// Best English Voices and Voices with Enhanced
-// * US:
-//     * Allison (Neutral)
-//     * Ava (a bit sensual)
-//     * Samantha (high-pitched)
-//     * Susan (spunky)
-//     * Tom (Deep)
-// * Australia:
-//     * Karen (good)
-//     * Lee (good)
-// * Ireland:
-//     * Moira (not too good)
-// * South Africa:
-//     * Tessa (good, but a bit robotic)
-// * UK:
-//     * Daniel (good and deep, royal)
-//     * Kate (slightly robotic but good)
-//     * Oliver (good, deep, and pedestrian)
-//     * Serena (a bit excited)
-
-// MIDI Sequencing:
-
-// ===== SpeechRecognition =====
-
-// ** There are throttling limits **
-// Per device per day
-// Per app per day (global limitations for all users of your app) - 1000 calls an hour across apps on a single device = 4 calls every 15 seconds => very generous
-// Error Code: 203
-// https://developer.apple.com/library/archive/qa/qa1951/_index.html
-// One minute limitation for a single utterance (from start to end of a recognition task)
-
-// ===== On Device Recognition =====
-// There is no continuous learning like you have on the Cloud. This can lead to less accuracy on the device. Moreover, the language support is limited to about 10 languages currently.
-// lets you do speech recognition for an unlimited amount of time
-
-// iOS 13 SFSpeechRecognizer is smart enough to recognize punctuations in your speech.
-// how many users have iOS 13?
-
-// ===== Pitch Recognition =====
-// We use Beethoven to conduct pitch recognition: https://github.com/vadymmarkov/Beethoven
-// Theory: https://medium.com/@neurodatalab/pitch-tracking-or-how-to-estimate-the-fundamental-frequency-in-speech-on-the-examples-of-praat-fe0ca50f61fd
-
-// Adult Male Vocal Range: Bass = E2 - F4 , Baritone = G2 - Ab4, Tenor = Bb2 - C5
-// Adult Female Vocal Range: Alto = F3 - A5, Soprano = A3 - C6
-// Source: https://www.quora.com/What-is-the-average-vocal-range-for-an-adult-male-and-for-an-adult-female#:~:text=Adult%20male%20professional%20singers%20may%20have%20up%20to%20three%20octave,and%20Contraltos%20may%20have%20less.
-// Speaking: https://en.wikipedia.org/wiki/Voice_frequency
-// Vocal Range: https://en.wikipedia.org/wiki/Vocal_range
-// Male: [85, 180]
-// Female: [165, 255]

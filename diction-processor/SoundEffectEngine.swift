@@ -16,6 +16,7 @@ public final class SoundEffectEngine: NSObject {
     
     static let shared = SoundEffectEngine()
     
+    // Players
     var commitBufferPlayer: AVAudioPlayer? = nil
     var correctWakePhrasePlayer: AVAudioPlayer? = nil
     var errorPlayer: AVAudioPlayer? = nil
@@ -25,6 +26,8 @@ public final class SoundEffectEngine: NSObject {
     var processingLooper: AVPlayerLooper? = nil
     var modalAmbiencePlayer: AVQueuePlayer? = nil
     var modalAmbienceLooper: AVPlayerLooper? = nil
+    var naturePlayer: AVQueuePlayer? = nil
+    var natureLooper: AVPlayerLooper? = nil
     var repeatPlayer: AVAudioPlayer? = nil
     var saveNotePlayer: AVAudioPlayer? = nil
     var startListeningPlayer: AVAudioPlayer? = nil
@@ -33,8 +36,16 @@ public final class SoundEffectEngine: NSObject {
     var voiceCommandDenyPlayer: AVAudioPlayer? = nil
     var deletePlayer: AVAudioPlayer? = nil
     var dialogPlayer: AVAudioPlayer? = nil
+    var startupPlayer: AVAudioPlayer? = nil
+    var tapPlayer: AVAudioPlayer? = nil
+    var speechRegisteredPlayer: AVAudioPlayer? = nil
+    var paragraphSuggestionPlayer: AVAudioPlayer? = nil
+    var sentenceSuggestionPlayer: AVAudioPlayer? = nil
+    
+    // Flags
     var isProcessing = false
     var isPlayingModalAmbience = false
+    var isPlayingNatureAmbience = false
     var pan: Float = 0 // A value of –1.0 is full left, 0.0 is center, and 1.0 is full right.
     var players = [AVAudioPlayer?]()
     
@@ -108,9 +119,9 @@ public final class SoundEffectEngine: NSObject {
         let modalAmbienceURL = URL(fileURLWithPath: modalAmbiencePath)
         let modalAmbienceAsset = AVAsset(url: modalAmbienceURL)
         let modalAmbienceItem = AVPlayerItem(asset: modalAmbienceAsset)
-        processingPlayer = AVQueuePlayer(playerItem: modalAmbienceItem)
-        processingPlayer?.volume = 0.02
-        processingLooper = AVPlayerLooper(player: processingPlayer!, templateItem: modalAmbienceItem)
+        modalAmbiencePlayer = AVQueuePlayer(playerItem: modalAmbienceItem)
+        modalAmbiencePlayer?.volume = 0.02
+        modalAmbienceLooper = AVPlayerLooper(player: modalAmbiencePlayer!, templateItem: modalAmbienceItem)
         
         // Repeat
         let repeatPath = Bundle.main.path(forResource: "repeat", ofType: "wav")!
@@ -199,6 +210,73 @@ public final class SoundEffectEngine: NSObject {
         } catch {
             print("===== [Error] There was a problem importing 'Dialog' sound =====")
         }
+        
+        // Paragraph Suggestion
+        let paragraphSuggestionPath = Bundle.main.path(forResource: "paragraph-suggestion", ofType: "wav")!
+        let paragraphSuggestionURL = URL(fileURLWithPath: paragraphSuggestionPath)
+
+        do {
+            self.paragraphSuggestionPlayer = try AVAudioPlayer(contentsOf: paragraphSuggestionURL)
+            self.players.append(self.paragraphSuggestionPlayer)
+        } catch {
+            print("===== [Error] There was a problem importing 'Paragraph Suggestion' sound =====")
+        }
+        
+        // Sentence Suggestion
+        let sentenceSuggestionPath = Bundle.main.path(forResource: "sentence-suggestion", ofType: "wav")!
+        let sentenceSuggestionURL = URL(fileURLWithPath: sentenceSuggestionPath)
+
+        do {
+            self.sentenceSuggestionPlayer = try AVAudioPlayer(contentsOf: sentenceSuggestionURL)
+            self.players.append(self.sentenceSuggestionPlayer)
+        } catch {
+            print("===== [Error] There was a problem importing 'Sentence Suggestion' sound =====")
+        }
+        
+        // Startup
+        let startupPath = Bundle.main.path(forResource: "startup", ofType: "wav")!
+        let startupURL = URL(fileURLWithPath: startupPath)
+
+        do {
+            self.startupPlayer = try AVAudioPlayer(contentsOf: startupURL)
+            self.startupPlayer?.volume = 0.07
+            self.players.append(self.startupPlayer)
+        } catch {
+            print("===== [Error] There was a problem importing 'Startup' sound =====")
+        }
+        
+        // Nature
+        let natureAmbiencePath = Bundle.main.path(forResource: "nature-ambience", ofType: "wav")!
+        let natureAmbienceURL = URL(fileURLWithPath: natureAmbiencePath)
+        let natureAmbienceAsset = AVAsset(url: natureAmbienceURL)
+        let natureAmbienceItem = AVPlayerItem(asset: natureAmbienceAsset)
+        naturePlayer = AVQueuePlayer(playerItem: natureAmbienceItem)
+        naturePlayer?.volume = 1
+        natureLooper = AVPlayerLooper(player: naturePlayer!, templateItem: natureAmbienceItem)
+        
+        // Speech Registered
+        let speechRegisteredPath = Bundle.main.path(forResource: "speech-registered", ofType: "wav")!
+        let speechRegisteredURL = URL(fileURLWithPath: speechRegisteredPath)
+
+        do {
+            self.speechRegisteredPlayer = try AVAudioPlayer(contentsOf: speechRegisteredURL)
+            self.speechRegisteredPlayer?.volume = 0.2
+            self.players.append(self.speechRegisteredPlayer)
+        } catch {
+            print("===== [Error] There was a problem importing 'Speech Registered' sound =====")
+        }
+        
+        // Tap
+        let tapPath = Bundle.main.path(forResource: "speech-registered", ofType: "wav")!
+        let tapURL = URL(fileURLWithPath: tapPath)
+
+        do {
+            self.tapPlayer = try AVAudioPlayer(contentsOf: tapURL)
+            self.tapPlayer?.volume = 0.2
+            self.players.append(self.tapPlayer)
+        } catch {
+            print("===== [Error] There was a problem importing 'Tap' sound =====")
+        }
     }
     
     func commitBuffer() {
@@ -268,6 +346,34 @@ public final class SoundEffectEngine: NSObject {
     func presentDialog() {
         dialogPlayer?.prepareToPlay()
         dialogPlayer?.play()
+    }
+    func startup() {
+        startupPlayer?.prepareToPlay()
+        startupPlayer?.play()
+    }
+    func paragraphSuggestion() {
+        paragraphSuggestionPlayer?.prepareToPlay()
+        paragraphSuggestionPlayer?.play()
+    }
+    func sentenceSuggestion() {
+        sentenceSuggestionPlayer?.prepareToPlay()
+        sentenceSuggestionPlayer?.play()
+    }
+    func startNatureAmbience() {
+        naturePlayer?.play()
+        self.isPlayingNatureAmbience = true
+    }
+    func stopNatureAmbience() {
+        naturePlayer?.stop()
+        self.isPlayingNatureAmbience = false
+    }
+    func speechRegistered() {
+        speechRegisteredPlayer?.prepareToPlay()
+        speechRegisteredPlayer?.play()
+    }
+    func tap() {
+        tapPlayer?.prepareToPlay()
+        tapPlayer?.play()
     }
     
     // Reference: https://stackoverflow.com/questions/39088804/is-there-a-way-to-play-a-sound-note-in-only-one-ear-of-headphone-in-swift-2-0-us

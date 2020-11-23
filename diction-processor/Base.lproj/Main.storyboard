@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="17156" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="RCd-aw-ZXC">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="17506" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="RCd-aw-ZXC">
     <device id="retina6_1" orientation="portrait" appearance="light"/>
     <dependencies>
         <deployment identifier="iOS"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="17125"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="17505"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="System colors in document resources" minToolsVersion="11.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
@@ -13,16 +13,16 @@
         <scene sceneID="UAn-Ck-xhl">
             <objects>
                 <tableViewController storyboardIdentifier="NoteTableViewController" id="EZK-eh-z08" customClass="NoteTableViewController" customModule="diction_processor" customModuleProvider="target" sceneMemberID="viewController">
-                    <tableView key="view" clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" dataMode="prototypes" style="plain" separatorStyle="default" rowHeight="-1" estimatedRowHeight="-1" sectionHeaderHeight="28" sectionFooterHeight="28" id="b89-bj-s66">
+                    <tableView key="view" clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" dataMode="prototypes" style="plain" separatorStyle="default" rowHeight="60" estimatedRowHeight="-1" sectionHeaderHeight="28" sectionFooterHeight="28" id="b89-bj-s66">
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
-                        <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                        <color key="backgroundColor" red="0.65098039215686276" green="0.66274509803921566" blue="0.74901960784313726" alpha="1" colorSpace="calibratedRGB"/>
                         <prototypes>
-                            <tableViewCell clipsSubviews="YES" contentMode="scaleToFill" preservesSuperviewLayoutMargins="YES" selectionStyle="default" indentationWidth="10" reuseIdentifier="Entry" id="XSj-C1-FHv">
-                                <rect key="frame" x="0.0" y="28" width="414" height="43.5"/>
+                            <tableViewCell clipsSubviews="YES" contentMode="scaleToFill" preservesSuperviewLayoutMargins="YES" selectionStyle="default" indentationWidth="10" reuseIdentifier="Entry" rowHeight="60" id="XSj-C1-FHv">
+                                <rect key="frame" x="0.0" y="28" width="414" height="60"/>
                                 <autoresizingMask key="autoresizingMask"/>
                                 <tableViewCellContentView key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" preservesSuperviewLayoutMargins="YES" insetsLayoutMarginsFromSafeArea="NO" tableViewCell="XSj-C1-FHv" id="VMV-gC-MYI">
-                                    <rect key="frame" x="0.0" y="0.0" width="414" height="43.5"/>
+                                    <rect key="frame" x="0.0" y="0.0" width="414" height="60"/>
                                     <autoresizingMask key="autoresizingMask"/>
                                 </tableViewCellContentView>
                             </tableViewCell>
@@ -33,10 +33,15 @@
                         </connections>
                     </tableView>
                     <navigationItem key="navigationItem" id="IFr-6d-b0n"/>
+                    <connections>
+                        <segue destination="BYZ-38-t0r" kind="show" identifier="moveFromNoteTableToDetail" id="BkO-te-Mgf"/>
+                        <segue destination="HHw-4v-0K5" kind="unwind" identifier="moveFromNoteTableToSleep" unwindAction="unwindToSleepWithSegue:" id="g4o-BB-C6F"/>
+                    </connections>
                 </tableViewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="pbg-WI-FDv" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
+                <exit id="HHw-4v-0K5" userLabel="Exit" sceneMemberID="exit"/>
             </objects>
-            <point key="canvasLocation" x="3376.811594202899" y="137.94642857142856"/>
+            <point key="canvasLocation" x="3723" y="138"/>
         </scene>
         <!--Detail View Controller-->
         <scene sceneID="tne-QT-ifu">
@@ -46,8 +51,8 @@
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" editable="NO" usesAttributedText="YES" allowsEditingTextAttributes="YES" translatesAutoresizingMaskIntoConstraints="NO" id="qWP-6t-6mG" customClass="NoSelectTextView" customModule="diction_processor" customModuleProvider="target">
-                                <rect key="frame" x="0.0" y="114" width="414" height="678"/>
+                            <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" misplaced="YES" editable="NO" usesAttributedText="YES" allowsEditingTextAttributes="YES" translatesAutoresizingMaskIntoConstraints="NO" id="qWP-6t-6mG" customClass="NoSelectTextView" customModule="diction_processor" customModuleProvider="target">
+                                <rect key="frame" x="0.0" y="112" width="414" height="678"/>
                                 <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                                 <accessibility key="accessibilityConfiguration">
                                     <accessibilityTraits key="traits" notEnabled="YES"/>
@@ -56,7 +61,7 @@
                                 <textInputTraits key="textInputTraits" autocapitalizationType="sentences"/>
                             </textView>
                             <scrollView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" bounces="NO" showsHorizontalScrollIndicator="NO" showsVerticalScrollIndicator="NO" bouncesZoom="NO" translatesAutoresizingMaskIntoConstraints="NO" id="ztA-53-ezE">
-                                <rect key="frame" x="0.0" y="44" width="414" height="60"/>
+                                <rect key="frame" x="0.0" y="88" width="414" height="60"/>
                                 <subviews>
                                     <stackView opaque="NO" contentMode="scaleToFill" preservesSuperviewLayoutMargins="YES" distribution="fillEqually" alignment="center" spacing="10" translatesAutoresizingMaskIntoConstraints="NO" id="NJR-7J-DET" userLabel="Command Bar">
                                         <rect key="frame" x="0.0" y="0.0" width="2153" height="60"/>
@@ -190,13 +195,13 @@
                                                     <constraint firstAttribute="height" constant="60" id="tm1-Fo-mAC"/>
                                                 </constraints>
                                             </view>
-                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="WWM-YB-zMH" userLabel="Halt Run Button">
+                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="WWM-YB-zMH" userLabel="Pause Run Button">
                                                 <rect key="frame" x="309" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Tfe-5m-0Kp">
                                                         <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="haltRun:" destination="BYZ-38-t0r" eventType="touchUpInside" id="rfe-YS-4Pa"/>
+                                                            <action selector="pauseRun:" destination="BYZ-38-t0r" eventType="touchUpInside" id="mUz-qe-LZV"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="stopwatch" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="rJ2-1w-pAc" userLabel="Icon">
@@ -208,7 +213,7 @@
                                                         </constraints>
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
-                                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Halt" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="8Vx-Hs-BXj" userLabel="Label">
+                                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Pause Run" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="8Vx-Hs-BXj" userLabel="Label">
                                                         <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="A6o-Mv-1Sk"/>
@@ -1453,7 +1458,7 @@
                                 </userDefinedRuntimeAttributes>
                             </stackView>
                             <view hidden="YES" alpha="0.0" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="MXM-2I-uDb">
-                                <rect key="frame" x="0.0" y="44" width="414" height="60"/>
+                                <rect key="frame" x="0.0" y="88" width="414" height="60"/>
                                 <subviews>
                                     <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="88x-K7-N2H" userLabel="Exit Slider Button">
                                         <rect key="frame" x="10" y="0.0" width="60" height="60"/>
@@ -1531,7 +1536,6 @@
                             <constraint firstItem="Ht0-xa-6Fc" firstAttribute="centerX" secondItem="6Tk-OE-BBY" secondAttribute="centerX" id="Ve8-wE-L0x"/>
                             <constraint firstItem="6Tk-OE-BBY" firstAttribute="trailing" secondItem="VQr-2O-kOR" secondAttribute="trailing" constant="20" id="WGB-8Z-0fC"/>
                             <constraint firstItem="ztA-53-ezE" firstAttribute="leading" secondItem="6Tk-OE-BBY" secondAttribute="leading" id="YqI-Dy-Zco"/>
-                            <constraint firstItem="nkY-JO-vng" firstAttribute="leading" secondItem="6Tk-OE-BBY" secondAttribute="leading" priority="500" constant="347" id="Z5c-in-JDm"/>
                             <constraint firstItem="6Tk-OE-BBY" firstAttribute="bottom" secondItem="nkY-JO-vng" secondAttribute="bottom" constant="90" id="aBc-cS-NVm"/>
                             <constraint firstItem="ztA-53-ezE" firstAttribute="top" secondItem="6Tk-OE-BBY" secondAttribute="top" id="bLU-Q1-UJT"/>
                             <constraint firstItem="6Tk-OE-BBY" firstAttribute="trailing" secondItem="MXM-2I-uDb" secondAttribute="trailing" id="cY1-aQ-ucZ"/>
@@ -1561,7 +1565,6 @@
                         <outlet property="exitSliderButton" destination="88x-K7-N2H" id="Hq4-2f-77G"/>
                         <outlet property="exitWalkRunButton" destination="WTY-vs-DOu" id="1td-9L-B5N"/>
                         <outlet property="exportButton" destination="pir-kT-Cor" id="Xc6-tW-o6G"/>
-                        <outlet property="haltRunButton" destination="WWM-YB-zMH" id="pSz-5M-AQp"/>
                         <outlet property="increaseRateButton" destination="llz-Gj-MCS" id="iEd-VI-zIh"/>
                         <outlet property="inspectClipboardButton" destination="j9F-d2-jUG" id="Rsb-E8-vR5"/>
                         <outlet property="menuBar" destination="Ht0-xa-6Fc" id="yYT-Qa-gcv"/>
@@ -1569,6 +1572,7 @@
                         <outlet property="moveHereButton" destination="81X-ao-BrY" id="uXw-NW-rFz"/>
                         <outlet property="pauseButton" destination="aiq-7G-8JT" id="GUk-Vt-gkK"/>
                         <outlet property="pauseEchoButton" destination="88v-ju-wHm" id="CLm-aP-rsk"/>
+                        <outlet property="pauseRunButton" destination="WWM-YB-zMH" id="GaK-vU-0tr"/>
                         <outlet property="pitchLabel" destination="nkY-JO-vng" id="aWJ-73-aAj"/>
                         <outlet property="playButton" destination="Lt6-DB-dya" id="6as-MT-AL0"/>
                         <outlet property="playCommitButton" destination="t5M-tA-0Yi" id="UAF-kB-2HI"/>
@@ -1597,11 +1601,13 @@
                         <outlet property="walkButton" destination="H0L-Fd-gxp" id="MZo-mJ-IhK"/>
                         <outlet property="walkNextElementButton" destination="rSh-4Z-F1B" id="N5X-Js-wlk"/>
                         <outlet property="walkPreviousElementButton" destination="diY-sg-ErT" id="JXi-SF-jAL"/>
+                        <segue destination="IXn-xi-Hmt" kind="unwind" identifier="moveFromDetailToNoteTable" unwindAction="unwindToNoteTableWithSegue:" id="SHq-w1-9o4"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="dkx-z0-nzr" sceneMemberID="firstResponder"/>
+                <exit id="IXn-xi-Hmt" userLabel="Exit" sceneMemberID="exit"/>
             </objects>
-            <point key="canvasLocation" x="4102.898550724638" y="137.94642857142856"/>
+            <point key="canvasLocation" x="4745" y="138"/>
         </scene>
         <!--View Controller-->
         <scene sceneID="IFd-OQ-mCj">
@@ -1611,16 +1617,17 @@
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="To start, say" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="uvq-Q4-3Bd" userLabel="Wake Phrase Subtitle Label">
-                                <rect key="frame" x="160.5" y="423.5" width="93" height="20.5"/>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="To begin, say" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="uvq-Q4-3Bd" userLabel="Wake Phrase Subtitle Label">
+                                <rect key="frame" x="157" y="423" width="100" height="21"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="17"/>
-                                <color key="textColor" systemColor="secondaryLabelColor"/>
+                                <color key="textColor" red="0.46666666670000001" green="0.4431372549" blue="0.76078431369999999" alpha="1" colorSpace="calibratedRGB"/>
                                 <nil key="highlightedColor"/>
                             </label>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="&quot;Rise and shine&quot;" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="VPR-FV-5BA" userLabel="Wake Phrase Label">
                                 <rect key="frame" x="77.5" y="454" width="259" height="42"/>
                                 <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="35"/>
-                                <nil key="highlightedColor"/>
+                                <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <color key="highlightedColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                             </label>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="C#4" textAlignment="right" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Zwl-A0-pai" userLabel="Pitch Label">
                                 <rect key="frame" x="347" y="803" width="47" height="29"/>
@@ -1638,7 +1645,7 @@
                             </view>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="F9h-fI-sc3"/>
-                        <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                        <color key="backgroundColor" red="0.14509803921568626" green="0.15294117647058825" blue="0.20392156862745098" alpha="1" colorSpace="calibratedRGB"/>
                         <constraints>
                             <constraint firstItem="uvq-Q4-3Bd" firstAttribute="centerX" secondItem="F9h-fI-sc3" secondAttribute="centerX" id="9iy-bW-aN8"/>
                             <constraint firstItem="VPR-FV-5BA" firstAttribute="top" secondItem="uvq-Q4-3Bd" secondAttribute="bottom" constant="10" id="9vf-p7-ALm"/>
@@ -1646,7 +1653,6 @@
                             <constraint firstItem="F9h-fI-sc3" firstAttribute="bottom" secondItem="zbc-MT-4Ab" secondAttribute="bottom" id="RWq-on-AEL"/>
                             <constraint firstItem="VPR-FV-5BA" firstAttribute="centerX" secondItem="F9h-fI-sc3" secondAttribute="centerX" id="aps-8q-F0Y"/>
                             <constraint firstItem="F9h-fI-sc3" firstAttribute="bottom" secondItem="Zwl-A0-pai" secondAttribute="bottom" constant="30" id="hEm-WI-Ik1"/>
-                            <constraint firstItem="Zwl-A0-pai" firstAttribute="leading" secondItem="F9h-fI-sc3" secondAttribute="leading" constant="347" id="sgH-G9-GfZ"/>
                             <constraint firstItem="VPR-FV-5BA" firstAttribute="centerY" secondItem="F9h-fI-sc3" secondAttribute="centerY" id="y5A-uN-BSj"/>
                             <constraint firstItem="F9h-fI-sc3" firstAttribute="trailing" secondItem="zbc-MT-4Ab" secondAttribute="trailing" id="zWa-dN-pMv"/>
                         </constraints>
@@ -1659,6 +1665,8 @@
                         <outlet property="soundIntensityIndicatorPositionBottom" destination="RWq-on-AEL" id="KlM-0c-VYc"/>
                         <outlet property="wakePhraseLabel" destination="VPR-FV-5BA" id="kIa-9H-8FE"/>
                         <outlet property="wakePhraseSubtitleLabel" destination="uvq-Q4-3Bd" id="Xhq-Up-PLO"/>
+                        <segue destination="EZK-eh-z08" kind="show" identifier="moveFromSleepToNoteTable" id="BJP-dc-6yB"/>
+                        <segue destination="BYZ-38-t0r" kind="show" identifier="moveFromSleepToDetail" id="tfs-dJ-LGA"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="PKT-am-5Mr" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
@@ -1673,6 +1681,7 @@
                     <navigationBar key="navigationBar" contentMode="scaleToFill" insetsLayoutMarginsFromSafeArea="NO" id="bVg-If-GFw">
                         <rect key="frame" x="0.0" y="44" width="414" height="44"/>
                         <autoresizingMask key="autoresizingMask"/>
+                        <color key="barTintColor" red="0.1450980392" green="0.1529411765" blue="0.20392156859999999" alpha="1" colorSpace="calibratedRGB"/>
                     </navigationBar>
                     <nil name="viewControllers"/>
                     <connections>
@@ -1684,6 +1693,9 @@
             <point key="canvasLocation" x="1753.6231884057972" y="137.94642857142856"/>
         </scene>
     </scenes>
+    <inferredMetricsTieBreakers>
+        <segue reference="tfs-dJ-LGA"/>
+    </inferredMetricsTieBreakers>
     <resources>
         <image name="arrow.2.squarepath" catalog="system" width="128" height="89"/>
         <image name="arrow.left" catalog="system" width="128" height="98"/>
@@ -1715,9 +1727,6 @@
         <image name="tortoise" catalog="system" width="128" height="68"/>
         <image name="trash" catalog="system" width="121" height="128"/>
         <image name="xmark" catalog="system" width="128" height="113"/>
-        <systemColor name="secondaryLabelColor">
-            <color red="0.23529411764705882" green="0.23529411764705882" blue="0.2627450980392157" alpha="0.59999999999999998" colorSpace="custom" customColorSpace="sRGB"/>
-        </systemColor>
         <systemColor name="systemBackgroundColor">
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>

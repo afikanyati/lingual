@@ -12,12 +12,82 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var window: UIWindow?
 
-
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         // Use this method to optionally configure and attach the UIWindow `window` to the provided UIWindowScene `scene`.
         // If using a storyboard, the `window` property will automatically be initialized and attached to the scene.
         // This delegate does not imply the connecting scene or session are new (see `application:configurationForConnectingSceneSession` instead).
         guard let _ = (scene as? UIWindowScene) else { return }
+        let mainViewController = self.window!.rootViewController!.children.first! as! ViewController
+        let storageManager = StorageManager()
+        let notifications = NotificationEngine()
+        let uiManager = UIManager(notifications: notifications)
+        let state = StateManager(
+            storageManager: storageManager,
+            notifications: notifications,
+            uiManager: uiManager
+        )
+        uiManager.state = state
+        let speechPlayer = SpeechPlayerEngine(
+            state: state,
+            notifications: notifications
+        )
+        let speechSynthesis = SpeechSynthesisEngine(
+            state: state,
+            speechPlayer: speechPlayer,
+            notifications: notifications
+        )
+        speechPlayer.speechSynthesis = speechSynthesis
+        let speechRecognition = SpeechRecognitionEngine(
+            state: state,
+            notifications: notifications,
+            speechPlayer: speechPlayer,
+            speechSynthesis: speechSynthesis,
+            uiManager: uiManager
+        )
+        notifications.speechSynthesis = speechSynthesis
+        notifications.speechRecognition = speechRecognition
+        speechSynthesis.speechRecognition = speechRecognition
+        speechPlayer.speechRecognition = speechRecognition
+        storageManager.speechRecognition = speechRecognition
+        let selectionCursor = SelectionCursor(
+            state: state,
+            speechPlayer: speechPlayer,
+            speechSynthesis: speechSynthesis,
+            speechRecognition: speechRecognition,
+            notifications: notifications,
+            uiManager: uiManager
+        )
+        speechRecognition.selectionCursor = selectionCursor
+        speechPlayer.selectionCursor = selectionCursor
+        speechSynthesis.selectionCursor = selectionCursor
+        let pitchRecognition = PitchRecognitionEngine(
+            state: state,
+            speechRecognition: speechRecognition
+        )
+        let noteManager = NoteManager(
+            state: state,
+            speechRecognition: speechRecognition,
+            notifications: notifications,
+            speechPlayer: speechPlayer,
+            speechSynthesis: speechSynthesis,
+            selectionCursor: selectionCursor,
+            uiManager: uiManager,
+            pitchRecognition: pitchRecognition
+        )
+        pitchRecognition.noteManager = noteManager
+        speechPlayer.noteManager = noteManager
+        speechSynthesis.noteManager = noteManager
+        speechRecognition.noteManager = noteManager
+        selectionCursor.noteManager = noteManager
+        mainViewController.state = state
+        mainViewController.notifications = notifications
+        mainViewController.speechRecognition = speechRecognition
+        mainViewController.speechSynthesis = speechSynthesis
+        mainViewController.pitchRecognition = pitchRecognition
+        mainViewController.speechPlayer = speechPlayer
+        mainViewController.selectionCursor = selectionCursor
+        mainViewController.noteManager = noteManager
+        mainViewController.uiManager = uiManager
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {

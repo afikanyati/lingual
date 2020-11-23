@@ -8,7 +8,7 @@
 
 import Foundation
 
-class VoiceCommandDatum: CustomStringConvertible, NSCoding {
+class VoiceCommandDatum: NSObject, NSCoding {
     var date: Date
     var utteredSpeech: String
     var isValid: Bool
@@ -37,11 +37,11 @@ class VoiceCommandDatum: CustomStringConvertible, NSCoding {
     required init?(coder: NSCoder) {
         self.date = coder.decodeObject(forKey: "date") as! Date
         self.utteredSpeech = coder.decodeObject(forKey: "utteredSpeech") as! String
-        self.isValid = coder.decodeObject(forKey: "isValid") as! Bool
+        self.isValid = coder.decodeBool(forKey: "isValid")
         self.type = coder.decodeObject(forKey: "type") as! String?
     }
 
-    var description: String {
+    override var description: String {
         return "VoiceCommandDatum (\n\tdate: \(date) \n\tutteredSpeech:\(utteredSpeech) \n\tisValid:\(isValid) \n\ttype:\(String(describing: type))\n)"
     }
 }

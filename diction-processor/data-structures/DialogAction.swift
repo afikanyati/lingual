@@ -11,6 +11,9 @@ import UIKit
 
 struct DialogAction {
     var title: String
+    var voiceCommand: String
+    var feedbackVisualMessage: String? = nil
+    var feedbackAudioMessage: String? = nil
     var style: UIAlertAction.Style
-    var handler: ((UIAlertAction) -> Void)?
+    var handler: ((UIAlertAction?) -> Void)?
 }
