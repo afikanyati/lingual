@@ -46,6 +46,12 @@ class StateManager: NSObject {
     // MARK: - Telemetry
     
     private(set) var appOpens = [TimeInterval]()
+    private(set) var audioDeviceUse = [AudioDeviceDatum]()
+    private(set) var noteViews = [TimeInterval]()
+    private(set) var notePlays = [TimeInterval]()
+    private(set) var noteTextExports = [TimeInterval]()
+    private(set) var noteAudioExports = [TimeInterval]()
+    private(set) var voiceCommands = [TimeInterval]()
     
     // MARK: - General
     
@@ -58,10 +64,9 @@ class StateManager: NSObject {
     
     // MARK: - Notes
     
-    private(set) var notes = [Note]()
+    @objc dynamic private(set) var notes = [Note]()
     var activeNotes: [Note] {
-        let activeNotes = self.notes.filter { !$0.isDeleted }
-        return activeNotes.reversed()
+        return self.notes.filter { !$0.isDeleted }
     }
     private(set) var clips = [String: Set<String>]()
     private(set) var speaker = Speaker(uid: UUID().uuidString, device: UIDevice.current.name)
@@ -136,19 +141,29 @@ class StateManager: NSObject {
     func configureNotificationObservers() {
         let notificationCenter = NotificationCenter.default
         
-        notificationCenter.addObserver(
+        // add observer to snapshot
+        self.addObserver(
             self,
-            selector: #selector(self.appGainsFocus),
-            name: UIApplication.didBecomeActiveNotification,
-            object: nil
+            forKeyPath: "snapshot",
+            options: [.old, .new],
+            context: nil
         )
         
+        // App
         notificationCenter.addObserver(
             self,
             selector: #selector(self.appLosesFocus),
             name: UIApplication.willResignActiveNotification,
             object: nil
         )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(self.audioSessionRouteChange),
+            name: AVAudioSession.routeChangeNotification,
+            object: nil
+        )
+        
+        // Speech Recognition Engine
         notificationCenter.addObserver(
             self,
             selector: #selector(onWakePhraseDetected(notification:)),
@@ -214,6 +229,26 @@ class StateManager: NSObject {
     @objc func appLosesFocus() {
         print("===== State Manager: App Lost Focus =====")
         // Will occur when open control center
+    }
+    
+    @objc func audioSessionRouteChange(notification: Notification) {
+        print("===== State Manager: Audio Session Route Change =====")
+        guard let userInfo = notification.userInfo,
+            let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
+            let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else {
+                return
+        }
+        print("\tReason: ", reason)
+
+        // Switch over the route change reason.
+        switch reason {
+        case .newDeviceAvailable: // New device found.
+            self.handleAudioDeviceChange()
+        case .oldDeviceUnavailable: // Old device removed.
+            break
+        default:
+            break
+        }
     }
     
     @objc func onWakePhraseDetected(notification: Notification) {
@@ -385,27 +420,65 @@ class StateManager: NSObject {
         self.notes = notification.userInfo!["notes"] as? [Note] ?? [Note]()
         
         // User Settings
-        self.speaker = notification.userInfo!["speaker"] as? Speaker ?? Speaker(uid: UUID().uuidString, device: UIDevice.current.name)
-        self.withOnDeviceRecognition = notification.userInfo!["withOnDeviceRecognition"] as? Bool ?? Utils.DEFAULT_WITH_ON_DEVICE_RECOGNITION
-        self.withTemporalSuggestions = notification.userInfo!["withTemporalSuggestions"] as? Bool ?? Utils.DEFAULT_WITH_TEMPORAL_SUGGESTIONS
-        self.withPunctuationSuggestions = notification.userInfo!["withPunctuationSuggestions"] as? Bool ?? Utils.DEFAULT_WITH_PUNCTUATION_SUGGESTIONS
-        self.withFormattingSuggestions = notification.userInfo!["withFormattingSuggestions"] as? Bool ?? Utils.DEFAULT_WITH_FORMATTING_SUGGESTIONS
-        self.withTextStrictlyAsWords = notification.userInfo!["withTextStrictlyAsWords"] as? Bool ?? Utils.DEFAULT_WITH_TEXT_STRICTLY_AS_WORDS
-        self.withCapitalization = notification.userInfo!["withCapitalization"] as? Bool ?? Utils.DEFAULT_WITH_CAPITALIZATION
-        self.withSkipPunctuation = notification.userInfo!["withSkipPunctuation"] as? Bool ?? Utils.DEFAULT_WITH_SKIP_PUNCTUATION
-        self.withOmitSilences = notification.userInfo!["withOmitSilences"] as? Bool ?? Utils.DEFAULT_WITH_OMIT_SILENCES
-        self.withPassiveEcho = notification.userInfo!["withPassiveEcho"] as? Bool ?? Utils.DEFAULT_WITH_PASSIVE_ECHO
-        self._playbackRate = notification.userInfo!["playbackRate"] as? Float ?? Utils.DEFAULT_PLAYBACK_RATE
-        self._echoRate = notification.userInfo!["echoRate"] as? Float ?? Utils.DEFAULT_ECHO_RATE
-        if let fontSize = notification.userInfo!["fontSize"] as? CGFloat {
-            self.font = UIFont.systemFont(ofSize: fontSize)
+        let userSettings = notification.userInfo!["userSettings"] as? [String: Any]
+        if let userSettings = userSettings {
+            print("\tAble to cast userSettings as [String: Any]")
+            self.speaker = userSettings["speaker"] as? Speaker ?? Speaker(uid: UUID().uuidString, device: UIDevice.current.name)
+            self.withOnDeviceRecognition = userSettings["withOnDeviceRecognition"] as? Bool ?? Utils.DEFAULT_WITH_ON_DEVICE_RECOGNITION
+            self.withTemporalSuggestions = userSettings["withTemporalSuggestions"] as? Bool ?? Utils.DEFAULT_WITH_TEMPORAL_SUGGESTIONS
+            self.withPunctuationSuggestions = userSettings["withPunctuationSuggestions"] as? Bool ?? Utils.DEFAULT_WITH_PUNCTUATION_SUGGESTIONS
+            self.withFormattingSuggestions = userSettings["withFormattingSuggestions"] as? Bool ?? Utils.DEFAULT_WITH_FORMATTING_SUGGESTIONS
+            self.withTextStrictlyAsWords = userSettings["withTextStrictlyAsWords"] as? Bool ?? Utils.DEFAULT_WITH_TEXT_STRICTLY_AS_WORDS
+            self.withCapitalization = userSettings["withCapitalization"] as? Bool ?? Utils.DEFAULT_WITH_CAPITALIZATION
+            self.withSkipPunctuation = userSettings["withSkipPunctuation"] as? Bool ?? Utils.DEFAULT_WITH_SKIP_PUNCTUATION
+            self.withOmitSilences = userSettings["withOmitSilences"] as? Bool ?? Utils.DEFAULT_WITH_OMIT_SILENCES
+            self.withPassiveEcho = userSettings["withPassiveEcho"] as? Bool ?? Utils.DEFAULT_WITH_PASSIVE_ECHO
+            self._playbackRate = userSettings["playbackRate"] as? Float ?? Utils.DEFAULT_PLAYBACK_RATE
+            self._echoRate = userSettings["echoRate"] as? Float ?? Utils.DEFAULT_ECHO_RATE
+            if let fontSize = userSettings["fontSize"] as? CGFloat {
+                self.font = UIFont.systemFont(ofSize: fontSize)
+            } else {
+                self.font = UIFont.systemFont(ofSize: Utils.DEFAULT_FONT_SIZE)
+            }
         } else {
+            print("\t[Error] Unable to cast userSettings as [String: Any]")
+            self.speaker = Speaker(uid: UUID().uuidString, device: UIDevice.current.name)
+            self.withOnDeviceRecognition = Utils.DEFAULT_WITH_ON_DEVICE_RECOGNITION
+            self.withTemporalSuggestions = Utils.DEFAULT_WITH_TEMPORAL_SUGGESTIONS
+            self.withPunctuationSuggestions = Utils.DEFAULT_WITH_PUNCTUATION_SUGGESTIONS
+            self.withFormattingSuggestions = Utils.DEFAULT_WITH_FORMATTING_SUGGESTIONS
+            self.withTextStrictlyAsWords = Utils.DEFAULT_WITH_TEXT_STRICTLY_AS_WORDS
+            self.withCapitalization = Utils.DEFAULT_WITH_CAPITALIZATION
+            self.withSkipPunctuation = Utils.DEFAULT_WITH_SKIP_PUNCTUATION
+            self.withOmitSilences = Utils.DEFAULT_WITH_OMIT_SILENCES
+            self.withPassiveEcho = Utils.DEFAULT_WITH_PASSIVE_ECHO
+            self._playbackRate = Utils.DEFAULT_PLAYBACK_RATE
+            self._echoRate = Utils.DEFAULT_ECHO_RATE
             self.font = UIFont.systemFont(ofSize: Utils.DEFAULT_FONT_SIZE)
         }
-
-        // App Opens
-        self.appOpens = notification.userInfo!["appOpens"] as? [TimeInterval] ?? [TimeInterval]()
         
+        // App Telemetry
+        let appTelemetry = notification.userInfo!["appTelemetry"] as? [String: Any]
+        if let appTelemetry = appTelemetry {
+            print("\tAble to cast appTelemetry as [String: Any]")
+            self.appOpens = appTelemetry["appOpens"] as? [TimeInterval] ?? [TimeInterval]()
+            self.audioDeviceUse = appTelemetry["audioDeviceUse"] as?  [AudioDeviceDatum] ?? [AudioDeviceDatum]()
+            self.noteViews = appTelemetry["noteViews"] as? [TimeInterval] ?? [TimeInterval]()
+            self.notePlays = appTelemetry["notePlays"] as? [TimeInterval] ?? [TimeInterval]()
+            self.noteTextExports = appTelemetry["noteTextExports"] as? [TimeInterval] ?? [TimeInterval]()
+            self.noteAudioExports = appTelemetry["noteAudioExports"] as? [TimeInterval] ?? [TimeInterval]()
+            self.voiceCommands = appTelemetry["voiceCommands"] as? [TimeInterval] ?? [TimeInterval]()
+        } else {
+            print("\t[Error] Unable to cast appTelemetry as [String: Any]")
+            self.appOpens = [TimeInterval]()
+            self.audioDeviceUse = [AudioDeviceDatum]()
+            self.noteViews = [TimeInterval]()
+            self.notePlays = [TimeInterval]()
+            self.noteTextExports = [TimeInterval]()
+            self.noteAudioExports = [TimeInterval]()
+            self.voiceCommands = [TimeInterval]()
+        }
+
         NotificationCenter.default.post(
             name: StateManager.onFetchedNotes,
             object: nil,
@@ -432,11 +505,52 @@ class StateManager: NSObject {
         checkRep()
     }
     
+    func saveNote(note: Note) {
+        print("===== State Manager: Save Note =====")
+        for (index, n) in self.notes.enumerated() {
+            if n.uid == note.uid {
+                print("\tFound and replaced existing note: ")
+                print("\tOld Note Segment Count: ", n.noteSegments.count)
+                print("\tNew Note Segment Count: ", note.noteSegments.count)
+                self.notes[index] = note
+            }
+        }
+    }
+    
+    // message should start with a present progressive verb: -ing
+    // so utterance will be: undo verb-ing object
     func save() {
         print("===== State Manager: Save  =====")
         self.storageManager.save(state: self)
         
         checkRep()
+    }
+    
+    // MARK: - Telemetry
+    
+    func incrementNoteViewCount(timeInterval: TimeInterval) {
+        print("===== State Manager: Increment Note View Count =====")
+        self.noteViews.append(timeInterval)
+    }
+    
+    func incrementNotePlayCount(timeInterval: TimeInterval) {
+        print("===== State Manager: Increment Note Play Count =====")
+        self.notePlays.append(timeInterval)
+    }
+    
+    func incrementNoteTextExportCount(timeInterval: TimeInterval) {
+        print("===== State Manager: Increment Note Text Export Count =====")
+        self.noteTextExports.append(timeInterval)
+    }
+    
+    func incrementNoteAudioExportCount(timeInterval: TimeInterval) {
+        print("===== State Manager: Increment Audio Export Count =====")
+        self.noteAudioExports.append(timeInterval)
+    }
+    
+    func incrementVoiceCommandCount(timeInterval: TimeInterval) {
+        print("===== State Manager: Increment Voice Command Count =====")
+        self.voiceCommands.append(timeInterval)
     }
     
     // MARK: - Setters
@@ -696,7 +810,7 @@ class StateManager: NSObject {
     
     func appendNote(note: Note) -> Int {
         print("===== State Manager: Append Note  =====")
-        self.notes.append(note)
+        self.notes.insert(note, at: 0)
         
         self.save()
         checkRep()
@@ -814,5 +928,30 @@ class StateManager: NSObject {
         }
         
         checkRep()
+    }
+    
+    func handleAudioDeviceChange() {
+        if AVAudioSession.isHeadphonesConnected && AVAudioSession.bluetoothAudioConnected {
+            // Bluetooth Headphones
+            let audioDeviceDatum = AudioDeviceDatum(
+                date: Date(),
+                deviceType: .bluetoothHeadphones
+            )
+            self.audioDeviceUse.append(audioDeviceDatum)
+        } else if AVAudioSession.isHeadphonesConnected && !AVAudioSession.bluetoothAudioConnected {
+            // Wired Headphones
+            let audioDeviceDatum = AudioDeviceDatum(
+                date: Date(),
+                deviceType: .wiredHeadphones
+            )
+            self.audioDeviceUse.append(audioDeviceDatum)
+        } else {
+            // Speakers
+            let audioDeviceDatum = AudioDeviceDatum(
+                date: Date(),
+                deviceType: .speakers
+            )
+            self.audioDeviceUse.append(audioDeviceDatum)
+        }
     }
 }

@@ -86,6 +86,8 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     private(set) var speechRecognizedTimer: Timer?
     private(set) var lastSpeechRecognizerHypothesizeDate: Date?
     private(set) var lastStartListeningDate: Date?
+    /// Stores the timestamp when we last started listening
+    private(set) var lastStartedListeningTimestamp: TimeInterval?
     /// Stores a queue of speech recognized tasks to be executed serially
     public var speechRecognizedQueue = Queue<Bool>()
     
@@ -1110,7 +1112,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         if let note = self.noteManager.currentNote, self.pausedListeningForSpeech {
             return Float(note.endTime.seconds)
         } else if let note = self.noteManager.currentNote, note.currentClipUID != nil && note.recordStartDate != nil && note.noteSegments.count > 0 {
-            return Float(note.noteSegments.last!.timeMapping.target.end.seconds) + Float(Date().timeIntervalSince(note.recordStartDate!))
+            return Float(Date().timeIntervalSince(note.recordStartDate!))
         } else if let note = self.noteManager.currentNote, note.recordStartDate != nil {
             return Float(Date().timeIntervalSince(note.recordStartDate!))
         }
@@ -1321,7 +1323,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 NotificationCenter.default.post(
                     name: SpeechRecognitionEngine.onBufferItem,
                     object: nil,
-                    userInfo: [ "buffer" : buffer]
+                    userInfo: [ "buffer" : buffer ]
                 )
                 
                 // Capture buffer
@@ -1334,6 +1336,8 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                     switch (type) {
                     case .SPEECH:
                         print("\tBroadcast 'onStartedListeningForSpeech' notification...")
+                        // Capture last started listening timestamp
+                        self.lastStartedListeningTimestamp = Date().timeIntervalSince1970
                         NotificationCenter.default.post(
                             name: SpeechRecognitionEngine.onStartedListeningForSpeech,
                             object: nil,
@@ -1733,13 +1737,17 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         
         // Capture valid voice command if we are composing a note
         if let _ = self.noteManager.currentNote, self.isListeningForSpeech {
+            let date = Date()
             let voiceCommandDatum = VoiceCommandDatum(
-                date: Date(),
+                date: date,
                 utteredSpeech: transcription.formattedString,
                 isValid: true,
                 type: voiceCommandType
             )
             self.voiceCommandStream.append(voiceCommandDatum)
+            
+            // Increment State Aggregate Count
+            self.state.incrementVoiceCommandCount(timeInterval: date.timeIntervalSince1970)
         }
         
         if !handled {
@@ -1853,13 +1861,17 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         
         // Capture invalid voice command if we are composing a note
         if let _ = self.noteManager.currentNote, self.isListeningForSpeech {
+            let date = Date()
             let voiceCommandDatum = VoiceCommandDatum(
-                date: Date(),
+                date: date,
                 utteredSpeech: transcription.formattedString,
                 isValid: false
             )
             
             self.voiceCommandStream.append(voiceCommandDatum)
+            
+            // Increment State Aggregate Count
+            self.state.incrementVoiceCommandCount(timeInterval: date.timeIntervalSince1970)
         }
     }
     
@@ -2024,7 +2036,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             //
             // e.g. "open selection" requires voice command words be tagged
             // for it to grab the right word to select
-            if let lastStartedListeningTimestamp = self.noteManager.currentNote?.lastStartedListeningTimestamp,
+            if let lastStartedListeningTimestamp = self.lastStartedListeningTimestamp,
                let lastStartListeningDate = self.lastStartListeningDate,
                invalidType != .CLOSE_TO_LAST_VOICE_COMMAND &&
                Utils.DEFAULT_START_LISTENING_DELAY + lastStartListeningDate.timeIntervalSinceNow < 0 &&
@@ -2042,8 +2054,22 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 self.earlyBroadcastSpeechRejection = true
                 print("\t[Error] Speech not broadcast:")
                 print("\tInvalid Type: ", invalidType ?? "nil")
+                print("\tLast Start Listening Timestamp: ", self.lastStartedListeningTimestamp ?? "nil")
+                if let lastStartedListeningTimestamp = self.lastStartedListeningTimestamp {
+                    print(
+                        "\tNow - Last Started Listening Timestamp >  Default Start Listening Delay ",
+                        Date().timeIntervalSince1970 - lastStartedListeningTimestamp >  Utils.DEFAULT_START_LISTENING_DELAY,
+                        lastStartedListeningTimestamp,
+                        Date().timeIntervalSince1970 - lastStartedListeningTimestamp,
+                        Utils.DEFAULT_START_LISTENING_DELAY
+                    )
+                }
                 if let lastStartListeningDate = self.lastStartListeningDate {
-                    print("\tLast Start Listening Date > Default Start Listening Delay: ", Utils.DEFAULT_START_LISTENING_DELAY + lastStartListeningDate.timeIntervalSinceNow)
+                    print(
+                        "\tLast Start Listening Date + Default Start Listening Delay < 0: ",
+                        Utils.DEFAULT_START_LISTENING_DELAY + lastStartListeningDate.timeIntervalSinceNow < 0,
+                        Utils.DEFAULT_START_LISTENING_DELAY + lastStartListeningDate.timeIntervalSinceNow
+                    )
                 }
             }
 
@@ -2134,7 +2160,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             // e.g. "open selection" requires voice command words be tagged
             // for it to grab the right word to select
             if let lastStartListeningDate = self.lastStartListeningDate,
-               let lastStartedListeningTimestamp = self.noteManager.currentNote?.lastStartedListeningTimestamp,
+               let lastStartedListeningTimestamp = self.lastStartedListeningTimestamp,
                !self.earlyBroadcastSpeechRejection &&
                 Utils.DEFAULT_START_LISTENING_DELAY + lastStartListeningDate.timeIntervalSinceNow < 0 &&
                  Date().timeIntervalSince1970 - lastStartedListeningTimestamp >  Utils.DEFAULT_START_LISTENING_DELAY
@@ -2149,8 +2175,22 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 )
             } else {
                 print("\t[Error] Speech not broadcast:")
+                print("\tLast Start Listening Timestamp: ", self.lastStartedListeningTimestamp ?? "nil")
+                if let lastStartedListeningTimestamp = self.lastStartedListeningTimestamp {
+                    print(
+                        "\tNow - Last Started Listening Timestamp >  Default Start Listening Delay ",
+                        Date().timeIntervalSince1970 - lastStartedListeningTimestamp >  Utils.DEFAULT_START_LISTENING_DELAY,
+                        lastStartedListeningTimestamp,
+                        Date().timeIntervalSince1970 - lastStartedListeningTimestamp,
+                        Utils.DEFAULT_START_LISTENING_DELAY
+                    )
+                }
                 if let lastStartListeningDate = self.lastStartListeningDate {
-                    print("\tLast Start Listening Date > Default Start Listening Delay: ", Utils.DEFAULT_START_LISTENING_DELAY + lastStartListeningDate.timeIntervalSinceNow)
+                    print(
+                        "\tLast Start Listening Date + Default Start Listening Delay < 0: ",
+                        Utils.DEFAULT_START_LISTENING_DELAY + lastStartListeningDate.timeIntervalSinceNow < 0,
+                        Utils.DEFAULT_START_LISTENING_DELAY + lastStartListeningDate.timeIntervalSinceNow
+                    )
                 }
                 print("\tEarly Broadcast Speech Rejection: ", self.earlyBroadcastSpeechRejection)
             }
@@ -2171,7 +2211,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             
             if let lastSpeechRecognizerHypothesizeDate = self.lastSpeechRecognizerHypothesizeDate,
                let lastStartListeningDate = self.lastStartListeningDate,
-                let lastStartedListeningTimestamp = self.noteManager.currentNote?.lastStartedListeningTimestamp,
+                let lastStartedListeningTimestamp = self.lastStartedListeningTimestamp,
                 AVAudioSession.isHeadphonesConnected &&
                self.isListeningForSpeech &&
                 self.state.withPunctuationSuggestions &&
@@ -2205,7 +2245,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             // e.g. "open selection" requires voice command words be tagged
             // for it to grab the right word to select
             if let lastStartListeningDate = self.lastStartListeningDate,
-               let lastStartedListeningTimestamp = self.noteManager.currentNote?.lastStartedListeningTimestamp,
+               let lastStartedListeningTimestamp = self.lastStartedListeningTimestamp,
                !self.earlyBroadcastSpeechRejection &&
                 Utils.DEFAULT_START_LISTENING_DELAY + lastStartListeningDate.timeIntervalSinceNow < 0 &&
                  Date().timeIntervalSince1970 - lastStartedListeningTimestamp >  Utils.DEFAULT_START_LISTENING_DELAY
@@ -2220,9 +2260,22 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 )
             } else {
                 print("\t[Error] Speech not broadcast:")
-                print("\tInvalid Type: ", invalidType ?? "nil")
+                print("\tLast Start Listening Timestamp: ", self.lastStartedListeningTimestamp ?? "nil")
+                if let lastStartedListeningTimestamp = self.lastStartedListeningTimestamp {
+                    print(
+                        "\tNow - Last Started Listening Timestamp >  Default Start Listening Delay ",
+                        Date().timeIntervalSince1970 - lastStartedListeningTimestamp >  Utils.DEFAULT_START_LISTENING_DELAY,
+                        lastStartedListeningTimestamp,
+                        Date().timeIntervalSince1970 - lastStartedListeningTimestamp,
+                        Utils.DEFAULT_START_LISTENING_DELAY
+                    )
+                }
                 if let lastStartListeningDate = self.lastStartListeningDate {
-                    print("\tLast Start Listening Date > Default Start Listening Delay: ", Utils.DEFAULT_START_LISTENING_DELAY + lastStartListeningDate.timeIntervalSinceNow)
+                    print(
+                        "\tLast Start Listening Date + Default Start Listening Delay < 0: ",
+                        Utils.DEFAULT_START_LISTENING_DELAY + lastStartListeningDate.timeIntervalSinceNow < 0,
+                        Utils.DEFAULT_START_LISTENING_DELAY + lastStartListeningDate.timeIntervalSinceNow
+                    )
                 }
                 print("\tEarly Broadcast Speech Rejection: ", self.earlyBroadcastSpeechRejection)
             }

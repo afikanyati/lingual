@@ -18,6 +18,7 @@ class NoteManager: NSObject {
     static let onSetNote = Notification.Name(Notifications.onSetNote.rawValue)
     static let onExecuteNoteAction = Notification.Name(Notifications.onExecuteNoteAction.rawValue)
     static let onNoteAudioExported = Notification.Name(Notifications.onNoteAudioExported.rawValue)
+    static let onUndoManagerChange = Notification.Name(Notifications.onUndoManagerChange.rawValue)
 
     // MARK: - App Modules
     
@@ -29,6 +30,10 @@ class NoteManager: NSObject {
     var selectionCursor: SelectionCursor
     var uiManager: UIManager
     var pitchRecognition: PitchRecognitionEngine
+    private let _undoManager = UndoManager()
+    var undoManager: UndoManager {
+        return _undoManager
+    }
     
     // MARK: - Note Manager Properties
     
@@ -40,6 +45,9 @@ class NoteManager: NSObject {
         
         return nil
     }
+    @objc dynamic var currentNoteUndoSnapshot: NoteSnapshot? = nil
+    private(set) var noteChangeHandler: (() -> Void)? = nil
+    
     /// Specifies whether note is currently running
     private(set) var isRunningNote = false
     /// Specifies whether note is currently walking
@@ -96,6 +104,13 @@ class NoteManager: NSObject {
     deinit {
         // remove notification observers
         NotificationCenter.default.removeObserver(self)
+
+        // remove observer from snapshot
+        self.removeObserver(
+            self,
+            forKeyPath: "currentNoteUndoSnapshot",
+            context: nil
+        )
     }
     
     // MARK: - Validation
@@ -121,6 +136,14 @@ class NoteManager: NSObject {
     
     func configureNotificationObservers() {
         let notificationCenter = NotificationCenter.default
+        
+        // Note Manager
+        self.addObserver(
+            self,
+            forKeyPath: "currentNoteUndoSnapshot",
+            options: [.old, .new],
+            context: nil
+        )
         
         // Voice Commands
         notificationCenter.addObserver(
@@ -365,9 +388,138 @@ class NoteManager: NSObject {
             self.pauseRun(voiceCommand: true, handler: handler)
         case "exit mode":
             self.exitWalkRun(voiceCommand: true, handler: handler)
+        case "undo":
+            self.undo(handler: handler)
+        case "redo":
+            if !self.selectionCursor.isPromptingForUpdateAcceptance {
+                self.redo(handler: handler)
+            }
         default:
             // Do Nothing
             break
+        }
+    }
+    
+    // MARK: - Key-Value Observer
+    
+    public override func observeValue(
+        forKeyPath keyPath: String?,
+        of object: Any?,
+        change: [NSKeyValueChangeKey : Any]?,
+        context: UnsafeMutableRawPointer?
+    ) {
+        print("===== Note Manager: Observe Value =====")
+
+        if keyPath == "currentNoteUndoSnapshot" {
+            print("\tKeyPath: currentNoteUndoSnapshot")
+            if let newSnapshot = change?[.newKey] as? NoteSnapshot, let _ = change?[.oldKey] as? NoteSnapshot {
+                print("\tNew Note Snapshot Received! Save to state")
+                let duplicateNote = newSnapshot.note.duplicate()
+                
+                // Handle Current Clip UID
+                if let note = self.currentNote,
+                   duplicateNote.currentClipUID == nil &&
+                    note.currentClipUID != nil &&
+                    self.speechRecognition.isListeningForSpeech
+                {
+                    print("\tDuplicate note has no currentClipUID. Give it existing note's currentClipUID...")
+                    let currentClipUID = note.currentClipUID
+                    duplicateNote.setCurrentClipUID(uid: currentClipUID)
+                }
+                
+                // Handle Record Start Date
+                if let note = self.currentNote,
+                   duplicateNote.recordStartDate == nil &&
+                    note.recordStartDate != nil &&
+                    self.speechRecognition.isListeningForSpeech
+                {
+                    print("\tDuplicate note has no recordStartDate. Give it existing note's recordStartDate...")
+                    let recordStartDate = note.recordStartDate
+                    duplicateNote.setRecordStartDate(date: recordStartDate)
+                }
+                
+                // Handle Record File
+                if let note = self.currentNote,
+                   duplicateNote.recordFile == nil &&
+                    note.recordFile != nil &&
+                    self.speechRecognition.isListeningForSpeech
+                {
+                    print("\tDuplicate note has no recordFile. Give it existing note's recordFile...")
+                    let recordFile = note.recordFile
+                    duplicateNote.setRecordFile(file: recordFile)
+                }
+
+                // Set Note
+                self.state.saveNote(note: duplicateNote) // we duplicate so there's no memory leaks/pointers to same memory locations
+                
+                print("\tSet Node Modules...")
+                self.setNoteModules(index: self.currentIndex)
+                
+                print("\tUpdate selection carets...")
+                if let anchorCaret = newSnapshot.selectionAnchorCaret {
+                    print("\tUpdated selection achor:")
+                    print("\tFrom: ", self.selectionCursor.anchorCaret ?? "nil")
+                    print("\tTo: ", anchorCaret)
+                    self.selectionCursor.setAnchorCaret(
+                        caret: Caret(
+                            index: anchorCaret.index,
+                            trackType: anchorCaret.trackType
+                        )
+                    )
+                } else {
+                    print("\tUpdated selection anchor:")
+                    print("\tFrom: ", self.selectionCursor.anchorCaret ?? "nil")
+                    print("\tTo: nil")
+                    self.selectionCursor.setAnchorCaret()
+                }
+                
+                if let focusCaret = newSnapshot.selectionFocusCaret {
+                    print("\tUpdated selection focus:")
+                    print("\tFrom: ", self.selectionCursor.focusCaret ?? "nil")
+                    print("\tTo: ", focusCaret)
+                    self.selectionCursor.setFocusCaret(
+                        caret: Caret(
+                            index: focusCaret.index,
+                            trackType: focusCaret.trackType
+                        )
+                    )
+                } else {
+                    print("\tUpdated selection focus:")
+                    print("\tFrom: ", self.selectionCursor.focusCaret ?? "nil")
+                    print("\tTo: nil")
+                    self.selectionCursor.setFocusCaret()
+                }
+                
+                if let cachedAnchorCaret = newSnapshot.selectionCachedAnchorCaret {
+                    print("\tUpdated selection cached anchor:")
+                    print("\tFrom: ", self.selectionCursor.cachedAnchorCaret ?? "nil")
+                    print("\tTo: ", cachedAnchorCaret)
+                    self.selectionCursor.setCachedAnchorCaret(
+                        caret: Caret(
+                            index: cachedAnchorCaret.index,
+                            trackType: cachedAnchorCaret.trackType
+                        )
+                    )
+                } else {
+                    print("\tUpdated selection cached anchot:")
+                    print("\tFrom: ", self.selectionCursor.cachedAnchorCaret ?? "nil")
+                    print("\tTo: nil")
+                    self.selectionCursor.setCachedAnchorCaret()
+                }
+                
+                if let note = self.currentNote {
+                    print("\tUpdate View with text: '\(note.getText())'")
+                    note.handleOnSpeechUpdate(text: note.getText())
+                }
+                
+                if let noteChangeHandler = self.noteChangeHandler {
+                    print("\tRunning Save Handler...")
+                    noteChangeHandler()
+                    self.noteChangeHandler = nil
+                }
+            } else {
+                print("\tNo new snapshot...")
+            }
         }
     }
     
@@ -456,17 +608,25 @@ class NoteManager: NSObject {
         if withListening {
             // Start Listening Immediately
             self.setCurrentNote(index: index)
+            
+            self.notifications.executeFeedback(
+                visualMessage: "Create Note",
+                audioMessage: "new note created",
+                withHaptics: true,
+                delay: 1
+            )
+            
             self.startNote(voiceCommand: voiceCommand, handler: handler)
         } else {
+            self.notifications.executeFeedback(
+                visualMessage: "Create Note",
+                audioMessage: "new note created",
+                withHaptics: true,
+                delay: 1
+            )
+            
             handler?()
         }
-        
-        self.notifications.executeFeedback(
-            visualMessage: "Create Note",
-            audioMessage: "new note created",
-            withHaptics: true,
-            delay: 1
-        )
         
         checkRep()
         
@@ -1583,7 +1743,7 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        let currentSegment = self.speechPlayer.getSegment(type: .current)
+        let currentSegment = self.speechPlayer.getCurrentSegment()
         
         if let currentSegment = currentSegment, self.speechPlayer.isPlayingNote, CMTimeMake(
             value: Int64(Utils.DEFAULT_SEGMENT_TIMESCALE * (currentSegment.timeMapping.target.start.seconds - Utils.SKIP_PLAYBACK_DURATION)),
@@ -1631,7 +1791,7 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        let currentSegment = self.speechPlayer.getSegment(type: .current)
+        let currentSegment = self.speechPlayer.getCurrentSegment()
         
         if let currentSegment = currentSegment, let currentItem = self.speechPlayer.player.currentItem, self.speechPlayer.isPlayingNote, CMTimeMake(
             value: Int64(Utils.DEFAULT_SEGMENT_TIMESCALE * (currentSegment.timeMapping.target.start.seconds + Utils.SKIP_PLAYBACK_DURATION)),
@@ -1833,6 +1993,11 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
+        if let note = self.currentNote {
+            print("\tRegistering a note change to the Undo Manager...")
+            self.registerNoteChange(note: note, undo: "increasing selection rate")
+        }
+        
         self.selectionCursor.adjustRateSelection(direction: .up) { rate in
             self.notifications.executeFeedback(
                 visualMessage: "Increase Selection Rate: \(rate.rounded(toPlaces: 2))",
@@ -1865,6 +2030,11 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
+        if let note = self.currentNote {
+            print("\tRegistering a note change to the Undo Manager...")
+            self.registerNoteChange(note: note, undo: "decreasing selection rate")
+        }
+        
         self.selectionCursor.adjustRateSelection(direction: .down) { rate in
             self.notifications.executeFeedback(
                 visualMessage: "Decrease Selection Rate: \(rate.rounded(toPlaces: 2))",
@@ -1895,6 +2065,11 @@ class NoteManager: NSObject {
         if voiceCommand {
             // Play Sound
             soundEngine.voiceCommandAccept()
+        }
+        
+        if let note = self.currentNote {
+            print("\tRegistering a note change to the Undo Manager...")
+            self.registerNoteChange(note: note, undo: "deleting '\(self.selectionCursor.selectionText ?? "selection")'")
         }
         
         self.selectionCursor.deleteSelection(isCommit: isCommit, handler: handler)
@@ -1961,6 +2136,11 @@ class NoteManager: NSObject {
             // Clear buffer segments
             print("\tClearing note buffer...")
             note.clearBuffer()
+            
+            if let note = self.currentNote {
+                print("\tRegistering a note change to the Undo Manager...")
+                self.registerNoteChange(note: note, undo: "replacing '\(self.selectionCursor.selectionText ?? "selection")'")
+            }
             
             // Accept Update
             print("\tAccepting Update Selection...")
@@ -2127,6 +2307,11 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
+        if let note = self.currentNote {
+            print("\tRegistering a note change to the Undo Manager...")
+            self.registerNoteChange(note: note, undo: "cutting '\(self.selectionCursor.selectionText ?? "selection")'")
+        }
+        
         self.selectionCursor.cutSelection()
         
         handler?()
@@ -2141,7 +2326,7 @@ class NoteManager: NSObject {
     }
     
     func pasteClipboard(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Paste Clipboard: \(self.selectionCursor.selectionText ?? "nil") =====")
+        print("===== Note Manager: Paste Clipboard: \(self.selectionCursor.clipboard != nil ? Note.getText(segments: self.selectionCursor.clipboard!) : "nil") =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
@@ -2153,7 +2338,12 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        self.selectionCursor.pasteSelection()
+        if let note = self.currentNote {
+            print("\tRegistering a note change to the Undo Manager...")
+            self.registerNoteChange(note: note, undo: "pasting '\(self.selectionCursor.clipboard != nil ? Note.getText(segments: self.selectionCursor.clipboard!) : "clipboard")'")
+        }
+        
+        self.selectionCursor.pasteClipboard()
 
         handler?()
         
@@ -2201,23 +2391,40 @@ class NoteManager: NSObject {
             )
             return
         }
-        var newFocus: NoteSegment? = lastCommit.last
-        var newAnchor: NoteSegment?  = lastCommit.first
         
+        let newAnchor: NoteSegment?  = lastCommit.first
+        var newAnchorIndex: Int?
         if let anchor = newAnchor, !anchor.isActive() {
             print("\tSearching for valid anchor...")
-            newAnchor = self.speechPlayer.getSegment(segment: anchor, segments: Array(lastCommit), type: .next, isWord: true)
+            newAnchorIndex = Utils.getSegmentIndex(
+                segment: anchor,
+                segments: Array(lastCommit),
+                type: .next,
+                isWord: true
+            )
         }
         
+        let newFocus: NoteSegment? = lastCommit.last
+        var newFocusIndex: Int?
         if let focus = newFocus, !focus.isActive() {
             print("\tSearching for valid focus...")
-            newFocus = self.speechPlayer.getSegment(segment: focus, segments: Array(lastCommit), type: .previous, isWord: true)
+            newFocusIndex = Utils.getSegmentIndex(
+                segment: focus,
+                segments: Array(lastCommit),
+                type: .previous,
+                isWord: true
+            )
         }
         
-        if let anchor = newAnchor, let focus = newFocus {
+        if let anchorIndex = newAnchorIndex,
+           let focusIndex = newFocusIndex
+        {
             // Select Previous Commit
             print("\tSetting selection...")
-            self.selectionCursor.setSelection(anchor: anchor, focus: focus)
+            self.selectionCursor.setSelection(
+                anchorCaret: Caret(index: anchorIndex, trackType: .committed),
+                focusCaret: Caret(index: focusIndex, trackType: .committed)
+            )
         }
         
         handler?()
@@ -2256,6 +2463,11 @@ class NoteManager: NSObject {
         
         // Play Sound
         soundEngine.voiceCommandAccept()
+        
+        if let note = self.currentNote {
+            print("\tRegistering a note change to the Undo Manager...")
+            self.registerNoteChange(note: note, undo: "rolling back last commit")
+        }
         
         if !self.speechRecognition.pausedListeningForSpeech {
             self.speechRecognition.pauseListeningForSpeech(preventListeningForCommands: true) { [weak self] in
@@ -2379,8 +2591,8 @@ class NoteManager: NSObject {
         }
         
         let currentAnchor = self.selectionCursor.anchor
-        var newSelection = currentAnchor
-        if let segment = newSelection, self.selectionCursor.isAtEndOfTextView {
+        var selectionIndex: Int?
+        if let segment = currentAnchor, self.selectionCursor.isAtEndOfTextView {
             print("\tAttempt to set last word as selection...")
             // set last word as selection
             if !segment.isValidWord() {
@@ -2390,9 +2602,15 @@ class NoteManager: NSObject {
                 print("\tIs Deleted: ", segment.isDeleted())
                 print("\tIs Voice Command Word: ", segment.isVoiceCommandWord())
                 print("\tIs Silence: ", segment.isSilence())
-                newSelection = self.speechPlayer.getSegment(segment: segment, segments: note.noteSegments, type: .previous, isWord: true, isCommitted: true)
+                selectionIndex = Utils.getSegmentIndex(
+                    segment: segment,
+                    segments: note.noteSegments,
+                    type: .previous,
+                    isWord: true,
+                    isCommitted: true
+                )
             }
-        } else if let segment = newSelection {
+        } else if let segment = currentAnchor {
             // set word after anchor as selection
             print("\tAttempt to set word after anchor as selection...")
             if !segment.isValidWord() {
@@ -2402,16 +2620,26 @@ class NoteManager: NSObject {
                 print("\tIs Deleted: ", segment.isDeleted())
                 print("\tIs Voice Command Word: ", segment.isVoiceCommandWord())
                 print("\tIs Silence: ", segment.isSilence())
-                newSelection = self.speechPlayer.getSegment(segment: segment, segments: note.noteSegments, type: .next, isWord: true, isCommitted: true)
+                selectionIndex = Utils.getSegmentIndex(
+                    segment: segment,
+                    segments: note.noteSegments,
+                    type: .next,
+                    isWord: true,
+                    isCommitted: true
+                )
             }
         }
         
-        if let newSelection = newSelection {
-            print("\tFound selection: ", newSelection.getText())
+        if let selectionIndex = selectionIndex {
+            let selection = note.noteSegments[selectionIndex]
+            print("\tFound selection: ", selection.getText())
             // Play Sound
             soundEngine.voiceCommandAccept()
 
-            self.selectionCursor.setSelection(anchor: newSelection, focus: newSelection)
+            self.selectionCursor.setSelection(
+                anchorCaret: Caret(index: selectionIndex, trackType: .committed),
+                focusCaret: Caret(index: selectionIndex, trackType: .committed)
+            )
             
             self.notifications.executeFeedback(
                 visualMessage: "Selection Opened!",
@@ -2502,20 +2730,34 @@ class NoteManager: NSObject {
             return
         }
         
-        var newAnchor: NoteSegment?
+        var newAnchorIndex: Int?
         if let currentAnchor = self.selectionCursor.anchor, direction == .left {
-            newAnchor = self.speechPlayer.getSegment(segment: currentAnchor, segments: note.noteSegments, type: .previous, isWord: true)
-        } else if let currentAnchor = self.selectionCursor.anchor, let currentFocus = self.selectionCursor.focus, direction == .right && currentAnchor.getUID() != currentFocus.getUID() {
-            newAnchor = self.speechPlayer.getSegment(segment: currentAnchor, segments: note.noteSegments, type: .next, isWord: true)
+            newAnchorIndex = Utils.getSegmentIndex(
+                segment: currentAnchor,
+                segments: note.noteSegments,
+                type: .previous,
+                isWord: true
+            )
+        } else if let currentAnchor = self.selectionCursor.anchor,
+            let currentFocus = self.selectionCursor.focus,
+            direction == .right &&
+            currentAnchor.getUID() != currentFocus.getUID()
+        {
+            newAnchorIndex = Utils.getSegmentIndex(
+                segment: currentAnchor,
+                segments: note.noteSegments,
+                type: .next,
+                isWord: true
+            )
         }
         
-        if let newAnchor = newAnchor {
+        if let newAnchorIndex = newAnchorIndex {
             if withFeedback {
                 // Play Sound
                 soundEngine.voiceCommandAccept()
             }
 
-            self.selectionCursor.setAnchor(segment: newAnchor)
+            self.selectionCursor.setAnchorCaret(caret: Caret(index: newAnchorIndex, trackType: .committed))
             
             if withFeedback {
                 self.notifications.executeFeedback(
@@ -2525,7 +2767,10 @@ class NoteManager: NSObject {
             }
             print("\tShifted anchor \(direction == .left ? "left" : "right")")
             handler?()
-        } else if let currentAnchor = self.selectionCursor.anchor, let currentFocus = self.selectionCursor.focus, currentAnchor.getUID() == currentFocus.getUID() {
+        } else if let currentAnchor = self.selectionCursor.anchor,
+            let currentFocus = self.selectionCursor.focus,
+            currentAnchor.getUID() == currentFocus.getUID()
+        {
             print("\tUnable to shift anchor right because we're selecting a single segment")
             self.notifications.executeError(
                 text: "Unable to shift before first word.",
@@ -2566,20 +2811,36 @@ class NoteManager: NSObject {
             return
         }
         
-        var newFocus: NoteSegment?
-        if let currentFocus = self.selectionCursor.focus, let currentAnchor = self.selectionCursor.anchor, direction == .left && currentAnchor.getUID() != currentFocus.getUID() {
-            newFocus = self.speechPlayer.getSegment(segment: currentFocus, segments: note.noteSegments, type: .previous, isWord: true)
-        } else if let currentFocus = self.selectionCursor.focus, direction == .right {
-            newFocus = self.speechPlayer.getSegment(segment: currentFocus, segments: note.noteSegments, type: .next, isWord: true)
+        var newFocusIndex: Int?
+        if let currentFocus = self.selectionCursor.focus,
+           let currentAnchor = self.selectionCursor.anchor,
+           direction == .left &&
+            currentAnchor.getUID() != currentFocus.getUID()
+        {
+            newFocusIndex = Utils.getSegmentIndex(
+                segment: currentFocus,
+                segments: note.noteSegments,
+                type: .previous,
+                isWord: true
+            )
+        } else if let currentFocus = self.selectionCursor.focus,
+            direction == .right
+        {
+            newFocusIndex = Utils.getSegmentIndex(
+                segment: currentFocus,
+                segments: note.noteSegments,
+                type: .next,
+                isWord: true
+            )
         }
         
-        if let newFocus = newFocus {
+        if let newFocusIndex = newFocusIndex {
             if withFeedback {
                 // Play Sound
                 soundEngine.voiceCommandAccept()
             }
 
-            self.selectionCursor.setFocus(segment: newFocus)
+            self.selectionCursor.setFocusCaret(caret: Caret(index: newFocusIndex, trackType: .committed))
             
             if withFeedback {
                 self.notifications.executeFeedback(
@@ -2589,7 +2850,10 @@ class NoteManager: NSObject {
             }
             print("\tShifted focus \(direction == .left ? "left" : "right")")
             handler?()
-        } else if let currentAnchor = self.selectionCursor.anchor, let currentFocus = self.selectionCursor.focus, currentAnchor.getUID() == currentFocus.getUID() {
+        } else if let currentAnchor = self.selectionCursor.anchor,
+              let currentFocus = self.selectionCursor.focus,
+              currentAnchor.getUID() == currentFocus.getUID()
+        {
             print("\tUnable to shift focus left because we're selecting a single segment")
             self.notifications.executeError(
                 text: "Unable to shift past last word.",
@@ -2852,6 +3116,67 @@ class NoteManager: NSObject {
         }
     }
     
+    // MARK: - Undo/Redo Methods
+    
+    // message should start with a present progressive verb: -ing
+    // so utterance will be: undo verb-ing object
+    func registerNoteChange(note: Note, undo message: String, handler: (() -> Void)? = nil) {
+        print("===== Note Manager: Register Note Change  =====")
+
+        // Update Undo/Redo History
+        print("\tCreating and setting new snapshot...")
+        let newSnapshot = NoteSnapshot(
+            note: note.duplicate(), // we duplicate so there's no memory leaks/pointers to same memory locations
+            selectionAnchorCaret: self.selectionCursor.anchorCaret,
+            selectionFocusCaret: self.selectionCursor.focusCaret,
+            selectionCachedAnchorCaret: self.selectionCursor.cachedAnchorCaret,
+            undo: message
+        )
+        self.modifyNote(snapshot: newSnapshot)
+        
+        self.noteChangeHandler = handler
+        
+        checkRep()
+    }
+    
+    @objc func undo(handler: (() -> Void)? = nil) {
+        print("===== Note Manager: Undo  =====")
+        if self.undoManager.canUndo {
+            let undoMessage = self.currentNoteUndoSnapshot!.message
+            self.undoManager.undo()
+            // Present Feedback
+            self.notifications.executeFeedback(
+                visualMessage: "Undo",
+                audioMessage: "undo \(undoMessage)",
+                withHaptics: true,
+                delay: 0
+            )
+        } else {
+            self.notifications.executeError(text: "Undo changes exhausted.")
+        }
+        
+        handler?()
+    }
+    
+    @objc func redo(handler: (() -> Void)? = nil) {
+        print("===== Note Manager: Redo  =====")
+        if self.undoManager.canRedo {
+            self.undoManager.redo()
+            let redoMessage = self.currentNoteUndoSnapshot!.message
+            // Present Feedback
+            self.notifications.executeFeedback(
+                visualMessage: "Redo",
+                audioMessage: "redo \(redoMessage)",
+                withHaptics: true,
+                delay: 0
+            )
+        } else {
+            self.notifications.executeError(text: "Redo changes exhausted.")
+        }
+        
+        handler?()
+    }
+    
     // MARK: - Setters
     
     func setCurrentNote(index: Int? = nil) {
@@ -2862,9 +3187,20 @@ class NoteManager: NSObject {
             self.setNoteModules(index: index)
             // Increment Note Views
             self.currentNote!.incrementViewCount()
+            
+            self.currentNoteUndoSnapshot = NoteSnapshot(
+                note: self.currentNote!.duplicate(), // we duplicate so there's no memory leaks/pointers to same memory locations
+                selectionAnchorCaret: self.selectionCursor.anchorCaret,
+                selectionFocusCaret: self.selectionCursor.focusCaret,
+                selectionCachedAnchorCaret: self.selectionCursor.cachedAnchorCaret,
+                undo: "to start of note"
+            )
+            
             print("Note Segments: ", self.currentNote!.noteSegments)
         } else {
             self.currentIndex = nil
+            self.currentNoteUndoSnapshot = nil
+            self.undoManager.removeAllActions()
         }
 
         var userInfo: [String : Int] = [:]
@@ -2978,5 +3314,38 @@ class NoteManager: NSObject {
         self.runningTimer = timer
         
         checkRep()
+    }
+}
+
+// MARK: - Undo Manager
+
+extension NoteManager {
+  
+    private func modifyNote(snapshot: NoteSnapshot) {
+
+        let oldSnapshot: NoteSnapshot = self.currentNoteUndoSnapshot!
+
+        let stateDiff = oldSnapshot.diffed(with: snapshot)
+        stateDidChange(diff: stateDiff)
+    }
+
+    private func stateDidChange(diff: NoteSnapshot.Diff) {
+
+        guard diff.hasChanges else { return }
+
+        self.currentNoteUndoSnapshot = diff.to
+
+        self.undoManager.registerUndo(withTarget: self) { target in
+            target.modifyNote(snapshot: diff.from)
+        }
+        
+        NotificationCenter.default.post(
+            name: NoteManager.onUndoManagerChange,
+            object: nil,
+            userInfo: [
+                "canUndo": self.undoManager.canUndo,
+                "canRedo": self.undoManager.canRedo
+            ]
+        )
     }
 }

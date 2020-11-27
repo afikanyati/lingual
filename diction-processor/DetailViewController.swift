@@ -95,6 +95,10 @@ class DetailViewController: UIViewController, SegueProtocol {
     // Run
     @IBOutlet weak var pauseRunButton: UIView?
     
+    // Undo/Redo
+    @IBOutlet weak var undoButton: UIView?
+    @IBOutlet weak var redoButton: UIView?
+    
     // Cursor
     var cursorView: UIView?
     
@@ -108,6 +112,9 @@ class DetailViewController: UIViewController, SegueProtocol {
     var selectionCursor: SelectionCursor!
     var noteManager: NoteManager!
     var uiManager: UIManager!
+    override var undoManager: UndoManager {
+        return self.noteManager.undoManager
+    }
     
     // MARK: - ViewController References
     weak var viewController: ViewController?
@@ -123,7 +130,7 @@ class DetailViewController: UIViewController, SegueProtocol {
     
     // MARK: - Lifecycle Methods
     
-    public override func viewWillAppear(_ animated: Bool) {
+    override func viewWillAppear(_ animated: Bool) {
         print("===== Detail View Controller: View Will Appear =====")
         super.viewWillAppear(animated)
         
@@ -131,7 +138,18 @@ class DetailViewController: UIViewController, SegueProtocol {
         self.configureNotificationObservers()
     }
     
-    public override func viewDidLoad() {
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Asssign as "Shake to undo" handler
+        becomeFirstResponder()
+    }
+    
+    // For shake to undo.
+    override var canBecomeFirstResponder: Bool {
+        return true
+    }
+    
+    override func viewDidLoad() {
         print("===== Detail View Controller: View Did Load =====")
         super.viewDidLoad()
         
@@ -140,6 +158,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         self.prepareCommandBar()
         self.prepareSlider()
         self.prepareTextView()
+        self.prepareGeneralView()
         self.transformationLabel?.isHidden = true
         DispatchQueue.main.async { [weak self] in
             self?.refreshView()
@@ -175,7 +194,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         )
     }
     
-    public override func viewWillDisappear(_ animated: Bool) {
+    override func viewWillDisappear(_ animated: Bool) {
         print("===== Detail View Controller: View Will Disappear =====")
         super.viewWillDisappear(animated)
 
@@ -465,6 +484,14 @@ class DetailViewController: UIViewController, SegueProtocol {
             name: SelectionCursor.onClipboardChange,
             object: nil
         )
+        
+        // StateManager
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onUndoManagerChange(notification:)),
+            name: NoteManager.onUndoManagerChange,
+            object: nil
+        )
     }
     
     @objc func onViewDidLoad(notification: Notification) {
@@ -706,6 +733,10 @@ class DetailViewController: UIViewController, SegueProtocol {
             if let _ = self?.selectionCursor.clipboard {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems?.insert(self!.getPasteClipboardButton(), at: 0)
             }
+            
+            // Remove Undo Buttons
+            self?.hideButton(self!.undoButton)
+            self?.hideButton(self!.redoButton)
         }
         
         Utils.onNoteComplete(
@@ -848,7 +879,7 @@ class DetailViewController: UIViewController, SegueProtocol {
     }
     
     @objc func onNoteDeleted(notification: Notification) {
-        print("===== Detail View Controlelr: On Deleted Note =====")
+        print("===== Detail View Controller: On Deleted Note =====")
 
         DispatchQueue.main.async { [weak self] in
             self?.textView?.attributedText = NSMutableAttributedString(string: "")
@@ -857,6 +888,50 @@ class DetailViewController: UIViewController, SegueProtocol {
             self?.refreshView()
             self?.setCursorVisibility(as: false)
             self?.performSegue(withIdentifier: Segues.moveFromDetailToNoteTable.rawValue, sender: nil)
+        }
+    }
+    
+    @objc func onUndoManagerChange(notification: Notification) {
+        print("===== Detail View Controller: On Undo Manager Change =====")
+        let canUndo = notification.userInfo!["canUndo"] as! Bool
+        let canRedo = notification.userInfo!["canRedo"] as! Bool
+        print("\tCan Undo: ", canUndo)
+        print("\tCan Redo: ", canRedo)
+        
+        // Handle Undo Button
+        if let undoButton = self.undoButton, canUndo && undoButton.alpha == 0 {
+            // Show
+            print("\tShow Undo Button...")
+            self.showButton(self.undoButton)
+        } else if let undoButton = self.undoButton, !canUndo && undoButton.alpha == 1 {
+            // Hide
+            print("\tHide Undo Button...")
+            self.hideButton(self.undoButton)
+        } else {
+            // !canUndo && undoButton.alpha == 0 || canRedo && undoButton.alpha == 1
+            // Do Nothing
+        }
+        
+        // Handle Redo Button
+        if let redoButton = self.redoButton, canRedo && redoButton.alpha == 0 {
+            // Show
+            print("\tShow Redo Button...")
+            self.showButton(self.redoButton)
+        } else if let redoButton = self.redoButton, !canRedo && redoButton.alpha == 1 {
+            // Hide
+            print("\tHide Redo Button...")
+            self.hideButton(self.redoButton)
+        } else {
+            // !canUndo && redoButton.alpha == 0 || canRedo && redoButton.alpha == 1
+            // Do Nothing
+        }
+        
+        DispatchQueue.main.async { [weak self] in
+            // Add text to text view if exists
+            if let noteManager = self?.noteManager, let note = noteManager.currentNote {
+                print("\tUpdate Text View: ", note.getText())
+                self?.updateUIText(text: note.getText(), transformations: note.transformations)
+            }
         }
     }
 
@@ -876,6 +951,8 @@ class DetailViewController: UIViewController, SegueProtocol {
         self.soundIntensityIndicator?.backgroundColor = UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red
         self.pitchLabel?.textColor = UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red
         self.transformationLabel?.textColor = UIColor(hex: Utils.LINGUAL_ORANGE) ?? UIColor.orange
+        self.hideButton(self.undoButton)
+        self.hideButton(self.redoButton)
     }
     
     func prepareMenuBar() {
@@ -1266,7 +1343,6 @@ class DetailViewController: UIViewController, SegueProtocol {
     }
     
     func updateUIText(text: String, highlightRange: NSRange? = nil, bufferRange: NSRange? = nil, transformations: [NoteTransformation]? = nil) {
-        print("PRRRNG IT")
         // Cache selection
         if let selectionTextRange = self.selectionCursor.selectionTextRange, self.selectionCursor.hasSelection {
             self.cachedTextViewSelectedRange = selectionTextRange
@@ -1278,7 +1354,6 @@ class DetailViewController: UIViewController, SegueProtocol {
             // If passage is in buffer, we make gray text
             mutableAttributedString.addAttribute(.foregroundColor, value: UIColor.systemGray, range: bufferRange)
         } else if let highlightRange = highlightRange, highlightRange.length > 0 && text.count > 0 {
-            print("YOOOOOOO Highlight Range: ", highlightRange)
             // If words in note are being echoed, we highlight them
             mutableAttributedString.addAttribute(.foregroundColor, value: UIColor.white, range: highlightRange)
             mutableAttributedString.addAttribute(.backgroundColor, value: UIColor(hex: Utils.LINGUAL_PURPLE) ?? UIColor.purple, range: highlightRange)
@@ -1297,7 +1372,6 @@ class DetailViewController: UIViewController, SegueProtocol {
         self.textView?.font = self.state.font
         
         if let cachedTextViewSelectedRange = self.cachedTextViewSelectedRange {
-            print("\t[updateUIText] Adding back cached selection text...")
             self.selectionCursor.manualSelection(range: cachedTextViewSelectedRange)
             self.cachedTextViewSelectedRange = nil
         }
@@ -1667,14 +1741,14 @@ class DetailViewController: UIViewController, SegueProtocol {
         // Previous Walk Element Button
         if let note = self.noteManager.currentNote,
            let walkingRange = self.noteManager.walkingRange,
-           let firstWalkingSegment = self.speechPlayer.getSegment(
+           let firstWalkingSegmentIndex = Utils.getSegmentIndex(
                 segment: Array(note.noteSegments[walkingRange])[0],
                 segments: Array(note.noteSegments[walkingRange]),
                 type: .next,
                 isWord: true
            ),
            self.noteManager.isWalkingNote &&
-            self.noteManager.walkingIndex != (firstWalkingSegment.getIndex() - Array(note.noteSegments[walkingRange])[0].getIndex())
+            self.noteManager.walkingIndex != firstWalkingSegmentIndex
         {
             numActiveButtons += 1
             self.showButton(self.walkPreviousElementButton)
@@ -1952,14 +2026,15 @@ class DetailViewController: UIViewController, SegueProtocol {
             
             if let textPosition = textPosition {
                 print("\tGet note segment at touch point...")
-                let (segment, _) = Utils.getSegmentAtTextPosition(
+                let (index, _) = Utils.getIndexAtTextPosition(
                     textPosition: textPosition,
                     textView: self.textView!,
                     note: note,
                     segments: note.noteSegments
                 )
                 
-                if let segment = segment {
+                if let index = index {
+                    let segment = note.noteSegments[index]
                     print("\tFound Segment: ", segment.getText())
                     print("\tPlay note and Seek to segment...")
                     self.noteManager.stopPlayingNote(withFeedback: false) {
@@ -2296,6 +2371,18 @@ class DetailViewController: UIViewController, SegueProtocol {
     // Reference: https://stackoverflow.com/questions/43251708/passing-arguments-to-selector-in-swift
     @objc func pasteClipboard(_ sender: Any? = nil) {
         self.noteManager.pasteClipboard()
+    }
+    
+    // MARK: - UndoManager Methods
+    
+    @IBAction func undoTapped() {
+        print("===== Detail View Controller: Undo Manager =====")
+        self.noteManager.undo()
+    }
+    
+    @IBAction func redoTapped() {
+        print("===== Detail View Controller: Redo Manager =====")
+        self.noteManager.redo()
     }
     
     // MARK: - Helper Methods

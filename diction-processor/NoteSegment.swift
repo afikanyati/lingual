@@ -383,7 +383,7 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
             firstSegment.getDateModified() == secondSegment.getDateModified() &&
             firstSegment.isDeleted() == secondSegment.isDeleted() &&
             firstSegment.getText() == secondSegment.getText() &&
-            firstSegment.getPhoneticallySimilarWords() == secondSegment.getPhoneticallySimilarWords() &&
+            firstSegment.getPhoneticallySimilarWords().elementsEqual(secondSegment.getPhoneticallySimilarWords()) &&
             firstSegment.isPunctuation() == secondSegment.isPunctuation() &&
             firstSegment.isSilence() == secondSegment.isSilence() &&
             firstSegment.isEmphasized() == secondSegment.isEmphasized() &&
@@ -1098,13 +1098,23 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
     }
     
     // creates new sentence note object
-    func createSentenceNote(onFinishHandler: @escaping (_ sentence: Note?) -> Void) {
+    func createSentenceNote() -> Note? {
         if let note = self.note {
-            let range = self.sentence.timeRange
-            Utils.trimNote(note: note, keeping: range, permanent: true) { note in
-                onFinishHandler(note)
-            }
+            let range = self.sentence.noteRange
+            let segments = Array(note.noteSegments[range])
+            let duplicateSegments = Utils.duplicateSegments(segments: segments)
+            let uid = UUID().uuidString
+            let note = Note(
+                uid: uid,
+                filename: "note-\(uid)",
+                creatorUID: note.state.speaker.uid,
+                segments: duplicateSegments
+            )
+            
+            return note
         }
+        
+        return nil
     }
     
     func runNotificationSearch() {

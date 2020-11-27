@@ -40,6 +40,9 @@ class ViewController: UIViewController, SegueProtocol {
     var selectionCursor: SelectionCursor!
     var noteManager: NoteManager!
     var uiManager: UIManager!
+    override var undoManager: UndoManager {
+        return self.noteManager.undoManager
+    }
     
     // MARK: - ViewController References
     weak var noteTableViewController: NoteTableViewController?
@@ -47,14 +50,25 @@ class ViewController: UIViewController, SegueProtocol {
     
     // MARK: - Lifecycle Methods
     
-    public override func viewWillAppear(_ animated: Bool) {
+    override func viewWillAppear(_ animated: Bool) {
         print("===== View Controller: View Will Appear =====")
         super.viewWillAppear(animated)
         
         self.configureNotificationObservers()
     }
     
-    public override func viewDidLoad() {
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Asssign as "Shake to undo" handler
+        becomeFirstResponder()
+    }
+    
+    // For shake to undo.
+    override var canBecomeFirstResponder: Bool {
+        return true
+    }
+    
+    override func viewDidLoad() {
         print("===== View Controller: View Did Load =====")
         super.viewDidLoad()
 
@@ -79,7 +93,7 @@ class ViewController: UIViewController, SegueProtocol {
         }
     }
     
-    public override func viewWillDisappear(_ animated: Bool) {
+    override func viewWillDisappear(_ animated: Bool) {
         print("===== View Controller: View Will Disappear =====")
         super.viewWillDisappear(animated)
     

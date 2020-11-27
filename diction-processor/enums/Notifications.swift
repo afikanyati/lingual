@@ -80,6 +80,7 @@ enum Notifications: String {
     
     // State Manager
     case onFetchedNotes
+    case onUndoManagerChange
     
     // UI Manager
     case onReceivedDialogInput

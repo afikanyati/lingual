@@ -135,15 +135,13 @@ class Note: AVMutableComposition, NSCoding {
     /// Stores the current clip UID
     private(set) var currentClipUID: String?
     /// Stores a reference to the moment current note clip started listening
-    public var recordStartDate: Date?
+    private(set) var recordStartDate: Date?
     /// Stores the total duration of time across segments capturing during the current listening clip
-    private var accumulatedDuration = TimeInterval(0)
+    private(set) var accumulatedDuration = TimeInterval(0) // Only relevant on < OS13 where timer restarts after every onFinishedRecognition
     /// Stores a reference to the audio file where listening buffers are being saved to
-    public var recordFile: AVAudioFile?
+    private(set) var recordFile: AVAudioFile?
     /// Stores whether clip is deleted
     private(set) var isDeleted = false
-    /// Stores the timestamp when we last started listening
-    private(set) var lastStartedListeningTimestamp: TimeInterval?
 
     // MARK: - Cached Properties
     /// Stores a cached version of the note's duration
@@ -205,10 +203,16 @@ class Note: AVMutableComposition, NSCoding {
         self.configureNotificationObservers()
         
         // A user might pass in segments when note instantiated
-        if let segments = segments {
+        if let segments = segments, segments.count > 0 {
+            print("\tSetting segments...")
             self.startTime = segments.first!.timeMapping.target.start
             self.endTime = segments.last!.timeMapping.target.end
-            self.setSegments(segments: segments, replaceNoteDetails: true)
+            self.setSegments(
+                segments: segments,
+                replaceNoteDetails: true,
+                saveToLowLevelRepr: true,
+                saveToState: false
+            )
         }
     }
     
@@ -232,7 +236,6 @@ class Note: AVMutableComposition, NSCoding {
         }
         coder.encode(committedBufferRanges, forKey: "committedBufferRanges") // Can't handle Range objects
         coder.encode(self.transformations, forKey: "transformations")
-        print("TRANSFORMATIONS IN: ", self.transformations)
         coder.encode(self.authorizedToListenForSpeech, forKey: "authorizedToListenForSpeech")
         coder.encode(self.clips, forKey: "clips")
         coder.encode(self.views, forKey: "views")
@@ -261,7 +264,6 @@ class Note: AVMutableComposition, NSCoding {
             self.committedBufferRanges = committedBufferRanges
         }
         self.transformations = coder.decodeObject(forKey: "transformations") as! [NoteTransformation]
-        print("TRANSFORMATIONS OUT: ", self.transformations)
         self.authorizedToListenForSpeech = coder.decodeBool(forKey: "authorizedToListenForSpeech")
         self.clips = coder.decodeObject(forKey: "clips") as! Set<String>
         self.startTime = self.noteSegments.count > 0 ? self.noteSegments.first!.timeMapping.target.start : CMTime.zero
@@ -288,7 +290,8 @@ class Note: AVMutableComposition, NSCoding {
             self.setSegments(
                 segments: self.noteSegments,
                 replaceNoteDetails: true,
-                saveToLowLevelRepr: true
+                saveToLowLevelRepr: true,
+                saveToState: false
             )
         }
     }
@@ -299,7 +302,35 @@ class Note: AVMutableComposition, NSCoding {
     }
     
     public override var description: String {
-        return "Note {\n\tfilename: \(self.filename) \n\tfileType: \(self.fileType) \n\tdateCreated: \(Utils.getDateString(date: self.dateCreated) ?? "nil") \n\tdateModified: \(Utils.getDateString(date: self.dateModified) ?? "nil") \n\tcreatorUID: \(self.creatorUID) \n\tnoteSegments: \(self.noteSegments) \n\tnoteBuffer: \(self.noteBuffer) \n\tsegmentIndexMap: \(self.segmentIndexMap) \n\tdeletedSegmentIndexMap: \(self.deletedSegmentIndexMap) \n\tcommittedBufferRanges: \(String(describing: self.committedBufferRanges)) \n\ttransformations: \(self.transformations) \n\tstartTime: \(self.startTime) \n\tendTime: \(self.endTime) \n\tduration: \(self.getDuration()) \n\tnumSentences: \(self.numSentences) \n\tlanguage: \(String(describing: self.language)) \n\tavgSpeakingRate: \(self.avgSpeakingRate) \n\tauthorizedToListenForSpeech: \(self.authorizedToListenForSpeech) \n\tclips: \(self.clips) \n\trecordStartDate: \(String(describing: self.recordStartDate)) \n\taccumulatedDuration: \(self.accumulatedDuration) \n\tisDeleted: \(self.isDeleted)\n}"
+        return "Note {\n\tuid: \(self.uid) \n\tfilename: \(self.filename) \n\tfileType: \(self.fileType) \n\tdateCreated: \(Utils.getDateString(date: self.dateCreated) ?? "nil") \n\tdateModified: \(Utils.getDateString(date: self.dateModified) ?? "nil") \n\tcreatorUID: \(self.creatorUID) \n\tnoteSegments: \(self.noteSegments) \n\tnoteBuffer: \(self.noteBuffer) \n\tsegmentIndexMap: \(self.segmentIndexMap) \n\tdeletedSegmentIndexMap: \(self.deletedSegmentIndexMap) \n\tcommittedBufferRanges: \(String(describing: self.committedBufferRanges)) \n\ttransformations: \(self.transformations) \n\tstartTime: \(self.startTime) \n\tendTime: \(self.endTime) \n\tduration: \(self.getDuration()) \n\tnumSentences: \(self.numSentences) \n\tlanguage: \(String(describing: self.language)) \n\tavgSpeakingRate: \(self.avgSpeakingRate) \n\tauthorizedToListenForSpeech: \(self.authorizedToListenForSpeech) \n\tclips: \(self.clips) \n\tcurrentClipUID: \(self.currentClipUID ?? "nil") \n\trecordStartDate: \(String(describing: self.recordStartDate)) \n\taccumulatedDuration: \(self.accumulatedDuration) \n\tisDeleted: \(self.isDeleted) \n\tviews: \(self.views) \n\tplays: \(self.plays) \n\ttextExports: \(self.textExports) \n\taudioExports: \(self.audioExports)\n}"
+    }
+    
+    static func ==(_ firstNote: Note, _ secondNote: Note) -> Bool {
+        return firstNote.uid == secondNote.uid &&
+            firstNote.filename == secondNote.filename &&
+            firstNote._fileType == secondNote._fileType &&
+            firstNote.dateCreated == secondNote.dateCreated &&
+            firstNote.dateModified == secondNote.dateModified &&
+            firstNote.creatorUID == secondNote.creatorUID &&
+            firstNote.noteSegments.elementsEqual(secondNote.noteSegments) &&
+            firstNote.noteBuffer.elementsEqual(secondNote.noteBuffer) &&
+            firstNote.segmentIndexMap == secondNote.segmentIndexMap &&
+            firstNote.deletedSegmentIndexMap == secondNote.deletedSegmentIndexMap &&
+            firstNote.committedBufferRanges.elementsEqual(secondNote.committedBufferRanges) &&
+            firstNote.transformations.elementsEqual(secondNote.transformations) &&
+            firstNote.startTime == secondNote.startTime &&
+            firstNote.endTime == secondNote.endTime &&
+            firstNote.authorizedToListenForSpeech == secondNote.authorizedToListenForSpeech &&
+            firstNote.clips == secondNote.clips &&
+            firstNote.currentClipUID == secondNote.currentClipUID &&
+            firstNote.recordStartDate == secondNote.recordStartDate &&
+            firstNote.accumulatedDuration == secondNote.accumulatedDuration &&
+            firstNote.recordFile == secondNote.recordFile &&
+            firstNote.isDeleted == secondNote.isDeleted &&
+            firstNote.views.elementsEqual(secondNote.views) &&
+            firstNote.plays.elementsEqual(secondNote.plays) &&
+            firstNote.textExports.elementsEqual(secondNote.textExports) &&
+            firstNote.audioExports.elementsEqual(secondNote.audioExports)
     }
     
     // MARK: - Configuration Methods
@@ -327,7 +358,7 @@ class Note: AVMutableComposition, NSCoding {
         // SpeechRecognitionEngine
         notificationCenter.addObserver(
             self,
-            selector: #selector(onStartListeningForSpeech(notification:)),
+            selector: #selector(onStartedListeningForSpeech(notification:)),
             name: SpeechRecognitionEngine.onStartedListeningForSpeech,
             object: nil
         )
@@ -351,8 +382,14 @@ class Note: AVMutableComposition, NSCoding {
         )
     }
     
-    @objc func onStartListeningForSpeech(notification: Notification) {
-        if self.noteManager == nil || self.isDeleted || noteManager.currentNote == nil || (self.noteManager!.currentNote != nil && self.noteManager!.currentNote!.uid != self.uid) { return }
+    @objc func onStartedListeningForSpeech(notification: Notification) {
+        if self.noteManager == nil ||
+            self.isDeleted ||
+            noteManager.currentNote == nil ||
+            (
+                self.noteManager!.currentNote != nil &&
+                self.noteManager!.currentNote!.uid != self.uid
+            ) { return }
         print("===== Note \(self.uid): On Start Listening For Speech =====")
         
         // Create and save new clip used to create unique track URLs to write audio into
@@ -360,9 +397,6 @@ class Note: AVMutableComposition, NSCoding {
         
         // Reset accumulated Duration for next clip capture
         self.accumulatedDuration = TimeInterval(0)
-        
-        // Capture last started listening timestamp
-        self.lastStartedListeningTimestamp = Date().timeIntervalSince1970
 
         // Configure Audio Write File
         self.configureAudioWriteFile()
@@ -405,6 +439,12 @@ class Note: AVMutableComposition, NSCoding {
     
     @objc func onSpeechUpdate(notification: Notification) {
         if self.noteManager == nil || self.tracks.count == 0 || self.isDeleted || self.noteManager!.currentNote == nil || (self.noteManager!.currentNote != nil && self.noteManager!.currentNote!.uid != self.uid) { return }
+        guard Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(self.noteManager.currentNote!).toOpaque() else {
+            print("\t[Error] Note has different memory address of current Note:")
+            print("\tSelf: ", Unmanaged.passUnretained(self).toOpaque())
+            print("\tCurrent Note: ", Unmanaged.passUnretained(self.noteManager.currentNote!).toOpaque())
+            return
+        }
         print("===== Note \(self.uid): On Speech Update =====")
         
         let transcription = notification.userInfo!["transcription"] as! SFTranscription
@@ -471,13 +511,13 @@ class Note: AVMutableComposition, NSCoding {
                 } else {
                     self.accumulatedDuration = max(0, Date().timeIntervalSince(self.recordStartDate!) - Utils.TRANSCRIPTION_LATENCY_DURATION)
                 }
+                
+                NotificationCenter.default.post(
+                    name: Note.onNoteCommittedBuffer,
+                    object: nil,
+                    userInfo: [:]
+                )
             }
-            
-            NotificationCenter.default.post(
-                name: Note.onNoteCommittedBuffer,
-                object: nil,
-                userInfo: [:]
-            )
         } else if self.recordStartDate != nil {
             print("\tDo not commit buffer.")
             if let numWordsBeforeVoiceCommand = numWordsBeforeVoiceCommand, isVoiceCommand && (self.speechRecognition.isListeningForSpeech || voiceCommandType == "stop note" || self.speechRecognition.pausedListeningForSpeech) && self.noteSegments.count > 0 {
@@ -495,15 +535,21 @@ class Note: AVMutableComposition, NSCoding {
         }
         
         if !self.selectionCursor.isUpdatingSelection {
+            print("\tUpdate View...")
             // execute listen update handler
             let text = self.getText()
             self.handleOnSpeechUpdate(text: text)
         }
         
-        // Save finished app
+        // Save changes
         if !self.speechRecognition.isListeningForSpeech && self.noteSegments.count > 0 && self.recordStartDate != nil {
             print("\tProcess note finishing...")
             self.handleFinish(normalize: true)
+        } else if let currentNoteUndoSnapshot = self.noteManager.currentNoteUndoSnapshot,
+            self.noteSegments.count != currentNoteUndoSnapshot.note.noteSegments.count &&
+            isFinalTranscription
+        {
+//            self.noteManager.registerNoteChange(note: self, undo: "committing new speech")
         }
     }
     
@@ -647,7 +693,9 @@ class Note: AVMutableComposition, NSCoding {
             sourceTimestamp = self.accumulatedDuration + segment.timestamp > 0 ?
                     floor(Utils.DEFAULT_SEGMENT_TIMESCALE * (self.accumulatedDuration + segment.timestamp))
                 :
-                    0
+                0
+            
+            print("SEGMENT = '\(word)', TIMESTAMP: ", segment.timestamp, self.accumulatedDuration)
             
             // Set duration
             duration = segment.duration > 0 ? floor(Utils.DEFAULT_SEGMENT_TIMESCALE * segment.duration) : 0
@@ -712,17 +760,17 @@ class Note: AVMutableComposition, NSCoding {
                 
                 // update selection anchor
                 if replaceSelectionAnchor {
-                    self.selectionCursor.setAnchor(segment: self.noteBuffer[transcriptionIndex])
+                    self.selectionCursor.setAnchorCaret(caret: Caret(index: transcriptionIndex, trackType: .buffer))
                 }
                 
                 // update selection focus
                 if replaceSelectionFocus {
-                    self.selectionCursor.setFocus(segment: self.noteBuffer[transcriptionIndex])
+                    self.selectionCursor.setFocusCaret(caret: Caret(index: transcriptionIndex, trackType: .buffer))
                 }
                 
                 // update selection cached anchor
                 if replaceSelectionCachedAnchor {
-                    self.selectionCursor.setCachedAnchor(segment: self.noteBuffer[transcriptionIndex])
+                    self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: transcriptionIndex, trackType: .buffer))
                 }
                 
                 self.handleMutation()
@@ -746,7 +794,8 @@ class Note: AVMutableComposition, NSCoding {
         omitLeadingSilence: Bool = false,
         saveSegments: Bool = false,
         saveToLowLevelRepr: Bool = false,
-        returnSegments: Bool = false
+        returnSegments: Bool = false,
+        saveToState: Bool = true
     ) -> [NoteSegment]? {
         print("===== Note: Normalize Segments =====")
         var lastEnd = CMTime.zero
@@ -769,7 +818,13 @@ class Note: AVMutableComposition, NSCoding {
                 if segment.timeMapping[normalizeType].start.seconds > lastEnd.seconds && !segment.isSilence() {
                     let trackURL = Utils.getFileURL(of: "\(self.filename)-\(currentClipUID)\(self.fileType)")
 
-                    if let lastCommittedSegment = self.noteSegments.last, index == 0 && segments != nil && segments!.first! != self.noteSegments.first! && self.noteSegments.count > 0 && normalizeType == .source && lastCommittedSegment.sourceURL!.absoluteString == trackURL.absoluteString {
+                    if let lastCommittedSegment = self.noteSegments.last,
+                       index == 0 && segments != nil &&
+                        segments!.first! != self.noteSegments.first! &&
+                        self.noteSegments.count > 0 &&
+                        normalizeType == .source &&
+                        lastCommittedSegment.sourceURL!.absoluteString == trackURL.absoluteString
+                    {
                         // first segment is silence
                         // we are normalizing source
                         // noteSegments is not empty
@@ -858,7 +913,10 @@ class Note: AVMutableComposition, NSCoding {
                     lastEnd = segment.timeMapping[normalizeType].end
                 } else if segment.timeMapping[normalizeType].start.seconds > lastEnd.seconds && segment.isSilence() {
                     // Modify silent segment in front of current segment to account for early time
-                    let newDuration = normalizeType == .source ? CMTimeSubtract(segment.timeMapping.source.end, lastEnd) : CMTimeSubtract(segment.timeMapping.target.end, lastEnd)
+                    let newDuration = normalizeType == .source ?
+                        CMTimeSubtract(segment.timeMapping.source.end, lastEnd)
+                        :
+                        CMTimeSubtract(segment.timeMapping.target.end, lastEnd)
                     let sourceTimeRange = normalizeType == .source ?
                     CMTimeRangeMake(start: lastEnd, duration: newDuration)
                     :
@@ -1131,7 +1189,8 @@ class Note: AVMutableComposition, NSCoding {
             self.setSegments(
                 segments: fullyNormalizedSegments,
                 replaceNoteDetails: replaceNoteDetails,
-                saveToLowLevelRepr: saveToLowLevelRepr
+                saveToLowLevelRepr: saveToLowLevelRepr,
+                saveToState: saveToState
             )
 
             // Check rep invariant
@@ -1213,7 +1272,8 @@ class Note: AVMutableComposition, NSCoding {
         let normalizedSegments = self.normalizeSegments(
             segments: segments,
             omitLeadingSilence: updateCachedAnchor, // remove leading space so that we don't erroneously treat it as a long silence in the event that we are inserting new speech
-            returnSegments: true
+            returnSegments: true,
+            saveToState: false
         )
         
         let lastBufferWordIndex = Utils.getNoteNthLastSegmentIndex(
@@ -1228,7 +1288,8 @@ class Note: AVMutableComposition, NSCoding {
         print("\tInserting buffer segments...")
         self.insertPassage(
             segments: normalizedSegments!,
-            at: insertTime
+            at: insertTime,
+            saveToState: true
         )
         
         if let lastBufferWordIndex = lastBufferWordIndex, updateCachedAnchor && cachedAnchorIndex != Int(Utils.UNKNOWN) {
@@ -1239,7 +1300,7 @@ class Note: AVMutableComposition, NSCoding {
                 if segment.getUID() == lastNormalizedWord.getUID() {
                     // update cached anchor
                     print("\tUpdating cached anchor in selection: ", segment.getText())
-                    self.selectionCursor.setCachedAnchor(segment: segment)
+                    self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: segment.getIndex(), trackType: .committed))
                 }
             }
         }
@@ -1250,7 +1311,7 @@ class Note: AVMutableComposition, NSCoding {
                 if segment.getUID() == oldAnchor.getUID() {
                     // update anchor
                     print("\tUpdated anchor segment in selection cursor: ", segment.getText())
-                    self.selectionCursor.setAnchor(segment: segment)
+                    self.selectionCursor.setAnchorCaret(caret: Caret(index: segment.getIndex(), trackType: .committed))
                 }
             }
         }
@@ -1261,7 +1322,7 @@ class Note: AVMutableComposition, NSCoding {
                 if segment.getUID() == oldFocus.getUID() {
                     // update focus
                     print("\tUpdated focus segment in selection cursor: ", segment.getText())
-                    self.selectionCursor.setAnchor(segment: segment)
+                    self.selectionCursor.setFocusCaret(caret: Caret(index: segment.getIndex(), trackType: .committed))
                 }
             }
         }
@@ -1278,7 +1339,7 @@ class Note: AVMutableComposition, NSCoding {
         self.noteBuffer = []
     }
     
-    func handleSave() {
+    func handleSave(handler: (() -> Void)? = nil) {
         print("===== Note: Handle Save =====")
         
         if let speechRecognition = self.speechRecognition, speechRecognition.isListeningForSpeech {
@@ -1302,9 +1363,9 @@ class Note: AVMutableComposition, NSCoding {
             self?.accumulatedDuration = TimeInterval(0)
             self?.recordStartDate = nil
             self?.clearBuffer()
-            self?.selectionCursor.setAnchor()
-            self?.selectionCursor.setFocus()
-            self?.selectionCursor.setCachedAnchor()
+            self?.selectionCursor.setAnchorCaret()
+            self?.selectionCursor.setFocusCaret()
+            self?.selectionCursor.setCachedAnchorCaret()
             self?.state.save()
             
             // Feedback
@@ -1341,7 +1402,8 @@ class Note: AVMutableComposition, NSCoding {
                 let _ = self.normalizeSegments(
                     normalizeType: .target,
                     saveSegments: true,
-                    saveToLowLevelRepr: true
+                    saveToLowLevelRepr: true,
+                    saveToState: true
                 )
             }
             onFinishHandler()
@@ -1352,7 +1414,8 @@ class Note: AVMutableComposition, NSCoding {
                 let _ = self.normalizeSegments(
                     normalizeType: .target,
                     saveSegments: true,
-                    saveToLowLevelRepr: true
+                    saveToLowLevelRepr: true,
+                    saveToState: true
                 )
             }
             onFinishHandler()
@@ -1738,295 +1801,6 @@ class Note: AVMutableComposition, NSCoding {
     
     // MARK: - Mutating Methods
     
-    // TRACKS MUST BE COLLAPSED INTO SINGLE TRACK TO USE THIS
-    func trim(keeping: CMTimeRange, permanent: Bool = false, overwrite: Bool = false, onFinishHandler: (() -> Void)? = nil) {
-        let keepRange = keeping
-        print("===== Note: Trim =====")
-        print("\tKeeping section starting: \(keepRange.start.seconds) until: \(keepRange.end.seconds)")
-        if self.noteBuffer.count > 0 {
-            print("===== There was a problem trimming note. Note buffer was not committed =====")
-            return
-        }
-        
-        // Present Feedback
-        self.notifications.executeFeedback(
-            visualMessage: "Trim Note",
-            audioMessage: "trimming note",
-            withHaptics: true
-        )
-        
-        var replaceSelectionAnchor = false
-        var replaceSelectionFocus = false
-        var replaceSelectionCachedAnchor = false
-        var newNoteSegments = [NoteSegment]()
-        var silenceIndices = [Int]()
-
-        let handleSegments = {
-            print("\tFiltering note segments...")
-            var lastEnd = CMTime.zero
-            if keepRange.start == CMTime.zero {
-                print("\tNote Segments don't require time-shifting...")
-                // requires no time-shifting if on the left side of range
-                for seg in self.noteSegments {
-                    if keepRange.containsTimeRange(seg.timeMapping.target) {
-                        let segment = seg.duplicate()
-                        
-                        // Save silence index
-                        if segment.isSilence() {
-                            silenceIndices.append(newNoteSegments.count)
-                        }
-
-                        // Add segment to array
-                        newNoteSegments.append(segment)
-                        
-                        // Update lastEnd
-                        lastEnd = seg.timeMapping.target.end
-                    } else {
-                        let segment = seg.duplicate()
-                        
-                        // We don't add to silence indices because it should have no effect
-                        // on the note
-                        
-                        // set to deleted
-                        segment.setIsDeleted(isDeleted: true)
-                        
-                        // Add segment to array
-                        newNoteSegments.append(segment)
-                    }
-                }
-            } else {
-                print("\tNote Segments require time-shifting...")
-                // requires time-shifting if on the right side of range
-                for seg in self.noteSegments {
-                    if keepRange.containsTimeRange(seg.timeMapping.target) {
-                        let shiftedSegment = seg.duplicate(
-                            timeRange: CMTimeRangeMake(
-                                start: lastEnd,
-                                duration: seg.timeMapping.target.duration
-                            )
-                        )
-
-                        // Save silence index
-                        if shiftedSegment.isSilence() {
-                            silenceIndices.append(newNoteSegments.count)
-                        }
-
-                        // Add segment to array
-                        newNoteSegments.append(shiftedSegment)
-
-                        // Update lastEnd
-                        lastEnd = CMTimeAdd(lastEnd, seg.timeMapping.target.duration)
-                    } else {
-                        let segment = seg.duplicate()
-                        
-                        // We don't add to silence indices because it should have no effect
-                        // on the note
-                        
-                        // set to deleted
-                        segment.setIsDeleted(isDeleted: true)
-                        
-                        // Add segment to array
-                        newNoteSegments.append(segment)
-                    }
-                }
-            }
-            
-            print("\tUpdate index, backgroundNoise, avgPauseDuration, and speakingRate...")
-
-            var avgPauseDuration: Double = silenceIndices.reduce(0, { result, i in
-               return result + newNoteSegments[i].timeMapping.target.duration.seconds
-            }) / Double(silenceIndices.count)
-            avgPauseDuration = avgPauseDuration.rounded(toPlaces: Utils.DEFAULT_FIG_COUNT)
-
-            var speakingRate: Double = newNoteSegments.reduce(0, { result, item in
-                if !item.isPunctuation() && !item.isSilence() && !item.isVoiceCommandWord() && !item.isDeleted() {
-                   return result + 1
-               }
-               
-               return result
-            }) / Double(self.getDuration(filteredDuration: true).seconds / Double(TimeConstant.secsPerMin))
-            speakingRate = speakingRate.rounded(toPlaces: Utils.DEFAULT_FIG_COUNT)
-
-            // Update Index, Background Noise, AvgPauseDuration, SpeakingRate, Selection Anchor, Selection Focus, Selection Cached Anchor
-            for (index, segment) in newNoteSegments.enumerated() {
-                // Set segment index
-                // We might need to update indices if we lost segments above
-                segment.setIndex(index: index)
-
-                // Set background noise
-                let datum = self.speechRecognition.getRecordingSoundIntensityDatum(timestamp: segment.timeMapping.target.start.seconds)
-                segment.setBackgroundNoise(noise: datum.power.rounded(toPlaces: Utils.SOUND_INTENSITY_SIG_FIG_COUNT))
-
-                // Set avgPauseDuration
-                segment.setAvgPauseDuration(duration: avgPauseDuration)
-
-                // Set speakingRate
-                segment.setSpeakingRate(rate: speakingRate)
-                
-                // determine if we need to update selection cursor anchor
-                // we need to get these values early before we replace segments
-                // so that selection cursor doesn't lose reference to its anchor
-                if let _ = self.selectionCursor.anchor, segment.getUID() == self.selectionCursor.anchor!.getUID() && !segment.isDeleted() {
-                    replaceSelectionAnchor = true
-                }
-                
-                // determine if we need to update selection cursor focus
-                // we need to get these values early before we replace segments
-                // so that selection cursor doesn't lose reference to its focus
-                if let _ = self.selectionCursor.focus, segment.getUID() == self.selectionCursor.focus!.getUID() && !segment.isDeleted() {
-                    replaceSelectionFocus = true
-                }
-                
-                // determine if we need to update selection cursor cached anchor
-                // we need to get these values early before we replace segments
-                // so that selection cursor doesn't lose reference to its cached anchor
-                if let _ = self.selectionCursor.cachedAnchor, segment.getUID() == self.selectionCursor.cachedAnchor!.getUID() && !segment.isDeleted() {
-                    replaceSelectionCachedAnchor = true
-                }
-            }
-        }
-
-        if permanent {
-            print("\tModify start and end times...")
-            
-            // Create new filename if not or can't overwrite
-            if !overwrite || self._fileType != .m4a {
-                print("\tCreate new uid and filename...")
-                let uid = UUID().uuidString
-                self.uid = uid
-                self.filename = "note-\(uid)"
-            }
-            
-            print("\tExporting and modifying segments...")
-            Utils.exportNote(
-                state: self.state,
-                note: self,
-                filename: self.filename,
-                fileType: self.fileType,
-                timeRange: keepRange
-            ) { noteURL in
-                // Handle Segments
-                handleSegments()
-                
-                print("\tUpdate note file type...")
-                // Change File Type
-                // We need this to be placed before normalizeSegments so newNoteSegments are
-                // updated with new trackURL
-                self.setFileType(fileType: .m4a)
-
-                print("\tNormalize segments to correct for any time-related errors...")
-                // Correct any time-related errors
-                // Normalize Segments will setSegments
-                // Make sure we update segments to reflect new track URL
-                let normalizedSegments = self.normalizeSegments(
-                    segments: newNoteSegments,
-                    normalizeType: .target,
-                    replaceNoteDetails: true,
-                    saveSegments: true
-                )
-                
-                if let normalizedSegments = normalizedSegments {
-                    // update selection properties
-                    for seg in normalizedSegments {
-                        // update selection anchor
-                        if replaceSelectionAnchor && seg.getUID() == self.selectionCursor.anchor!.getUID() {
-                            self.selectionCursor.setAnchor(segment: seg)
-                        }
-                        
-                        // update selection focus
-                        if replaceSelectionFocus && seg.getUID() == self.selectionCursor.focus!.getUID() {
-                            self.selectionCursor.setFocus(segment: seg)
-                        }
-                        
-                        // update selection cached anchor
-                        if replaceSelectionCachedAnchor && seg.getUID() == self.selectionCursor.cachedAnchor!.getUID() {
-                            self.selectionCursor.setCachedAnchor(segment: seg)
-                        }
-                    }
-                }
-                
-                self.startTime = CMTime.zero
-                self.endTime = normalizedSegments!.last!.timeMapping.target.end
-
-                // Check Representation Invariant
-                self.handleMutation()
-                self.checkRep()
-                
-                // Run Completion Handler
-                onFinishHandler?()
-            }
-        } else {
-            // Need to remove right side first because everything shifts
-            // if we do left side first
-            print("\tRemove time ranges from underlying AVMutableComposition...")
-            print("\tChange start times...")
-            if CMTimeSubtract(self.getDuration(), keepRange.end) > CMTime.zero && CMTimeSubtract(keepRange.start, CMTime.zero) > CMTime.zero {
-                // Remove from right side and left
-                print("\tTrim Note from the right and left side...")
-                let removeRightRange = CMTimeRangeFromTimeToTime(start: keepRange.end, end: self.getDuration())
-                let removeLeftRange = CMTimeRangeFromTimeToTime(start: CMTime.zero, end: keepRange.start)
-                
-                // Remove Time Range
-                self.removeTimeRange(removeRightRange)
-                self.removeTimeRange(removeLeftRange)
-            } else if CMTimeSubtract(self.getDuration(), keepRange.end) > CMTime.zero && CMTimeSubtract(keepRange.start, CMTime.zero) <= CMTime.zero {
-                // Remove from right side only
-                print("\tTrim Note from the right side only...")
-                let removeRightRange = CMTimeRangeFromTimeToTime(start: keepRange.end, end: self.getDuration())
-                
-                // Remove Time Range
-                self.removeTimeRange(removeRightRange)
-            } else if CMTimeSubtract(self.getDuration(), keepRange.end) <= CMTime.zero && CMTimeSubtract(keepRange.start, CMTime.zero) > CMTime.zero {
-                // Remove from left side only
-                print("\tTrim Note from the left side only...")
-                let removeLeftRange = CMTimeRangeFromTimeToTime(start: CMTime.zero, end: keepRange.start)
-                
-                // Remove Time Range
-                self.removeTimeRange(removeLeftRange)
-            }
-
-            print("\tModify note start and end times...")
-
-            // Handle segments
-            handleSegments()
-            
-            print("\tUpdate Note Segments...")
-            // Update Segments
-            // We cannot go through setSegments method because these note segments might not be normalized
-            // Compute segment sentences
-            let segmentsWithUpdatedSentences = updateSegmentSentences(segments: newNoteSegments)
-            self.noteSegments = segmentsWithUpdatedSentences.count == newNoteSegments.count ? segmentsWithUpdatedSentences : newNoteSegments
-            
-            // update selection properties
-            for seg in self.noteSegments {
-                // update selection anchor
-                if replaceSelectionAnchor && seg.getUID() == self.selectionCursor.anchor!.getUID() {
-                    self.selectionCursor.setAnchor(segment: seg)
-                }
-                
-                // update selection focus
-                if replaceSelectionFocus && seg.getUID() == self.selectionCursor.focus!.getUID() {
-                    self.selectionCursor.setFocus(segment: seg)
-                }
-                
-                // update selection cached anchor
-                if replaceSelectionCachedAnchor && seg.getUID() == self.selectionCursor.cachedAnchor!.getUID() {
-                    self.selectionCursor.setCachedAnchor(segment: seg)
-                }
-            }
-            
-            self.startTime = CMTime.zero
-            self.endTime = self.noteSegments.last!.timeMapping.target.end
-
-            // Check Representation Invariant
-            self.handleMutation()
-            self.checkRep()
-            
-            // Run Completion Handler
-            onFinishHandler?()
-        }
-    }
-    
     // Mutates Segments
     func updateSegmentSentences(segments: [NoteSegment]) -> [NoteSegment] {
         print("===== Note: Update Segment Sentences =====")
@@ -2129,7 +1903,7 @@ class Note: AVMutableComposition, NSCoding {
     
     // time must be at a segment boundary to make everything work correctly
     // assumes buffer is empty
-    func insertPassage(segments: [NoteSegment], at time: CMTime) {
+    func insertPassage(segments: [NoteSegment], at time: CMTime, saveToState: Bool = true) {
         print("===== Note: Insert Passage =====")
 //        guard self.noteBuffer.count == 0 else {
 //            print("\t[Error] There was a problem inserting passage. Buffer was not empty")
@@ -2184,7 +1958,8 @@ class Note: AVMutableComposition, NSCoding {
             normalizeType: .target,
             replaceNoteDetails: true,
             saveSegments: true,
-            saveToLowLevelRepr: true
+            saveToLowLevelRepr: true,
+            saveToState: saveToState
         )
 
         if !self.selectionCursor.isUpdatingSelection {
@@ -2196,7 +1971,7 @@ class Note: AVMutableComposition, NSCoding {
     
     // time must be at a segment boundary to make everything work correctly
     // assumes buffer is empty
-    func removePassage(range: CMTimeRange) {
+    func removePassage(range: CMTimeRange, saveToState: Bool = true) {
         print("===== Note: Remove Passage =====")
 //        guard self.noteBuffer.count == 0 else {
 //            print("\t[Error] There was a problem removing passage. Buffer was not empty")
@@ -2229,7 +2004,7 @@ class Note: AVMutableComposition, NSCoding {
                     updateAnchor = true
                     // Clear anchor so we get no errors related to selectionRange
                     // When we update anchor when we have a selection, focus will be outdate and cause error
-                    self.selectionCursor.setAnchor()
+                    self.selectionCursor.setAnchorCaret()
                 }
                 
                 // Check if we need to update selection focus
@@ -2238,7 +2013,7 @@ class Note: AVMutableComposition, NSCoding {
                     updateFocus = true
                     // Clear focus so we get no errors related to selectionRange
                     // When we update focus when we have a selection, anchor will be outdate and cause error
-                    self.selectionCursor.setFocus()
+                    self.selectionCursor.setFocusCaret()
                 }
                 
                 // Check if we need to update selection cached anchor
@@ -2246,7 +2021,7 @@ class Note: AVMutableComposition, NSCoding {
                     print("\tSelection cursor cached anchor requires updating...")
                     updateCachedAnchor = true
                     // Clear cached anchor
-                    self.selectionCursor.setCachedAnchor()
+                    self.selectionCursor.setCachedAnchorCaret()
                 }
             }
         }
@@ -2262,43 +2037,46 @@ class Note: AVMutableComposition, NSCoding {
             normalizeType: .target,
             replaceNoteDetails: true,
             saveSegments: true,
-            saveToLowLevelRepr: true
+            saveToLowLevelRepr: true,
+            saveToState: saveToState
         )
         
         var segment: NoteSegment?
         if updateAnchor || updateFocus || updateCachedAnchor {
             print("\tSearching for replacement segment...")
-            segment = self.speechPlayer.getSegment(
+            segment = Utils.getSegment(
                 forTrackTime: CMTimeMake(
                     value: Int64(Utils.DEFAULT_SEGMENT_TIMESCALE * (max(0, beforeTime.seconds - Utils.TEMPORAL_DELTA))),
                     timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
-                )
+                ),
+                note: self
             )
             
             while segment != nil && segment!.timeMapping.target.start > CMTime.zero && (segment!.isVoiceCommandWord() || segment!.isDeleted() || segment!.isSilence()) {
                 let startTime = segment!.timeMapping.target.start
-                segment = self.speechPlayer.getSegment(
+                segment = Utils.getSegment(
                     forTrackTime: CMTimeMake(
                         value: Int64(Utils.DEFAULT_SEGMENT_TIMESCALE * (max(0, startTime.seconds - Utils.TEMPORAL_DELTA))),
                         timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
-                    )
+                    ),
+                    note: self
                 )
             }
         }
         
         if let segment = segment, updateAnchor && segment.isActive() {
             print("\tUpdating selection cursor anchor..")
-            self.selectionCursor.setAnchor(segment: segment)
+            self.selectionCursor.setAnchorCaret(caret: Caret(index: segment.getIndex(), trackType: .committed))
         }
         
         if let segment = segment, updateFocus && segment.isActive() {
             print("\tUpdating selection cursor focus...")
-            self.selectionCursor.setFocus(segment: segment)
+            self.selectionCursor.setFocusCaret(caret: Caret(index: segment.getIndex(), trackType: .committed))
         }
         
         if let segment = segment, updateCachedAnchor && segment.isActive() {
             print("\tUpdating selection cursor cached anchor...")
-            self.selectionCursor.setCachedAnchor(segment: segment)
+            self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: segment.getIndex(), trackType: .committed))
         }
         
         // we don't change text view in this mode, so text won't be available
@@ -2312,9 +2090,13 @@ class Note: AVMutableComposition, NSCoding {
     func updatePassage(segments: [NoteSegment], range: CMTimeRange) {
         print("===== Note: Update Passage =====")
         print("\tRemoving current passsage from note...")
-        self.removePassage(range: range)
+        self.removePassage(range: range, saveToState: false)
         print("\tAdding new passage to note...")
-        let _ = self.insertPassage(segments: segments, at: range.start)
+        let _ = self.insertPassage(
+            segments: segments,
+            at: range.start,
+            saveToState: true
+        )
         print("\tSuccessfully updated passage in note!")
     }
 
@@ -2935,14 +2717,27 @@ class Note: AVMutableComposition, NSCoding {
             return
         }
         
-        var currentSegment: NoteSegment? = Array(self.noteSegments[walkingRange])[self.noteManager.walkingIndex]
+        let currentSegment: NoteSegment? = Array(self.noteSegments[walkingRange])[self.noteManager.walkingIndex]
+        var currentSegmentIndex: Int? = self.noteManager.walkingIndex
         if let segment = currentSegment, let walkingRange = self.noteManager.walkingRange, !segment.isActive() {
-            currentSegment = self.speechPlayer.getSegment(segment: segment, segments: Array(self.noteSegments[walkingRange]), type: .next, isWord: true)
+            currentSegmentIndex = Utils.getSegmentIndex(
+                segment: segment,
+                segments: Array(self.noteSegments[walkingRange]),
+                type: .next,
+                isWord: true
+            )
         }
         
-        if let currentSegment = currentSegment {
+        // when current segment is != nil, it means the first segment
+        // was valid and we didn't need to update walking index
+        //
+        // when current segment index != self.noteManager.walkingIndex it means we had to
+        // update walking index
+        if let currentSegmentIndex = currentSegmentIndex {
             // Updating walking index
-            self.noteManager.setWalkingIndex(index: currentSegment.getIndex() - Array(self.noteSegments[walkingRange]).first!.getIndex())
+            if currentSegmentIndex != self.noteManager.walkingIndex {
+                self.noteManager.setWalkingIndex(index: currentSegmentIndex)
+            }
 
             // Present Feedback
             self.notifications.executeFeedback(
@@ -2955,10 +2750,14 @@ class Note: AVMutableComposition, NSCoding {
             self.noteManager.setPausedWalkingNote(to: false)
             self.noteManager.setPausedRunningNote(to: false)
             
-            self.selectionCursor.setSelection(anchor: currentSegment, focus: currentSegment)
+            self.selectionCursor.setSelection(
+                anchorCaret: Caret(index: currentSegmentIndex, trackType: .committed),
+                focusCaret: Caret(index: currentSegmentIndex, trackType: .committed)
+            )
             
             // start looping walk
             if AVAudioSession.isHeadphonesConnected {
+                let currentSegment = Array(self.noteSegments[walkingRange])[currentSegmentIndex]
                 let makeStep = {
                     self.speechPlayer.play(segments: [currentSegment])
                     
@@ -3017,15 +2816,21 @@ class Note: AVMutableComposition, NSCoding {
             return
         }
         
-        var currentSegment: NoteSegment? = Array(self.noteSegments[walkingRange])[self.noteManager.walkingIndex]
+        let currentSegment: NoteSegment? = Array(self.noteSegments[walkingRange])[self.noteManager.walkingIndex]
+        var currentSegmentIndex: Int? = nil
         if let segment = currentSegment, let walkingRange = self.noteManager.walkingRange {
-            currentSegment = self.speechPlayer.getSegment(segment: segment, segments: Array(self.noteSegments[walkingRange]), type: .previous, isWord: true)
+            currentSegmentIndex = Utils.getSegmentIndex(
+                segment: segment,
+                segments: Array(self.noteSegments[walkingRange]),
+                type: .previous,
+                isWord: true
+            )
         }
         
-        if let currentSegment = currentSegment, self.noteManager.walkingIndex != (currentSegment.getIndex() - Array(self.noteSegments[walkingRange]).first!.getIndex()) {
+        if let currentSegmentIndex = currentSegmentIndex, self.noteManager.walkingIndex != currentSegmentIndex {
             
             // Updating walking index
-            self.noteManager.setWalkingIndex(index: currentSegment.getIndex() - Array(self.noteSegments[walkingRange]).first!.getIndex())
+            self.noteManager.setWalkingIndex(index: currentSegmentIndex)
 
             // Present Feedback
             self.notifications.executeFeedback(
@@ -3051,10 +2856,14 @@ class Note: AVMutableComposition, NSCoding {
                 self.speechSynthesis.stopEcho(withFeedback: false)
             }
             
-            self.selectionCursor.setSelection(anchor: currentSegment, focus: currentSegment)
+            self.selectionCursor.setSelection(
+                anchorCaret: Caret(index: currentSegmentIndex, trackType: .committed),
+                focusCaret: Caret(index: currentSegmentIndex, trackType: .committed)
+            )
             
             // start looping walk
-            if AVAudioSession.isHeadphonesConnected {// play speech
+            if AVAudioSession.isHeadphonesConnected { // play speech
+                let currentSegment = Array(self.noteSegments[walkingRange])[currentSegmentIndex]
                 let makeStep = {
                     self.speechPlayer.play(segments: [currentSegment])
                     
@@ -3112,14 +2921,20 @@ class Note: AVMutableComposition, NSCoding {
             return
         }
         
-        var currentSegment: NoteSegment? = Array(self.noteSegments[walkingRange])[self.noteManager.walkingIndex]
+        let currentSegment: NoteSegment? = Array(self.noteSegments[walkingRange])[self.noteManager.walkingIndex]
+        var currentSegmentIndex: Int? = nil
         if let segment = currentSegment, let walkingRange = self.noteManager.walkingRange {
-            currentSegment = self.speechPlayer.getSegment(segment: segment, segments: Array(self.noteSegments[walkingRange]), type: .next, isWord: true)
+            currentSegmentIndex = Utils.getSegmentIndex(
+                segment: segment,
+                segments: Array(self.noteSegments[walkingRange]),
+                type: .next,
+                isWord: true
+            )
         }
 
-        if let currentSegment = currentSegment, self.noteManager.walkingIndex != (currentSegment.getIndex() - Array(self.noteSegments[walkingRange]).first!.getIndex()) {
+        if let currentSegmentIndex = currentSegmentIndex, self.noteManager.walkingIndex != currentSegmentIndex {
             // Updating walking index
-            self.noteManager.setWalkingIndex(index: currentSegment.getIndex() - Array(self.noteSegments[walkingRange]).first!.getIndex())
+            self.noteManager.setWalkingIndex(index: currentSegmentIndex)
 
             // Present Feedback
             self.notifications.executeFeedback(
@@ -3145,10 +2960,14 @@ class Note: AVMutableComposition, NSCoding {
                 self.speechSynthesis.stopEcho(withFeedback: false)
             }
             
-            self.selectionCursor.setSelection(anchor: currentSegment, focus: currentSegment)
+            self.selectionCursor.setSelection(
+                anchorCaret: Caret(index: currentSegmentIndex, trackType: .committed),
+                focusCaret: Caret(index: currentSegmentIndex, trackType: .committed)
+            )
             
             // start looping walk
             if AVAudioSession.isHeadphonesConnected {
+                let currentSegment = Array(self.noteSegments[walkingRange])[currentSegmentIndex]
                 let makeStep = {
                     self.speechPlayer.play(segments: [currentSegment])
                     
@@ -3343,10 +3162,12 @@ class Note: AVMutableComposition, NSCoding {
             
             if clearSelection {
                 // We only clear the focus so that the cursor remains at given location
-                self.selectionCursor.setFocus()
-                if !self.selectionCursor.isAtEndOfTextView {
+                self.selectionCursor.setFocusCaret()
+                if let anchorCaret = self.selectionCursor.anchorCaret,
+                   !self.selectionCursor.isAtEndOfTextView
+                {
                     // We cache the anchor if we're mid-note so that new content is added from given location
-                    self.selectionCursor.setCachedAnchor(segment: self.selectionCursor.anchor)
+                    self.selectionCursor.setCachedAnchorCaret(caret: anchorCaret)
                 }
             } else if let _ = self.selectionCursor.anchor, let _ = self.selectionCursor.focus, !pause {
                 // Initiate looping selection behavior when we end walk
@@ -3392,69 +3213,143 @@ class Note: AVMutableComposition, NSCoding {
     }
     
     func generateNewClip() {
-        self.currentClipUID = UUID().uuidString
+        self.setCurrentClipUID(uid: UUID().uuidString)
         self.clips.insert(self.currentClipUID!)
         print("\tAdding new clip: ", self.currentClipUID!)
         self.state.setClip(clipUID: self.currentClipUID!, noteUID: self.uid)
     }
     
-    // https://developer.apple.com/documentation/avfoundation/avassetexportpresetpassthrough
-    // https://stackoverflow.com/questions/58025109/exporting-mp3-with-avassetexportsession
-    // We do not compute sentences for segments here because the segments lack a reference to an note
-    // Without a reference to an note, they cannot compute getText correctly
-    // MUST HAVE A SINGLE COLLAPSED TRACK
-    func duplicate(onFinishHandler: @escaping (_ note: Note?) -> Void) {
-        print("===== Duplicate Note =====")
-        guard self.noteBuffer.count == 0 else {
-            print("\t[Error] There was a problem inserting passage. Buffer was not empty")
-            return
+    func duplicate() -> Note {
+        print("===== Note \(self.uid): Duplicate ======")
+        var noteSegments = [NoteSegment]()
+        for segment in self.noteSegments {
+            noteSegments.append(segment.duplicate())
         }
+        
+        let duplicateNote = Note(
+            uid: self.uid,
+            filename: self.filename,
+            creatorUID: self.creatorUID,
+            segments: noteSegments
+        )
+            
+        // Set Date Created
+        duplicateNote.dateCreated = self.dateCreated
+        
+        // Set Date Modified
+        duplicateNote.dateModified = self.dateModified
 
-        // Export Note
-        let uid = UUID().uuidString
-        let duplicateFilename = "note-\(uid)"
-        Utils.exportNote(
-            state: self.state,
-            note: self,
-            filename: duplicateFilename,
-            fileType: self.fileType,
-            timeRange: CMTimeRangeMake(start: CMTime.zero, duration: self.getDuration())
-        ) { noteURL in
-            let duplicateNote = Note(
-                uid: uid,
-                filename: duplicateFilename,
-                fileType: .m4a,
-                creatorUID: self.creatorUID,
-                segments: self.noteSegments // Will copy segments so there are not multiple pointers to a single segment
+        // Set Committed Buffer Ranges
+        var committedBufferRanges = [Range<Int>]()
+        self.committedBufferRanges.forEach({ range in
+            let duplicateRange = range.lowerBound..<range.upperBound
+            committedBufferRanges.append(duplicateRange)
+        })
+        duplicateNote.committedBufferRanges = committedBufferRanges
+        
+        // Set Transformations
+        var transformations = [NoteTransformation]()
+        self.transformations.forEach({ transformation in
+            let duplicateTransformation = NoteTransformation(
+                type: transformation.type,
+                uids: transformation.uids,
+                text: transformation.text,
+                value: transformation.value,
+                textRange: transformation.textRange,
+                noteRange: transformation.noteRange
             )
-                
-            // Set Date Created
-            duplicateNote.dateCreated = self.dateCreated
-            
-            // Set Date Modified
-            duplicateNote.dateModified = self.dateModified
-            
-            // Execute handler
-            onFinishHandler(duplicateNote)
-        }
+            transformations.append(duplicateTransformation)
+        })
+        duplicateNote.transformations = transformations
+        
+        // Set Authorized To Listen For Speech
+        duplicateNote.authorizedToListenForSpeech = self.authorizedToListenForSpeech
+
+        // Set Clips
+        duplicateNote.clips = self.clips
+        
+        // Set Current Clip UID
+        duplicateNote.setCurrentClipUID(uid: self.currentClipUID)
+
+        // Set Record Start Date
+        duplicateNote.recordStartDate = self.recordStartDate
+        
+        // Set Accumulated Duration
+        duplicateNote.accumulatedDuration = self.accumulatedDuration
+        
+        // Set Record File
+        duplicateNote.recordFile = self.recordFile
+        
+        // Set Is Deleted
+        duplicateNote.isDeleted = self.isDeleted
+        
+        // Set Views
+        var views = [TimeInterval]()
+        self.views.forEach({ timeInterval in
+            views.append(timeInterval)
+        })
+        duplicateNote.views = views
+        
+        // Set Plays
+        var plays = [TimeInterval]()
+        self.plays.forEach({ timeInterval in
+            plays.append(timeInterval)
+        })
+        duplicateNote.plays = plays
+        
+        // Set Text Exports
+        var textExports = [TimeInterval]()
+        self.textExports.forEach({ timeInterval in
+            textExports.append(timeInterval)
+        })
+        duplicateNote.textExports = textExports
+        
+        // Audio Exports
+        var audioExports = [TimeInterval]()
+        self.audioExports.forEach({ timeInterval in
+            audioExports.append(timeInterval)
+        })
+        duplicateNote.audioExports = audioExports
+        
+        return duplicateNote
     }
     
     // MARK: - Telemetry
     
     func incrementViewCount() {
-        self.views.append(Date().timeIntervalSince1970)
+        print("===== Note: Increment View Count =====")
+        let timeInterval = Date().timeIntervalSince1970
+        self.views.append(timeInterval)
+        
+        // Increment State Aggregate Count
+        self.state.incrementNoteViewCount(timeInterval: timeInterval)
     }
     
     func incrementPlayCount() {
-        self.plays.append(Date().timeIntervalSince1970)
+        print("===== Note: Increment Play Count =====")
+        let timeInterval = Date().timeIntervalSince1970
+        self.plays.append(timeInterval)
+        
+        // Increment State Aggregate Count
+        self.state.incrementNotePlayCount(timeInterval: timeInterval)
     }
     
     func incrementTextExportCount() {
-        self.textExports.append(Date().timeIntervalSince1970)
+        print("===== Note: Increment Text Export Count =====")
+        let timeInterval = Date().timeIntervalSince1970
+        self.textExports.append(timeInterval)
+        
+        // Increment State Aggregate Count
+        self.state.incrementNoteTextExportCount(timeInterval: timeInterval)
     }
     
     func incrementAudioExportCount() {
-        self.audioExports.append(Date().timeIntervalSince1970)
+        print("===== Note: Increment Audio Export Count =====")
+        let timeInterval = Date().timeIntervalSince1970
+        self.audioExports.append(timeInterval)
+        
+        // Increment State Aggregate Count
+        self.state.incrementNoteAudioExportCount(timeInterval: timeInterval)
     }
     
     // MARK: - Setters
@@ -3472,7 +3367,12 @@ class Note: AVMutableComposition, NSCoding {
     // we have to duplicate segments to reset these
     // thus is a costly computation
     // TODO: Confirm that source and target don't affect setting segments to low-level representation
-    func setSegments(segments: [NoteSegment], replaceNoteDetails: Bool = false, saveToLowLevelRepr: Bool = false) {
+    func setSegments(
+        segments: [NoteSegment],
+        replaceNoteDetails: Bool = false,
+        saveToLowLevelRepr: Bool = false,
+        saveToState: Bool = true
+    ) {
         print("===== Note: Set Segments =====")
         var setSegmentNote = false
         // set note reference in segments
@@ -3530,16 +3430,16 @@ class Note: AVMutableComposition, NSCoding {
             for segment in self.noteSegments {
                 if let selectionCursor = self.selectionCursor, let anchor = selectionCursor.anchor, segment.getUID() == anchor.getUID() {
                     print("\tUpdating selection cursor anchor...")
-                    self.selectionCursor.setAnchor(segment: segment)
+                    self.selectionCursor.setAnchorCaret(caret: Caret(index: segment.getIndex(), trackType: .committed))
                 }
                 
                 if let selectionCursor = self.selectionCursor, let focus = selectionCursor.focus, segment.getUID() == focus.getUID() {
                      print("\tUpdating selection cursor focus...")
-                    self.selectionCursor.setFocus(segment: segment)
+                    self.selectionCursor.setFocusCaret(caret: Caret(index: segment.getIndex(), trackType: .committed))
                 }
                 if let selectionCursor = self.selectionCursor, let cachedAnchor = selectionCursor.cachedAnchor, segment.getUID() == cachedAnchor.getUID() {
                      print("\tUpdating selection cursor cached anchor...")
-                    self.selectionCursor.setCachedAnchor(segment: segment)
+                    self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: segment.getIndex(), trackType: .committed))
                 }
                 
                 // Add segment uid-index pair into segmentIndexMap
@@ -3566,9 +3466,11 @@ class Note: AVMutableComposition, NSCoding {
             print("\tSuccessfully updated \(self.noteSegments.count) note segments!")
             print("\tSuccessfully updated \(self.transformations.count) note transformations!")
             
-            // Save note
-            // We don't run handle save when note ended. We run it at the end of on speech update
-            self.handleSave()
+            if saveToState {
+                // Save note
+                // We don't run handle save when note ended. We run it at the end of on speech update
+                self.handleSave()
+            }
         } catch {
             print("\t[Error] There was a problem updating note segments")
         }
@@ -3621,6 +3523,41 @@ class Note: AVMutableComposition, NSCoding {
     func setIsDeleted(to isDeleted: Bool) {
         print("===== Note: Set Is Deleted =====")
         self.isDeleted = isDeleted
+        
+        // Handle Mutation
+        self.handleMutation()
+    }
+    
+    func setCurrentClipUID(uid: String?) {
+        print("===== Note: Set Current Clip UID =====")
+        self.currentClipUID = uid
+        
+        // Handle Mutation
+        self.handleMutation()
+    }
+    
+    func setRecordStartDate(date: Date?) {
+        print("===== Note: Set Record Start Date =====")
+        self.recordStartDate = date
+        
+        // Handle Mutation
+        self.handleMutation()
+    }
+    
+    func setAccumulatedDuration(interval: TimeInterval) {
+        print("===== Note: Set Accumulated Duration =====")
+        self.accumulatedDuration = interval
+        
+        // Handle Mutation
+        self.handleMutation()
+    }
+    
+    func setRecordFile(file: AVAudioFile?) {
+        print("===== Note: Set Record File =====")
+        self.recordFile = file
+        
+        // Handle Mutation
+        self.handleMutation()
     }
     
     // MARK: - Getters
@@ -3687,11 +3624,11 @@ class Note: AVMutableComposition, NSCoding {
         return nil
     }
     
-    func extractSentence(number: Int, onFinishHandler: @escaping (_ sentence: Note?) -> Void) {
+    func extractSentence(number: Int) -> Note? {
         print("===== Extract Sentence =====")
         guard self.noteBuffer.count == 0 else {
             print("\t[Error] There was a problem inserting passage. Buffer was not empty")
-            return
+            return nil
         }
         
         let sentenceSegment = Utils.binarySearch(
@@ -3705,18 +3642,17 @@ class Note: AVMutableComposition, NSCoding {
         )
         
         if let sentenceSegment = sentenceSegment {
-            sentenceSegment.createSentenceNote() { sentence in
-                onFinishHandler(sentence)
-            }
-            return
+            return sentenceSegment.createSentenceNote()
         }
+        
+        return nil
     }
     
-    func extractSentence(forTrackTime: CMTime, onFinishHandler: @escaping (_ sentence: Note?) -> Void) {
+    func extractSentence(forTrackTime: CMTime) -> Note? {
         print("===== Extract Sentence =====")
         guard self.noteBuffer.count == 0 else {
             print("\t[Error] There was a problem inserting passage. Buffer was not empty")
-            return
+            return nil
         }
         
         let sentenceSegment = Utils.binarySearch(
@@ -3730,43 +3666,40 @@ class Note: AVMutableComposition, NSCoding {
         )
         
         if let sentenceSegment = sentenceSegment {
-            sentenceSegment.createSentenceNote() { sentence in
-                onFinishHandler(sentence)
-            }
-            return
+            return sentenceSegment.createSentenceNote()
         }
+        
+        return nil
     }
     
-    func extractSentence(type: SentencePosition, onFinishHandler: @escaping (_ sentence: Note?) -> Void) {
+    func extractSentence(type: SentencePosition) -> Note? {
         let currentTime = self.speechPlayer.getCurrentTime()
-        self.extractSentence(forTrackTime: currentTime) { sentence in
+        if let sentence = self.extractSentence(forTrackTime: currentTime) {
             switch type {
             case .current:
-                onFinishHandler(sentence)
-                break
+                return sentence
             case .previous:
                 let timestamp = floor(Utils.DEFAULT_SEGMENT_TIMESCALE * (currentTime.seconds - Utils.TEMPORAL_DELTA))
                 let previousTime = CMTimeMake(
                     value: Int64(timestamp),
                     timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
                 )
-                self.extractSentence(forTrackTime: previousTime) { sentence in
-                    onFinishHandler(sentence)
+                if let previousSentence = self.extractSentence(forTrackTime: previousTime) {
+                    return previousSentence
                 }
-                break
             case .next:
                 let timestamp = floor(Utils.DEFAULT_SEGMENT_TIMESCALE * (currentTime.seconds + Utils.TEMPORAL_DELTA))
                 let nextTime = CMTimeMake(
                     value: Int64(timestamp),
                     timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
                 )
-                self.extractSentence(forTrackTime: nextTime) { sentence in
-                    onFinishHandler(sentence)
+                if let nextSentence = self.extractSentence(forTrackTime: nextTime) {
+                    return nextSentence
                 }
-                break
             }
         }
         
+        return nil
     }
     
     // We use .lowercased() throughout the method because sometimes word is made uppercase if we have PunctuationSuggestions on which will capitalize on-demand
@@ -3891,7 +3824,9 @@ class Note: AVMutableComposition, NSCoding {
             }
             return Double.infinity
         case .word:
-            if let segmentTrackTime = segmentTrackTime, let segment = self.speechPlayer.getSegment(forTrackTime: segmentTrackTime) {
+            if let segmentTrackTime = segmentTrackTime,
+               let segment = Utils.getSegment(forTrackTime: segmentTrackTime, note: self)
+            {
                 return segment.getPower()
             }
             break
@@ -3902,7 +3837,10 @@ class Note: AVMutableComposition, NSCoding {
     
     func getSentimentScore(type: ScaleUnitType = .word, sentenceNumber: Int? = nil, forTrackTime: CMTime? = nil) -> Float {
         print("===== Get Sentiment Score =====")
-        if let forTrackTime = forTrackTime, let segment = self.speechPlayer.getSegment(forTrackTime: forTrackTime), let sentiment = segment.getSentimentScore(type: type) {
+        if let forTrackTime = forTrackTime,
+           let segment = Utils.getSegment(forTrackTime: forTrackTime, note: self),
+           let sentiment = segment.getSentimentScore(type: type)
+        {
             return sentiment
         }
 
@@ -3916,7 +3854,10 @@ class Note: AVMutableComposition, NSCoding {
         let argumentSet: Set = Set(argumentArr)
 
         // Use cached version if it exists
-        if let cachedDuration = self.cachedDuration, let cachedDurationArgsSet = self.cachedDurationArgsSet, argumentSet == cachedDurationArgsSet {
+        if let cachedDuration = self.cachedDuration,
+           let cachedDurationArgsSet = self.cachedDurationArgsSet,
+           argumentSet == cachedDurationArgsSet
+        {
             return cachedDuration
         }
 
@@ -3958,42 +3899,89 @@ class Note: AVMutableComposition, NSCoding {
     
     func triggerBufferCommitNotification() {
         // Give visual feedback
-        var firstBufferSegment: NoteSegment?
-        var lastBufferSegment: NoteSegment?
+        var firstBufferSegmentIndex: Int?
+        var lastBufferSegmentIndex: Int?
+        var trackType: NoteTrackType?
         if self.noteBuffer.count > 0 {
             // Find first buffer word
-            firstBufferSegment = self.noteBuffer.first!
-            if !firstBufferSegment!.isActive() {
-                firstBufferSegment = self.speechPlayer.getSegment(segment: firstBufferSegment, segments: self.noteBuffer, type: .next, isWord: true)
+            let firstBufferSegment = self.noteBuffer.first
+            if let firstBufferSegment = firstBufferSegment, !firstBufferSegment.isActive() {
+                firstBufferSegmentIndex = Utils.getSegmentIndex(
+                    segment: firstBufferSegment,
+                    segments: self.noteBuffer,
+                    type: .next,
+                    isWord: true
+                )
+            } else if let _ = firstBufferSegment {
+                firstBufferSegmentIndex = 0
             }
             
             // Find last buffer word
-            lastBufferSegment = self.noteBuffer.last!
-            if !lastBufferSegment!.isActive() {
-                lastBufferSegment = self.speechPlayer.getSegment(segment: lastBufferSegment, segments: self.noteBuffer, type: .previous, isWord: true)
+            let lastBufferSegment = self.noteBuffer.last
+            if let lastBufferSegment = lastBufferSegment, !lastBufferSegment.isActive() {
+                lastBufferSegmentIndex = Utils.getSegmentIndex(
+                    segment: lastBufferSegment,
+                    segments: self.noteBuffer,
+                    type: .previous,
+                    isWord: true
+                )
+            } else if let _ = lastBufferSegment {
+                lastBufferSegmentIndex = self.noteBuffer.count - 1
             }
+            
+            // Set trackt ype
+            trackType = .buffer
         } else if let lastBufferRange = self.committedBufferRanges.last {
             let lastBuffer = self.noteSegments[lastBufferRange]
             // Find first buffer word
-            firstBufferSegment = lastBuffer.first!
-            if !firstBufferSegment!.isActive() {
-                
+            let firstBufferSegment = lastBuffer.first
+            if let firstBufferSegment = firstBufferSegment, !firstBufferSegment.isActive() {
+                firstBufferSegmentIndex = Utils.getSegmentIndex(
+                    segment: firstBufferSegment,
+                    segments: Array(lastBuffer),
+                    type: .next,
+                    isWord: true
+                )
+            } else if let _ = firstBufferSegment {
+                firstBufferSegmentIndex = lastBufferRange.lowerBound
             }
-            firstBufferSegment = self.speechPlayer.getSegment(segment: firstBufferSegment, segments: Array(lastBuffer), type: .next, isWord: true)
+            
 
             // Find last buffer word
-            lastBufferSegment = lastBuffer.last!
-            if !lastBufferSegment!.isActive() {
-                lastBufferSegment = self.speechPlayer.getSegment(segment: lastBufferSegment, segments: Array(lastBuffer), type: .previous, isWord: true)
+            let lastBufferSegment = lastBuffer.last
+            if let lastBufferSegment = lastBufferSegment, !lastBufferSegment.isActive() {
+                lastBufferSegmentIndex = Utils.getSegmentIndex(
+                    segment: lastBufferSegment,
+                    segments: Array(lastBuffer),
+                    type: .previous,
+                    isWord: true
+                )
+            } else if let _ = lastBufferSegment {
+                lastBufferSegmentIndex = lastBufferRange.upperBound - 1
             }
+            
+            trackType = .committed
         }
         
-        if let firstBufferSegment = firstBufferSegment, let lastBufferSegment = lastBufferSegment, firstBufferSegment != lastBufferSegment {
+        if let firstBufferSegmentIndex = firstBufferSegmentIndex,
+           let lastBufferSegmentIndex = lastBufferSegmentIndex,
+           let trackType = trackType,
+           firstBufferSegmentIndex != lastBufferSegmentIndex
+        {
+            let segments = trackType == .committed ? self.noteSegments : self.noteBuffer
+            let firstBufferSegment = segments[firstBufferSegmentIndex]
+            let lastBufferSegment = segments[lastBufferSegmentIndex]
             self.notifications.executeFeedback(
                 visualMessage: "\"\(firstBufferSegment.getText().lowercased())...\(lastBufferSegment.getText().lowercased())\" committed!",
                 withHaptics: true
             )
-        } else if let firstBufferSegment = firstBufferSegment, let lastBufferSegment = lastBufferSegment, firstBufferSegment == lastBufferSegment {
+        } else if let firstBufferSegmentIndex = firstBufferSegmentIndex,
+            let lastBufferSegmentIndex = lastBufferSegmentIndex,
+            let trackType = trackType,
+            firstBufferSegmentIndex == lastBufferSegmentIndex
+        {
+            let segments = trackType == .committed ? self.noteSegments : self.noteBuffer
+            let firstBufferSegment = segments[firstBufferSegmentIndex]
             self.notifications.executeFeedback(
                 visualMessage: "\"\(firstBufferSegment.getText().lowercased())\" committed!",
                 withHaptics: true
@@ -4076,137 +4064,141 @@ class Note: AVMutableComposition, NSCoding {
                     self.noteSegments[index] = duplicateSegment
                 }
                 
+                // determine track type
+                let trackType: NoteTrackType = self.noteBuffer.count > 0 ? .buffer : .committed
+                let index = self.noteBuffer.count > 0 ? index + lowestCommandIndex : duplicateSegment.getIndex()
+                
                 // update selection anchor
                 if duplicateSegment == self.selectionCursor.anchor {
                     print("\tReplacing Selection Cursor Anchor with version that is not voice command word...")
-                    self.selectionCursor.setAnchor(segment: duplicateSegment)
+                    self.selectionCursor.setAnchorCaret(caret: Caret(index: index, trackType: trackType))
                 }
                 
                 // update selection focus
                 if duplicateSegment == self.selectionCursor.focus {
                     print("\tReplacing Selection Cursor Focus with version that is voice command word...")
-                    self.selectionCursor.setFocus(segment: duplicateSegment)
+                    self.selectionCursor.setFocusCaret(caret: Caret(index: index, trackType: trackType))
                 }
                 
                 // update selection cached anchor
                 if duplicateSegment == self.selectionCursor.cachedAnchor {
                     print("\tReplacing Selection Cursor Cached Anchor with version that is voice command word...")
-                    self.selectionCursor.setCachedAnchor(segment: duplicateSegment)
+                    self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: index, trackType: trackType))
                 }
             }
             
             if let anchor = self.selectionCursor.anchor, replaceSelectionAnchor && self.noteBuffer.count > 0 && !anchor.isCommitted() {
                 print("\tReplacing anchor. We cannot have a voice command anchor.")
                 print("\tSearching in note buffer...")
-                var newAnchor: NoteSegment?
-                let newAnchorIndex = Utils.getNoteNthLastSegmentIndex(
+                var newAnchorIndex = Utils.getNoteNthLastSegmentIndex(
                     segments: Array(self.noteBuffer[0..<lowestCommandIndex]),
                     selectionCursor: self.selectionCursor,
                     n: 0
                 ).1
+                var newAnchorTrackType: NoteTrackType
                 
                 if let newAnchorIndex = newAnchorIndex {
-                    newAnchor = Array(self.noteBuffer[0..<lowestCommandIndex])[newAnchorIndex]
-                    print("\tFound new anchor: ", newAnchor ?? "nil")
-                }
-                
-                if newAnchor == nil {
+                    newAnchorTrackType = .buffer
+                    let newAnchor = Array(self.noteBuffer[0..<lowestCommandIndex])[newAnchorIndex]
+                    print("\tFound new anchor: ", newAnchor)
+                } else {
                     print("\tUnable to find replacement anchor in buffer. Search in committed segments...")
                     let segments = self.selectionCursor.cachedAnchor != nil ? Array(self.noteSegments[0..<self.selectionCursor.cachedAnchor!.getIndex() + 1]) : self.noteSegments // We add one because we want to include cached anchor
-                    let newAnchorIndex = Utils.getNoteNthLastSegmentIndex(
+                    newAnchorIndex = Utils.getNoteNthLastSegmentIndex(
                         segments: segments,
                         selectionCursor: self.selectionCursor,
                         n: 0
                     ).1
+                    newAnchorTrackType = .committed
                     
                     if let newAnchorIndex = newAnchorIndex {
-                        newAnchor = segments[newAnchorIndex]
-                        print("\tFound new anchor: ", newAnchor ?? "nil")
+                        let newAnchor = segments[newAnchorIndex]
+                        print("\tFound new anchor: ", newAnchor)
                     }
                 }
                 
-                if let newAnchor = newAnchor {
+                if let newAnchorIndex = newAnchorIndex {
                     print("\tUpdating Selection Anchor...")
-                    self.selectionCursor.setAnchor(segment: newAnchor)
+                    self.selectionCursor.setAnchorCaret(caret: Caret(index: newAnchorIndex, trackType: newAnchorTrackType))
                 }
             } else if let _ = self.selectionCursor.anchor, replaceSelectionAnchor {
                 print("\tReplacing anchor. We cannot have a voice command anchor.")
                 print("\tSearching in note committed segments...")
-                var newAnchor: NoteSegment?
                 let segments = self.selectionCursor.cachedAnchor != nil ? Array(self.noteSegments[0..<self.selectionCursor.cachedAnchor!.getIndex() + 1]) : self.noteSegments // We add one because we want to include cached anchor
                 let newAnchorIndex = Utils.getNoteNthLastSegmentIndex(
                     segments: segments,
                     selectionCursor: self.selectionCursor,
                     n: 0
                 ).1
+                let newAnchorTrackType: NoteTrackType = .committed
                 
                 if let newAnchorIndex = newAnchorIndex {
-                    newAnchor = segments[newAnchorIndex]
-                    print("\tFound new anchor: ", newAnchor ?? "nil")
+                    let newAnchor = segments[newAnchorIndex]
+                    print("\tFound new anchor: ", newAnchor)
                 }
                 
-                if let newAnchor = newAnchor {
+                if let newAnchorIndex = newAnchorIndex {
                     print("\tUpdating Selection Anchor...")
-                    self.selectionCursor.setAnchor(segment: newAnchor)
+                    self.selectionCursor.setAnchorCaret(caret: Caret(index: newAnchorIndex, trackType: newAnchorTrackType))
                 }
             }
             
             print("\tClear focus...")
             if !self.selectionCursor.hasSelection {
-                self.selectionCursor.setFocus()
+                self.selectionCursor.setFocusCaret()
             }
             
             if let cachedAnchor = self.selectionCursor.cachedAnchor, replaceSelectionCachedAnchor && self.noteBuffer.count > 0 && !cachedAnchor.isCommitted() {
                 print("\tReplacing cached anchor. We cannot have a voice command cached anchor.")
                 print("\tSearching in note buffer...")
-                var newCachedAnchor: NoteSegment?
                 let newCachedAnchorIndex = Utils.getNoteNthLastSegmentIndex(
                     segments: Array(self.noteBuffer[0..<cachedAnchor.getIndex() + 1]), // We add one because we want to include cached anchor
                     selectionCursor: self.selectionCursor,
                     n: 0
                 ).1
+                var newCachedAnchorTrackType: NoteTrackType
                 
                 if let newCachedAnchorIndex = newCachedAnchorIndex {
-                    newCachedAnchor = Array(self.noteBuffer[0..<cachedAnchor.getIndex() + 1])[newCachedAnchorIndex] // We add one because we want to include cached anchor
-                    print("\tFound new cached anchor: ", newCachedAnchor ?? "nil")
-                }
-                
-                if newCachedAnchor == nil {
+                    newCachedAnchorTrackType = .buffer
+                    let newCachedAnchor = Array(self.noteBuffer[0..<cachedAnchor.getIndex() + 1])[newCachedAnchorIndex] // We add one because we want to include cached anchor
+                    print("\tFound new cached anchor: ", newCachedAnchor)
+                } else {
                     print("\tUnable to find replacement cached anchor in buffer. Search in committed segments...")
                     let newCachedAnchorIndex = Utils.getNoteNthLastSegmentIndex(
                         segments: self.noteSegments,
                         selectionCursor: self.selectionCursor,
                         n: 0
                     ).1
+                    newCachedAnchorTrackType = .committed
                     
                     if let newCachedAnchorIndex = newCachedAnchorIndex {
-                        newCachedAnchor = self.noteSegments[newCachedAnchorIndex]
-                        print("\tFound new cached anchor: ", newCachedAnchor ?? "nil")
+                        let newCachedAnchor = self.noteSegments[newCachedAnchorIndex]
+                        print("\tFound new cached anchor: ", newCachedAnchor)
                     }
                 }
                 
-                if let newCachedAnchor = newCachedAnchor {
+                if let newCachedAnchorIndex = newCachedAnchorIndex {
                     print("\tUpdating Selection Cached Anchor...")
-                    self.selectionCursor.setCachedAnchor(segment: newCachedAnchor)
+                    self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: newCachedAnchorIndex, trackType: newCachedAnchorTrackType))
                 }
             } else if let cachedAnchor = self.selectionCursor.cachedAnchor, replaceSelectionCachedAnchor {
                 print("\tReplacing cached anchor. We cannot have a voice command anchor.")
                 print("\tSearching in note committed segments...")
-                var newCachedAnchor: NoteSegment?
                 let newCachedAnchorIndex = Utils.getNoteNthLastSegmentIndex(
                     segments: Array(self.noteBuffer[0..<cachedAnchor.getIndex() + 1]), // We add one because we want to include cached anchor
                     selectionCursor: self.selectionCursor,
                     n: 0
                 ).1
+                let newCachedAnchorTrackType: NoteTrackType = .committed
                 
                 if let newCachedAnchorIndex = newCachedAnchorIndex {
-                    newCachedAnchor = Array(self.noteBuffer[0..<cachedAnchor.getIndex() + 1])[newCachedAnchorIndex] // We add one because we want to include cached anchor
-                    print("\tFound new cached anchor: ", newCachedAnchor ?? "nil")
+                    let newCachedAnchor = Array(self.noteBuffer[0..<cachedAnchor.getIndex() + 1])[newCachedAnchorIndex] // We add one because we want to include cached anchor
+                    print("\tFound new cached anchor: ", newCachedAnchor)
                 }
                 
-                if let newCachedAnchor = newCachedAnchor {
+                if let newCachedAnchorIndex = newCachedAnchorIndex {
                     print("\tUpdating Selection Cached Anchor...")
-                    self.selectionCursor.setCachedAnchor(segment: newCachedAnchor)
+                    self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: newCachedAnchorIndex, trackType: newCachedAnchorTrackType))
                 }
             }
             
@@ -4221,18 +4213,42 @@ class Note: AVMutableComposition, NSCoding {
         
         if self.noteBuffer.count > 0 {
             // Find first buffer word
-            var firstBufferSegment = self.noteBuffer.first
+            let firstBufferSegment = self.noteBuffer.first
+            var firstBufferSegmentIndex: Int?
             if let segment = firstBufferSegment, !segment.isActive() {
-                firstBufferSegment = self.speechPlayer.getSegment(segment: segment, segments: self.noteBuffer, type: .next, isWord: true)
+                firstBufferSegmentIndex = Utils.getSegmentIndex(
+                    segment: segment,
+                    segments: self.noteBuffer,
+                    type: .next,
+                    isWord: true
+                )
+            } else if let _ = firstBufferSegment {
+                firstBufferSegmentIndex = 0
             }
             
             // Find last buffer word
-            var lastBufferSegment = self.noteBuffer.last
+            let lastBufferSegment = self.noteBuffer.last
+            var lastBufferSegmentIndex: Int?
             if let segment = lastBufferSegment, !segment.isActive() {
-                lastBufferSegment = self.speechPlayer.getSegment(segment: segment, segments: self.noteBuffer, type: .previous, isWord: true)
+                lastBufferSegmentIndex = Utils.getSegmentIndex(
+                    segment: segment,
+                    segments: self.noteBuffer,
+                    type: .previous,
+                    isWord: true
+                )
+            } else if let _ = lastBufferSegment {
+                lastBufferSegmentIndex = self.noteBuffer.count - 1
             }
             
-            if self.speechRecognition.isListeningForSpeech && self.noteBuffer.count > 0, let firstBufferSegment = firstBufferSegment, let lastBufferSegment = lastBufferSegment, let firstBufferSegmentTextRange = self.getSegmentTextRange(of: firstBufferSegment), let lastBufferSegmentTextRange = self.getSegmentTextRange(of: lastBufferSegment), firstBufferSegment.isActive() && lastBufferSegment.isActive() {
+            if let firstBufferSegmentIndex = firstBufferSegmentIndex,
+               let lastBufferSegmentIndex = lastBufferSegmentIndex,
+               let firstBufferSegmentTextRange = self.getSegmentTextRange(of: self.noteBuffer[firstBufferSegmentIndex]),
+               let lastBufferSegmentTextRange = self.getSegmentTextRange(of: self.noteBuffer[lastBufferSegmentIndex]),
+               self.speechRecognition.isListeningForSpeech &&
+                self.noteBuffer.count > 0 &&
+                self.noteBuffer[firstBufferSegmentIndex].isActive() &&
+                self.noteBuffer[lastBufferSegmentIndex].isActive()
+            {
                 let bufferRange = NSRange(
                     location: firstBufferSegmentTextRange.location,
                     length: (lastBufferSegmentTextRange.location - firstBufferSegmentTextRange.location) + lastBufferSegmentTextRange.length

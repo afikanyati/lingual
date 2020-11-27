@@ -11,4 +11,5 @@ import Foundation
 enum NoteTrackType {
     case committed
     case buffer
+    case other
 }

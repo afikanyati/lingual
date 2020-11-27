@@ -15,6 +15,10 @@ extension AVAudioSession {
         return sharedInstance().isHeadphonesConnected
     }
     
+    static var bluetoothAudioConnected: Bool {
+        return sharedInstance().bluetoothAudioConnected
+    }
+    
     static func isHeadphonePortType(portType: AVAudioSession.Port) -> Bool {
         return portType == AVAudioSession.Port.headphones
         || portType == AVAudioSession.Port.bluetoothA2DP
@@ -24,6 +28,20 @@ extension AVAudioSession {
 
     var isHeadphonesConnected: Bool {
         return !currentRoute.outputs.filter { $0.isHeadphones }.isEmpty
+    }
+    
+    // Reference: https://stackoverflow.com/questions/28928876/how-to-detect-if-a-bluetooth-headset-plugged-or-not-ios-8
+    var bluetoothAudioConnected: Bool {
+        let outputs = currentRoute.outputs
+        for output in outputs {
+            if output.portType == AVAudioSession.Port.bluetoothA2DP ||
+                output.portType == AVAudioSession.Port.bluetoothHFP ||
+                output.portType == AVAudioSession.Port.bluetoothLE
+            {
+                return true
+            }
+        }
+        return false
     }
 }
 

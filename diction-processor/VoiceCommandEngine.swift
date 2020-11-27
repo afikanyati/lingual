@@ -24,6 +24,7 @@ public final class VoiceCommandEngine: NSObject {
         "start not",
         "start notes",
         "starting it",
+        "i started it",
         "stagnant",
         "starts not",
         "stocks not",
@@ -31,6 +32,7 @@ public final class VoiceCommandEngine: NSObject {
         "scott's not",
         "scott note",
         "scott not",
+        "scott mode",
         "starting out",
         "stop note",
         "resume note",
@@ -309,12 +311,14 @@ public final class VoiceCommandEngine: NSObject {
         "start not",
         "start notes",
         "starting it",
+        "i started it",
         "stagnant",
         "starts not",
         "stocks not",
         "stock note",
         "scott note",
         "scott not",
+        "scott mode",
         "scott's not",
         "starting out",
         "stop note",
@@ -635,12 +639,14 @@ public final class VoiceCommandEngine: NSObject {
         "start note": "start note",
         "stagnant": "start note",
         "starting it": "start note",
+        "i started it": "start note",
         "start a note": "start note",
         "start not": "start note",
         "start notes": "start note",
         "stock note": "start note",
         "scott note": "start note",
         "scott not": "start note",
+        "scott mode": "start note",
         "scott's not": "start note",
         "starting out": "start note",
         "starts not": "start note",
@@ -1090,6 +1096,7 @@ public final class VoiceCommandEngine: NSObject {
     
     func isNoteVoiceCommand(command: String) -> Bool {
         if (
+            // Note Manager
             command == "play note" ||
             command == "pause note" ||
             command == "start note" ||
@@ -1101,7 +1108,7 @@ public final class VoiceCommandEngine: NSObject {
             command == "stop echo" ||
             command == "play previous sentence" ||
             command == "echo previous sentence" ||
-            command == "accept update selection" ||
+            command == "delete" ||
             command == "delete selection" ||
             command == "update selection" ||
             command == "copy selection" ||
@@ -1132,24 +1139,32 @@ public final class VoiceCommandEngine: NSObject {
             command == "shift focus right" ||
             command == "shift forward" ||
             command == "shift backward" ||
-            command == "expand selection" ||
-            command == "reduce selection" ||
-            command == "run selection" ||
-            command == "walk selection" ||
-            command == "run note" ||
-            command == "walk note" ||
-            command == "next element" ||
-            command == "previous element" ||
-            command == "pause run" ||
-            command == "exit mode" ||
             command == "pause" ||
             command == "stop" ||
             command == "paste clipboard" ||
-            command == "move here" ||
-            command == "echo" ||
+            command == "expand selection" ||
+            command == "reduce selection" ||
             command == "delete note" ||
             command == "play selection" ||
-            command == "echo selection"
+            command == "echo selection" ||
+            command == "run selection" ||
+            command == "walk selection" ||
+            command == "walk note" ||
+            command == "run note" ||
+            command == "next element" ||
+            command == "previous element" ||
+            command == "echo" ||
+            command == "pause run" ||
+            command == "exit mode" ||
+            command == "cancel" ||
+            command == "redo" ||
+            command == "undo" ||
+            // UI Manager
+            command == "accept update selection" ||
+            command == "export audio" ||
+            command == "export text" ||
+            // General
+            command == "move here"
         ) {
             return true
         }
@@ -1168,6 +1183,8 @@ public final class VoiceCommandEngine: NSObject {
             command == "echo note" ||
             command == "pause echo" ||
             command == "stop echo" ||
+            command == "play previous sentence" ||
+            command == "echo previous sentence" ||
             command == "delete" ||
             command == "delete selection" ||
             command == "update selection" ||
@@ -1179,20 +1196,18 @@ public final class VoiceCommandEngine: NSObject {
             command == "export note" ||
             command == "export selection" ||
             command == "pause playback" ||
+            command == "resume playback" ||
             command == "resume echo" ||
             command == "edit note" ||
             command == "play commit" ||
-            command == "skip backward" ||
-            command == "skip forward" ||
-            command == "stop playback" ||
-            command == "pause" ||
-            command == "stop" ||
-            command == "paste clipboard" ||
-            command == "resume playback" ||
+            command == "echo commit" ||
+            command == "select commit" ||
             command == "walk commit" ||
             command == "run commit" ||
             command == "rollback commit" ||
-            command == "select commit" ||
+            command == "skip backward" ||
+            command == "skip forward" ||
+            command == "stop playback" ||
             command == "open selection" ||
             command == "remove selection" ||
             command == "shift anchor left" ||
@@ -1201,24 +1216,26 @@ public final class VoiceCommandEngine: NSObject {
             command == "shift focus left" ||
             command == "shift forward" ||
             command == "shift backward" ||
+            command == "pause" ||
+            command == "stop" ||
+            command == "paste clipboard" ||
             command == "expand selection" ||
             command == "reduce selection" ||
-            command == "echo commit" ||
-            command == "echo previous sentence" ||
-            command == "play previous sentence" ||
             command == "delete note" ||
             command == "play selection" ||
             command == "echo selection" ||
-            command == "echo" ||
-            command == "cancel" ||
-            command == "walk note" ||
             command == "run selection" ||
             command == "walk selection" ||
+            command == "walk note" ||
             command == "run note" ||
             command == "next element" ||
             command == "previous element" ||
+            command == "echo" ||
             command == "pause run" ||
-            command == "exit mode"
+            command == "exit mode" ||
+            command == "cancel" ||
+            command == "redo" ||
+            command == "undo"
         ) {
             return true
         }
@@ -1240,8 +1257,6 @@ public final class VoiceCommandEngine: NSObject {
             command == "deactivate formatting suggestions" ||
             command == "activate passive echo" ||
             command == "deactivate passive echo" ||
-            command == "pause" ||
-            command == "stop" ||
             command == "increase volume" ||
             command == "decrease volume"
         ) {
@@ -1342,22 +1357,4 @@ public final class VoiceCommandEngine: NSObject {
         // - Undo
         // - Prompt fro Assistance
     }
-    
-//    func trimNote(note: Note, handler: (() -> Void)? = nil) {
-//        print("\tVoice Command: Trim Note")
-//
-//        // note.trim(keeping: <#T##CMTimeRange#>)
-//    }
-    
-//    func startListeningForVolume(note: Note) {
-//        if note.isListeningForSpeech {
-//            note.stopListeningForSpeech() {
-//                viewController.startListeningForVolume()
-//            }
-//        } else if note.isListeningForCommands {
-//            note.stopListeningForVoiceCommands() {
-//                viewController.startListeningForVolume()
-//            }
-//        }
-//    }
 }

@@ -208,18 +208,6 @@ class Utils {
         "F8": 5588,
         "G8": 6272
     ]
-
-    // MARK: - Factory Methods
-    public static func trimNote(note: Note, keeping: CMTimeRange, permanent: Bool = false, onFinishHandler: @escaping (_ note: Note?) -> Void) {
-        print("===== Trim Note Factory Method =====")
-        note.duplicate() { note in
-            if let duplicateNote = note {
-                duplicateNote.trim(keeping: keeping, permanent: permanent) {
-                    onFinishHandler(duplicateNote)
-                }
-            }
-        }
-    }
     
     // MARK: - General Utilities
     
@@ -1609,32 +1597,129 @@ class Utils {
         return nil
     }
     
-    public static func getSegmentAtTextPosition(
+    public static func getIndicesInTextRange(
+        textRange: UITextRange,
+        textView: UITextView,
+        note: Note,
+        segments: [NoteSegment]
+    ) -> [Int] {
+        // Get index relative to text view at which textPosition begins
+        let location = textView.offset(from: textView.beginningOfDocument, to: textRange.start)
+        // Get the length of the text range
+        let length = textView.offset(from: textRange.start, to: textRange.end)
+        // Get note text
+        let noteText = note.getText()
+        // Get index of lower part of text range relative to note text
+        var lowerIndex = noteText.index(noteText.startIndex, offsetBy: Int(location))
+        // Get index of upper part of text range relative to note text
+        var upperIndex = noteText.index(noteText.startIndex, offsetBy: Int(location) + length)
+        // Computer selection range
+        var selectionRangeStringIndex = lowerIndex..<upperIndex
+        // Get range text
+        var rangeText = String(noteText[selectionRangeStringIndex]).replace("\n\n", with: " ")
+        // Get all text before range
+        var beforeRangeText = String(noteText[noteText.startIndex..<lowerIndex]).replace("\n\n", with: " ")
+        // Get all text after range
+        var afterRangeText = String(noteText[upperIndex..<noteText.endIndex]).replace("\n\n", with: " ")
+        
+        // Determine number of words before range
+        var numLowerWords = beforeRangeText.split(separator: " ").count
+        // Determine number of spaces before range
+        var numLowerSpaces = beforeRangeText.filter { $0 == " " }.count
+        
+        // We want the start of the range to be at the left of a space
+        // Thus the first character of should be a space
+        // We slide selection to the left until we meet criteria
+        var i = 0
+        while numLowerWords > numLowerSpaces && beforeRangeText.count > 0 && beforeRangeText.last != " " {
+            i += 1
+            lowerIndex = noteText.index(noteText.startIndex, offsetBy: Int(location - i))
+            selectionRangeStringIndex = lowerIndex..<upperIndex
+            rangeText = String(noteText[selectionRangeStringIndex]).replace("\n\n", with: " ")
+            beforeRangeText = String(noteText[noteText.startIndex..<lowerIndex]).replace("\n\n", with: " ")
+            numLowerWords = beforeRangeText.split(separator: " ").count
+            numLowerSpaces = beforeRangeText.filter { $0 == " " }.count
+        }
+        
+        
+        // Get number of words in range
+        var numRangeWords = rangeText.split(separator: " ").count
+        // Get number of spaces in range
+        var numRangeSpaces = rangeText.filter { $0 == " " }.count
+        
+        // We want the end of the range to be at the left of a space
+        // We slide selection to the right until we meet criteria
+        var j = 0
+        while numRangeSpaces <= numRangeWords && afterRangeText.count > 0 && afterRangeText.first != " " {
+            j += 1
+            upperIndex = noteText.index(noteText.startIndex, offsetBy: Int(location + length + j))
+            selectionRangeStringIndex = lowerIndex..<upperIndex
+            rangeText = String(noteText[selectionRangeStringIndex]).replace("\n\n", with: " ")
+            afterRangeText = String(noteText[upperIndex..<noteText.endIndex]).replace("\n\n", with: " ")
+            numRangeWords = rangeText.split(separator: " ").count
+            numRangeSpaces = rangeText.filter { $0 == " " }.count
+        }
+        
+        // Find segment indices that correspond
+        // to the words between the number of lower words
+        // and the number of lower words + number of range words
+        var numProcessedWords: Int = 0
+        var rangeSegments = [Int]()
+        for i in 0..<segments.count {
+            let segment = segments[i]
+            if segment.isActive() {
+                numProcessedWords += 1
+            }
+            
+            if segment.isActive() && numProcessedWords > numLowerWords && numProcessedWords < numLowerWords + numRangeWords + 1 {
+                rangeSegments.append(i)
+            }
+            
+            if numProcessedWords > numLowerWords + numRangeWords {
+                break
+            }
+        }
+        
+        return rangeSegments
+    }
+    
+    public static func getIndexAtTextPosition(
         textPosition: UITextPosition,
         textView: UITextView,
         note: Note,
         segments: [NoteSegment]
-    ) -> (NoteSegment?, Int?) {
-        let cursorLocation = textView.offset(from: textView.beginningOfDocument, to: textPosition)
+    ) -> (Int?, Int?) {
+        // Get index relative to text view at which textPosition begins
+        let location = textView.offset(from: textView.beginningOfDocument, to: textPosition)
+        // Get note text
         let noteText = note.getText()
-        var cursorIndex = noteText.index(noteText.startIndex, offsetBy: Int(cursorLocation))
-        var beforeCursorText = String(noteText[noteText.startIndex..<cursorIndex]).replace("\n\n", with: " ")
-        var afterCursorText = String(noteText[cursorIndex..<noteText.endIndex]).replace("\n\n", with: " ")
+        // Get index relative to note text at which textPosition begins
+        var caretIndex = noteText.index(noteText.startIndex, offsetBy: Int(location))
+        // Get all text before caret
+        var beforeCaretText = String(noteText[noteText.startIndex..<caretIndex]).replace("\n\n", with: " ")
+        // Get all text after caret
+        var afterCaretText = String(noteText[caretIndex..<noteText.endIndex]).replace("\n\n", with: " ")
+        // Determine number of words before caret
+        var numLowerWords = beforeCaretText.split(separator: " ").count
         
-        var numLowerWords = beforeCursorText.split(separator: " ").count
-        // first character of rangeText should be a space
-        var i = 0
-        while afterCursorText.count > 0 && beforeCursorText.last != " " && afterCursorText.first != " "  {
-            i += 1
-            cursorIndex = noteText.index(noteText.startIndex, offsetBy: Int(cursorLocation) + i)
-            beforeCursorText = String(noteText[noteText.startIndex..<cursorIndex]).replace("\n\n", with: " ")
-            afterCursorText = String(noteText[cursorIndex..<noteText.endIndex]).replace("\n\n", with: " ")
-            numLowerWords = beforeCursorText.split(separator: " ").count
+        // We want the caret to be at the left of a space
+        // Thus the first character of should be a space
+        // We slide caret to the right until we meet criteria
+        var rightOffsetFromCaret = 0
+        while afterCaretText.count > 0 && beforeCaretText.last != " " && afterCaretText.first != " "  {
+            rightOffsetFromCaret += 1
+            caretIndex = noteText.index(noteText.startIndex, offsetBy: Int(location + rightOffsetFromCaret))
+            beforeCaretText = String(noteText[noteText.startIndex..<caretIndex]).replace("\n\n", with: " ")
+            afterCaretText = String(noteText[caretIndex..<noteText.endIndex]).replace("\n\n", with: " ")
+            numLowerWords = beforeCaretText.split(separator: " ").count
         }
         
+        // Find segment index that corresponds to
+        // the last word in the lower half of the bissection
+        // caused by the caret
         var numProcessedWords: Int = 0
-        var segment: NoteSegment?
-        let lowerWords = beforeCursorText.split(separator: " ")
+        var segmentIndex: Int?
+        let lowerWords = beforeCaretText.split(separator: " ")
         for i in 0..<segments.count {
             let seg = segments[i]
             if seg.isActive() {
@@ -1642,12 +1727,191 @@ class Utils {
             }
             
             if seg.isActive() && seg.getText().lowercased().trimTrailingPunctuation() == lowerWords.last!.lowercased().trimTrailingPunctuation() && numProcessedWords == numLowerWords {
-                segment = seg
+                segmentIndex = i
                 break
             }
         }
         
-        return (segment, i)
+        return (segmentIndex, rightOffsetFromCaret)
+    }
+    
+    // Assumes playbackSegments are sorted in ascending order of index values
+    public static func getSegmentIndex(
+        segment: NoteSegment,
+        segments: [NoteSegment],
+        type: SegmentPosition,
+        isWord: Bool = false,
+        isCommitted: Bool = false
+    ) -> Int? {
+        var result: Int?
+        switch type {
+        case .current:
+            result = segment.getIndex() - segments[0].getIndex()
+        case .previous:
+            var currentSegmentIndex = segment.getIndex() - segments[0].getIndex()
+            if currentSegmentIndex - 1 >= 0 {
+                result = currentSegmentIndex - 1
+            } else {
+                // Input segment is the first element in the array
+                // We return it because there are no more previous segments
+                result = currentSegmentIndex
+            }
+            
+            if isWord || isCommitted {
+                while let res = result, (
+                    (isWord && (
+                        segments[res].isPunctuation() ||
+                        segments[res].isSilence() ||
+                        segments[res].isVoiceCommandWord() ||
+                        segments[res].isDeleted()
+                    )) ||
+                    (isCommitted && !segments[res].isCommitted())
+                ) && currentSegmentIndex - 1 >= 0 {
+                    currentSegmentIndex -= 1
+                    result = currentSegmentIndex
+                }
+            }
+        case .next:
+            var currentSegmentIndex = segment.getIndex() - segments[0].getIndex()
+            if currentSegmentIndex + 1 < segments.count {
+                result = currentSegmentIndex + 1
+            } else {
+                // Input segment is the last element in the array
+                // We return it because there are no more next segments
+                result = currentSegmentIndex
+            }
+            
+            if isWord || isCommitted {
+                while let res = result, (
+                    (isWord && (
+                        segments[res].isPunctuation() ||
+                        segments[res].isSilence() ||
+                        segments[res].isVoiceCommandWord() ||
+                        segments[res].isDeleted()
+                    )) ||
+                    (isCommitted && !segments[res].isCommitted())
+                ) && currentSegmentIndex + 1 < segments.count {
+                    currentSegmentIndex += 1
+                    result = currentSegmentIndex
+                }
+            }
+        }
+        
+        if let result = result, (isWord && (
+            segments[result].isPunctuation() ||
+            segments[result].isSilence() ||
+            segments[result].isVoiceCommandWord() ||
+            segments[result].isDeleted()
+        )) ||
+        (isCommitted && !segments[result].isCommitted()) {
+            return nil
+        } else {
+            return result
+        }
+    }
+    
+    public static func getSegment(
+        forTrackTime: CMTime,
+        segments: [NoteSegment]? = nil,
+        note: Note? = nil,
+        isPlayingNote: Bool = false,
+        isWord: Bool = false,
+        isCommitted: Bool = false
+    ) -> NoteSegment? {
+        if let segments = segments, isPlayingNote {
+            var segment = Utils.binarySearch(
+                in: segments,
+                isLower: { segment in
+                    return segment.timeMapping.target.end < forTrackTime
+                },
+                isHigher: { segment in
+                    return segment.timeMapping.target.start > forTrackTime
+                }
+            )
+            
+            if let s = segment, isWord || isCommitted {
+                var currentSegmentIndex = s.getIndex() - segments[0].getIndex()
+                while let seg = segment, (
+                    (isWord && (
+                        seg.isPunctuation() ||
+                        seg.isSilence() ||
+                        seg.isVoiceCommandWord() ||
+                        seg.isDeleted()
+                    )) ||
+                    (isCommitted && !seg.isCommitted())
+                ) && currentSegmentIndex + 1 < segments.count {
+                    currentSegmentIndex += 1
+                    segment = segments[currentSegmentIndex]
+                }
+            }
+            return segment
+        } else if let note = note {
+            // check committed segments
+            var seg = Utils.binarySearch(
+                in: note.noteSegments,
+                isLower: { segment in
+                    return segment.timeMapping.target.end < forTrackTime
+                },
+                isHigher: { segment in
+                    return segment.timeMapping.target.start > forTrackTime
+                }
+            )
+            
+            // Only return if we found it
+            if let s = seg, isWord || isCommitted {
+                var currentSegmentIndex = s.getIndex() - note.noteSegments[0].getIndex()
+                while let segment = seg, (
+                    (isWord && (
+                        segment.isPunctuation() ||
+                        segment.isSilence() ||
+                        segment.isVoiceCommandWord() ||
+                        segment.isDeleted()
+                    )) ||
+                    (isCommitted && !segment.isCommitted())
+                ) && currentSegmentIndex + 1 < note.noteSegments.count {
+                    currentSegmentIndex += 1
+                    seg = note.noteSegments[currentSegmentIndex]
+                }
+                return seg
+            }
+            
+            // check buffer segments
+            let committedTrackLastSegment = note.noteSegments.last
+            if let committedTrackLastSegment = committedTrackLastSegment {
+                // We subtract because segments in track two do not factor time from track one
+                let boundaryTime = CMTimeSubtract(forTrackTime, committedTrackLastSegment.timeMapping.target.end)
+                var segment = Utils.binarySearch(
+                    in: note.noteBuffer,
+                    isLower: { segment in
+                        return segment.timeMapping.target.end < boundaryTime
+                    },
+                    isHigher: { segment in
+                        return segment.timeMapping.target.start > boundaryTime
+                    }
+                )
+                
+                if let s = segment, isWord || isCommitted {
+                    var currentSegmentIndex = s.getIndex() - note.noteBuffer[0].getIndex()
+                    while let seg = segment, (
+                        (isWord && (
+                            seg.isPunctuation() ||
+                            seg.isSilence() ||
+                            seg.isVoiceCommandWord() ||
+                            seg.isDeleted()
+                        )) ||
+                        (isCommitted && !seg.isCommitted())
+                    ) && currentSegmentIndex + 1 < note.noteBuffer.count {
+                        currentSegmentIndex += 1
+                        segment = note.noteBuffer[currentSegmentIndex]
+                    }
+                    return segment
+                }
+                
+                return segment
+            }
+        }
+        
+        return nil
     }
     
     // MARK: - Helper Functions
@@ -1661,6 +1925,14 @@ class Utils {
     // Reference: https://learnappmaking.com/binary-search-swift-how-to/
     // Must be ordered segments and conditional
     public static func binarySearch(in segments: [NoteSegment], isLower: (_ segment: NoteSegment) -> Bool, isHigher: (_ segment: NoteSegment) -> Bool) -> NoteSegment? {
+        let index = binarySearchIndex(in: segments, isLower: isLower, isHigher: isHigher)
+        if let index = index {
+            return segments[index]
+        }
+        return nil
+    }
+    
+    public static func binarySearchIndex(in segments: [NoteSegment], isLower: (_ segment: NoteSegment) -> Bool, isHigher: (_ segment: NoteSegment) -> Bool) -> Int? {
         var left = 0
         var right = segments.count - 1
         
@@ -1672,7 +1944,7 @@ class Utils {
             } else if isHigher(segments[middle]) {
                 right = middle - 1
             } else {
-                return segments[middle]
+                return middle
             }
         }
         
@@ -1754,7 +2026,7 @@ class Utils {
             }
         } else {
             trackType = .buffer
-            if selectionCursor.cachedAnchor == nil {
+            if selectionCursor.cachedAnchorCaret == nil {
                 var i = 0
                 for (index, segment) in bufferSegments!.reversed().enumerated() {
                     if segment.isActive() && lastSegmentIndex == nil && i == n {

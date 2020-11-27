@@ -15,6 +15,8 @@
 		8B24440724DCE50D0050C959 /* TimeNormalizerType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B24440624DCE50D0050C959 /* TimeNormalizerType.swift */; };
 		8B27A3DC24B6A839001E5F06 /* Double+Rounded.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B27A3DB24B6A839001E5F06 /* Double+Rounded.swift */; };
 		8B27A3DE24B6A8E9001E5F06 /* Float+Rounded.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B27A3DD24B6A8E9001E5F06 /* Float+Rounded.swift */; };
+		8B39B356256E18BF00A9904F /* NoteSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B39B355256E18BF00A9904F /* NoteSnapshot.swift */; };
+		8B39B35E256F62FA00A9904F /* Caret.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B39B35D256F62FA00A9904F /* Caret.swift */; };
 		8B3B52952537AF1400B2BEDB /* lingual-logomark.png in Resources */ = {isa = PBXBuildFile; fileRef = 8B3B52942537AF1400B2BEDB /* lingual-logomark.png */; };
 		8B3B529D2539016A00B2BEDB /* modal-ambience.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8B3B529C2539016A00B2BEDB /* modal-ambience.wav */; };
 		8B3BC5BF24F882F9004FCD7B /* SelectionChangeType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B3BC5BE24F882F9004FCD7B /* SelectionChangeType.swift */; };
@@ -25,6 +27,8 @@
 		8B40A27525661FEE002C6B46 /* startup.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8B40A27425661FEE002C6B46 /* startup.wav */; };
 		8B40A2822568FB03002C6B46 /* speech-registered.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8B40A2812568FB03002C6B46 /* speech-registered.wav */; };
 		8B40A28725699B57002C6B46 /* CenteredButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B40A28625699B57002C6B46 /* CenteredButton.swift */; };
+		8B4293B7256C943400A513A3 /* AudioDeviceDatum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B4293B6256C943400A513A3 /* AudioDeviceDatum.swift */; };
+		8B4293BC256C960D00A513A3 /* AudioDeviceType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B4293BB256C960D00A513A3 /* AudioDeviceType.swift */; };
 		8B57A05B25552440005A5D17 /* NoteManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B57A05A25552440005A5D17 /* NoteManager.swift */; };
 		8B5C3A1D252B93A000A4DCA7 /* UITextView+NoActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B5C3A1C252B93A000A4DCA7 /* UITextView+NoActions.swift */; };
 		8B5C59E025451F1000420080 /* NoteTableViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B5C59DF25451F1000420080 /* NoteTableViewController.swift */; };
@@ -168,6 +172,8 @@
 		8B24440624DCE50D0050C959 /* TimeNormalizerType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeNormalizerType.swift; sourceTree = "<group>"; };
 		8B27A3DB24B6A839001E5F06 /* Double+Rounded.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Double+Rounded.swift"; sourceTree = "<group>"; };
 		8B27A3DD24B6A8E9001E5F06 /* Float+Rounded.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Float+Rounded.swift"; sourceTree = "<group>"; };
+		8B39B355256E18BF00A9904F /* NoteSnapshot.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = NoteSnapshot.swift; sourceTree = "<group>"; };
+		8B39B35D256F62FA00A9904F /* Caret.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Caret.swift; sourceTree = "<group>"; };
 		8B3B52942537AF1400B2BEDB /* lingual-logomark.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "lingual-logomark.png"; sourceTree = "<group>"; };
 		8B3B529C2539016A00B2BEDB /* modal-ambience.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "modal-ambience.wav"; sourceTree = "<group>"; };
 		8B3BC5BE24F882F9004FCD7B /* SelectionChangeType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionChangeType.swift; sourceTree = "<group>"; };
@@ -178,6 +184,8 @@
 		8B40A27425661FEE002C6B46 /* startup.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = startup.wav; sourceTree = "<group>"; };
 		8B40A2812568FB03002C6B46 /* speech-registered.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "speech-registered.wav"; sourceTree = "<group>"; };
 		8B40A28625699B57002C6B46 /* CenteredButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CenteredButton.swift; sourceTree = "<group>"; };
+		8B4293B6256C943400A513A3 /* AudioDeviceDatum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDeviceDatum.swift; sourceTree = "<group>"; };
+		8B4293BB256C960D00A513A3 /* AudioDeviceType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDeviceType.swift; sourceTree = "<group>"; };
 		8B57A05A25552440005A5D17 /* NoteManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteManager.swift; sourceTree = "<group>"; };
 		8B5C3A1C252B93A000A4DCA7 /* UITextView+NoActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITextView+NoActions.swift"; sourceTree = "<group>"; };
 		8B5C59DF25451F1000420080 /* NoteTableViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteTableViewController.swift; sourceTree = "<group>"; };
@@ -344,6 +352,7 @@
 				8B40A2162564C2A2002C6B46 /* InvalidVoiceCommandType.swift */,
 				8BA3056024CBD43D0056E4DF /* RecognitionTask.swift */,
 				8BC6E10525130DD1003DD26A /* TransformationType.swift */,
+				8B4293BB256C960D00A513A3 /* AudioDeviceType.swift */,
 				8BCA1AFE24A3DA5B0068BABB /* SentencePosition.swift */,
 				8BCA1AFC24A3DA3B0068BABB /* SegmentPosition.swift */,
 				8B24440624DCE50D0050C959 /* TimeNormalizerType.swift */,
@@ -378,10 +387,13 @@
 			isa = PBXGroup;
 			children = (
 				8BCA1B0024A43D530068BABB /* Speaker.swift */,
+				8B39B35D256F62FA00A9904F /* Caret.swift */,
+				8B39B355256E18BF00A9904F /* NoteSnapshot.swift */,
 				8B8D55EF2530E02C004AD436 /* DialogItem.swift */,
 				8B8D55F42530E043004AD436 /* DialogAction.swift */,
 				8B669B6A24B2C3DD00D5996B /* PitchDatum.swift */,
 				8B766E8B24A8094300D41A13 /* SoundIntensityDatum.swift */,
+				8B4293B6256C943400A513A3 /* AudioDeviceDatum.swift */,
 				8B66BFDF253BD17F0085A94F /* VoiceCommandDatum.swift */,
 				8B766E8824A7D7D200D41A13 /* Sentence.swift */,
 				8BE2EB1824BA44BC00E2D519 /* Determiners.swift */,
@@ -766,6 +778,7 @@
 				8B8D55F52530E043004AD436 /* DialogAction.swift in Sources */,
 				8B86B50724EF56C600568CDD /* NoteTrackType.swift in Sources */,
 				8B27A3DE24B6A8E9001E5F06 /* Float+Rounded.swift in Sources */,
+				8B39B35E256F62FA00A9904F /* Caret.swift in Sources */,
 				8B57A05B25552440005A5D17 /* NoteManager.swift in Sources */,
 				8B3BC5BF24F882F9004FCD7B /* SelectionChangeType.swift in Sources */,
 				8B766F2824AC2AA300D41A13 /* NoteCalculator.swift in Sources */,
@@ -775,6 +788,7 @@
 				8BA3055924C91A2B0056E4DF /* LinkedList.swift in Sources */,
 				8BEC136824906FF30056E767 /* AppDelegate.swift in Sources */,
 				8B669B6724B013F200D5996B /* TimeConstant+Minute+Hour.swift in Sources */,
+				8B4293BC256C960D00A513A3 /* AudioDeviceType.swift in Sources */,
 				8B669B6324B012F500D5996B /* AVPlayer+Playback.swift in Sources */,
 				8B766F5024AC2AB200D41A13 /* InputSignalTracker.swift in Sources */,
 				8BCA1AFD24A3DA3B0068BABB /* SegmentPosition.swift in Sources */,
@@ -782,6 +796,7 @@
 				8BCA1B0124A43D530068BABB /* Speaker.swift in Sources */,
 				8B766E8C24A8094300D41A13 /* SoundIntensityDatum.swift in Sources */,
 				8B766F5B24AC2AB200D41A13 /* FFTTransformer.swift in Sources */,
+				8B4293B7256C943400A513A3 /* AudioDeviceDatum.swift in Sources */,
 				8B766F4F24AC2AB200D41A13 /* Transformer.swift in Sources */,
 				8B766F4924AC2AB200D41A13 /* Estimator.swift in Sources */,
 				8B5C59E025451F1000420080 /* NoteTableViewController.swift in Sources */,
@@ -800,6 +815,7 @@
 				8B766F4524AC2AB200D41A13 /* HPSEstimator.swift in Sources */,
 				8B766F2724AC2AA300D41A13 /* FrequencyValidator.swift in Sources */,
 				8B766F5924AC2AB200D41A13 /* EstimationFactory.swift in Sources */,
+				8B39B356256E18BF00A9904F /* NoteSnapshot.swift in Sources */,
 				8B0E034D2558BEAD0059E00B /* UIManager.swift in Sources */,
 				8BA3056524D0FB660056E4DF /* StringIndex+distance.swift in Sources */,
 				8BEC136A24906FF30056E767 /* SceneDelegate.swift in Sources */,

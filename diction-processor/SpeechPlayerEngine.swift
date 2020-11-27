@@ -432,7 +432,7 @@ class SpeechPlayerEngine: NSObject {
     func skip(to time: CMTime, handler: (() -> Void)? = nil) {
         print("===== Speech Player Engine: Skip =====")
         print("\tSkiping to: ", time.seconds)
-        let currentSegment = self.getSegment(type: .current)
+        let currentSegment = self.getCurrentSegment()
         if let _ = currentSegment, self.isPlayingNote {
             self.player.seek(
                 to: time,
@@ -583,173 +583,14 @@ class SpeechPlayerEngine: NSObject {
         return self.player.currentTime()
     }
     
-    // Assumes playbackSegments are sorted in ascending order of index values
-    func getSegment(segment: NoteSegment? = nil, segments: [NoteSegment]? = nil, type: SegmentPosition, isWord: Bool = false, isCommitted: Bool = false) -> NoteSegment? {
-        var result: NoteSegment?
-        switch type {
-        case .current:
-            let currentTime = self.player.currentTime()
-            result = self.getSegment(forTrackTime: currentTime)
-        case .previous:
-            guard let segment = segment, let segments = segments else { return nil }
-            var currentSegmentIndex = segment.getIndex() - segments[0].getIndex()
-            if currentSegmentIndex - 1 >= 0 {
-                result = segments[currentSegmentIndex - 1]
-            } else {
-                // Input segment is the first element in the array
-                // We return it because there are no more previous segments
-                result = segment
-            }
-            
-            if isWord || isCommitted {
-                while let seg = result, (
-                    (isWord && (
-                        seg.isPunctuation() ||
-                        seg.isSilence() ||
-                        seg.isVoiceCommandWord() ||
-                        seg.isDeleted()
-                    )) ||
-                    (isCommitted && !seg.isCommitted())
-                ) && currentSegmentIndex - 1 >= 0 {
-                    currentSegmentIndex -= 1
-                    result = segments[currentSegmentIndex]
-                }
-            }
-        case .next:
-            guard let segment = segment, let segments = segments else { return nil }
-            var currentSegmentIndex = segment.getIndex() - segments[0].getIndex()
-            if currentSegmentIndex + 1 < segments.count {
-                result = segments[currentSegmentIndex + 1]
-            } else {
-                // Input segment is the last element in the array
-                // We return it because there are no more next segments
-                result = segment
-            }
-            
-            if isWord || isCommitted {
-                while let seg = result, (
-                    (isWord && (
-                        seg.isPunctuation() ||
-                        seg.isSilence() ||
-                        seg.isVoiceCommandWord() ||
-                        seg.isDeleted()
-                    )) ||
-                    (isCommitted && !seg.isCommitted())
-                ) && currentSegmentIndex + 1 < segments.count {
-                    currentSegmentIndex += 1
-                    result = segments[currentSegmentIndex]
-                }
-            }
-        }
-        
-        if let result = result, (isWord && (
-            result.isPunctuation() ||
-            result.isSilence() ||
-            result.isVoiceCommandWord() ||
-            result.isDeleted()
-        )) ||
-        (isCommitted && !result.isCommitted()) {
-            return nil
-        } else {
-            return result
-        }
-    }
-    
-    func getSegment(forTrackTime: CMTime, isWord: Bool = false, isCommitted: Bool = false) -> NoteSegment? {
-        if let playbackSegments = self.playbackSegments, self.isPlayingNote {
-            var segment = Utils.binarySearch(
-                in: playbackSegments,
-                isLower: { segment in
-                    return segment.timeMapping.target.end < forTrackTime
-                },
-                isHigher: { segment in
-                    return segment.timeMapping.target.start > forTrackTime
-                }
-            )
-            
-            if let s = segment, isWord || isCommitted {
-                var currentSegmentIndex = s.getIndex() - playbackSegments[0].getIndex()
-                while let seg = segment, (
-                    (isWord && (
-                        seg.isPunctuation() ||
-                        seg.isSilence() ||
-                        seg.isVoiceCommandWord() ||
-                        seg.isDeleted()
-                    )) ||
-                    (isCommitted && !seg.isCommitted())
-                ) && currentSegmentIndex + 1 < playbackSegments.count {
-                    currentSegmentIndex += 1
-                    segment = playbackSegments[currentSegmentIndex]
-                }
-            }
-            return segment
-        } else if let note = self.noteManager.currentNote {
-            // check committed segments
-            var seg = Utils.binarySearch(
-                in: note.noteSegments,
-                isLower: { segment in
-                    return segment.timeMapping.target.end < forTrackTime
-                },
-                isHigher: { segment in
-                    return segment.timeMapping.target.start > forTrackTime
-                }
-            )
-            
-            // Only return if we found it
-            if let s = seg, isWord || isCommitted {
-                var currentSegmentIndex = s.getIndex() - note.noteSegments[0].getIndex()
-                while let segment = seg, (
-                    (isWord && (
-                        segment.isPunctuation() ||
-                        segment.isSilence() ||
-                        segment.isVoiceCommandWord() ||
-                        segment.isDeleted()
-                    )) ||
-                    (isCommitted && !segment.isCommitted())
-                ) && currentSegmentIndex + 1 < note.noteSegments.count {
-                    currentSegmentIndex += 1
-                    seg = note.noteSegments[currentSegmentIndex]
-                }
-                return seg
-            }
-            
-            // check buffer segments
-            let committedTrackLastSegment = note.noteSegments.last
-            if let committedTrackLastSegment = committedTrackLastSegment {
-                // We subtract because segments in track two do not factor time from track one
-                let boundaryTime = CMTimeSubtract(forTrackTime, committedTrackLastSegment.timeMapping.target.end)
-                var segment = Utils.binarySearch(
-                    in: note.noteBuffer,
-                    isLower: { segment in
-                        return segment.timeMapping.target.end < boundaryTime
-                    },
-                    isHigher: { segment in
-                        return segment.timeMapping.target.start > boundaryTime
-                    }
-                )
-                
-                if let s = segment, isWord || isCommitted {
-                    var currentSegmentIndex = s.getIndex() - note.noteBuffer[0].getIndex()
-                    while let seg = segment, (
-                        (isWord && (
-                            seg.isPunctuation() ||
-                            seg.isSilence() ||
-                            seg.isVoiceCommandWord() ||
-                            seg.isDeleted()
-                        )) ||
-                        (isCommitted && !seg.isCommitted())
-                    ) && currentSegmentIndex + 1 < note.noteBuffer.count {
-                        currentSegmentIndex += 1
-                        segment = note.noteBuffer[currentSegmentIndex]
-                    }
-                    return segment
-                }
-                
-                return segment
-            }
-        }
-        
-        return nil
+    func getCurrentSegment() -> NoteSegment? {
+        let currentTime = self.player.currentTime()
+        return Utils.getSegment(
+            forTrackTime: currentTime,
+            segments: self.playbackSegments,
+            note: self.noteManager.currentNote,
+            isPlayingNote: self.isPlayingNote
+        )
     }
     
     // MARK: - Voice Commands
@@ -935,11 +776,14 @@ class SpeechPlayerEngine: NSObject {
             self.handleBoundaryTimeObserver(start: true)
         }
         
-        let firstPlayableSegment = self.getSegment(
+        let firstPlayableSegment = Utils.getSegment(
             forTrackTime: CMTimeMake(
                 value: Int64(Utils.DEFAULT_SEGMENT_TIMESCALE * (self.startPlaybackAt!.seconds + Utils.TEMPORAL_DELTA)),
                 timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
-            )
+            ),
+            segments: self.playbackSegments,
+            note: self.noteManager.currentNote,
+            isPlayingNote: self.isPlayingNote
         )
         let rate = firstPlayableSegment?.getRate() ?? self.playbackRate
         let rateWasSet = self.setPlayerRate(rate: rate)
@@ -969,16 +813,27 @@ class SpeechPlayerEngine: NSObject {
     
     func handleBoundaryTimeObserver(start: Bool = false) {
         print("===== Speech Player Engine: Handle Boundary Time Observer =====")
+        guard let playbackSegments = self.playbackSegments else {
+            print("\t[Error] Playback Segments are not set. Abort Method.")
+            return
+        }
         let seekNextSegmentHandler: (_ segment: NoteSegment, _ conditional: Bool) -> Void = { segment, conditional in
             print("\tSeek next segment...")
-            let nextSegment = self.getSegment(segment: segment, segments: self.playbackSegments, type: .next, isWord: true)
+            let nextSegmentIndex = Utils.getSegmentIndex(
+                segment: segment,
+                segments: playbackSegments,
+                type: .next,
+                isWord: true
+            )
+            
             if conditional && (
                 (self.state.withSkipPunctuation && segment.isPunctuation()) ||
                     (self.state.withOmitSilences && segment.isSilence() && segment.timeMapping.target.duration.seconds > Utils.SILENCE_SKIP_THRESHOLD) ||
                 segment.isVoiceCommandWord() ||
                 segment.isDeleted()
-            ), let nextSegment = nextSegment {
+            ), let nextSegmentIndex = nextSegmentIndex {
                 print("\tSkip to next segment...")
+                let nextSegment = playbackSegments[nextSegmentIndex]
                 print("Next word '\(nextSegment.getText())' at \(nextSegment.timeMapping.target.start.seconds) seconds...")
                 // skip to next segment
                 self.previousBoundarySegment = segment
@@ -1007,8 +862,8 @@ class SpeechPlayerEngine: NSObject {
             }
             
             var userInfo: [String: NoteSegment] = ["previous": self.previousBoundarySegment!]
-            if let nextSegment = nextSegment {
-                userInfo["next"] = nextSegment
+            if let nextSegmentIndex = nextSegmentIndex {
+                userInfo["next"] = playbackSegments[nextSegmentIndex]
             }
             // Broadcast Boundary Crossing
             NotificationCenter.default.post(
@@ -1068,8 +923,17 @@ class SpeechPlayerEngine: NSObject {
             )
         }
         
-        let currentSegment = self.getSegment(type: .current)
-        if let segment = self.getSegment(forTrackTime: self.startPlaybackAt!, isWord: self.state.withOmitSilences), start {
+        let currentSegment = self.getCurrentSegment()
+        if  let note = self.noteManager.currentNote,
+            let segment = Utils.getSegment(
+                forTrackTime: self.startPlaybackAt!,
+                segments: self.playbackSegments,
+                note: note,
+                isPlayingNote: self.isPlayingNote,
+                isWord: self.state.withOmitSilences
+            ),
+            start
+        {
             print("\tStarting Segment: '\(segment.getText())' at \(segment.timeMapping.target.start.seconds)")
             self.previousBoundarySegment = segment
             self.player.seek(
@@ -1083,7 +947,12 @@ class SpeechPlayerEngine: NSObject {
                 (self.state.withOmitSilences && segment.isSilence() && segment.timeMapping.target.duration.seconds > Utils.SILENCE_SKIP_THRESHOLD) ||
                 segment.isVoiceCommandWord() ||
                 segment.isDeleted()
-            ) && self.getSegment(segment: segment, segments: self.playbackSegments, type: .next, isWord: true) == nil
+            ) && Utils.getSegmentIndex(
+                segment: segment,
+                segments: self.playbackSegments!,
+                type: .next,
+                isWord: true
+            ) == nil
         ) {
             // last segment of note
             seekEndPlaybackHandler(segment, true)
