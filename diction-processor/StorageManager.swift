@@ -33,7 +33,7 @@ class StorageManager: NSObject {
             object: nil,
             userInfo: [
                 "userSettings": self.fetchUserSettings() as Any,
-                "notes" : self.fetchNotes() as Any,
+                "entries" : self.fetchEntries() as Any,
                 "voiceCommandStream": self.fetchVoiceCommandStream() as Any,
                 "appTelemetry": self.fetchAppTelemetry() as Any
             ]
@@ -43,7 +43,7 @@ class StorageManager: NSObject {
     func save(state: StateManager) {
         print("===== Storage Manager: Save =====")
         DispatchQueue.global(qos: .utility).async {
-            self.saveNotes(notes: state.notes)
+            self.saveEntries(entries: state.entries)
             self.saveUserSettings(
                 speaker: state.speaker,
                 withOnDeviceRecognition: state.withOnDeviceRecognition,
@@ -62,10 +62,10 @@ class StorageManager: NSObject {
             self.saveAppTelemetry(
                 appOpens: state.appOpens,
                 audioDeviceUse: state.audioDeviceUse,
-                noteViews: state.noteViews,
-                notePlays: state.notePlays,
-                noteTextExports: state.noteTextExports,
-                noteAudioExports: state.noteAudioExports,
+                entryViews: state.entryViews,
+                entryPlays: state.entryPlays,
+                entryTextExports: state.entryTextExports,
+                entryAudioExports: state.entryAudioExports,
                 voiceCommands: state.voiceCommands
             )
             if let speechRecognition = self.speechRecognition {
@@ -77,18 +77,18 @@ class StorageManager: NSObject {
     
     // MARK: - Fetching
     
-    func fetchNotes() -> [Note]? {
-        print("===== Storage Manager: Fetch Notes =====")
+    func fetchEntries() -> [Entry]? {
+        print("===== Storage Manager: Fetch Entries =====")
         let defaults = UserDefaults.standard
-        if let savedObj = defaults.object(forKey: "notes") as? Data {
-            if let notes = try? NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(savedObj) as? [Note] {
-                print("\tSuccessfully fetched \(notes.count) notes!")
-                return notes
+        if let savedObj = defaults.object(forKey: "entries") as? Data {
+            if let entries = try? NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(savedObj) as? [Entry] {
+                print("\tSuccessfully fetched \(entries.count) entries!")
+                return entries
             } else {
-                print("\t[Error] There was a problem converting notes Data object to array of Notes.")
+                print("\t[Error] There was a problem converting entries Data object to array of Entries.")
             }
         } else {
-            print("\t[Error] There was a problem retrieving notes Data object.")
+            print("\t[Error] There was a problem retrieving entries Data object.")
         }
         
         return nil
@@ -102,10 +102,10 @@ class StorageManager: NSObject {
                 print("\tSuccessfully fetched \(clips.count) clips!")
                 return clips
             } else {
-                print("\t[Error] There was a problem converting notes Data object to clips dictionary.")
+                print("\t[Error] There was a problem converting entries Data object to clips dictionary.")
             }
         } else {
-            print("\t[Error] There was a problem retrieving notes clips dictionary.")
+            print("\t[Error] There was a problem retrieving entries clips dictionary.")
         }
         
         return nil
@@ -323,52 +323,52 @@ class StorageManager: NSObject {
             print("\t[Error] There was a problem retrieving audioDeviceUse Data object.")
         }
         
-        // Note Views
-        if let savedObj = defaults.object(forKey: "noteViews") as? Data {
-            if let noteViews = try? NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(savedObj) as? [TimeInterval] {
-                print("\tSuccessfully fetched \(noteViews.count) noteViews!")
-                appTelemetry["noteViews"] = noteViews
+        // Entry Views
+        if let savedObj = defaults.object(forKey: "entryViews") as? Data {
+            if let entryViews = try? NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(savedObj) as? [TimeInterval] {
+                print("\tSuccessfully fetched \(entryViews.count) entryViews!")
+                appTelemetry["entryViews"] = entryViews
             } else {
-                print("\t[Error] There was a problem fetching noteViews.")
+                print("\t[Error] There was a problem fetching entryViews.")
             }
         } else {
-            print("\t[Error] There was a problem retrieving noteViews Data object.")
+            print("\t[Error] There was a problem retrieving entryViews Data object.")
         }
         
-        // Note Plays
-        if let savedObj = defaults.object(forKey: "noteViews") as? Data {
-            if let notePlays = try? NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(savedObj) as? [TimeInterval] {
-                print("\tSuccessfully fetched \(notePlays.count) notePlays!")
-                appTelemetry["notePlays"] = notePlays
+        // Entry Plays
+        if let savedObj = defaults.object(forKey: "entryViews") as? Data {
+            if let entryPlays = try? NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(savedObj) as? [TimeInterval] {
+                print("\tSuccessfully fetched \(entryPlays.count) entryPlays!")
+                appTelemetry["entryPlays"] = entryPlays
             } else {
-                print("\t[Error] There was a problem fetching notePlays.")
+                print("\t[Error] There was a problem fetching entryPlays.")
             }
         } else {
-            print("\t[Error] There was a problem retrieving notePlays Data object.")
+            print("\t[Error] There was a problem retrieving entryPlays Data object.")
         }
         
-        // Note Text Exports
-        if let savedObj = defaults.object(forKey: "noteTextExports") as? Data {
-            if let noteTextExports = try? NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(savedObj) as? [TimeInterval] {
-                print("\tSuccessfully fetched \(noteTextExports.count) noteTextExports!")
-                appTelemetry["noteTextExports"] = noteTextExports
+        // Entry Text Exports
+        if let savedObj = defaults.object(forKey: "entryTextExports") as? Data {
+            if let entryTextExports = try? NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(savedObj) as? [TimeInterval] {
+                print("\tSuccessfully fetched \(entryTextExports.count) entryTextExports!")
+                appTelemetry["entryTextExports"] = entryTextExports
             } else {
-                print("\t[Error] There was a problem fetching noteTextExports.")
+                print("\t[Error] There was a problem fetching entryTextExports.")
             }
         } else {
-            print("\t[Error] There was a problem retrieving noteTextExports Data object.")
+            print("\t[Error] There was a problem retrieving entryTextExports Data object.")
         }
         
-        // Note Audio Exports
-        if let savedObj = defaults.object(forKey: "noteAudioExports") as? Data {
-            if let noteAudioExports = try? NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(savedObj) as? [TimeInterval] {
-                print("\tSuccessfully fetched \(noteAudioExports.count) noteAudioExports!")
-                appTelemetry["noteAudioExports"] = noteAudioExports
+        // Entry Audio Exports
+        if let savedObj = defaults.object(forKey: "entryAudioExports") as? Data {
+            if let entryAudioExports = try? NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(savedObj) as? [TimeInterval] {
+                print("\tSuccessfully fetched \(entryAudioExports.count) entryAudioExports!")
+                appTelemetry["entryAudioExports"] = entryAudioExports
             } else {
-                print("\t[Error] There was a problem fetching noteAudioExports.")
+                print("\t[Error] There was a problem fetching entryAudioExports.")
             }
         } else {
-            print("\t[Error] There was a problem retrieving noteAudioExports Data object.")
+            print("\t[Error] There was a problem retrieving entryAudioExports Data object.")
         }
         
         // Voice Commands
@@ -388,15 +388,15 @@ class StorageManager: NSObject {
     
     // MARK: - Saving
     
-    func saveNotes(notes: [Note]) {
-        print("===== Storage Manager: Save Notes =====")
+    func saveEntries(entries: [Entry]) {
+        print("===== Storage Manager: Save Entries =====")
         
-        if let savedData = try? NSKeyedArchiver.archivedData(withRootObject: notes, requiringSecureCoding: false) {
+        if let savedData = try? NSKeyedArchiver.archivedData(withRootObject: entries, requiringSecureCoding: false) {
             let defaults = UserDefaults.standard
-            defaults.set(savedData, forKey: "notes")
-            print("\tSuccessfully saved \(notes.count) notes!")
+            defaults.set(savedData, forKey: "entries")
+            print("\tSuccessfully saved \(entries.count) entries!")
         } else {
-            print("\t[Error] There was a problem converting notes to Data object.")
+            print("\t[Error] There was a problem converting entries to Data object.")
         }
     }
     
@@ -550,10 +550,10 @@ class StorageManager: NSObject {
     func saveAppTelemetry(
         appOpens: [TimeInterval],
         audioDeviceUse: [AudioDeviceDatum],
-        noteViews: [TimeInterval],
-        notePlays: [TimeInterval],
-        noteTextExports: [TimeInterval],
-        noteAudioExports: [TimeInterval],
+        entryViews: [TimeInterval],
+        entryPlays: [TimeInterval],
+        entryTextExports: [TimeInterval],
+        entryAudioExports: [TimeInterval],
         voiceCommands: [TimeInterval]
     ) {
         print("===== Storage Manager: Save Telemetry =====")
@@ -576,40 +576,40 @@ class StorageManager: NSObject {
             print("\t[Error] There was a problem converting audioDeviceUse to Data object.")
         }
         
-        // Note Views
-        if let savedData = try? NSKeyedArchiver.archivedData(withRootObject: noteViews, requiringSecureCoding: false) {
+        // Entry Views
+        if let savedData = try? NSKeyedArchiver.archivedData(withRootObject: entryViews, requiringSecureCoding: false) {
             let defaults = UserDefaults.standard
-            defaults.set(savedData, forKey: "noteViews")
-            print("\tSuccessfully saved \(noteViews.count) noteViews!")
+            defaults.set(savedData, forKey: "entryViews")
+            print("\tSuccessfully saved \(entryViews.count) entryViews!")
         } else {
-            print("\t[Error] There was a problem converting noteViews to Data object.")
+            print("\t[Error] There was a problem converting entryViews to Data object.")
         }
         
-        // Note Plays
-        if let savedData = try? NSKeyedArchiver.archivedData(withRootObject: notePlays, requiringSecureCoding: false) {
+        // Entry Plays
+        if let savedData = try? NSKeyedArchiver.archivedData(withRootObject: entryPlays, requiringSecureCoding: false) {
             let defaults = UserDefaults.standard
-            defaults.set(savedData, forKey: "notePlays")
-            print("\tSuccessfully saved \(notePlays.count) notePlays!")
+            defaults.set(savedData, forKey: "entryPlays")
+            print("\tSuccessfully saved \(entryPlays.count) entryPlays!")
         } else {
-            print("\t[Error] There was a problem converting notePlays to Data object.")
+            print("\t[Error] There was a problem converting entryPlays to Data object.")
         }
         
-        // Note Text Exports
-        if let savedData = try? NSKeyedArchiver.archivedData(withRootObject: noteTextExports, requiringSecureCoding: false) {
+        // Entry Text Exports
+        if let savedData = try? NSKeyedArchiver.archivedData(withRootObject: entryTextExports, requiringSecureCoding: false) {
             let defaults = UserDefaults.standard
-            defaults.set(savedData, forKey: "noteTextExports")
-            print("\tSuccessfully saved \(noteTextExports.count) noteTextExports!")
+            defaults.set(savedData, forKey: "entryTextExports")
+            print("\tSuccessfully saved \(entryTextExports.count) entryTextExports!")
         } else {
-            print("\t[Error] There was a problem converting noteTextExports to Data object.")
+            print("\t[Error] There was a problem converting entryTextExports to Data object.")
         }
         
-        // Note Audio Exports
-        if let savedData = try? NSKeyedArchiver.archivedData(withRootObject: noteAudioExports, requiringSecureCoding: false) {
+        // Entry Audio Exports
+        if let savedData = try? NSKeyedArchiver.archivedData(withRootObject: entryAudioExports, requiringSecureCoding: false) {
             let defaults = UserDefaults.standard
-            defaults.set(savedData, forKey: "noteAudioExports")
-            print("\tSuccessfully saved \(noteAudioExports.count) noteAudioExports!")
+            defaults.set(savedData, forKey: "entryAudioExports")
+            print("\tSuccessfully saved \(entryAudioExports.count) entryAudioExports!")
         } else {
-            print("\t[Error] There was a problem converting noteAudioExports to Data object.")
+            print("\t[Error] There was a problem converting entryAudioExports to Data object.")
         }
         
         // Voice Commands

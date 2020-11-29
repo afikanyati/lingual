@@ -65,7 +65,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             state: state,
             speechRecognition: speechRecognition
         )
-        let noteManager = NoteManager(
+        let entryManager = EntryManager(
             state: state,
             speechRecognition: speechRecognition,
             notifications: notifications,
@@ -75,11 +75,11 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             uiManager: uiManager,
             pitchRecognition: pitchRecognition
         )
-        pitchRecognition.noteManager = noteManager
-        speechPlayer.noteManager = noteManager
-        speechSynthesis.noteManager = noteManager
-        speechRecognition.noteManager = noteManager
-        selectionCursor.noteManager = noteManager
+        pitchRecognition.entryManager = entryManager
+        speechPlayer.entryManager = entryManager
+        speechSynthesis.entryManager = entryManager
+        speechRecognition.entryManager = entryManager
+        selectionCursor.entryManager = entryManager
         mainViewController.state = state
         mainViewController.notifications = notifications
         mainViewController.speechRecognition = speechRecognition
@@ -87,7 +87,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         mainViewController.pitchRecognition = pitchRecognition
         mainViewController.speechPlayer = speechPlayer
         mainViewController.selectionCursor = selectionCursor
-        mainViewController.noteManager = noteManager
+        mainViewController.entryManager = entryManager
         mainViewController.uiManager = uiManager
     }
 

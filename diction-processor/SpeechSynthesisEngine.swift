@@ -24,7 +24,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
     var speechPlayer: SpeechPlayerEngine
     weak var speechRecognition: SpeechRecognitionEngine!
     weak var selectionCursor: SelectionCursor!
-    weak var noteManager: NoteManager!
+    weak var entryManager: EntryManager!
 
     // MARK: - Speech Synthesis Properties
     
@@ -52,11 +52,11 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
         return self.speechSynthesizer.isPaused
     }
     /// Stores segment range currently being played
-    private(set) var echoSegments: [NoteSegment]? = nil
+    private(set) var echoSegments: [EntrySegment]? = nil
     /// Stores range of segments in echoSegments
     private(set) var echoRange: Range<Int>? = nil
     /// Stores echoSegments source
-    private(set) var echoSegmentsTrackType: NoteTrackType? = nil
+    private(set) var echoSegmentsTrackType: EntryTrackType? = nil
     
     // MARK: - Initialization and Deinitialization
     
@@ -91,7 +91,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
         result = result && (self.updateEchoRate && (self.isPlayingEcho || self.isPlayingPassiveEcho) || !self.updateEchoRate)
         
         if !result {
-            fatalError("===== [Error] Note Manager Representation Invariants were broken =====")
+            fatalError("===== [Error] Entry Manager Representation Invariants were broken =====")
         }
     }
     
@@ -119,8 +119,8 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
         // State
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteDeleted(notification:)),
-            name: NoteManager.onNoteDeleted,
+            selector: #selector(onEntryDeleted(notification:)),
+            name: EntryManager.onEntryDeleted,
             object: nil
         )
         
@@ -140,11 +140,11 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
             object: nil
         )
         
-        // Note
+        // Entry
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteCommittedBuffer(notification:)),
-            name: Note.onNoteCommittedBuffer,
+            selector: #selector(onEntryCommittedBuffer(notification:)),
+            name: Entry.onEntryCommittedBuffer,
             object: nil
         )
     }
@@ -180,8 +180,8 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
         }
     }
     
-    @objc func onNoteDeleted(notification: Notification) {
-        print("===== Speech Synthesis Engine: On Deleted Note =====")
+    @objc func onEntryDeleted(notification: Notification) {
+        print("===== Speech Synthesis Engine: On Deleted Entry =====")
         self.stopEcho(withFeedback: false)
     }
     
@@ -198,17 +198,17 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
         }
     }
     
-    @objc func onNoteCommittedBuffer(notification: Notification) {
-        print("===== Speech Synthesis Engine: On Note Committed Buffer =====")
+    @objc func onEntryCommittedBuffer(notification: Notification) {
+        print("===== Speech Synthesis Engine: On Entry Committed Buffer =====")
 
-        if let note = self.noteManager.currentNote, self.state.withPassiveEcho && AVAudioSession.isHeadphonesConnected && self.speechRecognition.isListeningForSpeech && !self.speechRecognition.pausedListeningForSpeech && !self.selectionCursor.isUpdatingSelection {
+        if let entry = self.entryManager.currentEntry, self.state.withPassiveEcho && AVAudioSession.isHeadphonesConnected && self.speechRecognition.isListeningForSpeech && !self.speechRecognition.pausedListeningForSpeech && !self.selectionCursor.isUpdatingSelection {
             print("\tAttempting to execute passive echo...")
             
-            if let lastEchoSegmentRange = note.committedBufferRanges.last {
+            if let lastEchoSegmentRange = entry.committedBufferRanges.last {
                 print("\tExecuting passive echo with last committed buffer: \(lastEchoSegmentRange)")
 
                 // Echo formatted String
-                self.executePassiveEcho(note: note)
+                self.executePassiveEcho(entry: entry)
                 
                 // Give haptic feedback
                 hapticEngine.lightImpact()
@@ -218,7 +218,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
     
     // MARK: - Methods
     
-    func startEcho(segments: [NoteSegment], allowPlayer: Bool = false, onStartHandler: (() -> Void)? = nil, onFinishHandler: (() -> Void)? = nil) {
+    func startEcho(segments: [EntrySegment], allowPlayer: Bool = false, onStartHandler: (() -> Void)? = nil, onFinishHandler: (() -> Void)? = nil) {
         print("===== Speech Synthesis Engine: Start Echo =====")
         if self.speechPlayer.player.isPlaying && !allowPlayer {
             print("\tStop speech audio to play speech synthesizer")
@@ -235,7 +235,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
         }
         
         // Give audio feedback
-        // *** The note playing is the audio feedback ***
+        // *** The entry playing is the audio feedback ***
         
         let executeEcho = {
             // Play Sound
@@ -244,7 +244,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
             }
             
             // Give feedback
-            if !self.noteManager.isWalkingNote && !self.noteManager.isRunningNote {
+            if !self.entryManager.isWalkingEntry && !self.entryManager.isRunningEntry {
                 self.notifications.executeFeedback(
                     visualMessage: "Start Echo",
                     withHaptics: true
@@ -259,7 +259,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
                 // start new echo
                 print("\tInitiate new speech synthesizer utterance...")
                 
-                let text = Note.getText(
+                let text = Entry.getText(
                     segments: segments,
                     withTemporalSuggestions: self.state.withTemporalSuggestions,
                     withPunctuationSuggestions: self.state.withPunctuationSuggestions,
@@ -271,7 +271,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
                 let synthesizerItem = SynthesizerItem(
                     synthesizer: self.speechSynthesizer,
                     text: text,
-                    voice: Utils.getSynthesizerVoice(withGender: self.state.speaker.gender),
+                    voice: Utils.getSynthesizerVoice(withRegister: self.state.speaker.register),
                     rate: self.echoRate,
                     volume: Utils.playbackVolume
                 )
@@ -337,7 +337,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
         print("===== Speech Synthesis Engine: Stop Echo =====")
         
         // Present Feedback
-        if withFeedback && !self.noteManager.isWalkingNote && !self.noteManager.isRunningNote {
+        if withFeedback && !self.entryManager.isWalkingEntry && !self.entryManager.isRunningEntry {
             self.notifications.executeFeedback(
                 visualMessage: "Stop Echo",
                 audioMessage: "echo stopped",
@@ -387,10 +387,10 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
         checkRep()
     }
     
-    func executePassiveEcho(note: Note) {
+    func executePassiveEcho(entry: Entry) {
         print("===== Speech Synthesis Engine: Execute Passive Echo =====")
         
-        guard let echoRange = note.committedBufferRanges.last else { return }
+        guard let echoRange = entry.committedBufferRanges.last else { return }
         
         if self.speechPlayer.player.isPlaying {
             print("\tStop speech audio to play speech synthesizer")
@@ -401,10 +401,10 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
         print("\tEcho Range: ", self.echoRange ?? "nil")
         self.echoSegmentsTrackType = .committed
         print("\tEcho Segments Track Type: ", self.echoSegmentsTrackType ?? "nil")
-        self.echoSegments = note.noteSegments
+        self.echoSegments = entry.entrySegments
         
         // Get echo text
-        let text = note.getText(segments: Array(note.noteSegments[echoRange]))
+        let text = entry.getText(segments: Array(entry.entrySegments[echoRange]))
         let echoText = text.trimTrailingPunctuation()
         print("\techoing: \"\(echoText)\"")
         
@@ -412,7 +412,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
         let synthesizerItem = SynthesizerItem(
             synthesizer: self.speechSynthesizer,
             text: echoText,
-            voice: Utils.getSynthesizerVoice(withGender: self.state.speaker.gender),
+            voice: Utils.getSynthesizerVoice(withRegister: self.state.speaker.register),
             rate: self.echoRate,
             volume: Utils.playbackVolume
         )
@@ -488,7 +488,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
     
     public func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, willSpeakRangeOfSpeechString characterRange: NSRange, utterance: AVSpeechUtterance) {
         // Highlight word currently being uttered
-        if let note = self.noteManager.currentNote,
+        if let entry = self.entryManager.currentEntry,
             let echoRange = self.echoRange,
            let echoSegments = self.echoSegments,
            let echoSegmentsTrackType = self.echoSegmentsTrackType,
@@ -502,25 +502,25 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
             )
         {
             // We do this so that we have the most recent version of the segment sources
-            // When we commit segments, we create new notes and there are sometimes
-            // race conditions where the segments in note do not have their
-            // note reference set, causing their methods (that require that reference)
+            // When we commit segments, we create new entries and there are sometimes
+            // race conditions where the segments in entry do not have their
+            // entry reference set, causing their methods (that require that reference)
             // to throw an error
-            let passiveSegments: [NoteSegment]
+            let passiveSegments: [EntrySegment]
             switch (echoSegmentsTrackType) {
             case .buffer:
-                passiveSegments = Array(note.noteBuffer[echoRange])
+                passiveSegments = Array(entry.entryBuffer[echoRange])
             case .committed:
-                passiveSegments = Array(note.noteSegments[echoRange])
+                passiveSegments = Array(entry.entrySegments[echoRange])
             default:
                 passiveSegments = Array(echoSegments[echoRange])
             }
             
-            guard utterance.speechString.trimTrailingPunctuation() == Note.getText(segments: passiveSegments).trimTrailingPunctuation() else { return }
+            guard utterance.speechString.trimTrailingPunctuation() == Entry.getText(segments: passiveSegments).trimTrailingPunctuation() else { return }
             
             var textRange = characterRange
             // find lowest segment that is a word
-            var lowestEchoSegment: NoteSegment?
+            var lowestEchoSegment: EntrySegment?
             for segment in passiveSegments {
                 if !segment.isSilence() && !segment.isVoiceCommandWord() && !segment.isDeleted() {
                     lowestEchoSegment = segment
@@ -528,7 +528,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
                 }
             }
 
-            if let note = self.noteManager.currentNote, let lowestEchoSegment = lowestEchoSegment, let lowestEchoSegmentRange = note.getSegmentTextRange(of: lowestEchoSegment), self.speechRecognition.isListeningForSpeech {
+            if let entry = self.entryManager.currentEntry, let lowestEchoSegment = lowestEchoSegment, let lowestEchoSegmentRange = entry.getSegmentTextRange(of: lowestEchoSegment), self.speechRecognition.isListeningForSpeech {
                 textRange = NSRange(location: lowestEchoSegmentRange.location + characterRange.location, length: characterRange.length)
             }
             
@@ -540,7 +540,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
         }
         
         // Process realtime changes to echo rate
-        if let _ = self.noteManager.currentNote, self.updateEchoRate, self.state.appActivated {
+        if let _ = self.entryManager.currentEntry, self.updateEchoRate, self.state.appActivated {
             // Compute unprocessed utterance
             let numProcessedChar = max(0, characterRange.location)
             let unprocessedUtterance = utterance.speechString.substring(fromIndex: numProcessedChar).lowercased()
@@ -552,7 +552,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
             let synthesizerItem = SynthesizerItem(
                 synthesizer: self.speechSynthesizer,
                 text: unprocessedUtterance,
-                voice: Utils.getSynthesizerVoice(withGender: self.state.speaker.gender),
+                voice: Utils.getSynthesizerVoice(withRegister: self.state.speaker.register),
                 rate: self.echoRate,
                 volume: Utils.playbackVolume
             )
@@ -576,7 +576,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
             return
         }
         
-        if let _ = self.noteManager.currentNote, !self.isPlayingPassiveEcho {
+        if let _ = self.entryManager.currentEntry, !self.isPlayingPassiveEcho {
             // Avoid updating ui when selection
             // it will remove selection
             NotificationCenter.default.post(
@@ -630,10 +630,10 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
                     userInfo: [:]
                 )
             }
-        } else if let note = self.noteManager.currentNote, self.state.appActivated && note.speechRecognition.pausedListeningForSpeech && !self.speechSynthesizer.isSpeaking && !AVAudioSession.isHeadphonesConnected && !self.noteManager.isRunningNote && !self.noteManager.isWalkingNote {
+        } else if let entry = self.entryManager.currentEntry, self.state.appActivated && entry.speechRecognition.pausedListeningForSpeech && !self.speechSynthesizer.isSpeaking && !AVAudioSession.isHeadphonesConnected && !self.entryManager.isRunningEntry && !self.entryManager.isWalkingEntry {
             // when headphones are off we don't listen for speech while echoing
             // but on completion we turn it back on
-            note.speechRecognition.startListeningForSpeech(
+            entry.speechRecognition.startListeningForSpeech(
                 onStartHandler: {
                     // Call after isPlayingEcho is set to false by tempOnEchoFinish
                     NotificationCenter.default.post(

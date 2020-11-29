@@ -14,7 +14,7 @@ import AVFoundation
 class StateManager: NSObject {
     // MARK: - Notifications
     
-    static let onFetchedNotes = Notification.Name(Notifications.onFetchedNotes.rawValue)
+    static let onFetchedEntries = Notification.Name(Notifications.onFetchedEntries.rawValue)
     
     // MARK: - App Modules
     
@@ -26,15 +26,15 @@ class StateManager: NSObject {
     
     /// Specifies whether speech recognition should use on-device compute or cloud compute
     private(set) var withOnDeviceRecognition = Utils.DEFAULT_WITH_ON_DEVICE_RECOGNITION
-    /// Specifies whether note will present visual indications of temporal silences on screen
+    /// Specifies whether entry will present visual indications of temporal silences on screen
     private(set) var withTemporalSuggestions = Utils.DEFAULT_WITH_TEMPORAL_SUGGESTIONS
-    /// Specifies whether note will present punctuation suggestions based on duration of silences
+    /// Specifies whether entry will present punctuation suggestions based on duration of silences
     private(set) var withPunctuationSuggestions = Utils.DEFAULT_WITH_PUNCTUATION_SUGGESTIONS
-    /// Specifies whether note will present emphasis suggestions based on fluctuating sound intensity of speaker
+    /// Specifies whether entry will present emphasis suggestions based on fluctuating sound intensity of speaker
     private(set) var withFormattingSuggestions = Utils.DEFAULT_WITH_FORMATTING_SUGGESTIONS
-    /// Specifies whether note will only present written language as words (versus numerals or punctuation symbols)
+    /// Specifies whether entry will only present written language as words (versus numerals or punctuation symbols)
     private(set) var withTextStrictlyAsWords = Utils.DEFAULT_WITH_TEXT_STRICTLY_AS_WORDS
-    /// Specifies whether note text will contain capitalized words
+    /// Specifies whether entry text will contain capitalized words
     private(set) var withCapitalization = Utils.DEFAULT_WITH_CAPITALIZATION
     /// Specifies whether segments corresponding to punctuation should be skipped
     private(set) var withSkipPunctuation = Utils.DEFAULT_WITH_SKIP_PUNCTUATION
@@ -47,10 +47,10 @@ class StateManager: NSObject {
     
     private(set) var appOpens = [TimeInterval]()
     private(set) var audioDeviceUse = [AudioDeviceDatum]()
-    private(set) var noteViews = [TimeInterval]()
-    private(set) var notePlays = [TimeInterval]()
-    private(set) var noteTextExports = [TimeInterval]()
-    private(set) var noteAudioExports = [TimeInterval]()
+    private(set) var entryViews = [TimeInterval]()
+    private(set) var entryPlays = [TimeInterval]()
+    private(set) var entryTextExports = [TimeInterval]()
+    private(set) var entryAudioExports = [TimeInterval]()
     private(set) var voiceCommands = [TimeInterval]()
     
     // MARK: - General
@@ -58,22 +58,22 @@ class StateManager: NSObject {
     private(set) var appActivated = false
     private(set) var mainViewReady = false
     private(set) var detailViewReady = false
-    private(set) var noteTableViewReady = false
+    private(set) var entryTableViewReady = false
     private(set) var playedStartupSound = false
     private(set) var font = UIFont.systemFont(ofSize: Utils.DEFAULT_FONT_SIZE)
     
-    // MARK: - Notes
+    // MARK: - Entries
     
-    @objc dynamic private(set) var notes = [Note]()
-    var activeNotes: [Note] {
-        return self.notes.filter { !$0.isDeleted }
+    @objc dynamic private(set) var entries = [Entry]()
+    var activeEntries: [Entry] {
+        return self.entries.filter { !$0.isDeleted }
     }
     private(set) var clips = [String: Set<String>]()
     private(set) var speaker = Speaker(uid: UUID().uuidString, device: UIDevice.current.name)
     
     // MARK: - Playback
     
-    /// Stores the current playback rate of note playback
+    /// Stores the current playback rate of entry playback
     private(set) var _playbackRate: Float = Utils.DEFAULT_PLAYBACK_RATE
     private(set) var _echoRate: Float = Utils.DEFAULT_ECHO_RATE
     
@@ -178,8 +178,8 @@ class StateManager: NSObject {
         )
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteTableViewDidLoad(notification:)),
-            name: NoteTableViewController.onDidLoad,
+            selector: #selector(onEntryTableViewDidLoad(notification:)),
+            name: EntryTableViewController.onDidLoad,
             object: nil
         )
         notificationCenter.addObserver(
@@ -196,8 +196,8 @@ class StateManager: NSObject {
         )
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteTableViewWillDisappear(notification:)),
-            name: NoteTableViewController.onWillDisappear,
+            selector: #selector(onEntryTableViewWillDisappear(notification:)),
+            name: EntryTableViewController.onWillDisappear,
             object: nil
         )
         notificationCenter.addObserver(
@@ -267,9 +267,9 @@ class StateManager: NSObject {
         self.mainViewReady = true
     }
     
-    @objc func onNoteTableViewDidLoad(notification: Notification) {
-        print("===== State Manager: On Note Table View Did Load =====")
-        self.noteTableViewReady = true
+    @objc func onEntryTableViewDidLoad(notification: Notification) {
+        print("===== State Manager: On Entry Table View Did Load =====")
+        self.entryTableViewReady = true
     }
     
     @objc func onDetailViewDidLoad(notification: Notification) {
@@ -282,9 +282,9 @@ class StateManager: NSObject {
         self.mainViewReady = false
     }
     
-    @objc func onNoteTableViewWillDisappear(notification: Notification) {
-        print("===== State Manager: On Note Table View Will Disappear =====")
-        self.noteTableViewReady = false
+    @objc func onEntryTableViewWillDisappear(notification: Notification) {
+        print("===== State Manager: On Entry Table View Will Disappear =====")
+        self.entryTableViewReady = false
     }
     
     @objc func onDetailViewWillDisappear(notification: Notification) {
@@ -407,7 +407,7 @@ class StateManager: NSObject {
                 handler: handler
             )
 //        case "adjust volume":
-//            startListeningForVolume(note: note)
+//            startListeningForVolume(entry: entry)
         default:
             // Do nothing
             break
@@ -416,8 +416,8 @@ class StateManager: NSObject {
     
     @objc func onFetchedStoredState(notification: Notification) {
         print("===== State Manager: On Fetch Stored State =====")
-        // Notes
-        self.notes = notification.userInfo!["notes"] as? [Note] ?? [Note]()
+        // Entries
+        self.entries = notification.userInfo!["entries"] as? [Entry] ?? [Entry]()
         
         // User Settings
         let userSettings = notification.userInfo!["userSettings"] as? [String: Any]
@@ -463,24 +463,24 @@ class StateManager: NSObject {
             print("\tAble to cast appTelemetry as [String: Any]")
             self.appOpens = appTelemetry["appOpens"] as? [TimeInterval] ?? [TimeInterval]()
             self.audioDeviceUse = appTelemetry["audioDeviceUse"] as?  [AudioDeviceDatum] ?? [AudioDeviceDatum]()
-            self.noteViews = appTelemetry["noteViews"] as? [TimeInterval] ?? [TimeInterval]()
-            self.notePlays = appTelemetry["notePlays"] as? [TimeInterval] ?? [TimeInterval]()
-            self.noteTextExports = appTelemetry["noteTextExports"] as? [TimeInterval] ?? [TimeInterval]()
-            self.noteAudioExports = appTelemetry["noteAudioExports"] as? [TimeInterval] ?? [TimeInterval]()
+            self.entryViews = appTelemetry["entryViews"] as? [TimeInterval] ?? [TimeInterval]()
+            self.entryPlays = appTelemetry["entryPlays"] as? [TimeInterval] ?? [TimeInterval]()
+            self.entryTextExports = appTelemetry["entryTextExports"] as? [TimeInterval] ?? [TimeInterval]()
+            self.entryAudioExports = appTelemetry["entryAudioExports"] as? [TimeInterval] ?? [TimeInterval]()
             self.voiceCommands = appTelemetry["voiceCommands"] as? [TimeInterval] ?? [TimeInterval]()
         } else {
             print("\t[Error] Unable to cast appTelemetry as [String: Any]")
             self.appOpens = [TimeInterval]()
             self.audioDeviceUse = [AudioDeviceDatum]()
-            self.noteViews = [TimeInterval]()
-            self.notePlays = [TimeInterval]()
-            self.noteTextExports = [TimeInterval]()
-            self.noteAudioExports = [TimeInterval]()
+            self.entryViews = [TimeInterval]()
+            self.entryPlays = [TimeInterval]()
+            self.entryTextExports = [TimeInterval]()
+            self.entryAudioExports = [TimeInterval]()
             self.voiceCommands = [TimeInterval]()
         }
 
         NotificationCenter.default.post(
-            name: StateManager.onFetchedNotes,
+            name: StateManager.onFetchedEntries,
             object: nil,
             userInfo: [:]
         )
@@ -505,14 +505,14 @@ class StateManager: NSObject {
         checkRep()
     }
     
-    func saveNote(note: Note) {
-        print("===== State Manager: Save Note =====")
-        for (index, n) in self.notes.enumerated() {
-            if n.uid == note.uid {
-                print("\tFound and replaced existing note: ")
-                print("\tOld Note Segment Count: ", n.noteSegments.count)
-                print("\tNew Note Segment Count: ", note.noteSegments.count)
-                self.notes[index] = note
+    func saveEntry(entry: Entry) {
+        print("===== State Manager: Save Entry =====")
+        for (index, n) in self.entries.enumerated() {
+            if n.uid == entry.uid {
+                print("\tFound and replaced existing entry: ")
+                print("\tOld Entry Segment Count: ", n.entrySegments.count)
+                print("\tNew Entry Segment Count: ", entry.entrySegments.count)
+                self.entries[index] = entry
             }
         }
         
@@ -530,24 +530,24 @@ class StateManager: NSObject {
     
     // MARK: - Telemetry
     
-    func incrementNoteViewCount(timeInterval: TimeInterval) {
-        print("===== State Manager: Increment Note View Count =====")
-        self.noteViews.append(timeInterval)
+    func incrementEntryViewCount(timeInterval: TimeInterval) {
+        print("===== State Manager: Increment Entry View Count =====")
+        self.entryViews.append(timeInterval)
     }
     
-    func incrementNotePlayCount(timeInterval: TimeInterval) {
-        print("===== State Manager: Increment Note Play Count =====")
-        self.notePlays.append(timeInterval)
+    func incrementEntryPlayCount(timeInterval: TimeInterval) {
+        print("===== State Manager: Increment Entry Play Count =====")
+        self.entryPlays.append(timeInterval)
     }
     
-    func incrementNoteTextExportCount(timeInterval: TimeInterval) {
-        print("===== State Manager: Increment Note Text Export Count =====")
-        self.noteTextExports.append(timeInterval)
+    func incrementEntryTextExportCount(timeInterval: TimeInterval) {
+        print("===== State Manager: Increment Entry Text Export Count =====")
+        self.entryTextExports.append(timeInterval)
     }
     
-    func incrementNoteAudioExportCount(timeInterval: TimeInterval) {
+    func incrementEntryAudioExportCount(timeInterval: TimeInterval) {
         print("===== State Manager: Increment Audio Export Count =====")
-        self.noteAudioExports.append(timeInterval)
+        self.entryAudioExports.append(timeInterval)
     }
     
     func incrementVoiceCommandCount(timeInterval: TimeInterval) {
@@ -702,7 +702,7 @@ class StateManager: NSObject {
         }
         
         // Make sure new setting is reflecting visually
-        // TODO => UPDATE NOTE DETAIL
+        // TODO => UPDATE ENTRY DETAIL
         
         if self.withTemporalSuggestions {
             // Present Feedback
@@ -736,7 +736,7 @@ class StateManager: NSObject {
         }
         
         // Make sure new setting is reflecting visually
-        // TODO => UPDATE NOTE DETAIL
+        // TODO => UPDATE ENTRY DETAIL
         
         if self.withPunctuationSuggestions {
             // Present Feedback
@@ -764,7 +764,7 @@ class StateManager: NSObject {
         self.withFormattingSuggestions = value
         
         // Make sure new setting is reflecting visually
-        // TODO => UPDATE NOTE DETAIL
+        // TODO => UPDATE ENTRY DETAIL
         
         if self.withFormattingSuggestions {
             // Present Feedback
@@ -792,7 +792,7 @@ class StateManager: NSObject {
         self.withTextStrictlyAsWords = value
         
         // Make sure new setting is reflecting visually
-        // TODO => UPDATE NOTE DETAIL
+        // TODO => UPDATE ENTRY DETAIL
         
         self.save()
         checkRep()
@@ -804,37 +804,37 @@ class StateManager: NSObject {
         self.withCapitalization = value
         
         // Make sure new setting is reflecting visually
-        // TODO => UPDATE NOTE DETAIL
+        // TODO => UPDATE ENTRY DETAIL
         
         self.save()
         checkRep()
     }
     
-    func appendNote(note: Note) -> Int {
-        print("===== State Manager: Append Note  =====")
-        self.notes.insert(note, at: 0)
+    func appendEntry(entry: Entry) -> Int {
+        print("===== State Manager: Append Entry  =====")
+        self.entries.insert(entry, at: 0)
         
         self.save()
         checkRep()
         
-        return 0 // we add notes in reverse order
+        return 0 // we add entries in reverse order
     }
     
-    func setClip(clipUID: String, noteUID: String) {
+    func setClip(clipUID: String, entryUID: String) {
         print("===== State Manager: Set Clip =====")
         if self.clips[clipUID] != nil {
-            print("\tInserted note uid into existing clip set...")
-            self.clips[clipUID]?.insert(noteUID)
+            print("\tInserted entry uid into existing clip set...")
+            self.clips[clipUID]?.insert(entryUID)
         } else {
             print("\tCreated new clip set for clip uid...")
-            let noteSet: Set = [noteUID]
-            self.clips[clipUID] = noteSet
+            let entrySet: Set = [entryUID]
+            self.clips[clipUID] = entrySet
         }
     }
     
     func setSpeakerPitch(to pitch: Pitch?) {
 //        print("===== State Manager: Set Speaker Pitch =====")
-//        print("\tSet to: ", pitch?.note.string ?? "nil")
+//        print("\tSet to: ", pitch?.entry.string ?? "nil")
         self.speaker.setSpeakerPitch(to: pitch)
     }
     
@@ -900,31 +900,31 @@ class StateManager: NSObject {
     
     // MARK: - Helpers
     
-    func manageClipRemoval(note: Note) {
-        for clipUID in note.clips {
-            guard var clipNotes = self.clips[clipUID] else {
-                print("[Error] There was a problem removing note clips from state. Clip UID \(clipUID) doesn't exist.")
+    func manageClipRemoval(entry: Entry) {
+        for clipUID in entry.clips {
+            guard var clipEntries = self.clips[clipUID] else {
+                print("[Error] There was a problem removing entry clips from state. Clip UID \(clipUID) doesn't exist.")
                 return
             }
             
-            guard !clipNotes.contains(note.uid) else {
-                print("[Error] There was a problem removing note clips from state. Clip UID \(clipUID) isn't associated with note UID \(note.uid).")
+            guard !clipEntries.contains(entry.uid) else {
+                print("[Error] There was a problem removing entry clips from state. Clip UID \(clipUID) isn't associated with entry UID \(entry.uid).")
                 return
             }
             
-            if clipNotes.count > 1 {
-                // Remove noteUID from clipNotes
-                clipNotes.remove(note.uid)
+            if clipEntries.count > 1 {
+                // Remove entryUID from clipEntries
+                clipEntries.remove(entry.uid)
                 
-                // Set as new clipNotes for clipUID
-                self.clips[clipUID] = clipNotes
+                // Set as new clipEntries for clipUID
+                self.clips[clipUID] = clipEntries
             } else {
-                // noteUID is the last uid associated with clip
+                // entryUID is the last uid associated with clip
                 // remove clip from clips tracker
                 self.clips.removeValue(forKey: clipUID)
                 
                 // Delete Clip
-                let filePath = Utils.getFileURL(of: "\(note.filename)-\(clipUID)\(note.fileType)").absoluteString
+                let filePath = Utils.getFileURL(of: "\(entry.filename)-\(clipUID)\(entry.fileType)").absoluteString
                 Utils.deleteExistingFile(atPath: filePath)
             }
         }

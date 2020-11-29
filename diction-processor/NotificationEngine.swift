@@ -54,7 +54,7 @@ class NotificationEngine {
         result = result && ((self.isExhaustingNotificationQueue && !self.notificationQueue.isEmpty) || !self.isExhaustingNotificationQueue)
         
         if !result {
-            fatalError("===== [Error] Note Manager Representation Invariants were broken =====")
+            fatalError("===== [Error] Notification Engine Representation Invariants were broken =====")
         }
     }
     
@@ -275,7 +275,7 @@ class NotificationEngine {
                     print("\tAudio Message: \(audioMessage)")
                     // we don't run when !AVAudioSession.isHeadphonesConnected
                     // because we will will catch the words and process them
-                    let voice = Utils.getSynthesizerVoice(withGender: .female)
+                    let voice = Utils.getSynthesizerVoice(withRegister: .female)
 
                     let synthesizerItem = SynthesizerItem(
                         synthesizer: self!.speechSynthesis.speechSynthesizer,
@@ -336,7 +336,7 @@ class NotificationEngine {
             hapticEngine.error()
             
             let errorHandler: () -> Void  = {
-                let voice = Utils.getSynthesizerVoice(withGender: .female)
+                let voice = Utils.getSynthesizerVoice(withRegister: .female)
                 let synthesizerItem = SynthesizerItem(
                     synthesizer: self.speechSynthesis.speechSynthesizer,
                     text: text,

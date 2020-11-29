@@ -1,6 +1,6 @@
 public struct Pitch: Equatable {
   public typealias Offset = (
-    note: MusicNote,
+    note: Note,
     frequency: Double,
     percentage: Double,
     cents: Double
@@ -28,7 +28,7 @@ public struct Pitch: Equatable {
   public let wave: AcousticWave
   public let offsets: Offsets
 
-  public var note: MusicNote {
+  public var note: Note {
     return offsets.closest.note
   }
 

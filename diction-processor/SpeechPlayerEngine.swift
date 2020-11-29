@@ -24,28 +24,28 @@ class SpeechPlayerEngine: NSObject {
     weak var selectionCursor: SelectionCursor!
     weak var speechSynthesis: SpeechSynthesisEngine!
     weak var speechRecognition: SpeechRecognitionEngine!
-    weak var noteManager: NoteManager!
+    weak var entryManager: EntryManager!
     
     // MARK: - Audio Playback
     
-    /// Stores the current playback rate of note playback
+    /// Stores the current playback rate of entry playback
     var playbackRate: Float {
         return self.state._playbackRate
     }
     
-    /// Specifies whether note is currently playing
-    var isPlayingNote: Bool {
+    /// Specifies whether entry is currently playing
+    var isPlayingEntry: Bool {
         return player.isPlaying
     }
-    /// Specifies whether note is currently paused
-    private(set) var pausedPlayingNote = false
+    /// Specifies whether entry is currently paused
+    private(set) var pausedPlayingEntry = false
     
-    /// Stores a reference to the note's player object
+    /// Stores a reference to the entry's player object
     private(set) var player = AVPlayer()
     
-    /// Specifies the time value at which note playback should begin
+    /// Specifies the time value at which entry playback should begin
     private(set) var startPlaybackAt: CMTime?
-    /// Specifies the time value at which note playback should end
+    /// Specifies the time value at which entry playback should end
     private(set) var stopPlaybackAt: CMTime?
     /// Stores a reference to a timer that begins next iteration of looping player
     private(set) var playerLoopTimer: Timer?
@@ -55,20 +55,20 @@ class SpeechPlayerEngine: NSObject {
     private(set) var timerObserverToken: Any?
     /// Stores a reference to the playback observer that executes when playback is complete
     private(set) var completionObserverToken: Any?
-    /// Stores a reference to the last segment processed during note playback. Prevents repeat processing.
-    private(set) var previousBoundarySegment: NoteSegment?
+    /// Stores a reference to the last segment processed during entry playback. Prevents repeat processing.
+    private(set) var previousBoundarySegment: EntrySegment?
     
     /// Specifies whether playing external segments
     private(set) var isPlayingExternalSegments = false
     
     /// Stores segment range currently being played
-    private(set) var playbackSegments: [NoteSegment]? = nil
+    private(set) var playbackSegments: [EntrySegment]? = nil
     
     /// Stores segments currently being played
     
-    /// Stores handlers to be executed when note is played
+    /// Stores handlers to be executed when entry is played
     private(set) var onStartHandler: (() -> Void)?
-    /// Stores handlers to be executed when note is finished playing
+    /// Stores handlers to be executed when entry is finished playing
     private(set) var onFinishHandler: (() -> Void)?
 
     // MARK: - Initialization and Deinitialization
@@ -94,10 +94,10 @@ class SpeechPlayerEngine: NSObject {
         var result = true
         
         // playback elements should be set if we're playing segments
-        result = result && ((self.isPlayingNote && self.playbackSegments != nil && self.playbackSegments!.count > 0 && self.startPlaybackAt != nil && self.stopPlaybackAt != nil) || !self.isPlayingNote)
+        result = result && ((self.isPlayingEntry && self.playbackSegments != nil && self.playbackSegments!.count > 0 && self.startPlaybackAt != nil && self.stopPlaybackAt != nil) || !self.isPlayingEntry)
         
         if !result {
-            fatalError("===== [Error] Note Manager Representation Invariants were broken =====")
+            fatalError("===== [Error] Entry Manager Representation Invariants were broken =====")
         }
     }
     
@@ -116,8 +116,8 @@ class SpeechPlayerEngine: NSObject {
         // State
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteDeleted(notification:)),
-            name: NoteManager.onNoteDeleted,
+            selector: #selector(onEntryDeleted(notification:)),
+            name: EntryManager.onEntryDeleted,
             object: nil
         )
         
@@ -155,15 +155,15 @@ class SpeechPlayerEngine: NSObject {
         }
     }
     
-    @objc func onNoteDeleted(notification: Notification) {
-        print("===== Speech Player Engine: On Deleted Note =====")
+    @objc func onEntryDeleted(notification: Notification) {
+        print("===== Speech Player Engine: On Deleted Entry =====")
         self.stop(withFeedback: false)
         
         checkRep()
     }
     
     @objc func onChangedPlayerRate(notification: Notification) {
-        print("===== Speech Player Engine: On Changed Player Note =====")
+        print("===== Speech Player Engine: On Changed Player Entry =====")
         let rate = notification.userInfo!["rate"] as! Float
         let _ = self.setPlayerRate(rate: rate)
         
@@ -172,26 +172,26 @@ class SpeechPlayerEngine: NSObject {
     
     // MARK: - Methods
     
-    // Requires that the current note is set
+    // Requires that the current entry is set
     func play(
-        note: Note,
+        entry: Entry,
         from: CMTime? = nil,
         to: CMTime? = nil,
         onStartHandler: (() -> Void)? = nil,
         onFinishHandler: (() -> Void)? = nil
     ) {
-        print("===== Speech Player Engine: Play (using Note) =====")
+        print("===== Speech Player Engine: Play (using Entry) =====")
         
-        if note.noteSegments.count == 0 {
+        if entry.entrySegments.count == 0 {
             self.notifications.executeError(
-                text: "Note is empty.",
+                text: "Entry is empty.",
                 handler: onFinishHandler
             )
             return
         }
         
-        if self.pausedPlayingNote {
-            print("\tNote was paused. Resume playback")
+        if self.pausedPlayingEntry {
+            print("\tEntry was paused. Resume playback")
             // Play Sound
             if !self.speechRecognition.isListeningForSpeech && !self.selectionCursor.hasSelection {
                 // should not play if we have a selection
@@ -202,7 +202,7 @@ class SpeechPlayerEngine: NSObject {
                 self.onStartHandler = onStartHandler
             }
             
-            self.pausedPlayingNote = false
+            self.pausedPlayingEntry = false
             self.isPlayingExternalSegments = false
             
             if self.speechRecognition.isListeningForCommands && !AVAudioSession.isHeadphonesConnected {
@@ -228,7 +228,7 @@ class SpeechPlayerEngine: NSObject {
                 soundEngine.play()
             }
             
-            self.pausedPlayingNote = false
+            self.pausedPlayingEntry = false
             self.isPlayingExternalSegments = false
             
             if onStartHandler != nil {
@@ -240,13 +240,13 @@ class SpeechPlayerEngine: NSObject {
             }
             
             // Set Start and End Times
-            self.startPlaybackAt = from != nil ? from : note.startTime
-            self.stopPlaybackAt = to != nil ? to : note.endTime
-            self.playbackSegments = Utils.duplicateSegments(segments: note.noteSegments)
+            self.startPlaybackAt = from != nil ? from : entry.startTime
+            self.stopPlaybackAt = to != nil ? to : entry.endTime
+            self.playbackSegments = Utils.duplicateSegments(segments: entry.entrySegments)
 
             // Run Player
             let player = self.runPlayer(
-                note: note,
+                entry: entry,
                 startTime: self.startPlaybackAt!,
                 volume: Utils.playbackVolume
             )
@@ -297,7 +297,7 @@ class SpeechPlayerEngine: NSObject {
     }
     
     func play(
-        segments: [NoteSegment],
+        segments: [EntrySegment],
         onStartHandler: (() -> Void)? = nil,
         onFinishHandler: (() -> Void)? = nil
     ) {
@@ -324,7 +324,7 @@ class SpeechPlayerEngine: NSObject {
                 soundEngine.play()
             }
             
-            self.pausedPlayingNote = false
+            self.pausedPlayingEntry = false
             self.isPlayingExternalSegments = true
             
             if onStartHandler != nil {
@@ -348,7 +348,7 @@ class SpeechPlayerEngine: NSObject {
             )
             
             // Handle Feedback
-            if !self.noteManager.isWalkingNote && !self.noteManager.isRunningNote {
+            if !self.entryManager.isWalkingEntry && !self.entryManager.isRunningEntry {
                 self.notifications.executeFeedback(
                     visualMessage: "Play",
                     withHaptics: true
@@ -401,15 +401,15 @@ class SpeechPlayerEngine: NSObject {
         self.startPlaybackAt = nil
         self.stopPlaybackAt = nil
         self.playbackSegments = nil
-        self.pausedPlayingNote = false
+        self.pausedPlayingEntry = false
         self.isPlayingExternalSegments = false
         
-        if soundEngine.isProcessing && (!self.selectionCursor.hasSelection || self.noteManager.isWalkingNote && self.noteManager.isRunningNote) {
+        if soundEngine.isProcessing && (!self.selectionCursor.hasSelection || self.entryManager.isWalkingEntry && self.entryManager.isRunningEntry) {
             soundEngine.stopProcessing()
         }
         
         // Handle Feedback
-        if !self.noteManager.isWalkingNote && !self.noteManager.isRunningNote && !self.selectionCursor.hasSelection && withFeedback {
+        if !self.entryManager.isWalkingEntry && !self.entryManager.isRunningEntry && !self.selectionCursor.hasSelection && withFeedback {
             self.notifications.executeFeedback(
                 visualMessage: "Stop Playback",
                 withHaptics: true
@@ -433,7 +433,7 @@ class SpeechPlayerEngine: NSObject {
         print("===== Speech Player Engine: Skip =====")
         print("\tSkiping to: ", time.seconds)
         let currentSegment = self.getCurrentSegment()
-        if let _ = currentSegment, self.isPlayingNote {
+        if let _ = currentSegment, self.isPlayingEntry {
             self.player.seek(
                 to: time,
                 toleranceBefore: CMTime.zero,
@@ -449,7 +449,7 @@ class SpeechPlayerEngine: NSObject {
             if self.playbackSegments == nil {
                 // havent recorded anything
                 self.notifications.executeError(
-                    text: "Note not playing.",
+                    text: "Entry not playing.",
                     handler: handler
                 )
             }
@@ -462,7 +462,7 @@ class SpeechPlayerEngine: NSObject {
         print("===== Speech Player Engine: Pause =====")
         
         player.pause()
-        self.pausedPlayingNote = true
+        self.pausedPlayingEntry = true
         
         // Present Feedback
         if withFeedback {
@@ -497,7 +497,7 @@ class SpeechPlayerEngine: NSObject {
         print("===== Speech Player Engine: Set Playback Rate =====")
         print("Setting rate to: ", rate)
 
-        if self.isPlayingNote {
+        if self.isPlayingEntry {
             self.player.rate = rate
         }
         
@@ -506,18 +506,18 @@ class SpeechPlayerEngine: NSObject {
         checkRep()
     }
 
-    // sets relative to wpm of current note
+    // sets relative to wpm of current entry
     func setPlaybackRate(wpm: Float) {
         print("===== Speech Player Engine: Set Playback Rate =====")
         print("Setting rate to \(wpm)wpm")
-        guard let note = self.noteManager.currentNote else {
-            print("\t[Error] There was a problem setting playback rate. Unable to locate note.")
+        guard let entry = self.entryManager.currentEntry else {
+            print("\t[Error] There was a problem setting playback rate. Unable to locate entry.")
             return
         }
         
-        let rate = wpm / Float(note.avgSpeakingRate).rounded(toPlaces: Utils.DEFAULT_FIG_COUNT)
+        let rate = wpm / Float(entry.avgSpeakingRate).rounded(toPlaces: Utils.DEFAULT_FIG_COUNT)
 
-        if self.isPlayingNote {
+        if self.isPlayingEntry {
             player.rate = rate
         }
         
@@ -539,24 +539,24 @@ class SpeechPlayerEngine: NSObject {
         // Set Rate
         if rate > 1.0 {
             // Play fast forward
-            print("\tWill play note in fast forward at rate: \(rate)")
+            print("\tWill play entry in fast forward at rate: \(rate)")
             self.player.rate = rate
         } else if rate > 0.0 && rate < 1.0 {
             // Play slow forward
-            print("\tWill play note in slow forward at rate: \(rate)")
+            print("\tWill play entry in slow forward at rate: \(rate)")
             self.player.rate = rate
         } else if rate < 0.0 && rate > -1.0 {
             // Play slow reverse
-            print("\tWill play note in slow reverse at rate: \(rate)")
+            print("\tWill play entry in slow reverse at rate: \(rate)")
             self.player.rate = rate
         } else if rate < -1.0 {
             // Play fast reverse
-            print("\tWill play note in fast reverse at rate: \(rate)")
+            print("\tWill play entry in fast reverse at rate: \(rate)")
             self.player.rate = rate
         } else {
             // Play as normal if rate = 1.0
             // Stop if rate = 0.0
-            print("\tWill play note at rate: \(rate)")
+            print("\tWill play entry at rate: \(rate)")
             self.player.rate = rate
         }
         
@@ -571,7 +571,7 @@ class SpeechPlayerEngine: NSObject {
         // print("===== Set Player Volume =====")
         
         // Set volume
-        // print("\tWill play note at volume: \(volume)")
+        // print("\tWill play entry at volume: \(volume)")
         player.volume = volume
         
         checkRep()
@@ -583,13 +583,13 @@ class SpeechPlayerEngine: NSObject {
         return self.player.currentTime()
     }
     
-    func getCurrentSegment() -> NoteSegment? {
+    func getCurrentSegment() -> EntrySegment? {
         let currentTime = self.player.currentTime()
         return Utils.getSegment(
             forTrackTime: currentTime,
             segments: self.playbackSegments,
-            note: self.noteManager.currentNote,
-            isPlayingNote: self.isPlayingNote
+            entry: self.entryManager.currentEntry,
+            isPlayingEntry: self.isPlayingEntry
         )
     }
     
@@ -652,13 +652,13 @@ class SpeechPlayerEngine: NSObject {
     // MARK: - Helpers
     
     func runPlayer(
-        note: Note,
+        entry: Entry,
         startTime: CMTime,
         volume: Float
     ) -> AVPlayer? {
-        print("===== Run Player: Note =====")
+        print("===== Run Player: Entry =====")
         return self.handleRunPlayer(
-            note: note,
+            entry: entry,
             startTime: startTime,
             volume: volume
         )
@@ -679,7 +679,7 @@ class SpeechPlayerEngine: NSObject {
     
     func handleRunPlayer(
         composition: AVMutableComposition? = nil,
-        note: Note? = nil,
+        entry: Entry? = nil,
         startTime: CMTime,
         volume: Float
     ) -> AVPlayer? {
@@ -706,8 +706,8 @@ class SpeechPlayerEngine: NSObject {
             self.setPlayerVolume(player: player, volume: volume)
             
             return player
-        } else if let note = note, self.player.currentItem == nil, let snapshot = note.copy() as? AVAsset {
-            print("\tInitiating AVPlayer with Note...")
+        } else if let entry = entry, self.player.currentItem == nil, let snapshot = entry.copy() as? AVAsset {
+            print("\tInitiating AVPlayer with Entry...")
             let assetKeys = [
                    "playable",
                    "duration",
@@ -740,7 +740,7 @@ class SpeechPlayerEngine: NSObject {
         return nil
     }
     
-    func handleStartPlaying() -> NoteSegment? {
+    func handleStartPlaying() -> EntrySegment? {
         let timeScale = CMTimeScale(NSEC_PER_SEC)
         let time = CMTime(seconds: 1, preferredTimescale: timeScale)
 
@@ -772,8 +772,8 @@ class SpeechPlayerEngine: NSObject {
         print("\tPlaying from: \(self.startPlaybackAt!.seconds)")
         self.player.seek(to: self.startPlaybackAt!)
         self.player.play()
-        if (!self.noteManager.isWalkingNote || self.noteManager.pausedWalkingNote) &&
-            (!self.noteManager.isRunningNote || self.noteManager.pausedRunningNote)
+        if (!self.entryManager.isWalkingEntry || self.entryManager.pausedWalkingEntry) &&
+            (!self.entryManager.isRunningEntry || self.entryManager.pausedRunningEntry)
         {
             self.handleBoundaryTimeObserver(start: true)
         }
@@ -784,8 +784,8 @@ class SpeechPlayerEngine: NSObject {
                 timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
             ),
             segments: self.playbackSegments,
-            note: self.noteManager.currentNote,
-            isPlayingNote: self.isPlayingNote
+            entry: self.entryManager.currentEntry,
+            isPlayingEntry: self.isPlayingEntry
         )
         let rate = firstPlayableSegment?.getRate() ?? self.playbackRate
         let rateWasSet = self.setPlayerRate(rate: rate)
@@ -819,7 +819,7 @@ class SpeechPlayerEngine: NSObject {
             print("\t[Error] Playback Segments are not set. Abort Method.")
             return
         }
-        let seekNextSegmentHandler: (_ segment: NoteSegment, _ conditional: Bool) -> Void = { segment, conditional in
+        let seekNextSegmentHandler: (_ segment: EntrySegment, _ conditional: Bool) -> Void = { segment, conditional in
             print("\tSeek next segment...")
             let nextSegmentIndex = Utils.getSegmentIndex(
                 segment: segment,
@@ -863,7 +863,7 @@ class SpeechPlayerEngine: NSObject {
                 let _ = self.setPlayerRate(rate: segment.getRate() * self.playbackRate)
             }
             
-            var userInfo: [String: NoteSegment] = ["previous": self.previousBoundarySegment!]
+            var userInfo: [String: EntrySegment] = ["previous": self.previousBoundarySegment!]
             if let nextSegmentIndex = nextSegmentIndex {
                 userInfo["next"] = playbackSegments[nextSegmentIndex]
             }
@@ -875,7 +875,7 @@ class SpeechPlayerEngine: NSObject {
             )
         }
         
-        let seekEndPlaybackHandler: (_ segment: NoteSegment, _ conditional: Bool) -> Void = { segment, conditional in
+        let seekEndPlaybackHandler: (_ segment: EntrySegment, _ conditional: Bool) -> Void = { segment, conditional in
             print("\tSeek end playback...")
             if conditional && (
                 (self.state.withSkipPunctuation && segment.isPunctuation()) ||
@@ -913,7 +913,7 @@ class SpeechPlayerEngine: NSObject {
                 let _ = self.setPlayerRate(rate: segment.getRate() * self.playbackRate)
             }
             
-            var userInfo: [String: NoteSegment] = [:]
+            var userInfo: [String: EntrySegment] = [:]
             if let previousBoundarySegment = self.previousBoundarySegment {
                 userInfo["previous"] = previousBoundarySegment
             }
@@ -926,12 +926,12 @@ class SpeechPlayerEngine: NSObject {
         }
         
         let currentSegment = self.getCurrentSegment()
-        if  let note = self.noteManager.currentNote,
+        if  let entry = self.entryManager.currentEntry,
             let segment = Utils.getSegment(
                 forTrackTime: self.startPlaybackAt!,
                 segments: self.playbackSegments,
-                note: note,
-                isPlayingNote: self.isPlayingNote,
+                entry: entry,
+                isPlayingEntry: self.isPlayingEntry,
                 isWord: self.state.withOmitSilences
             ),
             start
@@ -956,7 +956,7 @@ class SpeechPlayerEngine: NSObject {
                 isWord: true
             ) == nil
         ) {
-            // last segment of note
+            // last segment of entry
             seekEndPlaybackHandler(segment, true)
         } else if let segment = currentSegment {
             // We do an equality check with the previous boundary to make sure we are strictly moving
@@ -978,7 +978,7 @@ class SpeechPlayerEngine: NSObject {
             // Turn down volume to not hear stutters from voice command word
             self.setPlayerVolume(player: self.player, volume: 0)
             
-            var userInfo: [String: NoteSegment] = [:]
+            var userInfo: [String: EntrySegment] = [:]
             if let previousBoundarySegment = self.previousBoundarySegment {
                 userInfo["previous"] = previousBoundarySegment
             }
@@ -994,7 +994,7 @@ class SpeechPlayerEngine: NSObject {
     func handleCompletionObserver() {
         print("===== Speech Player Engine: Handle Completion Observer =====")
 
-        if let stopPlaybackAt = self.stopPlaybackAt, let startPlaybackAt = self.startPlaybackAt, self.selectionCursor.hasSelection && self.selectionCursor.isLoopingSelection && !self.noteManager.isWalkingNote && !self.noteManager.isRunningNote {
+        if let stopPlaybackAt = self.stopPlaybackAt, let startPlaybackAt = self.startPlaybackAt, self.selectionCursor.hasSelection && self.selectionCursor.isLoopingSelection && !self.entryManager.isWalkingEntry && !self.entryManager.isRunningEntry {
             // Stop Playing
             self.stop()
             
@@ -1003,7 +1003,7 @@ class SpeechPlayerEngine: NSObject {
                 self.selectionCursor.playSelection(loop: true)
             }
         } else {
-            print("\tStop note.")
+            print("\tStop entry.")
             // Stop Playing
             self.stop()
             
@@ -1022,11 +1022,11 @@ class SpeechPlayerEngine: NSObject {
                         userInfo: [:]
                     )
                 }
-            } else if let note = self.noteManager.currentNote, self.state.appActivated && self.speechRecognition.pausedListeningForSpeech && !AVAudioSession.isHeadphonesConnected && !self.noteManager.isRunningNote && !self.noteManager.isWalkingNote {
+            } else if let entry = self.entryManager.currentEntry, self.state.appActivated && self.speechRecognition.pausedListeningForSpeech && !AVAudioSession.isHeadphonesConnected && !self.entryManager.isRunningEntry && !self.entryManager.isWalkingEntry {
                 print("\tStart listening for speech again.")
                 // when headphones are off we don't listen for speech while echoing
                 // but on completion we turn it back on
-                note.speechRecognition.startListeningForSpeech(
+                entry.speechRecognition.startListeningForSpeech(
                     onStartHandler: {
                         NotificationCenter.default.post(
                             name: SpeechSynthesisEngine.onRequestToUpdateView,
@@ -1078,7 +1078,7 @@ class SpeechPlayerEngine: NSObject {
     ){
         print("===== Speech Player Engine: Observe Value =====")
         print("Key Path: ", keyPath ?? "nil")
-//        guard self.noteBuffer.count == 0 else {
+//        guard self.entryBuffer.count == 0 else {
 //            print("===== [Error] There was a problem inserting passage. Buffer was not empty =====")
 //        }
 
@@ -1095,10 +1095,10 @@ class SpeechPlayerEngine: NSObject {
             // Switch over the status
             switch status {
             case .readyToPlay:
-                print("===== Playing Note =====")
+                print("===== Playing Entry =====")
                 let firstPlayableSegment = self.handleStartPlaying()
                 
-                var userInfo: [String: NoteSegment] = [:]
+                var userInfo: [String: EntrySegment] = [:]
                 if let firstSegment = firstPlayableSegment {
                     userInfo["next"] = firstSegment
                 }

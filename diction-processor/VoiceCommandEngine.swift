@@ -15,29 +15,23 @@ public final class VoiceCommandEngine: NSObject {
     static let shared = VoiceCommandEngine()
     static let onProcessedVoiceCommand = Notification.Name(Notifications.onProcessedVoiceCommand.rawValue)
     static let voiceCommands = [
-        "play note",
-        "pause note",
-        "create note",
-        "new note",
-        "start note",
-        "start a note",
-        "start not",
-        "start notes",
+        "play entry",
+        "pause entry",
+        "create entry",
+        "new entry",
+        "start entry",
+        "start an entry",
         "starting it",
         "i started it",
         "stagnant",
-        "starts not",
-        "stocks not",
-        "stock note",
-        "scott's not",
-        "scott note",
-        "scott not",
+        "stock entry",
+        "scott entry",
         "scott mode",
         "starting out",
-        "stop note",
-        "resume note",
-        "continue note",
-        "echo note",
+        "stop entry",
+        "resume entry",
+        "continue entry",
+        "echo entry",
         "play echo",
         "start echo",
         "pause echo",
@@ -97,7 +91,7 @@ public final class VoiceCommandEngine: NSObject {
         "playback rate up",
         "playback rate down",
         "delete",
-        "delete note",
+        "delete entry",
         "delete selection",
         "update",
         "replace",
@@ -120,14 +114,14 @@ public final class VoiceCommandEngine: NSObject {
         "run selection",
         "walk",
         "walk selection",
-        "run note",
-        "walk note",
+        "run entry",
+        "walk entry",
         "pause playback",
         "resume playback",
         "continue playback",
         "resume echo",
         "continue echo",
-        "edit note",
+        "edit entry",
         "play last commit",
         "play last comment",
         "echo last commit",
@@ -153,12 +147,8 @@ public final class VoiceCommandEngine: NSObject {
         "skip forward",
         "skip ahead",
         "stop playback",
-        "export note",
-        "export notes",
-        "export not",
-        "exports note",
-        "exports notes",
-        "exports not",
+        "export entry",
+        "exports entry",
         "accept",
         "except",
         "redo",
@@ -298,41 +288,25 @@ public final class VoiceCommandEngine: NSObject {
     ]
 
     private let voiceCommands: Set = [
-        "play note",
-        "play not",
-        "play notes",
-        "pause note",
-        "pause not",
-        "pause notes",
-        "create note",
-        "new note",
-        "start note",
-        "start a note",
-        "start not",
-        "start notes",
+        "play entry",
+        "pause entry",
+        "create entry",
+        "new entry",
+        "start entry",
+        "start an entry",
         "starting it",
         "i started it",
         "stagnant",
-        "starts not",
-        "stocks not",
-        "stock note",
-        "scott note",
-        "scott not",
+        "stock entry",
+        "scott entry",
         "scott mode",
-        "scott's not",
         "starting out",
-        "stop note",
-        "stop not",
-        "stop notes",
-        "resume note",
-        "resume not",
-        "resume notes",
-        "continue note",
-        "delete note",
-        "echo note",
-        "echo notes",
-        "ecko note",
-        "ecko notes",
+        "stop entry",
+        "resume entry",
+        "continue entry",
+        "delete entry",
+        "echo entry",
+        "ecko entry",
         "play ecko",
         "play echo",
         "start echo",
@@ -446,12 +420,8 @@ public final class VoiceCommandEngine: NSObject {
         "run selection",
         "walk",
         "walk selection",
-        "run note",
-        "run notes",
-        "run not",
-        "walk note",
-        "walk notes",
-        "walk not",
+        "run entry",
+        "walk entry",
         "pause playback",
         "resume playback",
         "continue playback",
@@ -459,7 +429,7 @@ public final class VoiceCommandEngine: NSObject {
         "resume ecko",
         "continue echo",
         "continue ecko",
-        "edit note",
+        "edit entry",
         "play commit",
         "play comment",
         "echo commit",
@@ -479,12 +449,8 @@ public final class VoiceCommandEngine: NSObject {
         "skip forward",
         "skip ahead",
         "stop playback",
-        "export note",
-        "export notes",
-        "export not",
-        "exports note",
-        "exports notes",
-        "exports not",
+        "export entry",
+        "exports entry",
         "accept",
         "except",
         "redo",
@@ -628,41 +594,25 @@ public final class VoiceCommandEngine: NSObject {
     ] // Make sure to add in contextual strings as well
     
     let voiceCommandMapping: [String : String] = [
-        "play note": "play note",
-        "play not": "play note",
-        "play notes": "play note",
-        "pause note": "pause note",
-        "pause not": "pause note",
-        "pause notes": "pause note",
-        "new note": "create note",
-        "create note": "create note",
-        "start note": "start note",
-        "stagnant": "start note",
-        "starting it": "start note",
-        "i started it": "start note",
-        "start a note": "start note",
-        "start not": "start note",
-        "start notes": "start note",
-        "stock note": "start note",
-        "scott note": "start note",
-        "scott not": "start note",
-        "scott mode": "start note",
-        "scott's not": "start note",
-        "starting out": "start note",
-        "starts not": "start note",
-        "stocks not": "start note",
-        "stop note": "stop note",
-        "stop not": "stop note",
-        "stop notes": "stop note",
-        "resume note": "resume note",
-        "resume not": "resume note",
-        "resume notes": "resume note",
-        "continue note": "resume note",
-        "delete note": "delete note",
-        "echo note": "echo note",
-        "echo notes": "echo note",
-        "ecko note": "echo note",
-        "ecko notes": "echo note",
+        "play entry": "play entry",
+        "pause entry": "pause entry",
+        "new entry": "create entry",
+        "create entry": "create entry",
+        "start entry": "start entry",
+        "stagnant": "start entry",
+        "starting it": "start entry",
+        "i started it": "start entry",
+        "start an entry": "start entry",
+        "stock entry": "start entry",
+        "scott entry": "start entry",
+        "scott mode": "start entry",
+        "starting out": "start entry",
+        "stop entry": "stop entry",
+        "resume entry": "resume entry",
+        "continue entry": "resume entry",
+        "delete entry": "delete entry",
+        "echo entry": "echo entry",
+        "ecko entry": "echo entry",
         "play ecko": "play echo",
         "play echo": "play echo",
         "start echo": "start echo",
@@ -776,12 +726,8 @@ public final class VoiceCommandEngine: NSObject {
         "run selection": "run selection",
         "walk": "walk selection",
         "walk selection": "walk selection",
-        "run note": "run note",
-        "run not": "run note",
-        "run notes": "run note",
-        "walk note": "walk note",
-        "walk not": "walk note",
-        "walk notes": "walk note",
+        "run entry": "run entry",
+        "walk entry": "walk entry",
         "pause playback": "pause playback",
         "resume playback": "resume playback",
         "continue playback": "resume playback",
@@ -789,7 +735,7 @@ public final class VoiceCommandEngine: NSObject {
         "resume ecko": "resume echo",
         "continue echo": "resume echo",
         "continue ecko": "resume echo",
-        "edit note": "edit note",
+        "edit entry": "edit entry",
         "play commit": "play commit",
         "play comment": "play commit",
         "echo commit": "echo commit",
@@ -805,12 +751,8 @@ public final class VoiceCommandEngine: NSObject {
         "skip forward": "skip forward",
         "skip ahead": "skip forward",
         "stop playback": "stop playback",
-        "export note": "export note",
-        "export not": "export note",
-        "export notes": "export note",
-        "exports note": "export note",
-        "exports not": "export note",
-        "exports notes": "export note",
+        "export entry": "export entry",
+        "exports entry": "export entry",
         "accept": "accept update selection",
         "except": "accept update selection",
         "accept update selection": "accept update selection",
@@ -1094,16 +1036,16 @@ public final class VoiceCommandEngine: NSObject {
         return false
     }
     
-    func isNoteVoiceCommand(command: String) -> Bool {
+    func isEntryVoiceCommand(command: String) -> Bool {
         if (
-            // Note Manager
-            command == "play note" ||
-            command == "pause note" ||
-            command == "start note" ||
-            command == "create note" ||
-            command == "stop note" ||
-            command == "resume note" ||
-            command == "echo note" ||
+            // Entry Manager
+            command == "play entry" ||
+            command == "pause entry" ||
+            command == "start entry" ||
+            command == "create entry" ||
+            command == "stop entry" ||
+            command == "resume entry" ||
+            command == "echo entry" ||
             command == "pause echo" ||
             command == "stop echo" ||
             command == "play previous sentence" ||
@@ -1116,12 +1058,12 @@ public final class VoiceCommandEngine: NSObject {
             command == "increase selection rate" ||
             command == "decrease selection rate" ||
             command == "export" ||
-            command == "export note" ||
+            command == "export entry" ||
             command == "export selection" ||
             command == "pause playback" ||
             command == "resume playback" ||
             command == "resume echo" ||
-            command == "edit note" ||
+            command == "edit entry" ||
             command == "play commit" ||
             command == "echo commit" ||
             command == "select commit" ||
@@ -1144,13 +1086,13 @@ public final class VoiceCommandEngine: NSObject {
             command == "paste clipboard" ||
             command == "expand selection" ||
             command == "reduce selection" ||
-            command == "delete note" ||
+            command == "delete entry" ||
             command == "play selection" ||
             command == "echo selection" ||
             command == "run selection" ||
             command == "walk selection" ||
-            command == "walk note" ||
-            command == "run note" ||
+            command == "walk entry" ||
+            command == "run entry" ||
             command == "next element" ||
             command == "previous element" ||
             command == "echo" ||
@@ -1172,15 +1114,15 @@ public final class VoiceCommandEngine: NSObject {
         return false
     }
     
-    func isNoteManagerCommand(command: String) -> Bool {
+    func isEntryManagerCommand(command: String) -> Bool {
         if (
-            command == "play note" ||
-            command == "pause note" ||
-            command == "start note" ||
-            command == "create note" ||
-            command == "stop note" ||
-            command == "resume note" ||
-            command == "echo note" ||
+            command == "play entry" ||
+            command == "pause entry" ||
+            command == "start entry" ||
+            command == "create entry" ||
+            command == "stop entry" ||
+            command == "resume entry" ||
+            command == "echo entry" ||
             command == "pause echo" ||
             command == "stop echo" ||
             command == "play previous sentence" ||
@@ -1193,12 +1135,12 @@ public final class VoiceCommandEngine: NSObject {
             command == "increase selection rate" ||
             command == "decrease selection rate" ||
             command == "export" ||
-            command == "export note" ||
+            command == "export entry" ||
             command == "export selection" ||
             command == "pause playback" ||
             command == "resume playback" ||
             command == "resume echo" ||
-            command == "edit note" ||
+            command == "edit entry" ||
             command == "play commit" ||
             command == "echo commit" ||
             command == "select commit" ||
@@ -1221,13 +1163,13 @@ public final class VoiceCommandEngine: NSObject {
             command == "paste clipboard" ||
             command == "expand selection" ||
             command == "reduce selection" ||
-            command == "delete note" ||
+            command == "delete entry" ||
             command == "play selection" ||
             command == "echo selection" ||
             command == "run selection" ||
             command == "walk selection" ||
-            command == "walk note" ||
-            command == "run note" ||
+            command == "walk entry" ||
+            command == "run entry" ||
             command == "next element" ||
             command == "previous element" ||
             command == "echo" ||
@@ -1325,7 +1267,7 @@ public final class VoiceCommandEngine: NSObject {
         print("\tVoice Command: \(command)")
         print("\tUtterance: \"\(utterance)\"")
 
-        if self.isNoteManagerCommand(command: command) ||
+        if self.isEntryManagerCommand(command: command) ||
             self.isStateCommand(command: command) ||
             self.isSpeechPlayerCommand(command: command) ||
             self.isSpeechSynthesisCommand(command: command) ||

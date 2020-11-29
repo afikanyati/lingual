@@ -1,5 +1,5 @@
 //
-//  NoteTrackType.swift
+//  EntryTrackType.swift
 //  diction-processor
 //
 //  Created by Afika Nyati on 8/20/20.
@@ -8,7 +8,7 @@
 
 import Foundation
 
-enum NoteTrackType {
+enum EntryTrackType {
     case committed
     case buffer
     case other

@@ -21,10 +21,10 @@ class DetailViewController: UIViewController, SegueProtocol {
     // MARK: - Outlets and Views
     
     // ===== Menu Bar =====
-    @IBOutlet weak var startNoteButton: UIView?
-    @IBOutlet weak var editNoteButton: UIView?
-    @IBOutlet weak var resumeNoteButton: UIView?
-    @IBOutlet weak var stopListeningNoteButton: UIView?
+    @IBOutlet weak var startEntryButton: UIView?
+    @IBOutlet weak var editEntryButton: UIView?
+    @IBOutlet weak var resumeEntryButton: UIView?
+    @IBOutlet weak var stopListeningEntryButton: UIView?
     @IBOutlet weak var playButton: UIView?
     @IBOutlet weak var stopPlayingButton: UIView?
     @IBOutlet weak var echoButton: UIView?
@@ -110,15 +110,15 @@ class DetailViewController: UIViewController, SegueProtocol {
     var notifications: NotificationEngine!
     var speechPlayer: SpeechPlayerEngine!
     var selectionCursor: SelectionCursor!
-    var noteManager: NoteManager!
+    var entryManager: EntryManager!
     var uiManager: UIManager!
     override var undoManager: UndoManager {
-        return self.noteManager.undoManager
+        return self.entryManager.undoManager
     }
     
     // MARK: - ViewController References
     weak var viewController: ViewController?
-    weak var noteTableViewController: NoteTableViewController?
+    weak var entryTableViewController: EntryTableViewController?
     
     // MARK: - General Properties
     var sliderIsVisible = false
@@ -231,18 +231,18 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
 
         switch identifier {
-        case .moveFromDetailToNoteTable:
-            print(">>>>> Segue from DetailViewController to NoteTableViewController >>>>>")
-            if let noteTableViewController = segue.destination as? NoteTableViewController {
-                noteTableViewController.state = self.state
-                noteTableViewController.speechRecognition = self.speechRecognition
-                noteTableViewController.speechSynthesis = self.speechSynthesis
-                noteTableViewController.pitchRecognition = self.pitchRecognition
-                noteTableViewController.notifications = self.notifications
-                noteTableViewController.speechPlayer = self.speechPlayer
-                noteTableViewController.selectionCursor = self.selectionCursor
-                noteTableViewController.noteManager = self.noteManager
-                noteTableViewController.uiManager = self.uiManager
+        case .moveFromDetailToEntryTable:
+            print(">>>>> Segue from DetailViewController to EntryTableViewController >>>>>")
+            if let entryTableViewController = segue.destination as? EntryTableViewController {
+                entryTableViewController.state = self.state
+                entryTableViewController.speechRecognition = self.speechRecognition
+                entryTableViewController.speechSynthesis = self.speechSynthesis
+                entryTableViewController.pitchRecognition = self.pitchRecognition
+                entryTableViewController.notifications = self.notifications
+                entryTableViewController.speechPlayer = self.speechPlayer
+                entryTableViewController.selectionCursor = self.selectionCursor
+                entryTableViewController.entryManager = self.entryManager
+                entryTableViewController.uiManager = self.uiManager
             }
             self.speechRecognition.activateListeningIndicator(
                 withRecording: self.speechRecognition.isListeningForSpeech,
@@ -252,14 +252,14 @@ class DetailViewController: UIViewController, SegueProtocol {
             // Remove textView and cursor from selectionCursor
             self.selectionCursor.setTextView()
             self.selectionCursor.setCursorView()
-        case .moveFromSleepToNoteTable:
-            print (">>>>> [Invalid Segue within DetailViewController] from ViewControlller to NoteTableViewController >>>>>")
+        case .moveFromSleepToEntryTable:
+            print (">>>>> [Invalid Segue within DetailViewController] from ViewControlller to EntryTableViewController >>>>>")
         case .moveFromSleepToDetail:
             print (">>>>> [Invalid Segue within DetailViewController] from ViewControlller to DetailViewController >>>>>")
-        case .moveFromNoteTableToDetail:
-            print (">>>>> [Invalid Segue within DetailViewController] from NoteTableViewControlller to DetailViewController >>>>>")
-        case .moveFromNoteTableToSleep:
-            print (">>>>> [Invalid Segue within DetailViewController] from NoteTableViewControlller to ViewController >>>>>")
+        case .moveFromEntryTableToDetail:
+            print (">>>>> [Invalid Segue within DetailViewController] from EntryTableViewControlller to DetailViewController >>>>>")
+        case .moveFromEntryTableToSleep:
+            print (">>>>> [Invalid Segue within DetailViewController] from EntryTableViewControlller to ViewController >>>>>")
         case .noIdentifier:
             print (">>>>> [Error] No Segue Identifier in ViewController >>>>>")
         }
@@ -292,17 +292,17 @@ class DetailViewController: UIViewController, SegueProtocol {
             object: nil
         )
         
-        // Observe NoteTableView
+        // Observe EntryTableView
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteTableViewDidLoad(notification:)),
-            name: NoteTableViewController.onDidLoad,
+            selector: #selector(onEntryTableViewDidLoad(notification:)),
+            name: EntryTableViewController.onDidLoad,
             object: nil
         )
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteTableViewWillDisappear(notification:)),
-            name: NoteTableViewController.onWillDisappear,
+            selector: #selector(onEntryTableViewWillDisappear(notification:)),
+            name: EntryTableViewController.onWillDisappear,
             object: nil
         )
         
@@ -394,24 +394,24 @@ class DetailViewController: UIViewController, SegueProtocol {
             object: nil
         )
         
-        // Observe Note
+        // Observe Entry
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteListenUpdate(notification:)),
-            name: Note.onNoteListenUpdate,
+            selector: #selector(onEntryListenUpdate(notification:)),
+            name: Entry.onEntryListenUpdate,
             object: nil
         )
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteListenStop(notification:)),
-            name: Note.onNoteListenStop,
+            selector: #selector(onEntryListenStop(notification:)),
+            name: Entry.onEntryListenStop,
             object: nil
         )
         
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteComplete(notification:)),
-            name: Note.onNoteComplete,
+            selector: #selector(onEntryComplete(notification:)),
+            name: Entry.onEntryComplete,
             object: nil
         )
         
@@ -461,23 +461,23 @@ class DetailViewController: UIViewController, SegueProtocol {
             object: nil
         )
         
-        // NoteManager
+        // EntryManager
         notificationCenter.addObserver(
             self,
-            selector: #selector(onExecuteNoteAction(notification:)),
-            name: NoteManager.onExecuteNoteAction,
+            selector: #selector(onExecuteEntryAction(notification:)),
+            name: EntryManager.onExecuteEntryAction,
             object: nil
         )
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteAudioExported(notification:)),
-            name: NoteManager.onNoteAudioExported,
+            selector: #selector(onEntryAudioExported(notification:)),
+            name: EntryManager.onEntryAudioExported,
             object: nil
         )
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteDeleted(notification:)),
-            name: NoteManager.onNoteDeleted,
+            selector: #selector(onEntryDeleted(notification:)),
+            name: EntryManager.onEntryDeleted,
             object: nil
         )
         
@@ -493,7 +493,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         notificationCenter.addObserver(
             self,
             selector: #selector(onUndoManagerChange(notification:)),
-            name: NoteManager.onUndoManagerChange,
+            name: EntryManager.onUndoManagerChange,
             object: nil
         )
     }
@@ -503,9 +503,9 @@ class DetailViewController: UIViewController, SegueProtocol {
         self.viewController = storyboard?.instantiateViewController(withIdentifier: "ViewController") as? ViewController
     }
     
-    @objc func onNoteTableViewDidLoad(notification: Notification) {
-        print("===== Detail View Controller: On Note Table View Did Load =====")
-        self.noteTableViewController = storyboard?.instantiateViewController(withIdentifier: "NoteTableViewController") as? NoteTableViewController
+    @objc func onEntryTableViewDidLoad(notification: Notification) {
+        print("===== Detail View Controller: On Entry Table View Did Load =====")
+        self.entryTableViewController = storyboard?.instantiateViewController(withIdentifier: "EntryTableViewController") as? EntryTableViewController
     }
     
     @objc func onViewWillDisappear(notification: Notification) {
@@ -513,17 +513,17 @@ class DetailViewController: UIViewController, SegueProtocol {
         self.viewController = nil
     }
     
-    @objc func onNoteTableViewWillDisappear(notification: Notification) {
-        print("===== Detail View Controller: On Note Table View Will Disappear =====")
-        self.noteTableViewController = nil
+    @objc func onEntryTableViewWillDisappear(notification: Notification) {
+        print("===== Detail View Controller: On Entry Table View Will Disappear =====")
+        self.entryTableViewController = nil
     }
     
     @objc func appMovedToBackground() {
         print("===== Detail View Controller: App Moved to Background =====")
         DispatchQueue.main.async { [weak self] in
-            // keep recording outside of app if note started
+            // keep recording outside of app if entry started
             if !self!.speechRecognition.isListeningForSpeech {
-                self?.performSegue(withIdentifier: Segues.moveFromDetailToNoteTable.rawValue, sender: nil)
+                self?.performSegue(withIdentifier: Segues.moveFromDetailToEntryTable.rawValue, sender: nil)
             }
             
             self?.setCursorVisibility(as: false)
@@ -561,8 +561,8 @@ class DetailViewController: UIViewController, SegueProtocol {
 
         DispatchQueue.main.async { [weak self] in
             let highlightRange = notification.userInfo!["highlightRange"] as! NSRange
-            if let note = self?.noteManager.currentNote {
-                self?.updateUIText(text: note.getText(), highlightRange: highlightRange, transformations: note.transformations)
+            if let entry = self?.entryManager.currentEntry {
+                self?.updateUIText(text: entry.getText(), highlightRange: highlightRange, transformations: entry.transformations)
             }
             
             self?.refreshView()
@@ -573,8 +573,8 @@ class DetailViewController: UIViewController, SegueProtocol {
         print("===== Detail View Controller: On Echo Finish =====")
         
         DispatchQueue.main.async { [weak self] in
-            if let note = self?.noteManager.currentNote {
-                self?.updateUIText(text: note.getText(), transformations: note.transformations)
+            if let entry = self?.entryManager.currentEntry {
+                self?.updateUIText(text: entry.getText(), transformations: entry.transformations)
             }
 
             self?.refreshView()
@@ -585,8 +585,8 @@ class DetailViewController: UIViewController, SegueProtocol {
         print("===== Detail View Controller: On Request To Update View =====")
         
         DispatchQueue.main.async { [weak self] in
-            if let note = self?.noteManager.currentNote {
-                self?.updateUIText(text: note.getText(), transformations: note.transformations)
+            if let entry = self?.entryManager.currentEntry {
+                self?.updateUIText(text: entry.getText(), transformations: entry.transformations)
             }
 
             self?.refreshView()
@@ -596,7 +596,7 @@ class DetailViewController: UIViewController, SegueProtocol {
     @objc func onStartedListeningForWakePhrase(notification: Notification) {
         print("===== View Controller: On Started Listening For Wake Phrase =====")
         Utils.onStartedListeningForWakePhrase(
-            withBackToNotesButton: true,
+            withBackToEntriesButton: true,
             notification: notification,
             speechRecognition: self.speechRecognition
         )
@@ -605,7 +605,7 @@ class DetailViewController: UIViewController, SegueProtocol {
     @objc func onStartedListeningForCommands(notification: Notification) {
         print("===== View Controller: On Started Listening For Commands =====")
         Utils.onStartedListeningForCommands(
-            withBackToNotesButton: true,
+            withBackToEntriesButton: true,
             notification: notification,
             speechRecognition: self.speechRecognition
         )
@@ -621,7 +621,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         DispatchQueue.main.async { [weak self] in
             let navigationController = Utils.getNavigationController()
             if !self!.speechRecognition.isListeningForSpeech {
-                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getDeleteNoteButton()]
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getDeleteEntryButton()]
             } else {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [] // remove delete button when listening for speech
             }
@@ -631,7 +631,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
         
         Utils.onStartedListeningForSpeech(
-            withBackToNotesButton: true,
+            withBackToEntriesButton: true,
             delayStartRecording: 3,
             notification: notification,
             speechRecognition: self.speechRecognition,
@@ -649,7 +649,7 @@ class DetailViewController: UIViewController, SegueProtocol {
     @objc func onPausedListening(notification: Notification) {
         print("===== Detail View Controller: On Paused Listening =====")
         Utils.onPausedListening(
-            withBackToNotesButton: true,
+            withBackToEntriesButton: true,
             notification: notification,
             speechRecognition: self.speechRecognition
         )
@@ -662,7 +662,7 @@ class DetailViewController: UIViewController, SegueProtocol {
     @objc func onStoppedListeningForSpeech(notification: Notification) {
         print("===== Detail View Controller: On Stopped Listening For Speech =====")
         Utils.onStoppedListening(
-            withBackToNotesButton: true,
+            withBackToEntriesButton: true,
             notification: notification,
             speechRecognition: self.speechRecognition,
             soundIntensityIndicatorHeight: self.soundIntensityIndicatorHeight,
@@ -678,7 +678,7 @@ class DetailViewController: UIViewController, SegueProtocol {
     @objc func onStoppedListening(notification: Notification) {
         print("===== Detail View Controller: On Stopped Listening =====")
         Utils.onStoppedListening(
-            withBackToNotesButton: true,
+            withBackToEntriesButton: true,
             notification: notification,
             speechRecognition: self.speechRecognition,
             soundIntensityIndicatorHeight: self.soundIntensityIndicatorHeight,
@@ -688,29 +688,29 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
     }
     
-    @objc func onNoteListenUpdate(notification: Notification) {
-        print("===== Detail View Controller: On Note Listen Update =====")
+    @objc func onEntryListenUpdate(notification: Notification) {
+        print("===== Detail View Controller: On Entry Listen Update =====")
         DispatchQueue.main.async { [weak self] in
             let text = notification.userInfo!["text"] as! String
             print("Text:\n'\(text)'")
             let highlightRange = notification.userInfo!["highlightRange"] as! NSRange?
             let bufferRange = notification.userInfo!["bufferRange"] as! NSRange?
-            let transformations = notification.userInfo!["transformations"] as! [NoteTransformation]
+            let transformations = notification.userInfo!["transformations"] as! [EntryTransformation]
             self?.updateUIText(text: text, highlightRange: highlightRange, bufferRange: bufferRange, transformations: transformations)
             self?.refreshView()
         }
     }
     
-    @objc func onNoteListenStop(notification: Notification) {
-        print("===== Detail View Controller: On Note Listen Stop =====")
+    @objc func onEntryListenStop(notification: Notification) {
+        print("===== Detail View Controller: On Entry Listen Stop =====")
         DispatchQueue.main.async { [weak self] in
-            if let noteManager = self?.noteManager, let note = noteManager.currentNote {
+            if let entryManager = self?.entryManager, let entry = entryManager.currentEntry {
                 let text = notification.userInfo!["text"] as! String
-                self?.updateUIText(text: text, transformations: note.transformations)
+                self?.updateUIText(text: text, transformations: entry.transformations)
             }
         }
         
-        Utils.onNoteStop(
+        Utils.onEntryStop(
             notification: notification,
             speechRecognition: self.speechRecognition
         ) { [weak self] in
@@ -731,7 +731,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         print("===== Detail View Controller: On Stop Notification =====")
         Utils.onStopNotification(
             notification: notification,
-            note: self.noteManager.currentNote,
+            entry: self.entryManager.currentEntry,
             speechRecognition: self.speechRecognition,
             selectionCursor: self.selectionCursor
         )
@@ -746,12 +746,12 @@ class DetailViewController: UIViewController, SegueProtocol {
         )
     }
     
-    @objc func onNoteComplete(notification: Notification) {
-        print("===== Detail View Controller: On Note Complete =====")
+    @objc func onEntryComplete(notification: Notification) {
+        print("===== Detail View Controller: On Entry Complete =====")
         DispatchQueue.main.async { [weak self] in
             let navigationController = Utils.getNavigationController()
             if !self!.speechRecognition.isListeningForSpeech {
-                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getDeleteNoteButton()]
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getDeleteEntryButton()]
             } else {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [] // remove delete button when listening for speech
             }
@@ -764,13 +764,13 @@ class DetailViewController: UIViewController, SegueProtocol {
             self?.hideButton(self!.redoButton)
         }
         
-        Utils.onNoteComplete(
+        Utils.onEntryComplete(
             notification: notification,
             speechRecognition: self.speechRecognition,
             soundIntensityIndicatorHeight: self.soundIntensityIndicatorHeight
         ) { [weak self] in
-            if let noteManager = self?.noteManager, let note = noteManager.currentNote {
-                self?.updateUIText(text: note.getText(), transformations: note.transformations)
+            if let entryManager = self?.entryManager, let entry = entryManager.currentEntry {
+                self?.updateUIText(text: entry.getText(), transformations: entry.transformations)
             }
             self?.refreshView()
         }
@@ -778,12 +778,12 @@ class DetailViewController: UIViewController, SegueProtocol {
     
     @objc func onSpeechStartPlaying(notification: Notification) {
         print("===== Detail View Controller: On Speech Start Playing =====")
-        print("\tFirst segment: ", (notification.userInfo!["previous"] as? NoteSegment)?.getText() ?? "nil")
+        print("\tFirst segment: ", (notification.userInfo!["previous"] as? EntrySegment)?.getText() ?? "nil")
 //        DispatchQueue.main.async { [weak self] in
         DispatchQueue.main.async { [weak self] in
             Utils.onSpeechStartPlaying(notification: notification) {
-                if let note = self?.noteManager.currentNote, let segment = notification.userInfo!["next"] as? NoteSegment, segment.getText().count > 0 && segment.isActive(), let range = note.getSegmentTextRange(of: segment) {
-                    self?.updateUIText(text: note.getText(), highlightRange: range, transformations: note.transformations)
+                if let entry = self?.entryManager.currentEntry, let segment = notification.userInfo!["next"] as? EntrySegment, segment.getText().count > 0 && segment.isActive(), let range = entry.getSegmentTextRange(of: segment) {
+                    self?.updateUIText(text: entry.getText(), highlightRange: range, transformations: entry.transformations)
                 }
             }
         }
@@ -795,15 +795,15 @@ class DetailViewController: UIViewController, SegueProtocol {
     
     @objc func onSpeechBoundaryCrossed(notification: Notification) {
         print("===== Detail View Controller: On Speech Boundary Crossed =====")
-        print("\tWord: '\((notification.userInfo!["previous"] as? NoteSegment)?.getText() ?? "nil")'")
+        print("\tWord: '\((notification.userInfo!["previous"] as? EntrySegment)?.getText() ?? "nil")'")
         DispatchQueue.main.async { [weak self] in
             Utils.onSpeechBoundaryCrossed(
                 notification: notification,
                 speechPlayer: self!.speechPlayer,
                 pitchLabel: self!.pitchLabel
             ) {
-                if let note = self?.noteManager.currentNote, let segment = notification.userInfo!["previous"] as? NoteSegment, segment.getText().count > 0 && segment.isActive(), let range = note.getSegmentTextRange(of: segment) {
-                    self?.updateUIText(text: note.getText(), highlightRange: range, transformations: note.transformations)
+                if let entry = self?.entryManager.currentEntry, let segment = notification.userInfo!["previous"] as? EntrySegment, segment.getText().count > 0 && segment.isActive(), let range = entry.getSegmentTextRange(of: segment) {
+                    self?.updateUIText(text: entry.getText(), highlightRange: range, transformations: entry.transformations)
                 }
             }
         }
@@ -819,7 +819,7 @@ class DetailViewController: UIViewController, SegueProtocol {
                     notification: notification,
                     speechRecognition: self!.speechRecognition,
                     speechPlayer: self!.speechPlayer,
-                    noteManager: self!.noteManager
+                    entryManager: self!.entryManager
                 )
             }
         }
@@ -832,10 +832,10 @@ class DetailViewController: UIViewController, SegueProtocol {
             Utils.onSpeechStopPlaying(
                 notification: notification,
                 speechRecognition: self!.speechRecognition,
-                noteManager: self!.noteManager
+                entryManager: self!.entryManager
             ) { [weak self] in
-                if let note = self?.noteManager.currentNote, !self!.selectionCursor.hasSelection {
-                    self?.updateUIText(text: note.getText(), transformations: note.transformations)
+                if let entry = self?.entryManager.currentEntry, !self!.selectionCursor.hasSelection {
+                    self?.updateUIText(text: entry.getText(), transformations: entry.transformations)
                 }
             }
             
@@ -843,8 +843,8 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
     }
     
-    @objc func onExecuteNoteAction(notification: Notification) {
-        print("===== Detail View Controller: On Execute Note Action =====")
+    @objc func onExecuteEntryAction(notification: Notification) {
+        print("===== Detail View Controller: On Execute Entry Action =====")
         let type = notification.userInfo!["type"] as? String
         if let type = type {
             switch (type) {
@@ -869,10 +869,10 @@ class DetailViewController: UIViewController, SegueProtocol {
     }
     
     // Reference: https://stackoverflow.com/questions/50128462/how-to-save-document-to-files-app-in-swift
-    @objc func onNoteAudioExported(notification: Notification) {
-        print("===== Detail View Controller: On Note Audio Exported =====")
+    @objc func onEntryAudioExported(notification: Notification) {
+        print("===== Detail View Controller: On Entry Audio Exported =====")
         DispatchQueue.main.async { [weak self] in
-            Utils.onNoteAudioExported(
+            Utils.onEntryAudioExported(
                 notification: notification,
                 vc: self!
             )
@@ -885,7 +885,7 @@ class DetailViewController: UIViewController, SegueProtocol {
             let navigationController = Utils.getNavigationController()
             self?.adjustCommandBar()
             if !self!.speechRecognition.isListeningForSpeech {
-                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getDeleteNoteButton()]
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getDeleteEntryButton()]
             } else {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [] // remove delete button when listening for speech
             }
@@ -897,16 +897,16 @@ class DetailViewController: UIViewController, SegueProtocol {
     
     @objc func onSpeechUpdate(notification: Notification) {
         DispatchQueue.main.async { [weak self] in
-            if let note = self?.noteManager.currentNote, self!.speechRecognition.isListeningForCommands && note.noteSegments.count == 0 {
+            if let entry = self?.entryManager.currentEntry, self!.speechRecognition.isListeningForCommands && entry.entrySegments.count == 0 {
                 print("===== Detail View Controller: On Speech Update =====")
-                print("\tNote is empty, so clear buffer hint text from text view...")
+                print("\tEntry is empty, so clear buffer hint text from text view...")
                 self?.updateUIText(text: "")
             }
         }
     }
     
-    @objc func onNoteDeleted(notification: Notification) {
-        print("===== Detail View Controller: On Deleted Note =====")
+    @objc func onEntryDeleted(notification: Notification) {
+        print("===== Detail View Controller: On Deleted Entry =====")
 
         DispatchQueue.main.async { [weak self] in
             self?.textView?.attributedText = NSMutableAttributedString(string: "")
@@ -914,7 +914,7 @@ class DetailViewController: UIViewController, SegueProtocol {
             navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = nil
             self?.refreshView()
             self?.setCursorVisibility(as: false)
-            self?.performSegue(withIdentifier: Segues.moveFromDetailToNoteTable.rawValue, sender: nil)
+            self?.performSegue(withIdentifier: Segues.moveFromDetailToEntryTable.rawValue, sender: nil)
         }
     }
     
@@ -955,9 +955,9 @@ class DetailViewController: UIViewController, SegueProtocol {
         
         DispatchQueue.main.async { [weak self] in
             // Add text to text view if exists
-            if let noteManager = self?.noteManager, let note = noteManager.currentNote {
-                print("\tUpdate Text View: ", note.getText())
-                self?.updateUIText(text: note.getText(), transformations: note.transformations)
+            if let entryManager = self?.entryManager, let entry = entryManager.currentEntry {
+                print("\tUpdate Text View: ", entry.getText())
+                self?.updateUIText(text: entry.getText(), transformations: entry.transformations)
             }
         }
     }
@@ -968,7 +968,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         DispatchQueue.main.async { [weak self] in
             let navigationController = Utils.getNavigationController()
             if !self!.speechRecognition.isListeningForSpeech {
-                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getDeleteNoteButton()]
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getDeleteEntryButton()]
             } else {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [] // remove delete button when listening for speech
             }
@@ -1038,17 +1038,17 @@ class DetailViewController: UIViewController, SegueProtocol {
             )
             
             // Add text to text view if exists
-            if let noteManager = self?.noteManager, let note = noteManager.currentNote {
-                self?.updateUIText(text: note.getText(), transformations: note.transformations)
+            if let entryManager = self?.entryManager, let entry = entryManager.currentEntry {
+                self?.updateUIText(text: entry.getText(), transformations: entry.transformations)
             }
         }
     }
     
-    func getDeleteNoteButton() -> UIBarButtonItem {
+    func getDeleteEntryButton() -> UIBarButtonItem {
         let button  = CenteredButton(type: .custom)
 
         button.frame = CGRect(x: 0.0, y: 0.0, width: Utils.NAVBAR_BUTTON_LENGTH, height: Utils.NAVBAR_BUTTON_LENGTH)
-        button.addTarget(self, action: #selector(self.handleDeleteNote), for: .touchDown)
+        button.addTarget(self, action: #selector(self.handleDeleteEntry), for: .touchDown)
         button.setImage(UIImage(systemName: "trash"), for: .normal)
         button.setTitle("Delete", for: .normal)
         button.titleLabel?.font = UIFont.systemFont(ofSize: 11)
@@ -1109,8 +1109,8 @@ class DetailViewController: UIViewController, SegueProtocol {
                 if let selectionTextRange = self?.selectionCursor.selectionTextRange, let textView = self?.selectionCursor.textView, let caretViewRect = self?.selectionCursor.caretViewPositionRequiresUpdate(textPosition: selectionTextRange.toTextRange(textInput: textView)!.end) {
                     print("\tSelection Cursor already has cursor position. Move it there.")
                     self?.cursorView?.frame = caretViewRect
-                } else if let note = self?.noteManager.currentNote, let textPosition = self?.textView?.endOfDocument, let caretViewRect = self?.selectionCursor.caretViewPositionRequiresUpdate(textPosition: textPosition), note.noteSegments.count > 0 {
-                    print("\tNote already has speech. Move cursor to end of document.")
+                } else if let entry = self?.entryManager.currentEntry, let textPosition = self?.textView?.endOfDocument, let caretViewRect = self?.selectionCursor.caretViewPositionRequiresUpdate(textPosition: textPosition), entry.entrySegments.count > 0 {
+                    print("\tEntry already has speech. Move cursor to end of document.")
                     self?.cursorView?.frame = caretViewRect
                 }
                 
@@ -1373,7 +1373,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
     }
     
-    func updateUIText(text: String, highlightRange: NSRange? = nil, bufferRange: NSRange? = nil, transformations: [NoteTransformation]? = nil) {
+    func updateUIText(text: String, highlightRange: NSRange? = nil, bufferRange: NSRange? = nil, transformations: [EntryTransformation]? = nil) {
         // Cache selection
         if let selectionTextRange = self.selectionCursor.selectionTextRange, self.selectionCursor.hasSelection {
             self.cachedTextViewSelectedRange = selectionTextRange
@@ -1385,7 +1385,7 @@ class DetailViewController: UIViewController, SegueProtocol {
             // If passage is in buffer, we make gray text
             mutableAttributedString.addAttribute(.foregroundColor, value: UIColor.systemGray, range: bufferRange)
         } else if let highlightRange = highlightRange, highlightRange.length > 0 && text.count > 0 {
-            // If words in note are being echoed, we highlight them
+            // If words in entry are being echoed, we highlight them
             mutableAttributedString.addAttribute(.foregroundColor, value: UIColor.white, range: highlightRange)
             mutableAttributedString.addAttribute(.backgroundColor, value: UIColor(hex: Utils.LINGUAL_PURPLE) ?? UIColor.purple, range: highlightRange)
         }
@@ -1417,59 +1417,59 @@ class DetailViewController: UIViewController, SegueProtocol {
     func adjustMenuBar() {
         print("===== Adjust Menu Bar =====")
 
-        // Start Note Button
-        if let note = self.noteManager.currentNote,
+        // Start Entry Button
+        if let entry = self.entryManager.currentEntry,
            !self.speechRecognition.isListeningForSpeech &&
-            note.noteSegments.count == 0 &&
+            entry.entrySegments.count == 0 &&
             self.speechRecognition.listeningPermissionsGranted {
-            self.showButton(self.startNoteButton)
+            self.showButton(self.startEntryButton)
         } else {
-            self.hideButton(self.startNoteButton)
+            self.hideButton(self.startEntryButton)
         }
         
-        // Resume Note Button
-        if let _ = self.noteManager.currentNote,
+        // Resume Entry Button
+        if let _ = self.entryManager.currentEntry,
            self.speechRecognition.isListeningForSpeech &&
             self.speechRecognition.userInitiatedPausedListeningForSpeech {
-            self.showButton(self.resumeNoteButton)
+            self.showButton(self.resumeEntryButton)
         } else {
-            self.hideButton(self.resumeNoteButton)
+            self.hideButton(self.resumeEntryButton)
         }
         
-        // Edit Note Button
-        if let note = self.noteManager.currentNote,
+        // Edit Entry Button
+        if let entry = self.entryManager.currentEntry,
            !self.speechRecognition.isListeningForSpeech &&
-            note.noteSegments.count > 0 &&
+            entry.entrySegments.count > 0 &&
             self.speechRecognition.listeningPermissionsGranted {
-            self.showButton(self.editNoteButton)
+            self.showButton(self.editEntryButton)
         } else {
-            self.hideButton(self.editNoteButton)
+            self.hideButton(self.editEntryButton)
         }
         
-        // Stop Listening Note Button
-        if self.speechRecognition.isListeningForSpeech && !self.noteManager.isExportingNote {
-            self.showButton(self.stopListeningNoteButton)
+        // Stop Listening Entry Button
+        if self.speechRecognition.isListeningForSpeech && !self.entryManager.isExportingEntry {
+            self.showButton(self.stopListeningEntryButton)
         } else {
-            self.hideButton(self.stopListeningNoteButton)
+            self.hideButton(self.stopListeningEntryButton)
         }
         
-        // Play Note Button
-        if let note = self.noteManager.currentNote,
+        // Play Entry Button
+        if let entry = self.entryManager.currentEntry,
         (
-            !self.speechPlayer.isPlayingNote ||
+            !self.speechPlayer.isPlayingEntry ||
             (
-                self.speechPlayer.isPlayingNote &&
-                note.speechPlayer.pausedPlayingNote
+                self.speechPlayer.isPlayingEntry &&
+                entry.speechPlayer.pausedPlayingEntry
             ) || (
-                self.speechPlayer.isPlayingNote &&
+                self.speechPlayer.isPlayingEntry &&
                     self.selectionCursor.hasSelection
             )
-        ) && note.noteSegments.count > 0 &&
+        ) && entry.entrySegments.count > 0 &&
         !(
             self.selectionCursor.hasSelection &&
             (
-                self.noteManager.isWalkingNote ||
-                self.noteManager.isRunningNote
+                self.entryManager.isWalkingEntry ||
+                self.entryManager.isRunningEntry
             )
         ) {
             self.showButton(self.playButton)
@@ -1483,23 +1483,23 @@ class DetailViewController: UIViewController, SegueProtocol {
             } else {
                 let buttonLabel = self.playButton?.subviews.filter {$0 is UILabel }
                 if let buttonLabel = buttonLabel?.first as? UILabel {
-                    buttonLabel.text = "Play Note"
+                    buttonLabel.text = "Play Entry"
                 }
             }
         } else {
             self.hideButton(self.playButton)
         }
         
-        // Stop Playing Note Button
-        if let note = self.noteManager.currentNote,
-           self.speechPlayer.isPlayingNote && note.noteSegments.count > 0 &&
+        // Stop Playing Entry Button
+        if let entry = self.entryManager.currentEntry,
+           self.speechPlayer.isPlayingEntry && entry.entrySegments.count > 0 &&
             !(
                 AVAudioSession.isHeadphonesConnected &&
                 self.selectionCursor.hasSelection
             ) &&
             !(
                 AVAudioSession.isHeadphonesConnected &&
-                self.noteManager.isWalkingNote
+                self.entryManager.isWalkingEntry
             ) {
             self.showButton(self.stopPlayingButton)
             
@@ -1512,7 +1512,7 @@ class DetailViewController: UIViewController, SegueProtocol {
             } else {
                 let buttonLabel = self.stopPlayingButton?.subviews.filter {$0 is UILabel }
                 if let buttonLabel = buttonLabel?.first as? UILabel {
-                    buttonLabel.text = "Stop Note"
+                    buttonLabel.text = "Stop Entry"
                 }
             }
         } else {
@@ -1520,7 +1520,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
         
         // Play Echo Button
-        if let note = self.noteManager.currentNote,
+        if let entry = self.entryManager.currentEntry,
         (
             !(
                 self.speechSynthesis.isPlayingEcho ||
@@ -1530,12 +1530,12 @@ class DetailViewController: UIViewController, SegueProtocol {
                 self.speechSynthesis.isPlayingEcho &&
                 self.speechSynthesis.pausedEcho
             )
-        ) && note.noteSegments.count > 0 &&
+        ) && entry.entrySegments.count > 0 &&
         !(
             self.selectionCursor.hasSelection &&
             (
-                self.noteManager.isWalkingNote ||
-                self.noteManager.isRunningNote
+                self.entryManager.isWalkingEntry ||
+                self.entryManager.isRunningEntry
             )
         ) {
             self.showButton(self.echoButton)
@@ -1549,7 +1549,7 @@ class DetailViewController: UIViewController, SegueProtocol {
             } else {
                 let buttonLabel = self.echoButton?.subviews.filter {$0 is UILabel }
                 if let buttonLabel = buttonLabel?.first as? UILabel {
-                    buttonLabel.text = "Echo Note"
+                    buttonLabel.text = "Echo Entry"
                 }
             }
         } else {
@@ -1557,16 +1557,16 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
 
         // Stop Echo Button
-        if let note = self.noteManager.currentNote,
+        if let entry = self.entryManager.currentEntry,
         (
             self.speechSynthesis.isPlayingEcho ||
             self.speechSynthesis.isPlayingPassiveEcho
-        ) && note.noteSegments.count > 0 &&
+        ) && entry.entrySegments.count > 0 &&
         !(
             self.selectionCursor.hasSelection &&
             (
-                self.noteManager.isWalkingNote ||
-                self.noteManager.isRunningNote
+                self.entryManager.isWalkingEntry ||
+                self.entryManager.isRunningEntry
             )
         ) {
             self.showButton(self.stopEchoButton)
@@ -1574,9 +1574,9 @@ class DetailViewController: UIViewController, SegueProtocol {
             self.hideButton(self.stopEchoButton)
         }
         
-        // Export Note Button
-        if let note = self.noteManager.currentNote,
-           note.noteSegments.count > 0 &&
+        // Export Entry Button
+        if let entry = self.entryManager.currentEntry,
+           entry.entrySegments.count > 0 &&
             !self.speechRecognition.isListeningForSpeech {
             self.showButton(self.exportButton)
             
@@ -1589,7 +1589,7 @@ class DetailViewController: UIViewController, SegueProtocol {
             } else {
                 let buttonLabel = self.exportButton?.subviews.filter {$0 is UILabel }
                 if let buttonLabel = buttonLabel?.first as? UILabel {
-                    buttonLabel.text = "Export Note"
+                    buttonLabel.text = "Export Entry"
                 }
             }
         } else {
@@ -1597,7 +1597,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
         
         // Walk Element Button
-        if let note = self.noteManager.currentNote, note.noteSegments.count > 0 && !self.noteManager.isWalkingNote {
+        if let entry = self.entryManager.currentEntry, entry.entrySegments.count > 0 && !self.entryManager.isWalkingEntry {
             self.showButton(self.walkButton)
             
             // Change text
@@ -1609,7 +1609,7 @@ class DetailViewController: UIViewController, SegueProtocol {
             } else {
                 let buttonLabel = self.walkButton?.subviews.filter {$0 is UILabel }
                 if let buttonLabel = buttonLabel?.first as? UILabel {
-                    buttonLabel.text = "Walk Note"
+                    buttonLabel.text = "Walk Entry"
                 }
             }
         } else {
@@ -1632,11 +1632,11 @@ class DetailViewController: UIViewController, SegueProtocol {
         
         // ===== Resting Command Bar Buttons ======
         
-        // Run Note Button
-        if let note = self.noteManager.currentNote,
-           note.noteSegments.count > 0 &&
+        // Run Entry Button
+        if let entry = self.entryManager.currentEntry,
+           entry.entrySegments.count > 0 &&
             !self.selectionCursor.isUpdatingSelection &&
-            !self.noteManager.isRunningNote
+            !self.entryManager.isRunningEntry
         {
             numActiveButtons += 1
             self.showButton(self.runButton)
@@ -1649,27 +1649,27 @@ class DetailViewController: UIViewController, SegueProtocol {
             } else {
                 let buttonLabel = self.runButton?.subviews.filter {$0 is UILabel }
                 if let buttonLabel = buttonLabel?.first as? UILabel {
-                    buttonLabel.text = "Run Note"
+                    buttonLabel.text = "Run Entry"
                 }
             }
         } else {
             self.hideButton(self.runButton)
         }
         
-        // Pause Note Button
-        if let note = self.noteManager.currentNote, note.noteSegments.count > 0 &&
+        // Pause Entry Button
+        if let entry = self.entryManager.currentEntry, entry.entrySegments.count > 0 &&
             (
                 (
-                    note.speechRecognition.isListeningForSpeech &&
-                    !note.speechRecognition.pausedListeningForSpeech
+                    entry.speechRecognition.isListeningForSpeech &&
+                    !entry.speechRecognition.pausedListeningForSpeech
                 ) ||
                 (
-                    note.speechPlayer.isPlayingNote &&
-                    !note.speechPlayer.pausedPlayingNote
+                    entry.speechPlayer.isPlayingEntry &&
+                    !entry.speechPlayer.pausedPlayingEntry
                 )
             ) && !self.selectionCursor.hasSelection &&
-            !note.noteManager.isWalkingNote &&
-            !note.noteManager.isRunningNote
+            !entry.entryManager.isWalkingEntry &&
+            !entry.entryManager.isRunningEntry
         {
             numActiveButtons += 1
             self.showButton(self.pauseButton)
@@ -1682,7 +1682,7 @@ class DetailViewController: UIViewController, SegueProtocol {
             } else {
                 let buttonLabel = self.pauseButton?.subviews.filter {$0 is UILabel }
                 if let buttonLabel = buttonLabel?.first as? UILabel {
-                    buttonLabel.text = "Pause Note"
+                    buttonLabel.text = "Pause Entry"
                 }
             }
         } else {
@@ -1690,7 +1690,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
         
         // Playback Rate Button
-        if let note = self.noteManager.currentNote, note.noteSegments.count > 0 {
+        if let entry = self.entryManager.currentEntry, entry.entrySegments.count > 0 {
             numActiveButtons += 1
             self.showButton(self.playbackRateButton)
         } else {
@@ -1698,7 +1698,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
         
         // Echo Rate Button
-        if let note = self.noteManager.currentNote, note.noteSegments.count > 0 {
+        if let entry = self.entryManager.currentEntry, entry.entrySegments.count > 0 {
             numActiveButtons += 1
             self.showButton(self.echoRateButton)
         } else {
@@ -1708,7 +1708,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         // ===== Conditional Buttons =====
         
         // Move Here Button
-//        if let _ = self.noteManager.currentNote, self.speechRecognition.isListeningForSpeech && (self.speechPlayer.pausedPlayingNote || self.speechPlayer.isPlayingNote || self.speechSynthesis.isPlayingEcho || self.speechSynthesis.pausedEcho) {
+//        if let _ = self.entryManager.currentEntry, self.speechRecognition.isListeningForSpeech && (self.speechPlayer.pausedPlayingEntry || self.speechPlayer.isPlayingEntry || self.speechSynthesis.isPlayingEcho || self.speechSynthesis.pausedEcho) {
 //            numActiveButtons += 1
 //            self.showButton(self.moveHereButton)
 //        } else {
@@ -1717,7 +1717,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         self.hideButton(self.moveHereButton)
         
         // Inspect Clipboard Button
-        if let _ = self.noteManager.currentNote, let _ = self.selectionCursor.clipboard, self.speechRecognition.isListeningForSpeech {
+        if let _ = self.entryManager.currentEntry, let _ = self.selectionCursor.clipboard, self.speechRecognition.isListeningForSpeech {
             numActiveButtons += 1
             self.showButton(self.inspectClipboardButton)
         } else {
@@ -1725,7 +1725,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
         
         // Play Commit Button
-        if let note = self.noteManager.currentNote, note.committedBufferRanges.count > 0 && self.speechRecognition.isListeningForSpeech {
+        if let entry = self.entryManager.currentEntry, entry.committedBufferRanges.count > 0 && self.speechRecognition.isListeningForSpeech {
             numActiveButtons += 1
             self.showButton(self.playCommitButton)
         } else {
@@ -1733,12 +1733,12 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
         
         // Pause Echo Button
-        if let _ = self.noteManager.currentNote,
+        if let _ = self.entryManager.currentEntry,
            self.speechSynthesis.isPlayingEcho &&
             !self.speechSynthesis.pausedEcho &&
             !self.selectionCursor.hasSelection &&
-            !self.noteManager.isWalkingNote &&
-            !self.noteManager.isRunningNote {
+            !self.entryManager.isWalkingEntry &&
+            !self.entryManager.isRunningEntry {
             numActiveButtons += 1
             self.showButton(self.pauseEchoButton)
         } else {
@@ -1746,11 +1746,11 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
         
         // Skip Backward Button
-        if let _ = self.noteManager.currentNote,
-           self.speechPlayer.isPlayingNote &&
+        if let _ = self.entryManager.currentEntry,
+           self.speechPlayer.isPlayingEntry &&
             !self.selectionCursor.hasSelection &&
-            !self.noteManager.isWalkingNote &&
-            !self.noteManager.isRunningNote {
+            !self.entryManager.isWalkingEntry &&
+            !self.entryManager.isRunningEntry {
             numActiveButtons += 1
             self.showButton(self.skipBackwardButton)
         } else {
@@ -1758,11 +1758,11 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
         
         // Skip Forward Button
-        if let _ = self.noteManager.currentNote,
-           self.speechPlayer.isPlayingNote &&
+        if let _ = self.entryManager.currentEntry,
+           self.speechPlayer.isPlayingEntry &&
             !self.selectionCursor.hasSelection &&
-            !self.noteManager.isWalkingNote &&
-            !self.noteManager.isRunningNote {
+            !self.entryManager.isWalkingEntry &&
+            !self.entryManager.isRunningEntry {
             numActiveButtons += 1
             self.showButton(self.skipForwardButton)
         } else {
@@ -1770,16 +1770,16 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
         
         // Previous Walk Element Button
-        if let note = self.noteManager.currentNote,
-           let walkingRange = self.noteManager.walkingRange,
+        if let entry = self.entryManager.currentEntry,
+           let walkingRange = self.entryManager.walkingRange,
            let firstWalkingSegmentIndex = Utils.getSegmentIndex(
-                segment: Array(note.noteSegments[walkingRange])[0],
-                segments: Array(note.noteSegments[walkingRange]),
+                segment: Array(entry.entrySegments[walkingRange])[0],
+                segments: Array(entry.entrySegments[walkingRange]),
                 type: .next,
                 isWord: true
            ),
-           self.noteManager.isWalkingNote &&
-            self.noteManager.walkingIndex != firstWalkingSegmentIndex
+           self.entryManager.isWalkingEntry &&
+            self.entryManager.walkingIndex != firstWalkingSegmentIndex
         {
             numActiveButtons += 1
             self.showButton(self.walkPreviousElementButton)
@@ -1788,15 +1788,15 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
 
         // Next Walk Element Button
-        if let note = self.noteManager.currentNote,
-           let walkingRange = self.noteManager.walkingRange,
-           let lastWalkingSegmentIndex = Utils.getNoteNthLastSegmentIndex(
-                segments: Array(note.noteSegments[walkingRange]),
+        if let entry = self.entryManager.currentEntry,
+           let walkingRange = self.entryManager.walkingRange,
+           let lastWalkingSegmentIndex = Utils.getEntryNthLastSegmentIndex(
+                segments: Array(entry.entrySegments[walkingRange]),
                 selectionCursor: self.selectionCursor,
                 n: 0
            ).1,
-           self.noteManager.isWalkingNote &&
-            self.noteManager.walkingIndex < lastWalkingSegmentIndex
+           self.entryManager.isWalkingEntry &&
+            self.entryManager.walkingIndex < lastWalkingSegmentIndex
         {
             numActiveButtons += 1
             self.showButton(self.walkNextElementButton)
@@ -1805,7 +1805,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
         
         // Exit Walk Run Button
-        if let _ = self.noteManager.currentNote, self.noteManager.isWalkingNote || self.noteManager.isRunningNote  {
+        if let _ = self.entryManager.currentEntry, self.entryManager.isWalkingEntry || self.entryManager.isRunningEntry  {
             numActiveButtons += 1
             self.showButton(self.exitWalkRunButton)
         } else {
@@ -1813,7 +1813,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
         
         // Pause Run Button
-        if let _ = self.noteManager.currentNote, self.noteManager.isRunningNote {
+        if let _ = self.entryManager.currentEntry, self.entryManager.isRunningEntry {
             numActiveButtons += 1
             self.showButton(self.pauseRunButton)
         } else {
@@ -1916,8 +1916,8 @@ class DetailViewController: UIViewController, SegueProtocol {
     
     // MARK: - Entry Methods
     
-    @objc func handleDeleteNote() {
-        self.noteManager.deleteNote()
+    @objc func handleDeleteEntry() {
+        self.entryManager.deleteEntry()
     }
     
     // MARK: - Helper Functions
@@ -1979,7 +1979,7 @@ class DetailViewController: UIViewController, SegueProtocol {
                 self?.refreshView()
             }
         } else if keyPath == "hasSelection" {
-            if let _ = self.noteManager.currentNote, let newHasSelection = change?[.newKey] as? Bool, let oldHasSelection = change?[.oldKey] as? Bool, newHasSelection && !oldHasSelection && self.speechRecognition.isListeningForSpeech {
+            if let _ = self.entryManager.currentEntry, let newHasSelection = change?[.newKey] as? Bool, let oldHasSelection = change?[.oldKey] as? Bool, newHasSelection && !oldHasSelection && self.speechRecognition.isListeningForSpeech {
                 print("====== Detail View Controller: Go from no selection to selection while recording ======")
                 // ====== Go from no selection to selection while recording ======
                 //
@@ -1987,7 +1987,7 @@ class DetailViewController: UIViewController, SegueProtocol {
                     self?.refreshView()
                     self?.setCursorVisibility(as: false)
                 }
-            } else if let note = self.noteManager.currentNote, let newHasSelection = change?[.newKey] as? Bool, let oldHasSelection = change?[.oldKey] as? Bool, !newHasSelection && oldHasSelection && self.speechRecognition.isListeningForSpeech && self.speechRecognition.pausedListeningForSpeech && self.speechRecognition.isListeningForCommands && !self.speechPlayer.isPlayingNote && !self.speechSynthesis.isPlayingEcho && !self.speechSynthesis.isPlayingPassiveEcho {
+            } else if let entry = self.entryManager.currentEntry, let newHasSelection = change?[.newKey] as? Bool, let oldHasSelection = change?[.oldKey] as? Bool, !newHasSelection && oldHasSelection && self.speechRecognition.isListeningForSpeech && self.speechRecognition.pausedListeningForSpeech && self.speechRecognition.isListeningForCommands && !self.speechPlayer.isPlayingEntry && !self.speechSynthesis.isPlayingEcho && !self.speechSynthesis.isPlayingPassiveEcho {
                 print("====== Detail View Controller: Go from selection to no selection while recording ======")
                 // ====== Go from selection to no selection while recording ======
                 //
@@ -1999,7 +1999,7 @@ class DetailViewController: UIViewController, SegueProtocol {
                         let timer = Utils.startRecordingUITimer(
                             timer: self!.speechRecognition.listeningTimer,
                             recording: true,
-                            note: note,
+                            entry: entry,
                             speechRecognition: self!.speechRecognition,
                             selectionCursor: self!.selectionCursor
                         )
@@ -2009,17 +2009,17 @@ class DetailViewController: UIViewController, SegueProtocol {
                 
                 Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { [weak self] timer in
                     DispatchQueue.main.async {
-                        self?.updateUIText(text: note.getText(), transformations: note.transformations)
+                        self?.updateUIText(text: entry.getText(), transformations: entry.transformations)
                     }
                 }
-            } else if let _ = self.noteManager.currentNote, let hasSelection = change?[.newKey] as? Bool, hasSelection && !self.speechRecognition.isListeningForSpeech && self.speechRecognition.isListeningForCommands {
+            } else if let _ = self.entryManager.currentEntry, let hasSelection = change?[.newKey] as? Bool, hasSelection && !self.speechRecognition.isListeningForSpeech && self.speechRecognition.isListeningForCommands {
                 print("====== Detail View Controller: Go from no selection to selection while not recording ======")
                 // ====== Go from no selection to selection while not recording ======
                 //
                 DispatchQueue.main.async { [weak self] in
                     self?.refreshView()
                 }
-            } else if let _ = self.noteManager.currentNote, let newHasSelection = change?[.newKey] as? Bool, let oldHasSelection = change?[.oldKey] as? Bool, !newHasSelection && oldHasSelection && !self.speechRecognition.isListeningForSpeech && self.speechRecognition.isListeningForCommands {
+            } else if let _ = self.entryManager.currentEntry, let newHasSelection = change?[.newKey] as? Bool, let oldHasSelection = change?[.oldKey] as? Bool, !newHasSelection && oldHasSelection && !self.speechRecognition.isListeningForSpeech && self.speechRecognition.isListeningForCommands {
                 print("====== Detail View Controller: Go from selection to no selection while not recording ======")
                 // ====== Go from selection to no selection while not recording ======
                 //
@@ -2034,16 +2034,16 @@ class DetailViewController: UIViewController, SegueProtocol {
     
     @objc func handleSingleTap(touch: UITapGestureRecognizer) {
         print("===== Touch Interaction: Single Tap =====")
-        if let note = self.noteManager.currentNote, self.state.appActivated && self.speechRecognition.isListeningForSpeech {
-            print("\tComposing Note => Move Cursor to Touch Location")
+        if let entry = self.entryManager.currentEntry, self.state.appActivated && self.speechRecognition.isListeningForSpeech {
+            print("\tComposing Entry => Move Cursor to Touch Location")
             print("\tDetermine text position near touch point...")
             let touchPoint = touch.location(in: self.textView)
             let textPosition = self.textView?.closestPosition(to: touchPoint)
             
-            if self.textView?.selectedTextRange != nil && self.selectionCursor.hasSelection && (self.noteManager.isWalkingNote || self.noteManager.isRunningNote) {
+            if self.textView?.selectedTextRange != nil && self.selectionCursor.hasSelection && (self.entryManager.isWalkingEntry || self.entryManager.isRunningEntry) {
                 // Remove Selection in view and model
                 print("\tPrior selection detected. Remove Selection in view and model...")
-                note.exitWalk(clearSelection: true, withFeedback: false)
+                entry.exitWalk(clearSelection: true, withFeedback: false)
             } else if self.textView?.selectedTextRange != nil && self.selectionCursor.hasSelection {
                 // Remove Selection in view and model
                 print("\tPrior selection detected. Remove Selection in view and model...")
@@ -2060,44 +2060,44 @@ class DetailViewController: UIViewController, SegueProtocol {
 //            DispatchQueue.main.async { [weak self] in
 //                self?.refreshView()
 //            }
-        } else if let note = self.noteManager.currentNote, self.state.appActivated && !self.speechRecognition.isListeningForSpeech {
-            print("\tConsuming Note => Playback to Note")
+        } else if let entry = self.entryManager.currentEntry, self.state.appActivated && !self.speechRecognition.isListeningForSpeech {
+            print("\tConsuming Entry => Playback to Entry")
             print("\tDetermine text position near touch point...")
             let touchPoint = touch.location(in: self.textView)
             let textPosition = self.textView?.closestPosition(to: touchPoint)
             
             if let textPosition = textPosition {
-                print("\tGet note segment at touch point...")
+                print("\tGet entry segment at touch point...")
                 let (index, _) = Utils.getIndexAtTextPosition(
                     textPosition: textPosition,
                     textView: self.textView!,
-                    note: note,
-                    segments: note.noteSegments
+                    entry: entry,
+                    segments: entry.entrySegments
                 )
                 
                 if let index = index {
-                    let segment = note.noteSegments[index]
+                    let segment = entry.entrySegments[index]
                     print("\tFound Segment: ", segment.getText())
-                    print("\tPlay note and Seek to segment...")
-                    let wasPlayingNote = self.speechPlayer.isPlayingNote && !self.speechPlayer.pausedPlayingNote
-                    self.noteManager.stopPlayingNote(withFeedback: false) {
-                        if wasPlayingNote {
-                            print("\tDon't pause note because it was playing before touch tap...")
-                            self.noteManager.playNote(from: segment.timeMapping.target.start)
+                    print("\tPlay entry and Seek to segment...")
+                    let wasPlayingEntry = self.speechPlayer.isPlayingEntry && !self.speechPlayer.pausedPlayingEntry
+                    self.entryManager.stopPlayingEntry(withFeedback: false) {
+                        if wasPlayingEntry {
+                            print("\tDon't pause entry because it was playing before touch tap...")
+                            self.entryManager.playEntry(from: segment.timeMapping.target.start)
                         } else {
-                            print("\tPause note because it wasn't playing before touch tap...")
-                            self.noteManager.playNote(
+                            print("\tPause entry because it wasn't playing before touch tap...")
+                            self.entryManager.playEntry(
                                 from: segment.timeMapping.target.start,
                                 onStartHandler: {
-                                    // Pause Note
-                                    self.noteManager.pauseNote(withFeedback: false)
+                                    // Pause Entry
+                                    self.entryManager.pauseEntry(withFeedback: false)
                                     
                                     // Highlight word
                                     DispatchQueue.main.async { [weak self] in
                                         Timer.scheduledTimer(withTimeInterval: 0.2, repeats: false) { timer in
-                                            if segment.getText().count > 0 && segment.isActive(), let range = note.getSegmentTextRange(of: segment) {
+                                            if segment.getText().count > 0 && segment.isActive(), let range = entry.getSegmentTextRange(of: segment) {
                                                 print("\tHighlight word '\(segment.getText())' on screen...")
-                                                self?.updateUIText(text: note.getText(), highlightRange: range, transformations: note.transformations)
+                                                self?.updateUIText(text: entry.getText(), highlightRange: range, transformations: entry.transformations)
                                             }
                                         }
                                     }
@@ -2144,48 +2144,48 @@ class DetailViewController: UIViewController, SegueProtocol {
     
     // MARK: - Menu Bar Methods
     
-    @IBAction func startNote(_ sender: Any? = nil) {
-        if let _ = self.noteManager.currentNote {
-            self.noteManager.startNote()
+    @IBAction func startEntry(_ sender: Any? = nil) {
+        if let _ = self.entryManager.currentEntry {
+            self.entryManager.startEntry()
         } else {
-            let _ = self.noteManager.createNote(withListening: true)
+            let _ = self.entryManager.createEntry(withListening: true)
         }
     }
     
-    @IBAction func resumeNote(_ sender: Any? = nil) {
-        self.noteManager.resumeNote()
+    @IBAction func resumeEntry(_ sender: Any? = nil) {
+        self.entryManager.resumeEntry()
     }
     
-    @IBAction func editNote(_ sender: Any? = nil) {
-        self.noteManager.editNote()
+    @IBAction func editEntry(_ sender: Any? = nil) {
+        self.entryManager.editEntry()
     }
     
-    @IBAction func stopListeningNote(_ sender: Any? = nil) {
-        self.noteManager.stopNote()
+    @IBAction func stopListeningEntry(_ sender: Any? = nil) {
+        self.entryManager.stopEntry()
     }
     
     @IBAction func play(_ sender: Any? = nil) {
-        self.noteManager.playNote()
+        self.entryManager.playEntry()
     }
     
     @IBAction func stopPlaying(_ sender: Any? = nil) {
-        self.noteManager.stopPlayingNote()
+        self.entryManager.stopPlayingEntry()
     }
     
     @IBAction func echo(_ sender: Any? = nil) {
-        self.noteManager.echoNote()
+        self.entryManager.echoEntry()
     }
     
     @IBAction func stopEcho(_ sender: Any? = nil) {
-        self.noteManager.stopEcho()
+        self.entryManager.stopEcho()
     }
     
     @IBAction func walk(_ sender: Any? = nil) {
-        self.noteManager.walkNote()
+        self.entryManager.walkEntry()
     }
     
     @IBAction func export(_ sender: Any? = nil) {
-        self.noteManager.exportNote()
+        self.entryManager.exportEntry()
     }
     
     // MARK: - Resting Command Bar Methods
@@ -2195,19 +2195,19 @@ class DetailViewController: UIViewController, SegueProtocol {
     }
     
     @IBAction func run(_ sender: Any? = nil) {
-        self.noteManager.runNote()
+        self.entryManager.runEntry()
     }
     
     @IBAction func pause(_ sender: Any? = nil) {
-        self.noteManager.pauseNote()
+        self.entryManager.pauseEntry()
     }
     
     @IBAction func playCommit(_ sender: Any? = nil) {
-        self.noteManager.playCommit()
+        self.entryManager.playCommit()
     }
     
     @IBAction func pauseEcho(_ sender: Any? = nil) {
-        self.noteManager.pauseEcho()
+        self.entryManager.pauseEcho()
     }
     
     @IBAction func inspectClipboard(_ sender: Any? = nil) {
@@ -2215,11 +2215,11 @@ class DetailViewController: UIViewController, SegueProtocol {
     }
     
     @IBAction func skipBackward(_ sender: Any? = nil) {
-        self.noteManager.skipBackward()
+        self.entryManager.skipBackward()
     }
     
     @IBAction func skipForward(_ sender: Any? = nil) {
-        self.noteManager.skipForward()
+        self.entryManager.skipForward()
     }
     
     @IBAction func playbackRate(_ sender: Any? = nil) {
@@ -2366,66 +2366,66 @@ class DetailViewController: UIViewController, SegueProtocol {
     }
     
     @IBAction func walkNextElement(_ sender: Any? = nil) {
-        self.noteManager.walkNextElement()
+        self.entryManager.walkNextElement()
     }
     
     @IBAction func walkPreviousElement(_ sender: Any? = nil) {
-        self.noteManager.walkPreviousElement()
+        self.entryManager.walkPreviousElement()
     }
     
     @IBAction func pauseRun(_ sender: Any? = nil) {
-        self.noteManager.pauseRun()
+        self.entryManager.pauseRun()
     }
     
     @IBAction func exitWalkRun(_ sender: Any? = nil) {
-        self.noteManager.exitWalkRun()
+        self.entryManager.exitWalkRun()
     }
 
     // MARK: - Selection Methods
 
     @IBAction func increaseRateSelection(_ sender: Any? = nil) {
-        self.noteManager.increaseRateSelection()
+        self.entryManager.increaseRateSelection()
     }
     
     @IBAction func decreaseRateSelection(_ sender: Any? = nil) {
-        self.noteManager.decreaseRateSelection()
+        self.entryManager.decreaseRateSelection()
     }
     
     @IBAction func deleteSelection(_ sender: Any? = nil) {
-        self.noteManager.deleteSelection()
+        self.entryManager.deleteSelection()
     }
     
     @IBAction func updateSelection(_ sender: Any? = nil) {
-        self.noteManager.updateSelection()
+        self.entryManager.updateSelection()
     }
     
     @IBAction func cancelUpdateSelection(_ sender: Any? = nil) {
-        self.noteManager.cancelUpdateSelection()
+        self.entryManager.cancelUpdateSelection()
     }
     
     @IBAction func copySelection(_ sender: Any? = nil) {
-        self.noteManager.copySelection()
+        self.entryManager.copySelection()
     }
     
     @IBAction func cutSelection(_ sender: Any? = nil) {
-        self.noteManager.cutSelection()
+        self.entryManager.cutSelection()
     }
     
     // Reference: https://stackoverflow.com/questions/43251708/passing-arguments-to-selector-in-swift
     @objc func pasteClipboard(_ sender: Any? = nil) {
-        self.noteManager.pasteClipboard()
+        self.entryManager.pasteClipboard()
     }
     
     // MARK: - UndoManager Methods
     
     @IBAction func undoTapped() {
         print("===== Detail View Controller: Undo Manager =====")
-        self.noteManager.undo()
+        self.entryManager.undo()
     }
     
     @IBAction func redoTapped() {
         print("===== Detail View Controller: Redo Manager =====")
-        self.noteManager.redo()
+        self.entryManager.redo()
     }
     
     // MARK: - Helper Methods

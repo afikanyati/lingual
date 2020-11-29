@@ -36,7 +36,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     var speechSynthesis: SpeechSynthesisEngine
     var uiManager: UIManager
     @objc dynamic weak var selectionCursor: SelectionCursor!
-    weak var noteManager: NoteManager!
+    weak var entryManager: EntryManager!
     
     // MARK: - Speech Recognition Properties
     
@@ -61,15 +61,15 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     private(set) var isActive = true
     private(set) var isListeningForWakePhrase = false
     private(set) var isListeningForVolume = false
-    /// Specifies whether note is currently listening for voice commands
+    /// Specifies whether entry is currently listening for voice commands
     private(set) var isListeningForCommands = false
-    /// Specifies whether note has paused listening for commands (active, but paused vs. inactive)
+    /// Specifies whether entry has paused listening for commands (active, but paused vs. inactive)
     private(set) var pausedListeningForCommands = false
-    /// Specifies whether note is currently listening for speech
+    /// Specifies whether entry is currently listening for speech
     private(set) var isListeningForSpeech = false
-    /// Specifies whether note has paused listening for speech (active, but paused vs. inactive)
+    /// Specifies whether entry has paused listening for speech (active, but paused vs. inactive)
     private(set) var pausedListeningForSpeech = false
-    /// Specifies whether note has been paused listening for speech by user
+    /// Specifies whether entry has been paused listening for speech by user
     private(set) var userInitiatedPausedListeningForSpeech = false
     /// Indicates whether we have to execute listening for speech handler in isListeningForSpeech method
     private(set) var executedListeningStartHandler = true
@@ -223,7 +223,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
 //        print("should not have a listening timer if we're not listening for speech: ", (self.listeningTimer != nil && self.isListeningForSpeech), self.listeningTimer == nil)
 //        print("current result: ", result)
         
-        // ***** IF WE ARE LISTENING TO SPEECH, MAKE SURE WE HAVE A NOTE AS WELL
+        // ***** IF WE ARE LISTENING TO SPEECH, MAKE SURE WE HAVE A ENTRY AS WELL
 
         if !result {
             fatalError("===== [Error] Speech Recognition Engine Representation Invariants were broken =====")
@@ -301,17 +301,17 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             context: nil
         )
         
-        // NoteManager
+        // EntryManager
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteDeleted(notification:)),
-            name: NoteManager.onNoteDeleted,
+            selector: #selector(onEntryDeleted(notification:)),
+            name: EntryManager.onEntryDeleted,
             object: nil
         )
         notificationCenter.addObserver(
             self,
-            selector: #selector(onExecuteNoteAction(notification:)),
-            name: NoteManager.onExecuteNoteAction,
+            selector: #selector(onExecuteEntryAction(notification:)),
+            name: EntryManager.onExecuteEntryAction,
             object: nil
         )
         
@@ -365,7 +365,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             self.stopListeningForWakePhrase()
         }
         
-        // keep recording outside of app if note started
+        // keep recording outside of app if entry started
         if !self.isListeningForSpeech {
             print("\tStop listening for voice commands...")
             self.state.setAppActive(as: false)
@@ -503,12 +503,12 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         }
     }
     
-    @objc func onNoteDeleted(notification: Notification) {
-        print("===== Speech Recognition Engine: On Deleted Note =====")
+    @objc func onEntryDeleted(notification: Notification) {
+        print("===== Speech Recognition Engine: On Deleted Entry =====")
     }
     
-    @objc func onExecuteNoteAction(notification: Notification) {
-        print("===== Speech Recognition Engine: On Execute Note Action =====")
+    @objc func onExecuteEntryAction(notification: Notification) {
+        print("===== Speech Recognition Engine: On Execute Entry Action =====")
         if let type = notification.userInfo!["type"] as? String {
             switch (type) {
             default:
@@ -619,8 +619,8 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                         var buttons: [UIBarButtonItem] = []
                         
                         if let _ = Utils.getNavigationController()?.visibleViewController as? DetailViewController  {
-                            let backToNotesButton = self!.getBackToNotesButton()
-                            buttons.append(backToNotesButton)
+                            let backToEntriesButton = self!.getBackToEntriesButton()
+                            buttons.append(backToEntriesButton)
                         }
                         let stopListeningButton = self!.getStopListeningButton(withStopIndicator: true)
                         buttons.append(stopListeningButton)
@@ -633,8 +633,8 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                         var buttons: [UIBarButtonItem] = []
                         
                         if let _ = Utils.getNavigationController()?.visibleViewController as? DetailViewController  {
-                            let backToNotesButton = self!.getBackToNotesButton()
-                            buttons.append(backToNotesButton)
+                            let backToEntriesButton = self!.getBackToEntriesButton()
+                            buttons.append(backToEntriesButton)
                         }
                         let stopListeningButton = self!.getStopListeningButton(withStopIndicator: true)
                         buttons.append(stopListeningButton)
@@ -659,24 +659,24 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         checkRep()
     }
     
-    @objc func handleBackToNotes(_ sender: Any) {
-        print("===== Speech Recognition Engine: Handle Back To Notes =====")
+    @objc func handleBackToEntries(_ sender: Any) {
+        print("===== Speech Recognition Engine: Handle Back To Entries =====")
         DispatchQueue.main.async {
-            Utils.getNavigationController()?.visibleViewController?.performSegue(withIdentifier: Segues.moveFromDetailToNoteTable.rawValue, sender: nil)
+            Utils.getNavigationController()?.visibleViewController?.performSegue(withIdentifier: Segues.moveFromDetailToEntryTable.rawValue, sender: nil)
         }
     }
     
-    func activateListeningIndicator(withRecording: Bool = false, withStopListeningButton: Bool = false, withBackToNotesButton: Bool = false) {
+    func activateListeningIndicator(withRecording: Bool = false, withStopListeningButton: Bool = false, withBackToEntriesButton: Bool = false) {
         print("===== Speech Recognition Engine: Activate Listening Indicator =====")
         print("\tWith Recording: ", withRecording)
         print("\tWith Stop Listening Button: ", withStopListeningButton)
-        print("\tWith Back To Notes Button: ", withBackToNotesButton)
+        print("\tWith Back To Entries Button: ", withBackToEntriesButton)
         DispatchQueue.main.async {
             var buttons: [UIBarButtonItem] = []
             
-            if withBackToNotesButton {
-                let backToNotesButton = self.getBackToNotesButton()
-                buttons.append(backToNotesButton)
+            if withBackToEntriesButton {
+                let backToEntriesButton = self.getBackToEntriesButton()
+                buttons.append(backToEntriesButton)
             }
             
             let spinner = UIActivityIndicatorView(style: .medium)
@@ -732,11 +732,11 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         return barButton
     }
     
-    func getBackToNotesButton() -> UIBarButtonItem {
+    func getBackToEntriesButton() -> UIBarButtonItem {
         let button  = UIButton(type: .custom)
         
         button.frame = CGRect(x: 0.0, y: 0.0, width: Utils.NAVBAR_BUTTON_LENGTH, height: Utils.NAVBAR_BUTTON_LENGTH)
-        button.addTarget(self, action: #selector(self.handleBackToNotes), for: .touchDown)
+        button.addTarget(self, action: #selector(self.handleBackToEntries), for: .touchDown)
         
         button.setImage(UIImage(systemName: "chevron.left"), for: .normal)
         button.tintColor = UIColor.systemGray
@@ -1109,7 +1109,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
 //                    self.isListeningForVolume = true
 //                    self.stopListeningForVolumeTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) {[weak self] timer in
 //                        self?.stopListeningForVolume() {
-//                            self?.note.startListeningForVoiceCommands(
+//                            self?.entry.startListeningForVoiceCommands(
 //                                soundIntensityHandler: self!.soundIntensityHandler!,
 //                                pitchHandler: self!.pitchHandler!
 //                            )
@@ -1137,7 +1137,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
 //                        self.stopListeningForVolumeTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) {[weak self] timer in
 //                            if self?.stopListeningForVolumeTimer != nil {
 //                                self?.stopListeningForVolume() {
-//                                    self?.note.startListeningForVoiceCommands(
+//                                    self?.entry.startListeningForVoiceCommands(
 //                                        soundIntensityHandler: self!.soundIntensityHandler!,
 //                                        pitchHandler: self!.pitchHandler!
 //                                    )
@@ -1238,12 +1238,12 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     
     func getDurationListening() -> Float {
         // print("===== Get Duration Listening =====")
-        if let note = self.noteManager.currentNote, self.pausedListeningForSpeech {
-            return Float(note.endTime.seconds)
-        } else if let note = self.noteManager.currentNote, note.currentClipUID != nil && note.recordStartDate != nil && note.noteSegments.count > 0 {
-            return Float(Date().timeIntervalSince(note.recordStartDate!))
-        } else if let note = self.noteManager.currentNote, note.recordStartDate != nil {
-            return Float(Date().timeIntervalSince(note.recordStartDate!))
+        if let entry = self.entryManager.currentEntry, self.pausedListeningForSpeech {
+            return Float(entry.endTime.seconds)
+        } else if let entry = self.entryManager.currentEntry, entry.currentClipUID != nil && entry.recordStartDate != nil && entry.entrySegments.count > 0 {
+            return Float(Date().timeIntervalSince(entry.recordStartDate!))
+        } else if let entry = self.entryManager.currentEntry, entry.recordStartDate != nil {
+            return Float(Date().timeIntervalSince(entry.recordStartDate!))
         }
         
         return 0
@@ -1252,9 +1252,9 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     func getRecordingSoundIntensityDatum(timestamp: Double) -> SoundIntensityDatum {
         var datum: SoundIntensityDatum
         var i = 0
-        var datumTimestamp = self.soundIntensityStream[i].date - self.noteManager.currentNote!.recordStartDate! - Utils.TRANSCRIPTION_LATENCY_DURATION
+        var datumTimestamp = self.soundIntensityStream[i].date - self.entryManager.currentEntry!.recordStartDate! - Utils.TRANSCRIPTION_LATENCY_DURATION
         repeat {
-            datumTimestamp = self.soundIntensityStream[i].date - self.noteManager.currentNote!.recordStartDate! - Utils.TRANSCRIPTION_LATENCY_DURATION
+            datumTimestamp = self.soundIntensityStream[i].date - self.entryManager.currentEntry!.recordStartDate! - Utils.TRANSCRIPTION_LATENCY_DURATION
             datum = self.soundIntensityStream[i]
             i += 1
         } while datumTimestamp < timestamp && i < self.soundIntensityStream.count
@@ -1303,7 +1303,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
 //                } else if !self.isListeningForSpeech && !self.isListeningForCommands {
 //                    self.startListeningForVoiceCommands()
 //                }
-            } else if let newHasSelection = change?[.newKey] as? Bool, let oldHasSelection = change?[.oldKey] as? Bool, !newHasSelection && oldHasSelection && self.isListeningForSpeech && self.isListeningForCommands && !self.speechPlayer.isPlayingNote && !self.speechSynthesis.isPlayingEcho && !self.speechSynthesis.isPlayingPassiveEcho {
+            } else if let newHasSelection = change?[.newKey] as? Bool, let oldHasSelection = change?[.oldKey] as? Bool, !newHasSelection && oldHasSelection && self.isListeningForSpeech && self.isListeningForCommands && !self.speechPlayer.isPlayingEntry && !self.speechSynthesis.isPlayingEcho && !self.speechSynthesis.isPlayingPassiveEcho {
                 print("\tKeyPath: hasSelection")
                 print("\tSelection removed.")
                 // start listening for speech again
@@ -1386,7 +1386,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             self.speechSynthesis.stopEcho(withFeedback: false)
         }
         
-        if self.speechPlayer.isPlayingNote && !self.speechPlayer.pausedPlayingNote && !self.selectionCursor.hasSelection {
+        if self.speechPlayer.isPlayingEntry && !self.speechPlayer.pausedPlayingEntry && !self.selectionCursor.hasSelection {
             // stop active playback
             self.speechPlayer.stop(withFeedback: false)
         }
@@ -1786,22 +1786,22 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 // Attempting to use selection voice command without selection
                 print("\t[Invalid] Attempting to use selection voice command without selection")
                 return (false, .SELECTION_COMMAND_WITHOUT_SELECTION, type, numWordsBeforeVoiceCommand)
-            } else if self.noteManager.currentNote == nil && type != "start note" && (voiceCommandEngine.isNoteVoiceCommand(command: type) || voiceCommandEngine.isNoteManagerCommand(command: type)) {
-                // Attempt to make note command when no note set
-                print("\t[Invalid] Attempt to make note command when no note set")
-                return (false, .NOTE_COMMAND_WITHOUT_NOTE_SET, type, numWordsBeforeVoiceCommand)
+            } else if self.entryManager.currentEntry == nil && type != "start entry" && (voiceCommandEngine.isEntryVoiceCommand(command: type) || voiceCommandEngine.isEntryManagerCommand(command: type)) {
+                // Attempt to make entry command when no entry set
+                print("\t[Invalid] Attempt to make entry command when no entry set")
+                return (false, .ENTRY_COMMAND_WITHOUT_ENTRY_SET, type, numWordsBeforeVoiceCommand)
             } else if !self.uiManager.dialogIsVisible && voiceCommandEngine.isUIManagerCommand(command: type) && (type != "cancel" && self.selectionCursor.isUpdatingSelection) {
                 // User said ui manager vocie command when wasn't visible
                 print("\t[Invalid] User said ui manager voice command when wasn't visible")
                 return (false, .UI_MANAGER_COMMAND_WITHOUT_DIALOG_VISIBLE, type, numWordsBeforeVoiceCommand)
-            } else if type == "stop" && !self.speechPlayer.isPlayingNote && !self.speechSynthesis.isPlayingEcho && !self.noteManager.isRunningNote {
+            } else if type == "stop" && !self.speechPlayer.isPlayingEntry && !self.speechSynthesis.isPlayingEcho && !self.entryManager.isRunningEntry {
                 // User said stop when no stoppable mode was active
                 print("\t[Invalid] User said stop when no stoppable mode was active")
                 return (false, .STOP_COMMAND_WITHOUT_SUITABLE_MODE, type, numWordsBeforeVoiceCommand)
             } else if type == "delete" && self.isListeningForSpeech && !self.selectionCursor.hasSelection {
-                // Attemping to delete note while listening for speech without selection
-                print("\t[Invalid] Attemping to delete note while listening for speech without selection")
-                return (false, .DELETE_NOTE_WHILE_LISTENING_FOR_SPEECH, type, numWordsBeforeVoiceCommand)
+                // Attemping to delete entry while listening for speech without selection
+                print("\t[Invalid] Attemping to delete entry while listening for speech without selection")
+                return (false, .DELETE_ENTRY_WHILE_LISTENING_FOR_SPEECH, type, numWordsBeforeVoiceCommand)
             } else {
                 print("\t[Valid] Voice command is valid")
                 return (true, nil, type, numWordsBeforeVoiceCommand)
@@ -1914,9 +1914,9 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         print("\tCommand Recognized!: \(voiceCommandType)")
 
         // Remove voice command text previous added to text view if voice command detected
-        if let note = self.noteManager.currentNote, !self.isListeningForSpeech && note.noteSegments.count == 0 {
-            // Don't clear text if we're mid-note
-            note.handleOnSpeechUpdate(text: "")
+        if let entry = self.entryManager.currentEntry, !self.isListeningForSpeech && entry.entrySegments.count == 0 {
+            // Don't clear text if we're mid-entry
+            entry.handleOnSpeechUpdate(text: "")
         }
         
         // clear any previous notifications
@@ -1925,8 +1925,8 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         // Set early detection flag on
         self.earlyValidVoiceCommandDetection = earlyDetection
         
-        // Capture valid voice command if we are composing a note
-        if let _ = self.noteManager.currentNote, self.isListeningForSpeech {
+        // Capture valid voice command if we are composing a entry
+        if let _ = self.entryManager.currentEntry, self.isListeningForSpeech {
             let date = Date()
             let voiceCommandDatum = VoiceCommandDatum(
                 date: date,
@@ -1942,16 +1942,16 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         
         if !handled {
             // Process Voice Command
-            if voiceCommandType == "stop note" && AVAudioSession.isHeadphonesConnected {
+            if voiceCommandType == "stop entry" && AVAudioSession.isHeadphonesConnected {
                 voiceCommandEngine.process(
                     command: voiceCommandType,
                     utterance: transcription.formattedString
                 ) {
-                    if let note = self.noteManager.currentNote, self.isListeningForSpeech {
-                        note.handleOnSpeechUpdate(text: note.getText())
+                    if let entry = self.entryManager.currentEntry, self.isListeningForSpeech {
+                        entry.handleOnSpeechUpdate(text: entry.getText())
                     } else {
                         NotificationCenter.default.post(
-                            name: Note.onRequestToUpdateView,
+                            name: Entry.onRequestToUpdateView,
                             object: nil,
                             userInfo: [:]
                         )
@@ -1966,8 +1966,8 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                     command: voiceCommandType,
                     utterance: transcription.formattedString
                 ) { [weak self] in
-                    if voiceCommandType != "pause note" &&
-                        voiceCommandType != "create note" &&
+                    if voiceCommandType != "pause entry" &&
+                        voiceCommandType != "create entry" &&
                         voiceCommandType != "open selection" &&
                         voiceCommandType != "select commit" &&
                         voiceCommandType != "walk commit" &&
@@ -1980,22 +1980,22 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                         voiceCommandType != "delete selection" &&
                         voiceCommandType != "previous element" &&
                         voiceCommandType != "exit mode" &&
-                        voiceCommandType != "walk note" &&
-                        voiceCommandType != "run note" &&
+                        voiceCommandType != "walk entry" &&
+                        voiceCommandType != "run entry" &&
                         !isUpdatingSelection &&
                         !hasSelection &&
                         !voiceCommandEngine.isUIManagerCommand(command: voiceCommandType) &&
                         self!.pausedListeningForSpeech
                     {
                         // Start listening for speech again if paused
-                        // It won't be paused if the processed voice command was 'stop note'
+                        // It won't be paused if the processed voice command was 'stop entry'
                         if !self!.selectionCursor.hasSelection {
                             self?.startListeningForSpeech() { [weak self] in
-                                if let note = self!.noteManager.currentNote, self!.isListeningForSpeech {
-                                    note.handleOnSpeechUpdate(text: note.getText())
+                                if let entry = self!.entryManager.currentEntry, self!.isListeningForSpeech {
+                                    entry.handleOnSpeechUpdate(text: entry.getText())
                                 } else {
                                     NotificationCenter.default.post(
-                                        name: Note.onRequestToUpdateView,
+                                        name: Entry.onRequestToUpdateView,
                                         object: nil,
                                         userInfo: [:]
                                     )
@@ -2003,14 +2003,14 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                             }
                         }
                     } else {
-                        if let note = self?.noteManager.currentNote,
+                        if let entry = self?.entryManager.currentEntry,
                            self!.isListeningForSpeech &&
                             !self!.selectionCursor.isUpdatingSelection
                         {
-                            note.handleOnSpeechUpdate(text: note.getText())
+                            entry.handleOnSpeechUpdate(text: entry.getText())
                         } else {
                             NotificationCenter.default.post(
-                                name: Note.onRequestToUpdateView,
+                                name: Entry.onRequestToUpdateView,
                                 object: nil,
                                 userInfo: [:]
                             )
@@ -2054,8 +2054,8 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             )
         }
         
-        // Capture invalid voice command if we are composing a note
-        if let _ = self.noteManager.currentNote, self.isListeningForSpeech {
+        // Capture invalid voice command if we are composing a entry
+        if let _ = self.entryManager.currentEntry, self.isListeningForSpeech {
             let date = Date()
             let voiceCommandDatum = VoiceCommandDatum(
                 date: date,
@@ -2159,11 +2159,11 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         // If we don't do this we commit segments that haven't been replaced with true duratio values
         // which affects timing of every other segment
         if let lastSpeechRecognizerHypothesizeDate = self.lastSpeechRecognizerHypothesizeDate, Utils.DEFAULT_RESET_LISTENING_FLAG_DELAY + lastSpeechRecognizerHypothesizeDate.timeIntervalSinceNow < 0 {
-            print("\tReset speech recognition flags and clear note buffer because final transcript didn't arrive...")
+            print("\tReset speech recognition flags and clear entry buffer because final transcript didn't arrive...")
             self.earlyValidVoiceCommandDetection = false
             self.earlyInvalidVoiceCommandDetection = false
             self.earlyBroadcastSpeechRejection = false
-            self.noteManager.currentNote?.clearBuffer()
+            self.entryManager.currentEntry?.clearBuffer()
         }
         
         // Capture durrent date
@@ -2191,9 +2191,9 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             // Analyze for voice commands
             let (isValidVoiceCommand, invalidType, voiceCommandType, _) = self.isValidVoiceCommand(query: transcription.formattedString.lowercased())
 
-            // Add voice command text to the text view if note is empty
-            if let note = self.noteManager.currentNote, !self.isListeningForSpeech && note.noteSegments.count == 0 {
-                note.handleOnSpeechUpdate(text: transcription.formattedString)
+            // Add voice command text to the text view if entry is empty
+            if let entry = self.entryManager.currentEntry, !self.isListeningForSpeech && entry.entrySegments.count == 0 {
+                entry.handleOnSpeechUpdate(text: transcription.formattedString)
             }
             
             if let voiceCommandType = voiceCommandType, isValidVoiceCommand {
@@ -2226,7 +2226,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             let (isValidVoiceCommand, invalidType, voiceCommandType, numWordsBeforeVoiceCommand) = self.isValidVoiceCommand(query: transcription.formattedString.lowercased())
             
             // We place this before the voice command detection infrastructure
-            // to make sure that we've processed voice commands into note
+            // to make sure that we've processed voice commands into entry
             // before acting on them.
             //
             // e.g. "open selection" requires voice command words be tagged
@@ -2300,20 +2300,20 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             self.isListeningForSpeech &&
             self.pausedListeningForSpeech &&
             !self.isListeningForCommands &&
-            self.noteManager.currentNote?.noteBuffer.count ?? 0 > 0 &&
-            self.noteManager.currentNote?.recordStartDate == nil
+            self.entryManager.currentEntry?.entryBuffer.count ?? 0 > 0 &&
+            self.entryManager.currentEntry?.recordStartDate == nil
         ) {
             print("\tHandling speech edge case and voice command speech")
-            // sometimes the voice commands that initiate the note will be sent to be committed erroneously
+            // sometimes the voice commands that initiate the entry will be sent to be committed erroneously
             // we catch them by identifying that self.recordStartDate == nil, for which they would be if
-            // they were processed before note properly started
+            // they were processed before entry properly started
 
             // Clear buffer
-            if let note = self.noteManager.currentNote, note.noteSegments.count == 0 {
+            if let entry = self.entryManager.currentEntry, entry.entrySegments.count == 0 {
                 // clear buffer
-                note.clearBuffer()
+                entry.clearBuffer()
                 // clear screen
-                note.handleOnSpeechUpdate(text: "")
+                entry.handleOnSpeechUpdate(text: "")
             }
             
             // Analyze for voice commands
@@ -2340,7 +2340,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         } else if
             (
                 self.isListeningForSpeech ||
-                (self.voiceCommandStream.last != nil && self.voiceCommandStream.last!.type == "stop note")
+                (self.voiceCommandStream.last != nil && self.voiceCommandStream.last!.type == "stop entry")
             ) &&
             !self.isListeningForCommands
         {
@@ -2349,7 +2349,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             let (isValidVoiceCommand, invalidType, voiceCommandType, numWordsBeforeVoiceCommand) = self.isValidVoiceCommand(query: result.bestTranscription.formattedString.lowercased())
             
             // We place this before the voice command detection infrastructure
-            // to make sure that we've processed voice commands into note
+            // to make sure that we've processed voice commands into entry
             // before acting on them.
             //
             // e.g. "open selection" requires voice command words be tagged
@@ -2434,7 +2434,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             let (isValidVoiceCommand, invalidType, voiceCommandType, numWordsBeforeVoiceCommand) = self.isValidVoiceCommand(query: result.bestTranscription.formattedString.lowercased())
             
             // We place this before the voice command detection infrastructure
-            // to make sure that we've processed voice commands into note
+            // to make sure that we've processed voice commands into entry
             // before acting on them.
             //
             // e.g. "open selection" requires voice command words be tagged
@@ -2490,9 +2490,9 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         } else {
             print("\tCatch all...")
             // execute listen update handler
-            if let note = self.noteManager.currentNote, !self.isListeningForSpeech && note.noteSegments.count == 0 {
-                // We are not yet starting a note and have no noteSegments. We should remove text on screen
-                note.handleOnSpeechUpdate(text: "")
+            if let entry = self.entryManager.currentEntry, !self.isListeningForSpeech && entry.entrySegments.count == 0 {
+                // We are not yet starting a entry and have no entrySegments. We should remove text on screen
+                entry.handleOnSpeechUpdate(text: "")
             }
         }
         

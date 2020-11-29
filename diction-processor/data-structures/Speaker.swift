@@ -15,7 +15,7 @@ class Speaker: NSObject, NSCoding {
     var name: String?
     var avatarURL: URL?
     var pitch: Pitch?
-    var gender: Gender {
+    var register: VocalRegister {
         if let pitch = pitch, pitch.note.octave >= 4 {
             return .female
         }
@@ -74,6 +74,6 @@ class Speaker: NSObject, NSCoding {
     }
     
     override var description: String {
-        return "Speaker (\n\tuid: \(self.uid) \n\tdevice: \(self.device) \n\tname: \(String(describing: self.name)) \n\tavatarURL: \(String(describing: self.avatarURL?.absoluteString)) \n\tpitch: \(String(describing: self.pitch?.note.string)) \n\tgender: \(self.gender)\n)"
+        return "Speaker (\n\tuid: \(self.uid) \n\tdevice: \(self.device) \n\tname: \(String(describing: self.name)) \n\tavatarURL: \(String(describing: self.avatarURL?.absoluteString)) \n\tpitch: \(String(describing: self.pitch?.note.string)) \n\tregister: \(self.register)\n)"
     }
 }

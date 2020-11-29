@@ -38,14 +38,14 @@ class ViewController: UIViewController, SegueProtocol {
     var notifications: NotificationEngine!
     var speechPlayer: SpeechPlayerEngine!
     var selectionCursor: SelectionCursor!
-    var noteManager: NoteManager!
+    var entryManager: EntryManager!
     var uiManager: UIManager!
     override var undoManager: UndoManager {
-        return self.noteManager.undoManager
+        return self.entryManager.undoManager
     }
     
     // MARK: - ViewController References
-    weak var noteTableViewController: NoteTableViewController?
+    weak var entryTableViewController: EntryTableViewController?
     weak var detailViewController: DetailViewController?
     
     // MARK: - Lifecycle Methods
@@ -88,7 +88,7 @@ class ViewController: UIViewController, SegueProtocol {
             self.speechRecognition.activateListeningIndicator(
                 withRecording: false,
                 withStopListeningButton: true,
-                withBackToNotesButton: false
+                withBackToEntriesButton: false
             )
         }
     }
@@ -117,18 +117,18 @@ class ViewController: UIViewController, SegueProtocol {
         }
 
         switch identifier {
-        case .moveFromSleepToNoteTable:
-            print(">>>>> Segue from ViewController to NoteTableViewController >>>>>")
-            if let noteTableViewController = segue.destination as? NoteTableViewController {
-                noteTableViewController.state = self.state
-                noteTableViewController.speechRecognition = self.speechRecognition
-                noteTableViewController.speechSynthesis = self.speechSynthesis
-                noteTableViewController.pitchRecognition = self.pitchRecognition
-                noteTableViewController.notifications = self.notifications
-                noteTableViewController.speechPlayer = self.speechPlayer
-                noteTableViewController.selectionCursor = self.selectionCursor
-                noteTableViewController.noteManager = self.noteManager
-                noteTableViewController.uiManager = self.uiManager
+        case .moveFromSleepToEntryTable:
+            print(">>>>> Segue from ViewController to EntryTableViewController >>>>>")
+            if let entryTableViewController = segue.destination as? EntryTableViewController {
+                entryTableViewController.state = self.state
+                entryTableViewController.speechRecognition = self.speechRecognition
+                entryTableViewController.speechSynthesis = self.speechSynthesis
+                entryTableViewController.pitchRecognition = self.pitchRecognition
+                entryTableViewController.notifications = self.notifications
+                entryTableViewController.speechPlayer = self.speechPlayer
+                entryTableViewController.selectionCursor = self.selectionCursor
+                entryTableViewController.entryManager = self.entryManager
+                entryTableViewController.uiManager = self.uiManager
             }
             self.speechRecognition.activateListeningIndicator(
                 withRecording: self.speechRecognition.isListeningForSpeech,
@@ -144,20 +144,20 @@ class ViewController: UIViewController, SegueProtocol {
                 detailViewController.notifications = self.notifications
                 detailViewController.speechPlayer = self.speechPlayer
                 detailViewController.selectionCursor = self.selectionCursor
-                detailViewController.noteManager = self.noteManager
+                detailViewController.entryManager = self.entryManager
                 detailViewController.uiManager = self.uiManager
             }
             self.speechRecognition.activateListeningIndicator(
                 withRecording: self.speechRecognition.isListeningForSpeech,
                 withStopListeningButton: !self.speechRecognition.isListeningForSpeech,
-                withBackToNotesButton: true
+                withBackToEntriesButton: true
             )
-        case .moveFromNoteTableToDetail:
-            print (">>>>> [Invalid Segue within ViewController] from NoteTableViewControlller to DetailViewController >>>>>")
-        case .moveFromNoteTableToSleep:
-            print (">>>>> [Invalid Segue within ViewController] from NoteTableViewControlller to ViewController >>>>>")
-        case .moveFromDetailToNoteTable:
-            print (">>>>> [Invalid Segue within ViewController] from DetailViewControlller to NoteTableViewController >>>>>")
+        case .moveFromEntryTableToDetail:
+            print (">>>>> [Invalid Segue within ViewController] from EntryTableViewControlller to DetailViewController >>>>>")
+        case .moveFromEntryTableToSleep:
+            print (">>>>> [Invalid Segue within ViewController] from EntryTableViewControlller to ViewController >>>>>")
+        case .moveFromDetailToEntryTable:
+            print (">>>>> [Invalid Segue within ViewController] from DetailViewControlller to EntryTableViewController >>>>>")
         case .noIdentifier:
             print (">>>>> [Error] No Segue Identifier in ViewController >>>>>")
         }
@@ -181,17 +181,17 @@ class ViewController: UIViewController, SegueProtocol {
     func configureNotificationObservers() {
         let notificationCenter = NotificationCenter.default
         
-        // Observe NoteTableView
+        // Observe EntryTableView
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteTableViewDidLoad(notification:)),
-            name: NoteTableViewController.onDidLoad,
+            selector: #selector(onEntryTableViewDidLoad(notification:)),
+            name: EntryTableViewController.onDidLoad,
             object: nil
         )
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteTableViewWillDisappear(notification:)),
-            name: NoteTableViewController.onWillDisappear,
+            selector: #selector(onEntryTableViewWillDisappear(notification:)),
+            name: EntryTableViewController.onWillDisappear,
             object: nil
         )
         
@@ -323,32 +323,32 @@ class ViewController: UIViewController, SegueProtocol {
             object: nil
         )
         
-        // Note
+        // Entry
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteComplete(notification:)),
-            name: Note.onNoteComplete,
+            selector: #selector(onEntryComplete(notification:)),
+            name: Entry.onEntryComplete,
             object: nil
         )
         
-        // NoteManager
+        // EntryManager
         notificationCenter.addObserver(
             self,
-            selector: #selector(onSetNote(notification:)),
-            name: NoteManager.onSetNote,
+            selector: #selector(onSetEntry(notification:)),
+            name: EntryManager.onSetEntry,
             object: nil
         )
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteAudioExported(notification:)),
-            name: NoteManager.onNoteAudioExported,
+            selector: #selector(onEntryAudioExported(notification:)),
+            name: EntryManager.onEntryAudioExported,
             object: nil
         )
     }
     
-    @objc func onNoteTableViewDidLoad(notification: Notification) {
-        print("===== View Controller: On Note Table View Did Load =====")
-        self.noteTableViewController = storyboard?.instantiateViewController(withIdentifier: "NoteTableViewController") as? NoteTableViewController
+    @objc func onEntryTableViewDidLoad(notification: Notification) {
+        print("===== View Controller: On Entry Table View Did Load =====")
+        self.entryTableViewController = storyboard?.instantiateViewController(withIdentifier: "EntryTableViewController") as? EntryTableViewController
     }
     
     @objc func onDetailViewDidLoad(notification: Notification) {
@@ -356,9 +356,9 @@ class ViewController: UIViewController, SegueProtocol {
         self.detailViewController = storyboard?.instantiateViewController(withIdentifier: "DetailViewController") as? DetailViewController
     }
     
-    @objc func onNoteTableViewWillDisappear(notification: Notification) {
+    @objc func onEntryTableViewWillDisappear(notification: Notification) {
         print("===== View Controller: On View Will Disappear =====")
-        self.noteTableViewController = nil
+        self.entryTableViewController = nil
     }
     
     @objc func onDetailViewWillDisappear(notification: Notification) {
@@ -366,12 +366,12 @@ class ViewController: UIViewController, SegueProtocol {
         self.detailViewController = nil
     }
     
-    @objc func onSetNote(notification: Notification) {
-        print("===== View Controller: On Set Note =====")
+    @objc func onSetEntry(notification: Notification) {
+        print("===== View Controller: On Set Entry =====")
         DispatchQueue.main.async { [weak self] in
-            let index = notification.userInfo!["currentNoteIndex"] as? Int
+            let index = notification.userInfo!["currentEntryIndex"] as? Int
             if let _ = index {
-                Utils.onSetNote(
+                Utils.onSetEntry(
                     notification: notification,
                     vc: self!,
                     identifier: Segues.moveFromSleepToDetail.rawValue
@@ -426,7 +426,7 @@ class ViewController: UIViewController, SegueProtocol {
         print("===== View Controller: On Started Listening For Speech =====")
         Utils.onStartedListeningForSpeech(
             notification: notification,
-            note: self.noteManager.currentNote,
+            entry: self.entryManager.currentEntry,
             speechRecognition: self.speechRecognition,
             selectionCursor: self.selectionCursor
         )
@@ -455,7 +455,7 @@ class ViewController: UIViewController, SegueProtocol {
     @objc func onWakePhraseDetected(notification: Notification) {
         print("===== View Controller: On Wake Phrase Detected =====")
         DispatchQueue.main.async { [weak self] in
-            self?.performSegue(withIdentifier: Segues.moveFromSleepToNoteTable.rawValue, sender: nil)
+            self?.performSegue(withIdentifier: Segues.moveFromSleepToEntryTable.rawValue, sender: nil)
         }
     }
     
@@ -471,7 +471,7 @@ class ViewController: UIViewController, SegueProtocol {
         print("===== View Controller: On Stop Timed Notification =====")
         Utils.onStopNotification(
             notification: notification,
-            note: self.noteManager.currentNote,
+            entry: self.entryManager.currentEntry,
             speechRecognition: self.speechRecognition,
             selectionCursor: self.selectionCursor
         )
@@ -486,9 +486,9 @@ class ViewController: UIViewController, SegueProtocol {
         )
     }
     
-    @objc func onNoteComplete(notification: Notification) {
-        print("===== View Controller: On Note Complete =====")
-        Utils.onNoteComplete(
+    @objc func onEntryComplete(notification: Notification) {
+        print("===== View Controller: On Entry Complete =====")
+        Utils.onEntryComplete(
             notification: notification,
             speechRecognition: self.speechRecognition,
             soundIntensityIndicatorHeight: self.soundIntensityIndicatorHeight
@@ -521,7 +521,7 @@ class ViewController: UIViewController, SegueProtocol {
                 notification: notification,
                 speechRecognition: self!.speechRecognition,
                 speechPlayer: self!.speechPlayer,
-                noteManager: self!.noteManager
+                entryManager: self!.entryManager
             )
         }
     }
@@ -532,16 +532,16 @@ class ViewController: UIViewController, SegueProtocol {
             Utils.onSpeechStopPlaying(
                 notification: notification,
                 speechRecognition: self!.speechRecognition,
-                noteManager: self!.noteManager
+                entryManager: self!.entryManager
             )
         }
     }
     
     // Reference: https://stackoverflow.com/questions/50128462/how-to-save-document-to-files-app-in-swift
-    @objc func onNoteAudioExported(notification: Notification) {
-        print("===== View Controller: On Note Audio Exported =====")
+    @objc func onEntryAudioExported(notification: Notification) {
+        print("===== View Controller: On Entry Audio Exported =====")
         DispatchQueue.main.async {
-            Utils.onNoteAudioExported(
+            Utils.onEntryAudioExported(
                 notification: notification,
                 vc: self
             )
@@ -606,11 +606,11 @@ class ViewController: UIViewController, SegueProtocol {
 // TODO: set withOnDeviceRecognition = true
 //
 // 10) No words for a minute
-// Instructions: Open app. Say wake phrase. Start note. Wait a minute without saying a word. Say words after a minute.
+// Instructions: Open app. Say wake phrase. Start entry. Wait a minute without saying a word. Say words after a minute.
 // Expected Result: No words should be transcribed before a minute. Words shold be transcribed after a minute. Session should be fluid.
 //
 // 11) Some words in a minute. More words after.
-// Instructions: Open app. Say wake phrase. Start note. Say some words before a minute. Say more words after a minute.
+// Instructions: Open app. Say wake phrase. Start entry. Say some words before a minute. Say more words after a minute.
 // Expected Result: Some words should be transcribed before a minute. More words should be stranscribed after a minute. Session should be fluid. The timestamps should be accurate for each word.
 //
 // +++++ On-device recognition
@@ -618,15 +618,15 @@ class ViewController: UIViewController, SegueProtocol {
 // TODO: set withOnDeviceRecognition = true
 //
 // 12) No words for a minute
-// Instructions: Open app. Say wake phrase. Start note. Wait a minute without saying a word. Say words after a minute.
+// Instructions: Open app. Say wake phrase. Start entry. Wait a minute without saying a word. Say words after a minute.
 // Expected Result: No words should be transcribed before a minute. Words shold be transcribed after a minute. Session should be fluid.
 //
 // 13) Some words in a minute. More words after.
-// Instructions: Open app. Say wake phrase. Start note. Say some words before a minute. Say more words after a minute.
+// Instructions: Open app. Say wake phrase. Start entry. Say some words before a minute. Say more words after a minute.
 // Expected Result: Some words should be transcribed before a minute. More words should be stranscribed after a minute. Session should be fluid. The timestamps should be accurate for each word.
 //
 // 14) Spaced out audio while using on-device recognition
-// Instructions: Speak out an note with at least five seconds of silence between each word
+// Instructions: Speak out an entry with at least five seconds of silence between each word
 // Expected result: On playback, the silences should be removed and the focus word on screen should be aligned with the word being uttered.
 //
 // 15) Test Punctuation Suggestion: Ignore Adjective
@@ -649,7 +649,7 @@ class ViewController: UIViewController, SegueProtocol {
 // Warning: Sometimes the transcript returns back a starting time for "can" that happens well before it is uttered. There is no control of this unfortunately
 //
 // 19) Test Punctuation and Temporal Suggestions Active
-// Instructions: In createNewNote() method, set 'withTemporalSuggestions' and 'withPunctuationSuggestions' to true. And open application
+// Instructions: In createNewEntry() method, set 'withTemporalSuggestions' and 'withPunctuationSuggestions' to true. And open application
 // Expected Result:  You should see a 'Conflicting View Modes' error dialog telling you it's selected punctuation suggestions.
 //
 // 20) Test Change Audio Inputs
@@ -659,40 +659,40 @@ class ViewController: UIViewController, SegueProtocol {
 // 21) Test Play Sentence
 //
 // ===== Code Needed =====
-// note.playSentence(number: 1)
+// entry.playSentence(number: 1)
 // =======================
 //
 // Instructions: Place code in an area where it maybe be executable. Utter the following: "This is the first sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the second sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the third sentence".
 // Expected Result: System should play back: "This is the second sentence".
 //
-// 22) Test Trim Note: Permanent
+// 22) Test Trim Entry: Permanent
 //
 // ===== Code Needed =====
-//note.trim(keeping: note.getSentenceDetails(number: 1)!.timeRange, permanent: true) {
-//    self.note.play(
+//entry.trim(keeping: entry.getSentenceDetails(number: 1)!.timeRange, permanent: true) {
+//    self.entry.play(
 //        onStartHandler: { [weak self] in
 //            // print("Successfully executed playback on start handler")
 //            DispatchQueue.main.async {
-//                self?.playAudioButton.setTitle(PAUSE_NOTE_LABEL, for: .normal)
+//                self?.playAudioButton.setTitle(PAUSE_ENTRY_LABEL, for: .normal)
 //            }
 //        },
 //        secondElapseHandler: { [weak self] in
 //            // print("Successfully executed playback secondT elapsed handler")
 //            DispatchQueue.main.async {
-//                if !self!.note.isListeningForSpeech && self!.note.player.currentTime().seconds != Double.infinity && self!.note.player.currentTime().seconds != Double.nan && self!.note.player.currentTime().seconds != -Double.infinity {
-//                    self?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: Float(self!.note.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.note.getDuration(filteredDuration: true).seconds)))"
+//                if !self!.entry.isListeningForSpeech && self!.entry.player.currentTime().seconds != Double.infinity && self!.entry.player.currentTime().seconds != Double.nan && self!.entry.player.currentTime().seconds != -Double.infinity {
+//                    self?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: Float(self!.entry.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.entry.getDuration(filteredDuration: true).seconds)))"
 //                }
 //            }
 //        },
 //        segmentBoundaryHandler: { [weak self] in
 //            // print("Successfully executed playback on segment boundary handler")
 //            DispatchQueue.main.async {
-//                if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && segment.isActive(), let highlightRange = self?.note.getSegmentTextRange(of: segment) {
+//                if let segment = self?.entry.getSegment(type: .current), segment.getText().count > 0 && segment.isActive(), let highlightRange = self?.entry.getSegmentTextRange(of: segment) {
 //                    // update text
-//                    self?.updateUIText(text: self!.note.getText(), highlightRange: highlightRange, transformations: self!.note.transformations)
+//                    self?.updateUIText(text: self!.entry.getText(), highlightRange: highlightRange, transformations: self!.entry.transformations)
 //                }
 //
-//                if let segment = self?.note.getSegment(type: .current), let pitch = segment.getPitch() {
+//                if let segment = self?.entry.getSegment(type: .current), let pitch = segment.getPitch() {
 //                    // update pitch
 //                    self?.pitchLabel.text = pitch.note.string
 //                }
@@ -700,8 +700,8 @@ class ViewController: UIViewController, SegueProtocol {
 //        }, onFinishHandler: { [weak self] in
 //            // print("Successfully executed playback on finish handler")
 //            DispatchQueue.main.async {
-//                self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
-//                if !self!.note.isListeningForSpeech {
+//                self?.updateUIText(text: self!.entry.getText(), transformations: self!.entry.transformations)
+//                if !self!.entry.isListeningForSpeech {
 //                    self?.navigationBar.topItem?.title = ""
 //                }
 //
@@ -716,34 +716,34 @@ class ViewController: UIViewController, SegueProtocol {
 // Instructions: Place code in an area where it maybe be executable. Utter the following: "This is the first sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the second sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the third sentence".
 // Expected Result: System should play back: "This is the second sentence".
 //
-// 23) Test Trim Note: Not Permanent
+// 23) Test Trim Entry: Not Permanent
 //
 // ===== Code Needed =====
-//note.trim(keeping: note.getSentenceDetails(number: 1)!.timeRange, permanent: false) {
-//    self.note.play(
+//entry.trim(keeping: entry.getSentenceDetails(number: 1)!.timeRange, permanent: false) {
+//    self.entry.play(
 //        onStartHandler: { [weak self] in
 //            // print("Successfully executed playback on start handler")
 //            DispatchQueue.main.async {
-//                self?.playAudioButton.setTitle(PAUSE_NOTE_LABEL, for: .normal)
+//                self?.playAudioButton.setTitle(PAUSE_ENTRY_LABEL, for: .normal)
 //            }
 //        },
 //        secondElapseHandler: { [weak self] in
 //            // print("Successfully executed playback secondT elapsed handler")
 //            DispatchQueue.main.async {
-//                if !self!.note.isListeningForSpeech && self!.note.player.currentTime().seconds != Double.infinity && self!.note.player.currentTime().seconds != Double.nan && self!.note.player.currentTime().seconds != -Double.infinity {
-//                    self?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: Float(self!.note.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.note.getDuration(filteredDuration: true).seconds)))"
+//                if !self!.entry.isListeningForSpeech && self!.entry.player.currentTime().seconds != Double.infinity && self!.entry.player.currentTime().seconds != Double.nan && self!.entry.player.currentTime().seconds != -Double.infinity {
+//                    self?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: Float(self!.entry.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.entry.getDuration(filteredDuration: true).seconds)))"
 //                }
 //            }
 //        },
 //        segmentBoundaryHandler: { [weak self] in
 //            // print("Successfully executed playback on segment boundary handler")
 //            DispatchQueue.main.async {
-//                if let segment = self?.note.getSegment(type: .current), segment.getText().count > 0 && segment.isActive(), let highlightRange = self?.note.getSegmentTextRange(of: segment) {
+//                if let segment = self?.entry.getSegment(type: .current), segment.getText().count > 0 && segment.isActive(), let highlightRange = self?.entry.getSegmentTextRange(of: segment) {
 //                    // update text
-//                    self?.updateUIText(text: self!.note.getText(), highlightRange: highlightRange, transformations: self!.note.transformations)
+//                    self?.updateUIText(text: self!.entry.getText(), highlightRange: highlightRange, transformations: self!.entry.transformations)
 //                }
 //
-//                if let segment = self?.note.getSegment(type: .current), let pitch = segment.getPitch() {
+//                if let segment = self?.entry.getSegment(type: .current), let pitch = segment.getPitch() {
 //                    // update pitch
 //                    self?.pitchLabel.text = pitch.note.string
 //                }
@@ -751,8 +751,8 @@ class ViewController: UIViewController, SegueProtocol {
 //        }, onFinishHandler: { [weak self] in
 //            // print("Successfully executed playback on finish handler")
 //            DispatchQueue.main.async {
-//                self?.updateUIText(text: self!.note.getText(), transformations: self!.note.transformations)
-//                if !self!.note.isListeningForSpeech {
+//                self?.updateUIText(text: self!.entry.getText(), transformations: self!.entry.transformations)
+//                if !self!.entry.isListeningForSpeech {
 //                    self?.navigationBar.topItem?.title = ""
 //                }
 //
@@ -770,8 +770,8 @@ class ViewController: UIViewController, SegueProtocol {
 // 24) Test Extract Sentence
 //
 // ===== Code Needed =====
-//note.extractSentence(number: 1) { sentence in
-//    self.tempNote = sentence
+//entry.extractSentence(number: 1) { sentence in
+//    self.tempEntry = sentence
 //    print(sentence?.getText() ?? "NIL")
 //    sentence?.play(onFinishHandler: {
 //        print("Finished sentence!")
@@ -782,39 +782,39 @@ class ViewController: UIViewController, SegueProtocol {
 // Instructions: Place code in an area where it maybe be executable. Utter the following: "This is the first sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the second sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the third sentence".
 // Expected Result: System should play back: "This is the second sentence".
 //
-// 25) Duplicate Note
+// 25) Duplicate Entry
 //
 // ===== Code Needed =====
-//note.duplicate() { note in
-//    self.tempNote = note
-//    self.tempNote?.play() {
+//entry.duplicate() { entry in
+//    self.tempEntry = entry
+//    self.tempEntry?.play() {
 //        print("Finished Sentence!")
 //    }
 //}
 // =======================
 //
-// Instructions: Place code in an area where it maybe be executable. Record any note.
-// Expected Result: System should play back your note.
+// Instructions: Place code in an area where it maybe be executable. Record any entry.
+// Expected Result: System should play back your entry.
 //
 // 26) Voice Commands
 //
-// Instructions: Open app and utter wake phrase. Start note by uttering "Start Note". Speak an note. End note by uttering "Stop Note". Play note by uttering "Play Note".
-// Expected Result: Your note should playback *** without *** 'Stop Note' in it.
+// Instructions: Open app and utter wake phrase. Start entry by uttering "Start Entry". Speak an entry. End entry by uttering "Stop Entry". Play entry by uttering "Play Entry".
+// Expected Result: Your entry should playback *** without *** 'Stop Entry' in it.
 //
-// 27) Uttering Voice Command Mid-Note
+// 27) Uttering Voice Command Mid-Entry
 //
-// Instructions: Open app and utter wake phrase. Start note by uttering "Start Note". Speak an note. Mid note utter "Play Note". Let audio play until completion. Continue speaking an note. End note by uttering "Stop Note". Play note by uttering "Play Note".
-// Expected Result: Mid-note you should hear yourself utter the note up until that point. After ending note, your note should playback *** without *** 'Stop Note' in it.
+// Instructions: Open app and utter wake phrase. Start entry by uttering "Start Entry". Speak an entry. Mid entry utter "Play Entry". Let audio play until completion. Continue speaking an entry. End entry by uttering "Stop Entry". Play entry by uttering "Play Entry".
+// Expected Result: Mid-entry you should hear yourself utter the entry up until that point. After ending entry, your entry should playback *** without *** 'Stop Entry' in it.
 //
 // 28) Test track collapsing implementation
 //
-// Instructions: Open app and utter wake phrase. Start note by uttering "Start Note". Utter "this is the first sentence". Then utter "Play Note". Let audio play until completion. Then utter "this is the second sentence". Then utter "Play Note". Let audio play until completion. Then utter "this is the third sentence". Then utter "Play Note". End note by uttering "Stop Note"
-// Expected Result: At each stage of "play note", each new utterance should be added to the note playback without voice command playback between each utterance.
+// Instructions: Open app and utter wake phrase. Start entry by uttering "Start Entry". Utter "this is the first sentence". Then utter "Play Entry". Let audio play until completion. Then utter "this is the second sentence". Then utter "Play Entry". Let audio play until completion. Then utter "this is the third sentence". Then utter "Play Entry". End entry by uttering "Stop Entry"
+// Expected Result: At each stage of "play entry", each new utterance should be added to the entry playback without voice command playback between each utterance.
 
-// 29) Double Play Note Test
+// 29) Double Play Entry Test
 //
-// Instructions: Open app and utter wake phrase. Start note by uttering "Start Note". Speak an note. Mid note utter "Play Note". Let audio play until completion. After completion, utter "Play Note" again.
-// Expected Result: Note should be played back twice without any voice command utters played back.
+// Instructions: Open app and utter wake phrase. Start entry by uttering "Start Entry". Speak an entry. Mid entry utter "Play Entry". Let audio play until completion. After completion, utter "Play Entry" again.
+// Expected Result: Entry should be played back twice without any voice command utters played back.
 
 // 30) Emphasis Test
 //

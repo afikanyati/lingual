@@ -1,5 +1,5 @@
 //
-//  NoteTransformation.swift
+//  EntryTransformation.swift
 //  diction-processor
 //
 //  Created by Afika Nyati on 9/16/20.
@@ -8,13 +8,13 @@
 
 import Foundation
 
-class NoteTransformation: NSObject, NSCoding {
+class EntryTransformation: NSObject, NSCoding {
     var type: TransformationType
     var uids: [String: Int]
     var text: String
     var value: Float?
     var textRange: NSRange
-    var noteRange: ClosedRange<Int>
+    var entryRange: ClosedRange<Int>
     
     init(
         type: TransformationType,
@@ -22,13 +22,13 @@ class NoteTransformation: NSObject, NSCoding {
         text: String,
         value: Float? = nil,
         textRange: NSRange,
-        noteRange: ClosedRange<Int>
+        entryRange: ClosedRange<Int>
     ) {
         self.type = type
         self.uids = uids
         self.text = text
         self.textRange = textRange
-        self.noteRange = noteRange
+        self.entryRange = entryRange
         if let value = value {
             self.value = value
         }
@@ -47,11 +47,11 @@ class NoteTransformation: NSObject, NSCoding {
             "length": self.textRange.length
         ]
         coder.encode(textRange, forKey: "textRange") // Can't handle NSRange objects
-        let noteRange: [String:Int] = [
-            "lowerBound": self.noteRange.lowerBound,
-            "upperBound": self.noteRange.upperBound
+        let entryRange: [String:Int] = [
+            "lowerBound": self.entryRange.lowerBound,
+            "upperBound": self.entryRange.upperBound
         ]
-        coder.encode(noteRange, forKey: "noteRange") // Can't handle ClosedRange objects
+        coder.encode(entryRange, forKey: "entryRange") // Can't handle ClosedRange objects
     }
     
     required init?(coder: NSCoder) {
@@ -65,11 +65,11 @@ class NoteTransformation: NSObject, NSCoding {
         }
         let textRange = coder.decodeObject(forKey: "textRange") as! [String:Int]
         self.textRange = NSRange(location: textRange["location"]!, length: textRange["length"]!)
-        let noteRange = coder.decodeObject(forKey: "noteRange") as! [String:Int]
-        self.noteRange = noteRange["lowerBound"]!...noteRange["upperBound"]!
+        let entryRange = coder.decodeObject(forKey: "entryRange") as! [String:Int]
+        self.entryRange = entryRange["lowerBound"]!...entryRange["upperBound"]!
     }
     
     override var description: String {
-        return "\tTransformation (\n\ttype: \(type) \n\tuids: \(uids) \n\ttext: \(text) \n\tvalue: \(String(describing: value)) \n\ttextRange: \(textRange) \n\tnoteRange: \(noteRange)\n)"
+        return "\tTransformation (\n\ttype: \(type) \n\tuids: \(uids) \n\ttext: \(text) \n\tvalue: \(String(describing: value)) \n\ttextRange: \(textRange) \n\tentryRange: \(entryRange)\n)"
     }
 }

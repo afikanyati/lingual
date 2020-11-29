@@ -1,5 +1,5 @@
 //
-//  NoteManager.swift
+//  EntryManager.swift
 //  diction-processor
 //
 //  Created by Afika Nyati on 11/5/20.
@@ -10,14 +10,14 @@ import UIKit
 import Speech
 import Foundation
 
-class NoteManager: NSObject {
+class EntryManager: NSObject {
     // MARK: - Notifications
     
-    static let onCreatedNote = Notification.Name(Notifications.onCreatedNote.rawValue)
-    static let onNoteDeleted = Notification.Name(Notifications.onNoteDeleted.rawValue)
-    static let onSetNote = Notification.Name(Notifications.onSetNote.rawValue)
-    static let onExecuteNoteAction = Notification.Name(Notifications.onExecuteNoteAction.rawValue)
-    static let onNoteAudioExported = Notification.Name(Notifications.onNoteAudioExported.rawValue)
+    static let onCreatedEntry = Notification.Name(Notifications.onCreatedEntry.rawValue)
+    static let onEntryDeleted = Notification.Name(Notifications.onEntryDeleted.rawValue)
+    static let onSetEntry = Notification.Name(Notifications.onSetEntry.rawValue)
+    static let onExecuteEntryAction = Notification.Name(Notifications.onExecuteEntryAction.rawValue)
+    static let onEntryAudioExported = Notification.Name(Notifications.onEntryAudioExported.rawValue)
     static let onUndoManagerChange = Notification.Name(Notifications.onUndoManagerChange.rawValue)
 
     // MARK: - App Modules
@@ -35,30 +35,30 @@ class NoteManager: NSObject {
         return _undoManager
     }
     
-    // MARK: - Note Manager Properties
+    // MARK: - Entry Manager Properties
     
     private(set) var currentIndex: Int? = nil
-    var currentNote: Note? {
+    var currentEntry: Entry? {
         if let index = self.currentIndex {
-            return self.state.activeNotes[index]
+            return self.state.activeEntries[index]
         }
         
         return nil
     }
-    @objc dynamic var currentNoteUndoSnapshot: NoteSnapshot? = nil
-    private(set) var noteChangeHandler: (() -> Void)? = nil
+    @objc dynamic var currentEntryUndoSnapshot: EntrySnapshot? = nil
+    private(set) var entryChangeHandler: (() -> Void)? = nil
     
-    /// Specifies whether note is currently running
-    private(set) var isRunningNote = false
-    /// Specifies whether note is currently walking
-    private(set) var isWalkingNote = false
-    /// Specifies whether note is currently paused walking
-    private(set) var pausedWalkingNote = false
-    /// Specifies whether note is currently paused running
-    private(set) var pausedRunningNote = false
-    /// Specifies whether note is currently walking
+    /// Specifies whether entry is currently running
+    private(set) var isRunningEntry = false
+    /// Specifies whether entry is currently walking
+    private(set) var isWalkingEntry = false
+    /// Specifies whether entry is currently paused walking
+    private(set) var pausedWalkingEntry = false
+    /// Specifies whether entry is currently paused running
+    private(set) var pausedRunningEntry = false
+    /// Specifies whether entry is currently walking
     private(set) var walkingRange: Range<Int>?
-    /// Specifies whether note is currently walking
+    /// Specifies whether entry is currently walking
     private(set) var walkingIndex: Int = 0
     /// Stores a reference to a timer that drives walking loop behavior
     private(set) var walkingTimer: Timer?
@@ -68,8 +68,8 @@ class NoteManager: NSObject {
     private(set) var echoDelayTimer: Timer?
     /// Stores a reference to a timer that drives passage running
     private(set) var runningTimer: Timer?
-    /// Stores whether note is currently being exported
-    private(set) var isExportingNote = false
+    /// Stores whether entry is currently being exported
+    private(set) var isExportingEntry = false
     
     // MARK: - Initialization and Deinitialization
     
@@ -83,7 +83,7 @@ class NoteManager: NSObject {
         uiManager: UIManager,
         pitchRecognition: PitchRecognitionEngine
     ) {
-        print("===== Note Manager: Initialization =====")
+        print("===== Entry Manager: Initialization =====")
         self.state = state
         self.speechRecognition = speechRecognition
         self.notifications = notifications
@@ -95,8 +95,8 @@ class NoteManager: NSObject {
         
         super.init()
         
-        print("\tSetting modules in notes")
-        self.setNoteModules() // Removing this will not show preview text on notes within note table
+        print("\tSetting modules in entries")
+        self.setEntryModules() // Removing this will not show preview text on entries within entry table
         
         self.configureNotificationObservers()
     }
@@ -108,7 +108,7 @@ class NoteManager: NSObject {
         // remove observer from snapshot
         self.removeObserver(
             self,
-            forKeyPath: "currentNoteUndoSnapshot",
+            forKeyPath: "currentEntryUndoSnapshot",
             context: nil
         )
     }
@@ -118,17 +118,17 @@ class NoteManager: NSObject {
     func checkRep() {
         var result = true
         
-        // exporting note can only be active if we have a current note
-        result = result && ((self.currentNote != nil && self.isExportingNote) || !self.isExportingNote)
+        // exporting entry can only be active if we have a current entry
+        result = result && ((self.currentEntry != nil && self.isExportingEntry) || !self.isExportingEntry)
         
         // cannot pause walking if walking is inactive
-        result = result && (!self.pausedWalkingNote || self.isWalkingNote)
+        result = result && (!self.pausedWalkingEntry || self.isWalkingEntry)
         
         // cannot pause running if walking is inactive
-        result = result && (!self.pausedRunningNote || self.isRunningNote)
+        result = result && (!self.pausedRunningEntry || self.isRunningEntry)
         
         if !result {
-            fatalError("===== [Error] Note Manager Representation Invariants were broken =====")
+            fatalError("===== [Error] Entry Manager Representation Invariants were broken =====")
         }
     }
     
@@ -137,10 +137,10 @@ class NoteManager: NSObject {
     func configureNotificationObservers() {
         let notificationCenter = NotificationCenter.default
         
-        // Note Manager
+        // Entry Manager
         self.addObserver(
             self,
-            forKeyPath: "currentNoteUndoSnapshot",
+            forKeyPath: "currentEntryUndoSnapshot",
             options: [.old, .new],
             context: nil
         )
@@ -156,29 +156,29 @@ class NoteManager: NSObject {
         // State Manager
         notificationCenter.addObserver(
             self,
-            selector: #selector(onFetchedNotes(notification:)),
-            name: StateManager.onFetchedNotes,
+            selector: #selector(onFetchedEntries(notification:)),
+            name: StateManager.onFetchedEntries,
             object: nil
         )
     }
     
-    @objc func onFetchedNotes(notification: Notification) {
-        print("===== Note Manager: On Fetched Notes =====")
-        print("\tSetting modules in notes")
-        self.setNoteModules()
+    @objc func onFetchedEntries(notification: Notification) {
+        print("===== Entry Manager: On Fetched Entries =====")
+        print("\tSetting modules in entries")
+        self.setEntryModules()
     }
     
     @objc func onProcessedVoiceCommand(notification: Notification) {
-        print("===== Note Manager: On Processed Voice Command =====")
+        print("===== Entry Manager: On Processed Voice Command =====")
         let command = notification.userInfo!["command"] as! String
         var handler: (() -> Void)?
         if notification.userInfo!["handler"] != nil {
             handler = notification.userInfo!["handler"] as? () -> Void
         }
         
-        if voiceCommandEngine.isNoteManagerCommand(command: command) && self.currentNote == nil && command != "start note" {
+        if voiceCommandEngine.isEntryManagerCommand(command: command) && self.currentEntry == nil && command != "start entry" {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -187,28 +187,28 @@ class NoteManager: NSObject {
         }
 
         switch (command) {
-        case "play note", "play selection":
-            self.playNote(voiceCommand: true, onFinishHandler: handler)
-        case "pause note":
-            self.pauseNote(voiceCommand: true, handler: handler)
-        case "start note":
-            if let _ = Utils.getNavigationController()?.visibleViewController as? NoteTableViewController, let _ = self.currentNote {
-                print("\tFound existing note while in Note List after receving 'start note' via voice command. Remove it to trigger new note creation.")
-                self.setCurrentNote()
+        case "play entry", "play selection":
+            self.playEntry(voiceCommand: true, onFinishHandler: handler)
+        case "pause entry":
+            self.pauseEntry(voiceCommand: true, handler: handler)
+        case "start entry":
+            if let _ = Utils.getNavigationController()?.visibleViewController as? EntryTableViewController, let _ = self.currentEntry {
+                print("\tFound existing entry while in Entry List after receving 'start entry' via voice command. Remove it to trigger new entry creation.")
+                self.setCurrentEntry()
             }
-            self.startNote(voiceCommand: true, handler: handler)
-        case "create note":
-            self.startNote(voiceCommand: true, handler: handler)
-        case "stop note":
-            if self.speechPlayer.isPlayingNote {
-                self.stopPlayingNote(voiceCommand: true, handler: handler)
-            } else if let _ = self.currentNote {
-                self.stopNote(voiceCommand: true, handler: handler)
+            self.startEntry(voiceCommand: true, handler: handler)
+        case "create entry":
+            self.startEntry(voiceCommand: true, handler: handler)
+        case "stop entry":
+            if self.speechPlayer.isPlayingEntry {
+                self.stopPlayingEntry(voiceCommand: true, handler: handler)
+            } else if let _ = self.currentEntry {
+                self.stopEntry(voiceCommand: true, handler: handler)
             }
-        case "resume note":
-            self.resumeNote(voiceCommand: true, handler: handler)
-        case "echo note":
-            self.echoNote(voiceCommand: true, handler: handler)
+        case "resume entry":
+            self.resumeEntry(voiceCommand: true, handler: handler)
+        case "echo entry":
+            self.echoEntry(voiceCommand: true, handler: handler)
         case "pause echo":
             self.pauseEcho(voiceCommand: true, handler: handler)
         case "stop echo":
@@ -225,14 +225,14 @@ class NoteManager: NSObject {
             self.increaseRateSelection(voiceCommand: true, handler: handler)
         case "decrease selection rate":
             self.decreaseRateSelection(voiceCommand: true, handler: handler)
-        case "export", "export note", "export selection":
-            self.exportNote(voiceCommand: true, handler: handler)
+        case "export", "export entry", "export selection":
+            self.exportEntry(voiceCommand: true, handler: handler)
         case "pause playback":
-            self.pauseNote(voiceCommand: true, handler: handler)
+            self.pauseEntry(voiceCommand: true, handler: handler)
         case "resume echo":
-            self.echoNote(voiceCommand: true, handler: handler)
-        case "edit note":
-            self.editNote(voiceCommand: true, handler: handler)
+            self.echoEntry(voiceCommand: true, handler: handler)
+        case "edit entry":
+            self.editEntry(voiceCommand: true, handler: handler)
         case "play commit":
             self.playCommit(voiceCommand: true, onFinishHandler: handler)
         case "skip backward":
@@ -240,54 +240,54 @@ class NoteManager: NSObject {
         case "skip forward":
             self.skipForward(voiceCommand: true, handler: handler)
         case "stop playback":
-            self.stopPlayingNote(voiceCommand: true, handler: handler)
+            self.stopPlayingEntry(voiceCommand: true, handler: handler)
         case "pause":
-            if let _ = self.currentNote, self.speechPlayer.isPlayingNote {
-                self.pauseNote(voiceCommand: true, handler: handler)
-            } else if let _ = self.currentNote, self.speechSynthesis.isPlayingEcho {
+            if let _ = self.currentEntry, self.speechPlayer.isPlayingEntry {
+                self.pauseEntry(voiceCommand: true, handler: handler)
+            } else if let _ = self.currentEntry, self.speechSynthesis.isPlayingEcho {
                 self.pauseEcho(voiceCommand: true, handler: handler)
-            } else if let note = self.currentNote, self.isRunningNote {
+            } else if let entry = self.currentEntry, self.isRunningEntry {
                 // Play Sound
                 soundEngine.voiceCommandAccept()
 
-                note.pauseRun(handler: handler)
+                entry.pauseRun(handler: handler)
             }
         case "stop":
-            if let _ = self.currentNote, self.speechPlayer.isPlayingNote {
-                self.stopPlayingNote(voiceCommand: true, handler: handler)
-            } else if let _ = self.currentNote, self.speechSynthesis.isPlayingEcho {
+            if let _ = self.currentEntry, self.speechPlayer.isPlayingEntry {
+                self.stopPlayingEntry(voiceCommand: true, handler: handler)
+            } else if let _ = self.currentEntry, self.speechSynthesis.isPlayingEcho {
                 self.stopEcho(voiceCommand: true, handler: handler)
-            } else if let note = self.currentNote, self.isRunningNote {
+            } else if let entry = self.currentEntry, self.isRunningEntry {
                 // Play Sound
                 soundEngine.voiceCommandAccept()
                 
-                note.pauseRun(handler: handler)
+                entry.pauseRun(handler: handler)
             }
         case "delete":
             if self.selectionCursor.hasSelection {
                 self.deleteSelection(voiceCommand: true, handler: handler)
-            } else if let _ = self.currentNote {
-                self.deleteNote(voiceCommand: true, handler: handler)
+            } else if let _ = self.currentEntry {
+                self.deleteEntry(voiceCommand: true, handler: handler)
             }
         case "echo":
             if self.selectionCursor.hasSelection {
-                self.echoNote(voiceCommand: true, handler: handler)
-            } else if let _ = self.currentNote {
-                self.echoNote(voiceCommand: true, handler: handler)
+                self.echoEntry(voiceCommand: true, handler: handler)
+            } else if let _ = self.currentEntry {
+                self.echoEntry(voiceCommand: true, handler: handler)
             }
         case "paste clipboard":
             self.pasteClipboard(voiceCommand: true, handler: handler)
         case "resume playback":
             if self.speechRecognition.pausedListeningForSpeech {
                 self.notifications.executeError(
-                    text: "Note not paused.",
+                    text: "Entry not paused.",
                     voiceCommand: true,
                     handler: handler
                 )
                 return
             }
             
-            self.startNote(voiceCommand: true, handler: handler)
+            self.startEntry(voiceCommand: true, handler: handler)
         case "select commit":
             self.selectCommit(
                 handler: handler
@@ -376,10 +376,10 @@ class NoteManager: NSObject {
             self.playPreviousSentence(
                 handler: handler
             )
-        case "run note", "run selection":
-            self.runNote(voiceCommand: true, handler: handler)
-        case "walk note", "walk selection":
-            self.walkNote(voiceCommand: true, handler: handler)
+        case "run entry", "run selection":
+            self.runEntry(voiceCommand: true, handler: handler)
+        case "walk entry", "walk selection":
+            self.walkEntry(voiceCommand: true, handler: handler)
         case "next element":
             self.walkNextElement(voiceCommand: true, handler: handler)
         case "previous element":
@@ -408,54 +408,54 @@ class NoteManager: NSObject {
         change: [NSKeyValueChangeKey : Any]?,
         context: UnsafeMutableRawPointer?
     ) {
-        print("===== Note Manager: Observe Value =====")
+        print("===== Entry Manager: Observe Value =====")
 
-        if keyPath == "currentNoteUndoSnapshot" {
-            print("\tKeyPath: currentNoteUndoSnapshot")
-            if let newSnapshot = change?[.newKey] as? NoteSnapshot,
-               let _ = change?[.oldKey] as? NoteSnapshot
+        if keyPath == "currentEntryUndoSnapshot" {
+            print("\tKeyPath: currentEntryUndoSnapshot")
+            if let newSnapshot = change?[.newKey] as? EntrySnapshot,
+               let _ = change?[.oldKey] as? EntrySnapshot
             {
-                print("\tNew Note Snapshot Received! Save to state")
-                let duplicateNote = newSnapshot.note.duplicate()
+                print("\tNew Entry Snapshot Received! Save to state")
+                let duplicateEntry = newSnapshot.entry.duplicate()
                 
                 // Handle Current Clip UID
-                if let note = self.currentNote,
-                   duplicateNote.currentClipUID == nil &&
-                    note.currentClipUID != nil &&
+                if let entry = self.currentEntry,
+                   duplicateEntry.currentClipUID == nil &&
+                    entry.currentClipUID != nil &&
                     self.speechRecognition.isListeningForSpeech
                 {
-                    print("\tDuplicate note has no currentClipUID. Give it existing note's currentClipUID...")
-                    let currentClipUID = note.currentClipUID
-                    duplicateNote.setCurrentClipUID(uid: currentClipUID)
+                    print("\tDuplicate entry has no currentClipUID. Give it existing entry's currentClipUID...")
+                    let currentClipUID = entry.currentClipUID
+                    duplicateEntry.setCurrentClipUID(uid: currentClipUID)
                 }
                 
                 // Handle Record Start Date
-                if let note = self.currentNote,
-                   duplicateNote.recordStartDate == nil &&
-                    note.recordStartDate != nil &&
+                if let entry = self.currentEntry,
+                   duplicateEntry.recordStartDate == nil &&
+                    entry.recordStartDate != nil &&
                     self.speechRecognition.isListeningForSpeech
                 {
-                    print("\tDuplicate note has no recordStartDate. Give it existing note's recordStartDate...")
-                    let recordStartDate = note.recordStartDate
-                    duplicateNote.setRecordStartDate(date: recordStartDate)
+                    print("\tDuplicate entry has no recordStartDate. Give it existing entry's recordStartDate...")
+                    let recordStartDate = entry.recordStartDate
+                    duplicateEntry.setRecordStartDate(date: recordStartDate)
                 }
                 
                 // Handle Record File
-                if let note = self.currentNote,
-                   duplicateNote.recordFile == nil &&
-                    note.recordFile != nil &&
+                if let entry = self.currentEntry,
+                   duplicateEntry.recordFile == nil &&
+                    entry.recordFile != nil &&
                     self.speechRecognition.isListeningForSpeech
                 {
-                    print("\tDuplicate note has no recordFile. Give it existing note's recordFile...")
-                    let recordFile = note.recordFile
-                    duplicateNote.setRecordFile(file: recordFile)
+                    print("\tDuplicate entry has no recordFile. Give it existing entry's recordFile...")
+                    let recordFile = entry.recordFile
+                    duplicateEntry.setRecordFile(file: recordFile)
                 }
 
-                // Set Note
-                self.state.saveNote(note: duplicateNote) // we duplicate so there's no memory leaks/pointers to same memory locations
+                // Set Entry
+                self.state.saveEntry(entry: duplicateEntry) // we duplicate so there's no memory leaks/pointers to same memory locations
                 
                 print("\tSet Node Modules...")
-                self.setNoteModules(index: self.currentIndex)
+                self.setEntryModules(index: self.currentIndex)
                 
                 print("\tUpdate selection carets...")
                 if let anchorCaret = newSnapshot.selectionAnchorCaret {
@@ -494,15 +494,15 @@ class NoteManager: NSObject {
                     self.selectionCursor.setCachedAnchorCaret()
                 }
                 
-                if let note = self.currentNote {
-                    print("\tUpdate View with text: '\(note.getText())'")
-                    note.handleOnSpeechUpdate(text: note.getText())
+                if let entry = self.currentEntry {
+                    print("\tUpdate View with text: '\(entry.getText())'")
+                    entry.handleOnSpeechUpdate(text: entry.getText())
                 }
                 
-                if let noteChangeHandler = self.noteChangeHandler {
+                if let entryChangeHandler = self.entryChangeHandler {
                     print("\tRunning Save Handler...")
-                    noteChangeHandler()
-                    self.noteChangeHandler = nil
+                    entryChangeHandler()
+                    self.entryChangeHandler = nil
                 }
             } else {
                 print("\tNo new snapshot...")
@@ -512,60 +512,60 @@ class NoteManager: NSObject {
     
     // MARK: - Methods
     
-    func setNoteModules(index: Int? = nil) {
-        print("===== Note Manager: Set Note Modules =====")
-        let handleNote: (_ note: Note) -> Void = { note in
-            print("\tHandled Note UID: ", note.uid)
-            if note.state == nil {
-                note.setState(state: self.state)
+    func setEntryModules(index: Int? = nil) {
+        print("===== Entry Manager: Set Entry Modules =====")
+        let handleEntry: (_ entry: Entry) -> Void = { entry in
+            print("\tHandled Entry UID: ", entry.uid)
+            if entry.state == nil {
+                entry.setState(state: self.state)
             }
-            if note.speechSynthesis == nil {
-                note.setSpeechSynthesis(speechSynthesis: self.speechSynthesis)
+            if entry.speechSynthesis == nil {
+                entry.setSpeechSynthesis(speechSynthesis: self.speechSynthesis)
             }
-            if note.speechRecognition == nil {
-                note.setSpeechRecognition(speechRecognition: self.speechRecognition)
+            if entry.speechRecognition == nil {
+                entry.setSpeechRecognition(speechRecognition: self.speechRecognition)
             }
-            if note.speechPlayer == nil {
-                note.setSpeechPlayer(speechPlayer: self.speechPlayer)
+            if entry.speechPlayer == nil {
+                entry.setSpeechPlayer(speechPlayer: self.speechPlayer)
             }
-            if note.selectionCursor == nil {
-                note.setSelectionCursor(selectionCursor: self.selectionCursor)
+            if entry.selectionCursor == nil {
+                entry.setSelectionCursor(selectionCursor: self.selectionCursor)
             }
-            if note.pitchRecognition == nil {
-                note.setPitchRecognition(pitchRecognition: self.pitchRecognition)
+            if entry.pitchRecognition == nil {
+                entry.setPitchRecognition(pitchRecognition: self.pitchRecognition)
             }
-            if note.noteManager == nil {
-                note.setNoteManager(noteManager: self)
+            if entry.entryManager == nil {
+                entry.setEntryManager(entryManager: self)
             }
-            if note.notifications == nil {
-                note.setNotifications(notifications: self.notifications)
+            if entry.notifications == nil {
+                entry.setNotifications(notifications: self.notifications)
             }
         }
         
         if let index = index {
-            print("\tHandle individual note.")
-            let note = self.state.activeNotes[index]
-            handleNote(note)
+            print("\tHandle individual entry.")
+            let entry = self.state.activeEntries[index]
+            handleEntry(entry)
         } else {
-            print("\tHandle all notes.")
-            for note in self.state.activeNotes {
-                handleNote(note)
+            print("\tHandle all entries.")
+            for entry in self.state.activeEntries {
+                handleEntry(entry)
             }
         }
     }
     
-    func getNote(uid: String) -> Note? {
-        for note in self.state.activeNotes {
-            if note.uid == uid {
-                return note
+    func getEntry(uid: String) -> Entry? {
+        for entry in self.state.activeEntries {
+            if entry.uid == uid {
+                return entry
             }
         }
         
         return nil
     }
     
-    func createNote(voiceCommand: Bool = false, withListening: Bool = false, handler: (() -> Void)? = nil) -> String {
-        print("===== Note Manager: Create Note =====")
+    func createEntry(voiceCommand: Bool = false, withListening: Bool = false, handler: (() -> Void)? = nil) -> String {
+        print("===== Entry Manager: Create Entry =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
@@ -573,41 +573,41 @@ class NoteManager: NSObject {
         }
 
         let uid = UUID().uuidString
-        let note = Note(
+        let entry = Entry(
             uid: uid,
-            filename: "note-\(uid)",
+            filename: "entry-\(uid)",
             creatorUID: self.state.speaker.uid
         )
         
-        print("\tNew Note UID: ", uid)
+        print("\tNew Entry UID: ", uid)
         
-        // Add new note
-        let index = self.state.appendNote(note: note)
+        // Add new entry
+        let index = self.state.appendEntry(entry: entry)
         
-        self.setNoteModules(index: index)
+        self.setEntryModules(index: index)
         
         NotificationCenter.default.post(
-            name: NoteManager.onCreatedNote,
+            name: EntryManager.onCreatedEntry,
             object: nil,
             userInfo: [:]
         )
         
         if withListening {
             // Start Listening Immediately
-            self.setCurrentNote(index: index)
+            self.setCurrentEntry(index: index)
             
             self.notifications.executeFeedback(
-                visualMessage: "Create Note",
-                audioMessage: "new note created",
+                visualMessage: "Create Entry",
+                audioMessage: "new entry created",
                 withHaptics: true,
                 delay: 1
             )
             
-            self.startNote(voiceCommand: voiceCommand, handler: handler)
+            self.startEntry(voiceCommand: voiceCommand, handler: handler)
         } else {
             self.notifications.executeFeedback(
-                visualMessage: "Create Note",
-                audioMessage: "new note created",
+                visualMessage: "Create Entry",
+                audioMessage: "new entry created",
                 withHaptics: true,
                 delay: 1
             )
@@ -620,49 +620,49 @@ class NoteManager: NSObject {
         return uid
     }
     
-    @objc func deleteNote(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Delete Note (using screen button or voice command) =====")
+    @objc func deleteEntry(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
+        print("===== Entry Manager: Delete Entry (using screen button or voice command) =====")
         guard let index = self.currentIndex else {
-            self.notifications.executeError(text: "No note selected")
+            self.notifications.executeError(text: "No entry selected")
             return
         }
         
-        self.deleteNote(index: index, handler: handler)
+        self.deleteEntry(index: index, handler: handler)
     }
     
-    func deleteNote(index: Int, withConfirmation: Bool = true, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Delete Note (using index) =====")
+    func deleteEntry(index: Int, withConfirmation: Bool = true, handler: (() -> Void)? = nil) {
+        print("===== Entry Manager: Delete Entry (using index) =====")
         
         let handleDelete: (_ handler: (() -> Void)?) -> Void = { [weak self] handler in
             // Reset Selection Cursor
             self?.selectionCursor.reset()
             
-            // Set Note to Deleted
-            let noteUID = self!.state.activeNotes[index].uid
-            if let note = self?.getNote(uid: noteUID) {
-                note.setIsDeleted(to: true)
+            // Set Entry to Deleted
+            let entryUID = self!.state.activeEntries[index].uid
+            if let entry = self?.getEntry(uid: entryUID) {
+                entry.setIsDeleted(to: true)
             }
             
             // save changes
             self?.state.save()
             
-            // Handle Note Clips
-    //        self.state.manageClipRemoval(note: note)
+            // Handle Entry Clips
+    //        self.state.manageClipRemoval(entry: entry)
             
-            // Remove Current Note
+            // Remove Current Entry
             if index == self?.currentIndex {
-                self?.setCurrentNote()
+                self?.setCurrentEntry()
             }
             
             NotificationCenter.default.post(
-                name: NoteManager.onNoteDeleted,
+                name: EntryManager.onEntryDeleted,
                 object: nil,
                 userInfo: [:]
             )
             
             self?.notifications.executeFeedback(
-                visualMessage: "Delete Note",
-                audioMessage: "note deleted",
+                visualMessage: "Delete Entry",
+                audioMessage: "entry deleted",
                 withHaptics: true,
                 delay: 0
             )
@@ -679,7 +679,7 @@ class NoteManager: NSObject {
             hapticEngine.success()
         }
         
-        // Find note
+        // Find entry
         if withConfirmation {
             print("\tHandle delete with confirmation dialog.")
             
@@ -687,8 +687,8 @@ class NoteManager: NSObject {
                 DialogAction(
                     title: "Delete",
                     voiceCommand: "delete",
-                    feedbackVisualMessage: "Delete Note",
-                    feedbackAudioMessage: "note deleted",
+                    feedbackVisualMessage: "Delete Entry",
+                    feedbackAudioMessage: "entry deleted",
                     style: .default,
                     handler: { action in
                         handleDelete(handler)
@@ -708,7 +708,7 @@ class NoteManager: NSObject {
             
             let dialogItem = DialogItem(
                 title: "Confirm Delete",
-                message: "Are you sure you want to delete note? Say 'delete' to continue, or 'cancel' to dismiss.",
+                message: "Are you sure you want to delete entry? Say 'delete' to continue, or 'cancel' to dismiss.",
                 preferredStyle: .alert,
                 actions: dialogActions
             )
@@ -717,35 +717,35 @@ class NoteManager: NSObject {
             print("\tHandle delete without confirmation dialog.")
             handleDelete(handler)
         } else {
-            print("\t[Error] There was a problem deleting note at index \(index). Unable to find it.")
+            print("\t[Error] There was a problem deleting entry at index \(index). Unable to find it.")
         }
     }
     
-    func deleteNote(uid: String, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Delete Note (using uid) =====")
+    func deleteEntry(uid: String, handler: (() -> Void)? = nil) {
+        print("===== Entry Manager: Delete Entry (using uid) =====")
 
-        // Find note
-        let note = self.getNote(uid: uid)
-        if let note = note {
+        // Find entry
+        let entry = self.getEntry(uid: uid)
+        if let entry = entry {
 
-            // Set Note to Deleted
-            note.setIsDeleted(to: true)
+            // Set Entry to Deleted
+            entry.setIsDeleted(to: true)
             
             // save changes
             self.state.save()
             
-            // Handle Note Clips
-    //        self.state.manageClipRemoval(note: note)
+            // Handle Entry Clips
+    //        self.state.manageClipRemoval(entry: entry)
             
             NotificationCenter.default.post(
-                name: NoteManager.onNoteDeleted,
+                name: EntryManager.onEntryDeleted,
                 object: nil,
                 userInfo: [:]
             )
             
             self.notifications.executeFeedback(
-                visualMessage: "Delete Note",
-                audioMessage: "note deleted",
+                visualMessage: "Delete Entry",
+                audioMessage: "entry deleted",
                 withHaptics: true,
                 delay: 0
             )
@@ -759,12 +759,12 @@ class NoteManager: NSObject {
     //        hapticEngine.mediumImpact()
             hapticEngine.success()
         } else {
-            print("\t[Error] There was a problem deleting note with uid \(uid). Unable to find it.")
+            print("\t[Error] There was a problem deleting entry with uid \(uid). Unable to find it.")
         }
     }
 
-    func startNote(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Start Note =====")
+    func startEntry(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
+        print("===== Entry Manager: Start Entry =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
@@ -773,7 +773,7 @@ class NoteManager: NSObject {
         
         if self.speechRecognition.isListeningForSpeech {
             self.notifications.executeError(
-                text: "Note already started.",
+                text: "Entry already started.",
                 voiceCommand: voiceCommand
             )
             
@@ -817,7 +817,7 @@ class NoteManager: NSObject {
         }
         
         if authStatus == .authorized && self.speechRecognition.session.recordPermission == .granted {
-            if let _ = self.currentNote, !self.speechRecognition.isListeningForSpeech && !self.isExportingNote {
+            if let _ = self.currentEntry, !self.speechRecognition.isListeningForSpeech && !self.isExportingEntry {
                 if  !self.speechRecognition.isListeningForCommands {
                     // User switched off listening with the button
                     // Change button to normal again
@@ -828,45 +828,45 @@ class NoteManager: NSObject {
                     soundEngine.voiceCommandAccept()
                 }
                 
-                print("\tStarting Note...")
+                print("\tStarting Entry...")
                 self.speechRecognition.startListeningForSpeech() {
                     self.notifications.executeFeedback(
-                        visualMessage: "Start Note",
-                        audioMessage: "note started",
+                        visualMessage: "Start Entry",
+                        audioMessage: "entry started",
                         withHaptics: true
                     )
                     
                     handler?()
                 }
-            } else if self.currentNote == nil && !self.speechRecognition.isListeningForSpeech {
-                print("\tCreating new note...")
-                let _ = self.createNote(voiceCommand: voiceCommand, withListening: true, handler: handler)
+            } else if self.currentEntry == nil && !self.speechRecognition.isListeningForSpeech {
+                print("\tCreating new entry...")
+                let _ = self.createEntry(voiceCommand: voiceCommand, withListening: true, handler: handler)
             } else {
                 if self.speechRecognition.isListeningForSpeech {
                     self.notifications.executeError(
-                        text: "Note already started.",
+                        text: "Entry already started.",
                         voiceCommand: voiceCommand,
                         handler: handler
                     )
                 } else {
                     self.notifications.executeError(
-                        text: "Wait until note export completion.",
+                        text: "Wait until entry export completion.",
                         voiceCommand: voiceCommand,
                         handler: handler
                     )
                 }
-                print("\t[Error] There was a problem starting note. System does not have record permissions.")
+                print("\t[Error] There was a problem starting entry. System does not have record permissions.")
             }
         } else {
             self.notifications.executeError(
-                text: "Unable to start note.",
+                text: "Unable to start entry.",
                 voiceCommand: voiceCommand
             )
-            print("\t[Error] There was a problem starting note. System does not have record permissions.")
+            print("\t[Error] There was a problem starting entry. System does not have record permissions.")
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -874,17 +874,17 @@ class NoteManager: NSObject {
         checkRep()
     }
     
-    func resumeNote(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Resume Note =====")
+    func resumeEntry(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
+        print("===== Entry Manager: Resume Entry =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
         }
         
-        guard let _ = self.currentNote else {
+        guard let _ = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -899,8 +899,8 @@ class NoteManager: NSObject {
 
             self.speechRecognition.startListeningForSpeech() {
                 self.notifications.executeFeedback(
-                    visualMessage: "Resume Note",
-                    audioMessage: "note resumed",
+                    visualMessage: "Resume Entry",
+                    audioMessage: "entry resumed",
                     withHaptics: true,
                     delay: 0
                 )
@@ -908,14 +908,14 @@ class NoteManager: NSObject {
             }
         } else {
             self.notifications.executeError(
-                text: "No ongoing note.",
+                text: "No ongoing entry.",
                 handler: handler
             )
             return
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -923,26 +923,26 @@ class NoteManager: NSObject {
         checkRep()
     }
     
-    func editNote(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Edit Note =====")
+    func editEntry(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
+        print("===== Entry Manager: Edit Entry =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
         }
         
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
             return
         }
         
-        if note.noteSegments.count == 0 {
+        if entry.entrySegments.count == 0 {
             self.notifications.executeError(
-                text: "No existing note.",
+                text: "No existing entry.",
                 voiceCommand: voiceCommand,
                 handler: handler
             )
@@ -986,16 +986,16 @@ class NoteManager: NSObject {
         }
         
         if authStatus == .authorized && self.speechRecognition.session.recordPermission == .granted {
-            if !self.speechRecognition.isListeningForSpeech && !self.isExportingNote {
+            if !self.speechRecognition.isListeningForSpeech && !self.isExportingEntry {
                 if voiceCommand {
                     // Play Sound
                     soundEngine.voiceCommandAccept()
                 }
-                print("\tStarting Note...")
+                print("\tStarting Entry...")
                 self.speechRecognition.startListeningForSpeech() {
                     self.notifications.executeFeedback(
-                        visualMessage: "Edit Note",
-                        audioMessage: "note editing started",
+                        visualMessage: "Edit Entry",
+                        audioMessage: "entry editing started",
                         withHaptics: true,
                         delay: 0
                     )
@@ -1003,16 +1003,16 @@ class NoteManager: NSObject {
                 }
             } else {
                 self.notifications.executeError(
-                    text: "Unable to start note.",
+                    text: "Unable to start entry.",
                     voiceCommand: voiceCommand,
                     handler: handler
                 )
-                print("\t[Error] There was a problem starting note. System does not have record permissions.")
+                print("\t[Error] There was a problem starting entry. System does not have record permissions.")
             }
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -1020,41 +1020,41 @@ class NoteManager: NSObject {
         checkRep()
     }
     
-    func stopNote(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Stop Note =====")
+    func stopEntry(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
+        print("===== Entry Manager: Stop Entry =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
         }
         
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
             return
         }
         
-        if self.speechRecognition.isListeningForSpeech && !self.isExportingNote {
-            print("\tStopping Note...")
+        if self.speechRecognition.isListeningForSpeech && !self.isExportingEntry {
+            print("\tStopping Entry...")
             if voiceCommand {
                 // No sound here
-                // We omit sound for stopping note
+                // We omit sound for stopping entry
             }
 
             self.speechRecognition.stopListeningForSpeech() {
                 // Perform finish cleanup
-                // We handle finish for voice commands within Note
-                // We might also get a call fro within note
+                // We handle finish for voice commands within Entry
+                // We might also get a call fro within entry
                 // if we receive final speech update from speech recognition engine
-                note.handleFinish(normalize: true)
+                entry.handleFinish(normalize: true)
                 
                 // Present feedback
                 self.notifications.executeFeedback(
-                    visualMessage: "Stop Note",
-                    audioMessage: "note stopped",
+                    visualMessage: "Stop Entry",
+                    audioMessage: "entry stopped",
                     withHaptics: true,
                     delay: 0
                 )
@@ -1064,22 +1064,22 @@ class NoteManager: NSObject {
         } else {
             if !self.speechRecognition.isListeningForSpeech {
                 self.notifications.executeError(
-                    text: "No ongoing note.",
+                    text: "No ongoing entry.",
                     voiceCommand: voiceCommand,
                     handler: handler
                 )
             } else {
                 self.notifications.executeError(
-                    text: "Wait until note export completion.",
+                    text: "Wait until entry export completion.",
                     voiceCommand: voiceCommand,
                     handler: handler
                 )
             }
-            print("\t[Error] There was a problem stopping note. We're not listening for speech or are exporting note.")
+            print("\t[Error] There was a problem stopping entry. We're not listening for speech or are exporting entry.")
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -1088,19 +1088,19 @@ class NoteManager: NSObject {
     }
     
     // Should never be called when headphones on while we have a selection
-    // Will be looping selection and have isPlayingNote set to true
+    // Will be looping selection and have isPlayingEntry set to true
     // Which should hide playButton
-    func playNote(from startTime: CMTime = CMTime.zero, voiceCommand: Bool = false, onStartHandler: (() -> Void)? = nil, onFinishHandler: (() -> Void)? = nil) {
-        print("===== Note Manager: Play \(self.selectionCursor.hasSelection ? "Selection" : "Note") =====")
+    func playEntry(from startTime: CMTime = CMTime.zero, voiceCommand: Bool = false, onStartHandler: (() -> Void)? = nil, onFinishHandler: (() -> Void)? = nil) {
+        print("===== Entry Manager: Play \(self.selectionCursor.hasSelection ? "Selection" : "Entry") =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
         }
         
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: onFinishHandler
             )
@@ -1112,7 +1112,7 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        let playSegments: (_ segments: [NoteSegment]) -> Void = { segments in
+        let playSegments: (_ segments: [EntrySegment]) -> Void = { segments in
             self.speechPlayer.play(
                 segments: segments,
                 onStartHandler: onStartHandler,
@@ -1121,16 +1121,16 @@ class NoteManager: NSObject {
         }
         
         let executePlay = {
-            if self.pausedWalkingNote || self.pausedRunningNote {
-                print("\tPlay \(self.pausedWalkingNote ? "walking" : "running") range.")
-                playSegments(Array(note.noteSegments[self.walkingRange!]))
+            if self.pausedWalkingEntry || self.pausedRunningEntry {
+                print("\tPlay \(self.pausedWalkingEntry ? "walking" : "running") range.")
+                playSegments(Array(entry.entrySegments[self.walkingRange!]))
             } else if let selectionSegments = self.selectionCursor.selectionSegments, self.selectionCursor.hasSelection {
                 print("\tPlay selection.")
                 playSegments(selectionSegments)
             } else {
-                print("\tPlay note from: \(startTime.seconds)")
+                print("\tPlay entry from: \(startTime.seconds)")
                 self.speechPlayer.play(
-                    note: note,
+                    entry: entry,
                     from: startTime,
                     onStartHandler: onStartHandler,
                     onFinishHandler: onFinishHandler
@@ -1139,15 +1139,15 @@ class NoteManager: NSObject {
                 // increment play count
                 // Only increment if we're playing from the start
                 if startTime == CMTime.zero {
-                    self.currentNote?.incrementPlayCount()
+                    self.currentEntry?.incrementPlayCount()
                 }
             }
         }
         
-        if self.isWalkingNote || self.isRunningNote {
-            print("\tIs currently \(self.isWalkingNote ? "walking" : "running"). Stop and play \(self.selectionCursor.hasSelection ? "selection" : "note").")
-            note.exitWalk(pause: true, clearSelection: false, withFeedback: false) {
-                if self.speechPlayer.isPlayingNote {
+        if self.isWalkingEntry || self.isRunningEntry {
+            print("\tIs currently \(self.isWalkingEntry ? "walking" : "running"). Stop and play \(self.selectionCursor.hasSelection ? "selection" : "entry").")
+            entry.exitWalk(pause: true, clearSelection: false, withFeedback: false) {
+                if self.speechPlayer.isPlayingEntry {
                     self.speechPlayer.stop(withFeedback: false) {
                         executePlay()
                     }
@@ -1155,8 +1155,8 @@ class NoteManager: NSObject {
                     executePlay()
                 }
             }
-        } else if self.speechPlayer.isPlayingNote {
-            print("\tIs currently playing prior speech. Stop and play new \(self.selectionCursor.hasSelection ? "selection" : "note").")
+        } else if self.speechPlayer.isPlayingEntry {
+            print("\tIs currently playing prior speech. Stop and play new \(self.selectionCursor.hasSelection ? "selection" : "entry").")
             self.speechPlayer.stop(withFeedback: false) {
                 executePlay()
             }
@@ -1165,7 +1165,7 @@ class NoteManager: NSObject {
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -1173,17 +1173,17 @@ class NoteManager: NSObject {
         checkRep()
     }
     
-    func stopPlayingNote(withFeedback: Bool = true, voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Stop Playing \(self.selectionCursor.hasSelection ? "Selection" : "Note") =====")
+    func stopPlayingEntry(withFeedback: Bool = true, voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
+        print("===== Entry Manager: Stop Playing \(self.selectionCursor.hasSelection ? "Selection" : "Entry") =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
         }
         
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -1195,14 +1195,14 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        // Stop Note
+        // Stop Entry
         self.speechPlayer.stop(withFeedback: withFeedback) { [weak self] in
-            if self!.pausedWalkingNote {
-                note.walk() {
+            if self!.pausedWalkingEntry {
+                entry.walk() {
                     handler?()
                 }
-            } else if self!.pausedRunningNote {
-                note.run() {
+            } else if self!.pausedRunningEntry {
+                entry.run() {
                     handler?()
                 }
             } else {
@@ -1211,7 +1211,7 @@ class NoteManager: NSObject {
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -1219,17 +1219,17 @@ class NoteManager: NSObject {
         checkRep()
     }
     
-    func echoNote(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Echo \(self.selectionCursor.hasSelection ? "Selection" : "Note") =====")
+    func echoEntry(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
+        print("===== Entry Manager: Echo \(self.selectionCursor.hasSelection ? "Selection" : "Entry") =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
         }
         
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -1243,23 +1243,23 @@ class NoteManager: NSObject {
         
         let executeEcho = {
             print("\tSpeech synthesizer \(self.speechSynthesis.pausedEcho ? "continue" : "starts") speaking...")
-            var segments: [NoteSegment]
-            if self.pausedWalkingNote || self.pausedRunningNote {
-                segments = Array(note.noteSegments[self.walkingRange!])
+            var segments: [EntrySegment]
+            if self.pausedWalkingEntry || self.pausedRunningEntry {
+                segments = Array(entry.entrySegments[self.walkingRange!])
             } else if self.selectionCursor.hasSelection {
                 segments = self.selectionCursor.selectionSegments!
             } else {
-                segments = note.noteSegments
+                segments = entry.entrySegments
             }
             self.speechSynthesis.startEcho(
                 segments: segments,
                 onFinishHandler: { [weak self] in
-                    if self!.pausedWalkingNote {
-                        note.walk() {
+                    if self!.pausedWalkingEntry {
+                        entry.walk() {
                             handler?()
                         }
-                    } else if self!.pausedRunningNote {
-                        note.run() {
+                    } else if self!.pausedRunningEntry {
+                        entry.run() {
                             handler?()
                         }
                     } else {
@@ -1269,8 +1269,8 @@ class NoteManager: NSObject {
             )
         }
         
-        if self.isWalkingNote || self.isRunningNote {
-            note.exitWalk(pause: true, clearSelection: false, withFeedback: false) {
+        if self.isWalkingEntry || self.isRunningEntry {
+            entry.exitWalk(pause: true, clearSelection: false, withFeedback: false) {
                 if self.speechSynthesis.isPlayingEcho {
                     self.speechSynthesis.stopEcho(withFeedback: false) {
                         executeEcho()
@@ -1288,7 +1288,7 @@ class NoteManager: NSObject {
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -1297,16 +1297,16 @@ class NoteManager: NSObject {
     }
     
     func stopEcho(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Stop Echo =====")
+        print("===== Entry Manager: Stop Echo =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
         }
         
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -1315,7 +1315,7 @@ class NoteManager: NSObject {
         
         if !self.speechSynthesis.isPlayingEcho && !self.speechSynthesis.isPlayingPassiveEcho {
             self.notifications.executeError(
-                text: "Note not being echoed.",
+                text: "Entry not being echoed.",
                 handler: handler
             )
             return
@@ -1328,12 +1328,12 @@ class NoteManager: NSObject {
         
         if self.speechSynthesis.isPlayingEcho || self.speechSynthesis.isPlayingPassiveEcho {
             self.speechSynthesis.stopEcho(withFeedback: false) { [weak self] in
-                if self!.pausedWalkingNote {
-                    note.walk() {
+                if self!.pausedWalkingEntry {
+                    entry.walk() {
                         handler?()
                     }
-                } else if self!.pausedRunningNote {
-                    note.run() {
+                } else if self!.pausedRunningEntry {
+                    entry.run() {
                         handler?()
                     }
                 } else {
@@ -1343,7 +1343,7 @@ class NoteManager: NSObject {
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -1351,17 +1351,17 @@ class NoteManager: NSObject {
         checkRep()
     }
     
-    func walkNote(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Walk \(self.selectionCursor.hasSelection ? "Selection" : "Note") =====")
+    func walkEntry(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
+        print("===== Entry Manager: Walk \(self.selectionCursor.hasSelection ? "Selection" : "Entry") =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
         }
         
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -1375,14 +1375,14 @@ class NoteManager: NSObject {
         
         if let selectionSegments = self.selectionCursor.selectionSegments, self.selectionCursor.hasSelection {
             // Walk Selection
-            note.walk(segments: selectionSegments, onStartHandler: handler)
+            entry.walk(segments: selectionSegments, onStartHandler: handler)
         } else {
-            // Walk Note
-            note.walk(onStartHandler: handler)
+            // Walk Entry
+            entry.walk(onStartHandler: handler)
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -1391,8 +1391,8 @@ class NoteManager: NSObject {
     }
     
     // Reference: https://www.hackingwithswift.com/example-code/system/how-to-copy-text-to-the-clipboard-using-uipasteboard
-    func exportNote(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Export \(self.selectionCursor.hasSelection ? "Selection" : "Note") =====")
+    func exportEntry(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
+        print("===== Entry Manager: Export \(self.selectionCursor.hasSelection ? "Selection" : "Entry") =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
@@ -1404,7 +1404,7 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        if let selectionTimeRange = self.selectionCursor.selectionTimeRange, let note = self.currentNote, self.selectionCursor.hasSelection {
+        if let selectionTimeRange = self.selectionCursor.selectionTimeRange, let entry = self.currentEntry, self.selectionCursor.hasSelection {
             // Export Selection
             let dialogActions = [
                 DialogAction(
@@ -1414,23 +1414,23 @@ class NoteManager: NSObject {
                     feedbackAudioMessage: "Exporting audio. Select selection destination on the screen.",
                     style: .default,
                     handler: { [weak self] action in
-                    self?.isExportingNote = true
-                    let selectionFilename = "note-\(UUID().uuidString)"
+                    self?.isExportingEntry = true
+                    let selectionFilename = "entry-\(UUID().uuidString)"
                     
-                    Utils.exportNote(
+                    Utils.exportEntry(
                         state: self!.state,
-                        note: note,
+                        entry: entry,
                         filename: selectionFilename,
-                        fileType: note.fileType,
+                        fileType: entry.fileType,
                         timeRange: selectionTimeRange
-                    ) { noteURL in
-                        self?.isExportingNote = false
+                    ) { entryURL in
+                        self?.isExportingEntry = false
                         handler?()
                         
                         NotificationCenter.default.post(
-                            name: NoteManager.onNoteAudioExported,
+                            name: EntryManager.onEntryAudioExported,
                             object: nil,
-                            userInfo: [ "noteURL" : noteURL]
+                            userInfo: [ "entryURL" : entryURL]
                         )
                     }
                 }),
@@ -1461,38 +1461,38 @@ class NoteManager: NSObject {
                 actions: dialogActions
             )
             self.uiManager.presentDialog(dialogItem: dialogItem)
-        } else if let note = self.currentNote {
-            // Export Note
+        } else if let entry = self.currentEntry {
+            // Export Entry
             let dialogActions = [
                 DialogAction(
                     title: "Export Audio",
                     voiceCommand: "export audio",
                     feedbackVisualMessage: "Exporting audio",
-                    feedbackAudioMessage: "Exporting audio. Select note destination on the screen.",
+                    feedbackAudioMessage: "Exporting audio. Select entry destination on the screen.",
                     style: .default,
                     handler: { [weak self]  action in
-                    self?.isExportingNote = true
-                    let selectionFilename = "note-\(UUID().uuidString)"
+                    self?.isExportingEntry = true
+                    let selectionFilename = "entry-\(UUID().uuidString)"
                     
-                    Utils.exportNote(
+                    Utils.exportEntry(
                         state: self!.state,
-                        note: note,
+                        entry: entry,
                         filename: selectionFilename,
-                        fileType: note.fileType,
-                        timeRange: note.timeRange
-                    ) { noteURL in
-                        self?.isExportingNote = false
+                        fileType: entry.fileType,
+                        timeRange: entry.timeRange
+                    ) { entryURL in
+                        self?.isExportingEntry = false
                         handler?()
                         
                         NotificationCenter.default.post(
-                            name: NoteManager.onNoteAudioExported,
+                            name: EntryManager.onEntryAudioExported,
                             object: nil,
-                            userInfo: [ "noteURL" : noteURL]
+                            userInfo: [ "entryURL" : entryURL]
                         )
                     }
                     
-                    // Increment Note Audio Export Count
-                    note.incrementAudioExportCount()
+                    // Increment Entry Audio Export Count
+                    entry.incrementAudioExportCount()
                 }),
                 DialogAction(
                     title: "Export Text",
@@ -1502,10 +1502,10 @@ class NoteManager: NSObject {
                     style: .default,
                     handler: { action in
                     let pasteboard = UIPasteboard.general
-                    pasteboard.string = note.getText()
+                    pasteboard.string = entry.getText()
                     
-                    // Increment Note Text Export Count
-                    note.incrementTextExportCount()
+                    // Increment Entry Text Export Count
+                    entry.incrementTextExportCount()
                 }),
                 DialogAction(
                     title: "Cancel",
@@ -1518,7 +1518,7 @@ class NoteManager: NSObject {
             ]
             
             let dialogItem = DialogItem(
-                title: "Export Note",
+                title: "Export Entry",
                 message: "Choose export format. Say 'export audio', 'export text', or 'cancel' to dismiss.",
                 preferredStyle: .alert,
                 actions: dialogActions
@@ -1533,7 +1533,7 @@ class NoteManager: NSObject {
         handler?()
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -1541,17 +1541,17 @@ class NoteManager: NSObject {
         checkRep()
     }
     
-    func runNote(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Run \(self.selectionCursor.hasSelection ? "Selection" : "Note") =====")
+    func runEntry(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
+        print("===== Entry Manager: Run \(self.selectionCursor.hasSelection ? "Selection" : "Entry") =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
         }
         
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -1565,14 +1565,14 @@ class NoteManager: NSObject {
         
         if let selectionSegments = self.selectionCursor.selectionSegments, self.selectionCursor.hasSelection {
             // Run Selection
-            note.run(segments: selectionSegments, onStartHandler: handler)
+            entry.run(segments: selectionSegments, onStartHandler: handler)
         } else {
-            // Run Note
-            note.run(onStartHandler: handler)
+            // Run Entry
+            entry.run(onStartHandler: handler)
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -1580,8 +1580,8 @@ class NoteManager: NSObject {
         checkRep()
     }
     
-    func pauseNote(withFeedback: Bool = true, voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Pause \(self.selectionCursor.hasSelection ? "Selection" : "Note") =====")
+    func pauseEntry(withFeedback: Bool = true, voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
+        print("===== Entry Manager: Pause \(self.selectionCursor.hasSelection ? "Selection" : "Entry") =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
@@ -1593,8 +1593,8 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        if self.speechPlayer.isPlayingNote {
-            print("\tPausing Playing Note...")
+        if self.speechPlayer.isPlayingEntry {
+            print("\tPausing Playing Entry...")
             self.speechPlayer.pause(withFeedback: withFeedback) {
                 if withFeedback {
                     self.notifications.executeFeedback(
@@ -1606,12 +1606,12 @@ class NoteManager: NSObject {
                 handler?()
             }
         } else if self.speechRecognition.isListeningForSpeech {
-            print("\tPausing Listening Note....")
+            print("\tPausing Listening Entry....")
             self.speechRecognition.pauseListeningForSpeech(userInitiated: true) {
                 if withFeedback {
                     self.notifications.executeFeedback(
-                        visualMessage: "Pause Note",
-                        audioMessage: "note paused",
+                        visualMessage: "Pause Entry",
+                        audioMessage: "entry paused",
                         withHaptics: true
                     )
                 }
@@ -1623,7 +1623,7 @@ class NoteManager: NSObject {
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -1632,23 +1632,23 @@ class NoteManager: NSObject {
     }
     
     func playCommit(voiceCommand: Bool = false, onStartHandler: (() -> Void)? = nil, onFinishHandler: (() -> Void)? = nil) {
-        print("===== Note Manager: Play Commit =====")
+        print("===== Entry Manager: Play Commit =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
         }
         
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: onFinishHandler
             )
             return
         }
         
-        if note.committedBufferRanges.count == 0 {
+        if entry.committedBufferRanges.count == 0 {
             self.notifications.executeError(
                 text: "No previous commits.",
                 handler: onFinishHandler
@@ -1662,8 +1662,8 @@ class NoteManager: NSObject {
         }
         
         let executePlay = {
-            let commit = note.getLastCommit()
-            print("\tLast Commit: ", note.getText(segments: commit))
+            let commit = entry.getLastCommit()
+            print("\tLast Commit: ", entry.getText(segments: commit))
             guard let lastCommit = commit else {
                 self.notifications.executeError(
                     text: "Unable to find last commit.",
@@ -1675,7 +1675,7 @@ class NoteManager: NSObject {
             let toTime = lastCommit.last!.timeMapping.target.end
             
             self.speechPlayer.play(
-                note: note,
+                entry: entry,
                 from: fromTime,
                 to: toTime,
                 onStartHandler: onStartHandler,
@@ -1683,9 +1683,9 @@ class NoteManager: NSObject {
             )
         }
         
-        if self.isWalkingNote || self.isRunningNote {
-            note.exitWalk(pause: true, clearSelection: false, withFeedback: false) {
-                if self.speechPlayer.isPlayingNote {
+        if self.isWalkingEntry || self.isRunningEntry {
+            entry.exitWalk(pause: true, clearSelection: false, withFeedback: false) {
+                if self.speechPlayer.isPlayingEntry {
                     self.speechPlayer.stop(withFeedback: false) {
                         executePlay()
                     }
@@ -1693,7 +1693,7 @@ class NoteManager: NSObject {
                     executePlay()
                 }
             }
-        } else if self.speechPlayer.isPlayingNote {
+        } else if self.speechPlayer.isPlayingEntry {
             self.speechPlayer.stop(withFeedback: false) {
                 executePlay()
             }
@@ -1702,7 +1702,7 @@ class NoteManager: NSObject {
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -1711,16 +1711,16 @@ class NoteManager: NSObject {
     }
     
     func pauseEcho(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Pause Echo =====")
+        print("===== Entry Manager: Pause Echo =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
         }
         
-        guard let _ = self.currentNote else {
+        guard let _ = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -1729,7 +1729,7 @@ class NoteManager: NSObject {
         
         if !self.speechSynthesis.isPlayingEcho {
             self.notifications.executeError(
-                text: "Note not being echoed.",
+                text: "Entry not being echoed.",
                 handler: handler
             )
             return
@@ -1757,7 +1757,7 @@ class NoteManager: NSObject {
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -1766,7 +1766,7 @@ class NoteManager: NSObject {
     }
     
     func skipBackward(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Skip Backward =====")
+        print("===== Entry Manager: Skip Backward =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
@@ -1780,7 +1780,7 @@ class NoteManager: NSObject {
         
         let currentSegment = self.speechPlayer.getCurrentSegment()
         
-        if let currentSegment = currentSegment, self.speechPlayer.isPlayingNote, CMTimeMake(
+        if let currentSegment = currentSegment, self.speechPlayer.isPlayingEntry, CMTimeMake(
             value: Int64(Utils.DEFAULT_SEGMENT_TIMESCALE * (currentSegment.timeMapping.target.start.seconds - Utils.SKIP_PLAYBACK_DURATION)),
             timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
         ) > CMTime.zero {
@@ -1790,7 +1790,7 @@ class NoteManager: NSObject {
             )
             self.speechPlayer.skip(to: time)
             
-        } else if let currentSegment = currentSegment, self.speechPlayer.isPlayingNote, CMTimeMake(
+        } else if let currentSegment = currentSegment, self.speechPlayer.isPlayingEntry, CMTimeMake(
             value: Int64(Utils.DEFAULT_SEGMENT_TIMESCALE * (currentSegment.timeMapping.target.start.seconds - Utils.SKIP_PLAYBACK_DURATION)),
             timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
         ) <= CMTime.zero {
@@ -1805,7 +1805,7 @@ class NoteManager: NSObject {
         
         handler?()
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -1814,7 +1814,7 @@ class NoteManager: NSObject {
     }
     
     func skipForward(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Skip Forward =====")
+        print("===== Entry Manager: Skip Forward =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
@@ -1828,7 +1828,7 @@ class NoteManager: NSObject {
         
         let currentSegment = self.speechPlayer.getCurrentSegment()
         
-        if let currentSegment = currentSegment, let currentItem = self.speechPlayer.player.currentItem, self.speechPlayer.isPlayingNote, CMTimeMake(
+        if let currentSegment = currentSegment, let currentItem = self.speechPlayer.player.currentItem, self.speechPlayer.isPlayingEntry, CMTimeMake(
             value: Int64(Utils.DEFAULT_SEGMENT_TIMESCALE * (currentSegment.timeMapping.target.start.seconds + Utils.SKIP_PLAYBACK_DURATION)),
             timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
         ) < currentItem.duration {
@@ -1837,7 +1837,7 @@ class NoteManager: NSObject {
                 timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
             )
             self.speechPlayer.skip(to: time)
-        } else if let currentSegment = currentSegment, let currentItem = self.speechPlayer.player.currentItem, self.speechPlayer.isPlayingNote, CMTimeMake(
+        } else if let currentSegment = currentSegment, let currentItem = self.speechPlayer.player.currentItem, self.speechPlayer.isPlayingEntry, CMTimeMake(
             value: Int64(Utils.DEFAULT_SEGMENT_TIMESCALE * (currentSegment.timeMapping.target.start.seconds + Utils.SKIP_PLAYBACK_DURATION)),
             timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
         ) >= currentItem.duration {
@@ -1852,7 +1852,7 @@ class NoteManager: NSObject {
         
         handler?()
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -1861,25 +1861,25 @@ class NoteManager: NSObject {
     }
     
     func walkNextElement(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Walk Next Element =====")
+        print("===== Entry Manager: Walk Next Element =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
         }
         
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
             return
         }
         
-        if !self.isWalkingNote {
+        if !self.isWalkingEntry {
             self.notifications.executeError(
-                text: "Not walking note or selection.",
+                text: "Not walking entry or selection.",
                 handler: handler
             )
             return
@@ -1890,12 +1890,12 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        note.walkToNextSegment(handler: handler)
+        entry.walkToNextSegment(handler: handler)
 
         handler?()
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -1904,25 +1904,25 @@ class NoteManager: NSObject {
     }
     
     func walkPreviousElement(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Walk Previous Element =====")
+        print("===== Entry Manager: Walk Previous Element =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
         }
         
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
             return
         }
         
-        if !self.isWalkingNote {
+        if !self.isWalkingEntry {
             self.notifications.executeError(
-                text: "Not walking note or selection.",
+                text: "Not walking entry or selection.",
                 handler: handler
             )
             return
@@ -1933,12 +1933,12 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        note.walkToPreviousSegment(handler: handler)
+        entry.walkToPreviousSegment(handler: handler)
         
         handler?()
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -1947,25 +1947,25 @@ class NoteManager: NSObject {
     }
     
     func pauseRun(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Pause Run =====")
+        print("===== Entry Manager: Pause Run =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
         }
         
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
             return
         }
         
-        if !self.isRunningNote {
+        if !self.isRunningEntry {
             self.notifications.executeError(
-                text: "Not running note or selection.",
+                text: "Not running entry or selection.",
                 handler: handler
             )
             return
@@ -1976,12 +1976,12 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        note.pauseRun(handler: handler)
+        entry.pauseRun(handler: handler)
         
         handler?()
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -1990,25 +1990,25 @@ class NoteManager: NSObject {
     }
     
     func exitWalkRun(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Exit Walk Run =====")
+        print("===== Entry Manager: Exit Walk Run =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
         }
         
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
             return
         }
         
-        if !self.isWalkingNote && !self.isRunningNote {
+        if !self.isWalkingEntry && !self.isRunningEntry {
             self.notifications.executeError(
-                text: "Not walking or running note or selection.",
+                text: "Not walking or running entry or selection.",
                 handler: handler
             )
             return
@@ -2019,10 +2019,10 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        note.exitWalk() {
+        entry.exitWalk() {
             handler?()
             NotificationCenter.default.post(
-                name: NoteManager.onExecuteNoteAction,
+                name: EntryManager.onExecuteEntryAction,
                 object: nil,
                 userInfo: ["type": "exit mode"]
             )
@@ -2032,7 +2032,7 @@ class NoteManager: NSObject {
     }
     
     func increaseRateSelection(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Increase Rate Selection: \(self.selectionCursor.selectionText ?? "nil") =====")
+        print("===== Entry Manager: Increase Rate Selection: \(self.selectionCursor.selectionText ?? "nil") =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
@@ -2044,21 +2044,21 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
             return
         }
         
-        print("\tRegistering a note change to the Undo Manager...")
-        self.registerNoteChange(note: note, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
+        print("\tRegistering a entry change to the Undo Manager...")
+        self.registerEntryChange(entry: entry, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
             self?.selectionCursor.adjustRateSelection(direction: .up) { [weak self] rate in
-                print("\tRegistering a note change to the Undo Manager...")
-                self?.registerNoteChange(
-                    note: self!.currentNote!,
+                print("\tRegistering a entry change to the Undo Manager...")
+                self?.registerEntryChange(
+                    entry: self!.currentEntry!,
                     undo: "increasing selection rate",
                     handler: handler
                 )
@@ -2072,7 +2072,7 @@ class NoteManager: NSObject {
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -2081,7 +2081,7 @@ class NoteManager: NSObject {
     }
     
     func decreaseRateSelection(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Decrease Rate Selection: \(self.selectionCursor.selectionText ?? "nil") =====")
+        print("===== Entry Manager: Decrease Rate Selection: \(self.selectionCursor.selectionText ?? "nil") =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
@@ -2093,21 +2093,21 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
             return
         }
         
-        print("\tRegistering a note change to the Undo Manager...")
-        self.registerNoteChange(note: note, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
+        print("\tRegistering a entry change to the Undo Manager...")
+        self.registerEntryChange(entry: entry, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
             self?.selectionCursor.adjustRateSelection(direction: .down) { [weak self] rate in
-                print("\tRegistering a note change to the Undo Manager...")
-                self?.registerNoteChange(
-                    note: self!.currentNote!,
+                print("\tRegistering a entry change to the Undo Manager...")
+                self?.registerEntryChange(
+                    entry: self!.currentEntry!,
                     undo: "decreasing selection rate",
                     handler: handler
                 )
@@ -2121,7 +2121,7 @@ class NoteManager: NSObject {
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -2130,7 +2130,7 @@ class NoteManager: NSObject {
     }
     
     func deleteSelection(voiceCommand: Bool = false, isCommit: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Delete Selection: \(self.selectionCursor.selectionText ?? "nil") =====")
+        print("===== Entry Manager: Delete Selection: \(self.selectionCursor.selectionText ?? "nil") =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
@@ -2142,9 +2142,9 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -2153,12 +2153,12 @@ class NoteManager: NSObject {
         
         let undoMessage = "deleting '\(self.selectionCursor.selectionText ?? "selection")'"
         
-        print("\tRegistering a note change to the Undo Manager...")
-        self.registerNoteChange(note: note, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
+        print("\tRegistering a entry change to the Undo Manager...")
+        self.registerEntryChange(entry: entry, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
             self?.selectionCursor.deleteSelection(isCommit: isCommit) { [weak self] in
-                print("\tRegistering a note change to the Undo Manager...")
-                self?.registerNoteChange(
-                    note: self!.currentNote!,
+                print("\tRegistering a entry change to the Undo Manager...")
+                self?.registerEntryChange(
+                    entry: self!.currentEntry!,
                     undo: undoMessage,
                     handler: handler
                 )
@@ -2166,7 +2166,7 @@ class NoteManager: NSObject {
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -2175,7 +2175,7 @@ class NoteManager: NSObject {
     }
     
     func updateSelection(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Update Selection: \(self.selectionCursor.selectionText ?? "nil") =====")
+        print("===== Entry Manager: Update Selection: \(self.selectionCursor.selectionText ?? "nil") =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
@@ -2198,7 +2198,7 @@ class NoteManager: NSObject {
         handler?()
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -2209,11 +2209,11 @@ class NoteManager: NSObject {
     func acceptUpdateSelection(
         handler: (() -> Void)? = nil
     ) {
-        print("===== Note Manager: Accept Update Selection =====")
+        print("===== Entry Manager: Accept Update Selection =====")
         print("\tTriggered by voice command.")
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -2225,15 +2225,15 @@ class NoteManager: NSObject {
             soundEngine.stopModalAmbience()
 
             // Clear buffer segments
-            print("\tClearing note buffer...")
-            note.clearBuffer()
+            print("\tClearing entry buffer...")
+            entry.clearBuffer()
             
-            print("\tRegistering a note change to the Undo Manager...")
-            self.registerNoteChange(note: note, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
+            print("\tRegistering a entry change to the Undo Manager...")
+            self.registerEntryChange(entry: entry, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
                 self?.selectionCursor.acceptUpdateSelection(handler: { [weak self] in
-                    print("\tRegistering a note change to the Undo Manager...")
-                    self?.registerNoteChange(
-                        note: self!.currentNote!,
+                    print("\tRegistering a entry change to the Undo Manager...")
+                    self?.registerEntryChange(
+                        entry: self!.currentEntry!,
                         undo: "replacing '\(self?.selectionCursor.selectionText ?? "selection")'",
                         handler: handler
                     )
@@ -2263,11 +2263,11 @@ class NoteManager: NSObject {
     func redoUpdateSelection(
         handler: (() -> Void)? = nil
     ) {
-        print("===== Note Manager: Redo Update Selection =====")
+        print("===== Entry Manager: Redo Update Selection =====")
         print("\tTriggered by voice command.")
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -2281,8 +2281,8 @@ class NoteManager: NSObject {
             }
 
             // Clear buffer segments
-            print("\tClearing note buffer...")
-            note.clearBuffer()
+            print("\tClearing entry buffer...")
+            entry.clearBuffer()
             
             // Redo Update Selection
             print("\tRedoing Update Selection...")
@@ -2309,16 +2309,16 @@ class NoteManager: NSObject {
     }
     
     func cancelUpdateSelection(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Cancel Update Selection: \(self.selectionCursor.selectionText ?? "nil") =====")
+        print("===== Entry Manager: Cancel Update Selection: \(self.selectionCursor.selectionText ?? "nil") =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
         }
         
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -2335,8 +2335,8 @@ class NoteManager: NSObject {
             soundEngine.stopModalAmbience()
 
             // Clear buffer segments
-            print("\tClearing note buffer...")
-            note.clearBuffer()
+            print("\tClearing entry buffer...")
+            entry.clearBuffer()
             
             // Cancel Update Selection
             print("\tCanceling Update Selection...")
@@ -2356,7 +2356,7 @@ class NoteManager: NSObject {
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: ["type": "cancel update selection"]
         )
@@ -2365,7 +2365,7 @@ class NoteManager: NSObject {
     }
     
     func copySelection(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Copy Selection: \(self.selectionCursor.selectionText ?? "nil") =====")
+        print("===== Entry Manager: Copy Selection: \(self.selectionCursor.selectionText ?? "nil") =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
@@ -2382,7 +2382,7 @@ class NoteManager: NSObject {
         handler?()
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -2391,16 +2391,16 @@ class NoteManager: NSObject {
     }
     
     func cutSelection(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Cut Selection: \(self.selectionCursor.selectionText ?? "nil") =====")
+        print("===== Entry Manager: Cut Selection: \(self.selectionCursor.selectionText ?? "nil") =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
         }
         
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -2414,12 +2414,12 @@ class NoteManager: NSObject {
         
         let undoMessage = "cutting '\(self.selectionCursor.selectionText ?? "selection")'"
         
-        print("\tRegistering a note change to the Undo Manager...")
-        self.registerNoteChange(note: note, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
+        print("\tRegistering a entry change to the Undo Manager...")
+        self.registerEntryChange(entry: entry, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
             self?.selectionCursor.cutSelection() { [weak self] in
-                print("\tRegistering a note change to the Undo Manager...")
-                self?.registerNoteChange(
-                    note: self!.currentNote!,
+                print("\tRegistering a entry change to the Undo Manager...")
+                self?.registerEntryChange(
+                    entry: self!.currentEntry!,
                     undo: undoMessage,
                     handler: handler
                 )
@@ -2427,7 +2427,7 @@ class NoteManager: NSObject {
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -2436,16 +2436,16 @@ class NoteManager: NSObject {
     }
     
     func pasteClipboard(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Paste Clipboard: \(self.selectionCursor.clipboard != nil ? Note.getText(segments: self.selectionCursor.clipboard!) : "nil") =====")
+        print("===== Entry Manager: Paste Clipboard: \(self.selectionCursor.clipboard != nil ? Entry.getText(segments: self.selectionCursor.clipboard!) : "nil") =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
         }
         
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -2457,14 +2457,14 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        let undoMessage = "pasting '\(self.selectionCursor.clipboard != nil ? Note.getText(segments: self.selectionCursor.clipboard!) : "clipboard")'"
+        let undoMessage = "pasting '\(self.selectionCursor.clipboard != nil ? Entry.getText(segments: self.selectionCursor.clipboard!) : "clipboard")'"
         
-        print("\tRegistering a note change to the Undo Manager...")
-        self.registerNoteChange(note: note, undo: "moving cursor") { [weak self] in
+        print("\tRegistering a entry change to the Undo Manager...")
+        self.registerEntryChange(entry: entry, undo: "moving cursor") { [weak self] in
             self?.selectionCursor.pasteClipboard() { [weak self] in
-                print("\tRegistering a note change to the Undo Manager...")
-                self?.registerNoteChange(
-                    note: self!.currentNote!,
+                print("\tRegistering a entry change to the Undo Manager...")
+                self?.registerEntryChange(
+                    entry: self!.currentEntry!,
                     undo: undoMessage,
                     handler: handler
                 )
@@ -2472,7 +2472,7 @@ class NoteManager: NSObject {
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -2483,18 +2483,18 @@ class NoteManager: NSObject {
     func selectCommit(
         handler: (() -> Void)? = nil
     ) {
-        print("===== Note Manager: Select Commit =====")
+        print("===== Entry Manager: Select Commit =====")
         print("\tTriggered by voice command.")
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
             return
         }
 
-        if note.committedBufferRanges.count == 0 {
+        if entry.committedBufferRanges.count == 0 {
             self.notifications.executeError(
                 text: "No previous commits.",
                 voiceCommand: true,
@@ -2506,8 +2506,8 @@ class NoteManager: NSObject {
         // Play Sound
         soundEngine.voiceCommandAccept()
         
-        let commit = note.getLastCommit()
-        print("\tLast Commit: ", note.getText(segments: commit))
+        let commit = entry.getLastCommit()
+        print("\tLast Commit: ", entry.getText(segments: commit))
         guard let lastCommit = commit else {
             self.notifications.executeError(
                 text: "Unable to find last commit.",
@@ -2516,7 +2516,7 @@ class NoteManager: NSObject {
             return
         }
         
-        let newAnchor: NoteSegment?  = lastCommit.first
+        let newAnchor: EntrySegment?  = lastCommit.first
         var newAnchorIndex: Int?
         if let anchor = newAnchor, !anchor.isActive() {
             print("\tSearching for valid anchor...")
@@ -2530,7 +2530,7 @@ class NoteManager: NSObject {
             newAnchorIndex = anchor.getIndex()
         }
         
-        let newFocus: NoteSegment? = lastCommit.last
+        let newFocus: EntrySegment? = lastCommit.last
         var newFocusIndex: Int?
         if let focus = newFocus, !focus.isActive() {
             print("\tSearching for valid focus...")
@@ -2558,7 +2558,7 @@ class NoteManager: NSObject {
         handler?()
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -2569,18 +2569,18 @@ class NoteManager: NSObject {
     func rollbackCommit(
         handler: (() -> Void)? = nil
     ) {
-        print("===== Note Manager: Rollback Commit =====")
+        print("===== Entry Manager: Rollback Commit =====")
         print("\tTriggered by voice command.")
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
             return
         }
 
-        if note.committedBufferRanges.count == 0 {
+        if entry.committedBufferRanges.count == 0 {
             self.notifications.executeError(
                 text: "No previous commits.",
                 voiceCommand: true,
@@ -2593,16 +2593,16 @@ class NoteManager: NSObject {
         soundEngine.voiceCommandAccept()
         
         let executeRollback = {
-            print("\tRegistering a note change to the Undo Manager...")
-            self.registerNoteChange(note: note, undo: "moving cursor") { [weak self] in
+            print("\tRegistering a entry change to the Undo Manager...")
+            self.registerEntryChange(entry: entry, undo: "moving cursor") { [weak self] in
                 // Select Previous Commit
                 self?.selectCommit()
                 
                 // Delete current selection
                 self?.selectionCursor.deleteSelection(isCommit: true) { [weak self] in
-                    print("\tRegistering a note change to the Undo Manager...")
-                    self?.registerNoteChange(
-                        note: self!.currentNote!,
+                    print("\tRegistering a entry change to the Undo Manager...")
+                    self?.registerEntryChange(
+                        entry: self!.currentEntry!,
                         undo: "rolling back last commit",
                         handler: handler
                     )
@@ -2619,7 +2619,7 @@ class NoteManager: NSObject {
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -2630,18 +2630,18 @@ class NoteManager: NSObject {
     func walkCommit(
         handler: (() -> Void)? = nil
     ) {
-        print("===== Note Manager: Walk Commit =====")
+        print("===== Entry Manager: Walk Commit =====")
         print("\tTriggered by voice command.")
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
             return
         }
 
-        if note.committedBufferRanges.count == 0 {
+        if entry.committedBufferRanges.count == 0 {
             self.notifications.executeError(
                 text: "No previous commits.",
                 voiceCommand: true,
@@ -2657,10 +2657,10 @@ class NoteManager: NSObject {
         self.selectCommit()
         
         // Walk current selection
-        self.walkNote(voiceCommand: true, handler: handler)
+        self.walkEntry(voiceCommand: true, handler: handler)
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -2671,18 +2671,18 @@ class NoteManager: NSObject {
     func runCommit(
         handler: (() -> Void)? = nil
     ) {
-        print("===== Note Manager: Run Commit =====")
+        print("===== Entry Manager: Run Commit =====")
         print("\tTriggered by voice command.")
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
             return
         }
 
-        if note.committedBufferRanges.count == 0 {
+        if entry.committedBufferRanges.count == 0 {
             self.notifications.executeError(
                 text: "No previous commits.",
                 voiceCommand: true,
@@ -2698,10 +2698,10 @@ class NoteManager: NSObject {
         self.selectCommit()
         
         // Run current selection
-        self.runNote(voiceCommand: true, handler: handler)
+        self.runEntry(voiceCommand: true, handler: handler)
         
         NotificationCenter.default.post(
-            name: NoteManager.onExecuteNoteAction,
+            name: EntryManager.onExecuteEntryAction,
             object: nil,
             userInfo: [:]
         )
@@ -2712,11 +2712,11 @@ class NoteManager: NSObject {
     func openSelection(
         handler: (() -> Void)? = nil
     ) {
-        print("===== Note Manager: Open Selection =====")
+        print("===== Entry Manager: Open Selection =====")
         print("\tTriggered by voice command.")
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -2737,7 +2737,7 @@ class NoteManager: NSObject {
                 print("\tIs Silence: ", segment.isSilence())
                 selectionIndex = Utils.getSegmentIndex(
                     segment: segment,
-                    segments: note.noteSegments,
+                    segments: entry.entrySegments,
                     type: .previous,
                     isWord: true,
                     isCommitted: true
@@ -2757,7 +2757,7 @@ class NoteManager: NSObject {
                 print("\tIs Silence: ", segment.isSilence())
                 selectionIndex = Utils.getSegmentIndex(
                     segment: segment,
-                    segments: note.noteSegments,
+                    segments: entry.entrySegments,
                     type: .next,
                     isWord: true,
                     isCommitted: true
@@ -2770,7 +2770,7 @@ class NoteManager: NSObject {
         print("Selection Index: ", selectionIndex ?? "nil")
         
         if let selectionIndex = selectionIndex {
-            let selection = note.noteSegments[selectionIndex]
+            let selection = entry.entrySegments[selectionIndex]
             print("\tFound selection: ", selection.getText())
             // Play Sound
             soundEngine.voiceCommandAccept()
@@ -2798,11 +2798,11 @@ class NoteManager: NSObject {
     func removeSelection(
         handler: (() -> Void)? = nil
     ) {
-        print("===== Note Manager: Remove Selection =====")
+        print("===== Entry Manager: Remove Selection =====")
         print("\tTriggered by voice command.")
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -2825,7 +2825,7 @@ class NoteManager: NSObject {
             self?.selectionCursor.clearSelection(withFeedback: true) {
                 // Notify observers of loading
                 NotificationCenter.default.post(
-                    name: Note.onRequestToUpdateView,
+                    name: Entry.onRequestToUpdateView,
                     object: nil,
                     userInfo: [:]
                 )
@@ -2834,9 +2834,9 @@ class NoteManager: NSObject {
             handler?()
         }
         
-        if self.isWalkingNote || self.isRunningNote {
-            print("\tIs \(self.isWalkingNote ? "walking" : "running") note. Stop runnning then execute 'remove selection' command...")
-            note.exitWalk(clearSelection: false, withFeedback: false) {
+        if self.isWalkingEntry || self.isRunningEntry {
+            print("\tIs \(self.isWalkingEntry ? "walking" : "running") entry. Stop runnning then execute 'remove selection' command...")
+            entry.exitWalk(clearSelection: false, withFeedback: false) {
                 executeRemoveSelection()
             }
         } else {
@@ -2849,11 +2849,11 @@ class NoteManager: NSObject {
         withFeedback: Bool = true,
         handler: (() -> Void)? = nil
     ) {
-        print("===== Note Manager: Shift Anchor \(direction == .left ? "Left" : "Right") =====")
+        print("===== Entry Manager: Shift Anchor \(direction == .left ? "Left" : "Right") =====")
         print("\tTriggered by voice command.")
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -2873,7 +2873,7 @@ class NoteManager: NSObject {
         if let currentAnchor = self.selectionCursor.anchor, direction == .left {
             newAnchorIndex = Utils.getSegmentIndex(
                 segment: currentAnchor,
-                segments: note.noteSegments,
+                segments: entry.entrySegments,
                 type: .previous,
                 isWord: true
             )
@@ -2884,7 +2884,7 @@ class NoteManager: NSObject {
         {
             newAnchorIndex = Utils.getSegmentIndex(
                 segment: currentAnchor,
-                segments: note.noteSegments,
+                segments: entry.entrySegments,
                 type: .next,
                 isWord: true
             )
@@ -2930,11 +2930,11 @@ class NoteManager: NSObject {
         withFeedback: Bool = true,
         handler: (() -> Void)? = nil
     ) {
-        print("===== Note Manager: Shift Focus \(direction == .left ? "Left" : "Right") =====")
+        print("===== Entry Manager: Shift Focus \(direction == .left ? "Left" : "Right") =====")
         print("\tTriggered by voice command.")
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -2958,7 +2958,7 @@ class NoteManager: NSObject {
         {
             newFocusIndex = Utils.getSegmentIndex(
                 segment: currentFocus,
-                segments: note.noteSegments,
+                segments: entry.entrySegments,
                 type: .previous,
                 isWord: true
             )
@@ -2967,7 +2967,7 @@ class NoteManager: NSObject {
         {
             newFocusIndex = Utils.getSegmentIndex(
                 segment: currentFocus,
-                segments: note.noteSegments,
+                segments: entry.entrySegments,
                 type: .next,
                 isWord: true
             )
@@ -3013,7 +3013,7 @@ class NoteManager: NSObject {
         withFeedback: Bool = true,
         handler: (() -> Void)? = nil
     ) {
-        print("===== Note Manager: Shift Selection =====")
+        print("===== Entry Manager: Shift Selection =====")
         print("\tTriggered by voice command.")
         
         if direction == .right {
@@ -3042,7 +3042,7 @@ class NoteManager: NSObject {
     func expandSelection(
         handler: (() -> Void)? = nil
     ) {
-        print("===== Note Manager: Expand Selection =====")
+        print("===== Entry Manager: Expand Selection =====")
         print("\tTriggered by voice command.")
         self.shiftAnchor(
             direction: .left,
@@ -3057,7 +3057,7 @@ class NoteManager: NSObject {
     func reduceSelection(
         handler: (() -> Void)? = nil
     ) {
-        print("===== Note Manager: Reduce Selection =====")
+        print("===== Entry Manager: Reduce Selection =====")
         print("\tTriggered by voice command.")
         self.shiftAnchor(
             direction: .right,
@@ -3072,18 +3072,18 @@ class NoteManager: NSObject {
     func echoCommit(
         handler: (() -> Void)? = nil
     ) {
-        print("===== Note Manager: Echo Commit =====")
+        print("===== Entry Manager: Echo Commit =====")
         print("\tTriggered by voice command.")
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
             return
         }
 
-        if note.committedBufferRanges.count == 0 {
+        if entry.committedBufferRanges.count == 0 {
             self.notifications.executeError(
                 text: "No previous commits.",
                 voiceCommand: true,
@@ -3096,8 +3096,8 @@ class NoteManager: NSObject {
         soundEngine.voiceCommandAccept()
         
         let executeEcho = {
-            let commit = note.getLastCommit()
-            print("\tLast Commit: ", note.getText(segments: commit))
+            let commit = entry.getLastCommit()
+            print("\tLast Commit: ", entry.getText(segments: commit))
             guard let lastCommit = commit else {
                 self.notifications.executeError(
                     text: "Unable to find last commit.",
@@ -3110,23 +3110,23 @@ class NoteManager: NSObject {
                 segments: Array(lastCommit),
                 onStartHandler: {
                     NotificationCenter.default.post(
-                        name: Note.onRequestToUpdateView,
+                        name: Entry.onRequestToUpdateView,
                         object: nil,
                         userInfo: [:]
                     )
                 },
                 onFinishHandler: {
                     NotificationCenter.default.post(
-                        name: Note.onRequestToUpdateView,
+                        name: Entry.onRequestToUpdateView,
                         object: nil,
                         userInfo: [:]
                     )
-                    if self.pausedWalkingNote {
-                        note.walk() {
+                    if self.pausedWalkingEntry {
+                        entry.walk() {
                             handler?()
                         }
-                    } else if self.pausedRunningNote {
-                        note.run() {
+                    } else if self.pausedRunningEntry {
+                        entry.run() {
                             handler?()
                         }
                     } else {
@@ -3136,8 +3136,8 @@ class NoteManager: NSObject {
             )
         }
         
-        if self.isWalkingNote || self.isRunningNote {
-            note.exitWalk(pause: true, clearSelection: false, withFeedback: false) {
+        if self.isWalkingEntry || self.isRunningEntry {
+            entry.exitWalk(pause: true, clearSelection: false, withFeedback: false) {
                 if self.speechSynthesis.isPlayingEcho {
                     self.speechSynthesis.stopEcho(withFeedback: false) {
                         executeEcho()
@@ -3158,29 +3158,29 @@ class NoteManager: NSObject {
     func echoPreviousSentence(
         handler: (() -> Void)? = nil
     ) {
-        print("===== Note Manager: Echo Previous Sentence =====")
+        print("===== Entry Manager: Echo Previous Sentence =====")
         print("\tTriggered by voice command.")
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
             return
         }
 
-        if note.noteSegments.count == 0 {
+        if entry.entrySegments.count == 0 {
             self.notifications.executeError(
-                text: "Note is empty.",
+                text: "Entry is empty.",
                 voiceCommand: true,
                 handler: handler
             )
             return
         }
 
-        let previousSentenceIndex = max(note.numSentences - 1, 0)
+        let previousSentenceIndex = max(entry.numSentences - 1, 0)
         
-        if note.numSentences == 1 {
+        if entry.numSentences == 1 {
             self.notifications.executeError(
                 text: "No previous sentence exists.",
                 voiceCommand: true,
@@ -3192,26 +3192,26 @@ class NoteManager: NSObject {
         // Play Sound
         soundEngine.voiceCommandAccept()
 
-        note.echoSentence(number: previousSentenceIndex, onFinishHandler: handler)
+        entry.echoSentence(number: previousSentenceIndex, onFinishHandler: handler)
     }
     
     func playPreviousSentence(
         handler: (() -> Void)? = nil
     ) {
-        print("===== Note Manager: Play Previous Sentence =====")
+        print("===== Entry Manager: Play Previous Sentence =====")
         print("\tTriggered by voice command.")
-        guard let note = self.currentNote else {
+        guard let entry = self.currentEntry else {
             self.notifications.executeError(
-                text: "No note selected.",
+                text: "No entry selected.",
                 voiceCommand: true,
                 handler: handler
             )
             return
         }
     
-        if note.noteSegments.count == 0 {
+        if entry.entrySegments.count == 0 {
             self.notifications.executeError(
-                text: "Note is empty.",
+                text: "Entry is empty.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -3219,9 +3219,9 @@ class NoteManager: NSObject {
         }
 
         let executePlay = {
-            let previousSentenceIndex = max(note.numSentences - 1, 0)
+            let previousSentenceIndex = max(entry.numSentences - 1, 0)
             
-            if note.numSentences == 1 {
+            if entry.numSentences == 1 {
                 self.notifications.executeError(
                     text: "No previous sentence exists.",
                     voiceCommand: true,
@@ -3233,12 +3233,12 @@ class NoteManager: NSObject {
             // Play Sound
             soundEngine.voiceCommandAccept()
 
-            note.playSentence(number: previousSentenceIndex)
+            entry.playSentence(number: previousSentenceIndex)
         }
         
-        if self.isWalkingNote || self.isRunningNote {
-            note.exitWalk(pause: true, clearSelection: false, withFeedback: false) {
-                if self.speechPlayer.isPlayingNote {
+        if self.isWalkingEntry || self.isRunningEntry {
+            entry.exitWalk(pause: true, clearSelection: false, withFeedback: false) {
+                if self.speechPlayer.isPlayingEntry {
                     self.speechPlayer.stop(withFeedback: false) {
                         executePlay()
                     }
@@ -3246,7 +3246,7 @@ class NoteManager: NSObject {
                     executePlay()
                 }
             }
-        } else if self.speechPlayer.isPlayingNote {
+        } else if self.speechPlayer.isPlayingEntry {
             self.speechPlayer.stop(withFeedback: false) {
                 executePlay()
             }
@@ -3259,31 +3259,31 @@ class NoteManager: NSObject {
     
     // message should start with a present progressive verb: -ing
     // so utterance will be: undo verb-ing object
-    func registerNoteChange(note: Note, undo message: String, handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Register Note Change  =====")
+    func registerEntryChange(entry: Entry, undo message: String, handler: (() -> Void)? = nil) {
+        print("===== Entry Manager: Register Entry Change  =====")
 
         // Update Undo/Redo History
         print("\tCreating and setting new snapshot...")
         
-        let newSnapshot = NoteSnapshot(
-            note: note.duplicate(), // we duplicate so there's no memory leaks/pointers to same memory locations
+        let newSnapshot = EntrySnapshot(
+            entry: entry.duplicate(), // we duplicate so there's no memory leaks/pointers to same memory locations
             selectionAnchorCaret: self.selectionCursor.anchorCaret?.duplicate(),
             selectionFocusCaret: self.selectionCursor.focusCaret?.duplicate(),
             selectionCachedAnchorCaret: self.selectionCursor.cachedAnchorCaret?.duplicate(),
             undo: message
         )
         
-        self.noteChangeHandler = handler
+        self.entryChangeHandler = handler
         
-        self.modifyNote(snapshot: newSnapshot)
+        self.modifyEntry(snapshot: newSnapshot)
         
         checkRep()
     }
     
     @objc func undo(handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Undo  =====")
+        print("===== Entry Manager: Undo  =====")
         let executeUndo = {
-            let undoMessage = self.currentNoteUndoSnapshot!.message
+            let undoMessage = self.currentEntryUndoSnapshot!.message
             self.undoManager.undo()
             // Present Feedback
             self.notifications.executeFeedback(
@@ -3312,11 +3312,11 @@ class NoteManager: NSObject {
     }
     
     @objc func redo(handler: (() -> Void)? = nil) {
-        print("===== Note Manager: Redo  =====")
+        print("===== Entry Manager: Redo  =====")
         
         let executeRedo = {
             self.undoManager.redo()
-            let redoMessage = self.currentNoteUndoSnapshot!.message
+            let redoMessage = self.currentEntryUndoSnapshot!.message
             // Present Feedback
             self.notifications.executeFeedback(
                 visualMessage: "Redo",
@@ -3345,36 +3345,36 @@ class NoteManager: NSObject {
     
     // MARK: - Setters
     
-    func setCurrentNote(index: Int? = nil) {
-        print("===== Note Manager: Set Current Note =====")
+    func setCurrentEntry(index: Int? = nil) {
+        print("===== Entry Manager: Set Current Entry =====")
         print("\tSet index to: ", index ?? "nil")
         if let index = index {
             self.currentIndex = index
-            self.setNoteModules(index: index)
-            // Increment Note Views
-            self.currentNote!.incrementViewCount()
+            self.setEntryModules(index: index)
+            // Increment Entry Views
+            self.currentEntry!.incrementViewCount()
             
-            self.currentNoteUndoSnapshot = NoteSnapshot(
-                note: self.currentNote!.duplicate(), // we duplicate so there's no memory leaks/pointers to same memory locations
+            self.currentEntryUndoSnapshot = EntrySnapshot(
+                entry: self.currentEntry!.duplicate(), // we duplicate so there's no memory leaks/pointers to same memory locations
                 selectionAnchorCaret: self.selectionCursor.anchorCaret,
                 selectionFocusCaret: self.selectionCursor.focusCaret,
                 selectionCachedAnchorCaret: self.selectionCursor.cachedAnchorCaret,
-                undo: "to start of note"
+                undo: "to start of entry"
             )
             
-            print("Note Segments: ", self.currentNote!.noteSegments)
+            print("Entry Segments: ", self.currentEntry!.entrySegments)
         } else {
             self.currentIndex = nil
-            self.currentNoteUndoSnapshot = nil
+            self.currentEntryUndoSnapshot = nil
             self.undoManager.removeAllActions()
         }
 
         var userInfo: [String : Int] = [:]
         if let currentIndex = self.currentIndex {
-            userInfo["currentNoteIndex"] = currentIndex
+            userInfo["currentEntryIndex"] = currentIndex
         }
         NotificationCenter.default.post(
-            name: NoteManager.onSetNote,
+            name: EntryManager.onSetEntry,
             object: nil,
             userInfo: userInfo
         )
@@ -3383,7 +3383,7 @@ class NoteManager: NSObject {
     }
     
     func setWalkingIndex(index: Int) {
-        print("===== Note Manager: Set Walking Index =====")
+        print("===== Entry Manager: Set Walking Index =====")
         print("\tSet index to: ", index)
         self.walkingIndex = index
         
@@ -3391,47 +3391,47 @@ class NoteManager: NSObject {
     }
     
     func setWalkingRange(range: Range<Int>? = nil) {
-        print("===== Note Manager: Set Walking Range =====")
+        print("===== Entry Manager: Set Walking Range =====")
         print("\tSet range to: ", range ?? "nil")
         self.walkingRange = range
         
         checkRep()
     }
     
-    func setIsWalkingNote(to isWalking: Bool) {
-        print("===== Note Manager: Set Is Walking Note =====")
+    func setIsWalkingEntry(to isWalking: Bool) {
+        print("===== Entry Manager: Set Is Walking Entry =====")
         print("\tSet to: ", isWalking)
-        self.isWalkingNote = isWalking
+        self.isWalkingEntry = isWalking
         
         checkRep()
     }
     
-    func setIsRunningNote(to isRunning: Bool) {
-        print("===== Note Manager: Set Is Running Note =====")
+    func setIsRunningEntry(to isRunning: Bool) {
+        print("===== Entry Manager: Set Is Running Entry =====")
         print("\tSet to: ", isRunning)
-        self.isRunningNote = isRunning
+        self.isRunningEntry = isRunning
         
         checkRep()
     }
     
-    func setPausedWalkingNote(to paused: Bool) {
-        print("===== Note Manager: Set Paused Walking Note =====")
+    func setPausedWalkingEntry(to paused: Bool) {
+        print("===== Entry Manager: Set Paused Walking Entry =====")
         print("\tSet to: ", paused)
-        self.pausedWalkingNote = paused
+        self.pausedWalkingEntry = paused
         
         checkRep()
     }
     
-    func setPausedRunningNote(to paused: Bool) {
-        print("===== Note Manager: Set Paused Running Note =====")
+    func setPausedRunningEntry(to paused: Bool) {
+        print("===== Entry Manager: Set Paused Running Entry =====")
         print("\tSet to: ", paused)
-        self.pausedRunningNote = paused
+        self.pausedRunningEntry = paused
         
         checkRep()
     }
     
     func setWalkingTimer(timer: Timer? = nil) {
-        print("===== Note Manager: Set Walking Timer =====")
+        print("===== Entry Manager: Set Walking Timer =====")
         if let _ = timer {
             print("\tSet new timer.")
         } else {
@@ -3444,7 +3444,7 @@ class NoteManager: NSObject {
     }
     
     func setWalkLoopDelayTimer(timer: Timer? = nil) {
-        print("===== Note Manager: Set Walk Loop Delay Timer =====")
+        print("===== Entry Manager: Set Walk Loop Delay Timer =====")
         if let _ = timer {
             print("\tSet new timer.")
         } else {
@@ -3457,7 +3457,7 @@ class NoteManager: NSObject {
     }
     
     func setEchoDelayTimer(timer: Timer? = nil) {
-        print("===== Note Manager: Set Echo Delay Timer =====")
+        print("===== Entry Manager: Set Echo Delay Timer =====")
         if let _ = timer {
             print("\tSet new timer.")
         } else {
@@ -3470,7 +3470,7 @@ class NoteManager: NSObject {
     }
     
     func setRunningTimer(timer: Timer? = nil) {
-        print("===== Note Manager: Set Running Timer =====")
+        print("===== Entry Manager: Set Running Timer =====")
         if let _ = timer {
             print("\tSet new timer.")
         } else {
@@ -3485,28 +3485,28 @@ class NoteManager: NSObject {
 
 // MARK: - Undo Manager
 
-extension NoteManager {
+extension EntryManager {
   
-    private func modifyNote(snapshot: NoteSnapshot) {
+    private func modifyEntry(snapshot: EntrySnapshot) {
 
-        let oldSnapshot: NoteSnapshot = self.currentNoteUndoSnapshot!
+        let oldSnapshot: EntrySnapshot = self.currentEntryUndoSnapshot!
 
         let stateDiff = oldSnapshot.diffed(with: snapshot)
         stateDidChange(diff: stateDiff)
     }
 
-    private func stateDidChange(diff: NoteSnapshot.Diff) {
+    private func stateDidChange(diff: EntrySnapshot.Diff) {
 
         guard diff.hasChanges else { return }
 
-        self.currentNoteUndoSnapshot = diff.to
+        self.currentEntryUndoSnapshot = diff.to
 
         self.undoManager.registerUndo(withTarget: self) { target in
-            target.modifyNote(snapshot: diff.from)
+            target.modifyEntry(snapshot: diff.from)
         }
         
         NotificationCenter.default.post(
-            name: NoteManager.onUndoManagerChange,
+            name: EntryManager.onUndoManagerChange,
             object: nil,
             userInfo: [
                 "canUndo": self.undoManager.canUndo,

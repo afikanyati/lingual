@@ -13,18 +13,18 @@ class Sentence: NSObject, NSCoding {
     var number: Int
     var text: String
     var timeRange: CMTimeRange
-    var noteRange: Range<Int>
+    var entryRange: Range<Int>
     
     init(
         number: Int,
         text: String,
         timeRange: CMTimeRange,
-        noteRange: Range<Int>
+        entryRange: Range<Int>
     ) {
         self.number = number
         self.text = text
         self.timeRange = timeRange
-        self.noteRange = noteRange
+        self.entryRange = entryRange
     }
     
     func encode(with coder: NSCoder) {
@@ -41,11 +41,11 @@ class Sentence: NSObject, NSCoding {
             ]
         ]
         coder.encode(timeRange, forKey: "timeRange")
-        let noteDictRange: [String:Int] = [
-            "startIndex": self.noteRange.startIndex,
-            "endIndex": self.noteRange.endIndex
+        let entryDictRange: [String:Int] = [
+            "startIndex": self.entryRange.startIndex,
+            "endIndex": self.entryRange.endIndex
         ]
-        coder.encode(noteDictRange, forKey: "noteRange")
+        coder.encode(entryDictRange, forKey: "entryRange")
     }
     
     required init?(coder: NSCoder) {
@@ -62,8 +62,8 @@ class Sentence: NSObject, NSCoding {
                 timescale: Int32(timeRange["end"]!["timescale"]!)
             )
         )
-        let noteDictRange = coder.decodeObject(forKey: "noteRange") as! [String:Int]
-        self.noteRange = noteDictRange["startIndex"]!..<noteDictRange["endIndex"]!
+        let entryDictRange = coder.decodeObject(forKey: "entryRange") as! [String:Int]
+        self.entryRange = entryDictRange["startIndex"]!..<entryDictRange["endIndex"]!
     }
     
    func setNumber(value: Int) {
@@ -74,8 +74,8 @@ class Sentence: NSObject, NSCoding {
         self.timeRange = value
     }
     
-    func setNoteRange(value: Range<Int>) {
-        self.noteRange = value
+    func setEntryRange(value: Range<Int>) {
+        self.entryRange = value
     }
     
     func setText(value: String) {
@@ -86,10 +86,10 @@ class Sentence: NSObject, NSCoding {
         return firstSentence.number == secondSentence.number &&
             firstSentence.text == secondSentence.text &&
             firstSentence.timeRange == secondSentence.timeRange &&
-            firstSentence.noteRange == secondSentence.noteRange
+            firstSentence.entryRange == secondSentence.entryRange
     }
     
     override var description: String {
-        return "Sentence (\n\t\ttext: \(text)\n\t\tnumber: \(number)\n\t\tnoteRange: \(noteRange)\n\t\ttimeRange: (\n\t\t\tstart: \(timeRange.start.seconds),\n\t\t\tend: \(timeRange.end.seconds),\n\t\t\tduration: \(timeRange.duration.seconds)\n\t\t)\n\t)"
+        return "Sentence (\n\t\ttext: \(text)\n\t\tnumber: \(number)\n\t\tentryRange: \(entryRange)\n\t\ttimeRange: (\n\t\t\tstart: \(timeRange.start.seconds),\n\t\t\tend: \(timeRange.end.seconds),\n\t\t\tduration: \(timeRange.duration.seconds)\n\t\t)\n\t)"
     }
 }

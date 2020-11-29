@@ -17,7 +17,7 @@ class PitchRecognitionEngine: NSObject, PitchEngineDelegate {
     
     var state: StateManager
     var speechRecognition: SpeechRecognitionEngine
-    var noteManager: NoteManager!
+    var entryManager: EntryManager!
     
     private(set) var pitchStream = [PitchDatum]()
 
@@ -151,9 +151,9 @@ class PitchRecognitionEngine: NSObject, PitchEngineDelegate {
     func getRecordingPitch(timestamp: Double) -> PitchDatum {
         var pitch: PitchDatum
         var i = 0
-        var datumTimestamp = self.pitchStream[i].date - self.noteManager.currentNote!.recordStartDate! - Utils.TRANSCRIPTION_LATENCY_DURATION
+        var datumTimestamp = self.pitchStream[i].date - self.entryManager.currentEntry!.recordStartDate! - Utils.TRANSCRIPTION_LATENCY_DURATION
         repeat {
-            datumTimestamp = self.pitchStream[i].date - self.noteManager.currentNote!.recordStartDate! - Utils.TRANSCRIPTION_LATENCY_DURATION
+            datumTimestamp = self.pitchStream[i].date - self.entryManager.currentEntry!.recordStartDate! - Utils.TRANSCRIPTION_LATENCY_DURATION
             pitch = self.pitchStream[i]
             i += 1
         } while datumTimestamp < timestamp && i < self.pitchStream.count
@@ -179,7 +179,7 @@ class PitchRecognitionEngine: NSObject, PitchEngineDelegate {
 //                        let rate: Float = 0.53
 //                        let volume = AVAudioSession.sharedInstance().outputVolume
 //                        let voice = Utils.getSynthesizerVoice(
-//                            withGender: pitch.note.octave >= 4 ? .female : .male,
+//                            withRegister: pitch.note.octave >= 4 ? .female : .male,
 //                            vc: self
 //                        )
 //                        let synthesizerItem = SynthesizerItem(
@@ -229,7 +229,7 @@ class PitchRecognitionEngine: NSObject, PitchEngineDelegate {
 //            // print("power: ", lastSoundIntensity.power, self.getBackgroundNoise(), Utils.VOLUME_POWER_DELTA)
 //            if self.isListeningForVolume && self.volumeListeningRateTimer == nil {
 //
-//                Utils.setMainVolume(to: Float(Utils.normalizePitch(incidentPitch: pitch, basePitch: self.note.speaker.pitch!)))
+//                Utils.setMainVolume(to: Float(Utils.normalizePitch(incidentPitch: pitch, basePitch: self.entry.speaker.pitch!)))
 //                // MAKE SURE TO ALSO CHANGE VOLUME OF SOUND EFFECTS
 //                self.volumeListeningRateTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: false) {[weak self] timer in
 //                    self?.volumeListeningRateTimer = nil

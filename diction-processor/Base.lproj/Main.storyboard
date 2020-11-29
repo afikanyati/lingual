@@ -9,10 +9,10 @@
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <scenes>
-        <!--Note Table View Controller-->
+        <!--Entry Table View Controller-->
         <scene sceneID="UAn-Ck-xhl">
             <objects>
-                <tableViewController storyboardIdentifier="NoteTableViewController" id="EZK-eh-z08" customClass="NoteTableViewController" customModule="diction_processor" customModuleProvider="target" sceneMemberID="viewController">
+                <tableViewController storyboardIdentifier="EntryTableViewController" id="EZK-eh-z08" customClass="EntryTableViewController" customModule="diction_processor" customModuleProvider="target" sceneMemberID="viewController">
                     <tableView key="view" clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" dataMode="prototypes" style="plain" separatorStyle="default" rowHeight="60" estimatedRowHeight="-1" sectionHeaderHeight="28" sectionFooterHeight="28" id="b89-bj-s66">
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
@@ -34,8 +34,8 @@
                     </tableView>
                     <navigationItem key="navigationItem" id="IFr-6d-b0n"/>
                     <connections>
-                        <segue destination="BYZ-38-t0r" kind="show" identifier="moveFromNoteTableToDetail" id="BkO-te-Mgf"/>
-                        <segue destination="HHw-4v-0K5" kind="unwind" identifier="moveFromNoteTableToSleep" unwindAction="unwindToSleepWithSegue:" id="g4o-BB-C6F"/>
+                        <segue destination="BYZ-38-t0r" kind="show" identifier="moveFromEntryTableToDetail" id="BkO-te-Mgf"/>
+                        <segue destination="HHw-4v-0K5" kind="unwind" identifier="moveFromEntryTableToSleep" unwindAction="unwindToSleepWithSegue:" id="g4o-BB-C6F"/>
                     </connections>
                 </tableViewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="pbg-WI-FDv" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
@@ -601,7 +601,7 @@
                                                         </constraints>
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
-                                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Run Note" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="pVH-ge-cnw" userLabel="Label">
+                                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Run Entry" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="pVH-ge-cnw" userLabel="Label">
                                                         <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="dHe-De-cf4"/>
@@ -644,7 +644,7 @@
                                                         </constraints>
                                                         <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                                     </imageView>
-                                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Pause Note" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="nYW-Cl-m24" userLabel="Label">
+                                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Pause Entry" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="nYW-Cl-m24" userLabel="Label">
                                                         <rect key="frame" x="0.0" y="31" width="93" height="25"/>
                                                         <constraints>
                                                             <constraint firstAttribute="height" constant="25" id="CHF-rn-2Zk"/>
@@ -1011,13 +1011,13 @@
                             <stackView opaque="NO" alpha="0.0" contentMode="scaleToFill" preservesSuperviewLayoutMargins="YES" distribution="fillEqually" alignment="center" spacing="10" translatesAutoresizingMaskIntoConstraints="NO" id="Ht0-xa-6Fc" userLabel="Menu Bar">
                                 <rect key="frame" x="0.0" y="792" width="414" height="70"/>
                                 <subviews>
-                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="qmX-8T-RmB" userLabel="Start Note Button">
+                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="qmX-8T-RmB" userLabel="Start Entry Button">
                                         <rect key="frame" x="0.0" y="0.0" width="32.5" height="70"/>
                                         <subviews>
                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Sod-kC-6f1">
                                                 <rect key="frame" x="0.0" y="0.0" width="32.5" height="70"/>
                                                 <connections>
-                                                    <action selector="startNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="GeF-al-c37"/>
+                                                    <action selector="startEntry:" destination="BYZ-38-t0r" eventType="touchUpInside" id="NpF-GE-vnb"/>
                                                 </connections>
                                             </button>
                                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="mic" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="XJK-54-0Ri" userLabel="Icon">
@@ -1029,7 +1029,7 @@
                                                 </constraints>
                                                 <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                             </imageView>
-                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Start Note" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="AtQ-cS-uai" userLabel="Label">
+                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Start Entry" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="AtQ-cS-uai" userLabel="Label">
                                                 <rect key="frame" x="0.0" y="39" width="32.5" height="25"/>
                                                 <constraints>
                                                     <constraint firstAttribute="height" constant="25" id="7aA-KB-tSB"/>
@@ -1055,13 +1055,13 @@
                                             <constraint firstItem="Sod-kC-6f1" firstAttribute="width" secondItem="qmX-8T-RmB" secondAttribute="width" id="x1g-gR-T9j"/>
                                         </constraints>
                                     </view>
-                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="104-Bb-akr" userLabel="Resume Note Button">
+                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="104-Bb-akr" userLabel="Resume Entry Button">
                                         <rect key="frame" x="42.5" y="0.0" width="32.5" height="70"/>
                                         <subviews>
                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="tPU-o1-GWr">
                                                 <rect key="frame" x="0.0" y="0.0" width="32.5" height="70"/>
                                                 <connections>
-                                                    <action selector="resumeNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="B8Q-3z-ekx"/>
+                                                    <action selector="resumeEntry:" destination="BYZ-38-t0r" eventType="touchUpInside" id="xiH-12-jpT"/>
                                                 </connections>
                                             </button>
                                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="mic" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="pAU-E2-XHV" userLabel="Icon">
@@ -1073,7 +1073,7 @@
                                                 </constraints>
                                                 <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                             </imageView>
-                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Resume Note" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="hMj-mD-fI4" userLabel="Label">
+                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Resume Entry" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="hMj-mD-fI4" userLabel="Label">
                                                 <rect key="frame" x="0.0" y="39" width="32.5" height="25"/>
                                                 <constraints>
                                                     <constraint firstAttribute="height" constant="25" id="4Ss-gd-pUT"/>
@@ -1099,13 +1099,13 @@
                                             <constraint firstItem="tPU-o1-GWr" firstAttribute="width" secondItem="104-Bb-akr" secondAttribute="width" id="yMx-QS-Kmg"/>
                                         </constraints>
                                     </view>
-                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="GcS-hv-4ky" userLabel="Edit Note Button">
+                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="GcS-hv-4ky" userLabel="Edit Entry Button">
                                         <rect key="frame" x="85" y="0.0" width="32" height="70"/>
                                         <subviews>
                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Euc-q5-RLq">
                                                 <rect key="frame" x="0.0" y="0.0" width="32" height="70"/>
                                                 <connections>
-                                                    <action selector="editNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="PWp-JJ-VOD"/>
+                                                    <action selector="editEntry:" destination="BYZ-38-t0r" eventType="touchUpInside" id="5C3-7X-K5r"/>
                                                 </connections>
                                             </button>
                                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="pencil" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="Vzr-gT-dNw" userLabel="Icon">
@@ -1117,7 +1117,7 @@
                                                 </constraints>
                                                 <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                             </imageView>
-                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Edit Note" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="QBh-9k-4JQ" userLabel="Label">
+                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Edit Entry" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="QBh-9k-4JQ" userLabel="Label">
                                                 <rect key="frame" x="0.0" y="39" width="32" height="25"/>
                                                 <constraints>
                                                     <constraint firstAttribute="height" constant="25" id="yGM-8X-Fdf"/>
@@ -1143,13 +1143,13 @@
                                             <constraint firstItem="QBh-9k-4JQ" firstAttribute="width" secondItem="GcS-hv-4ky" secondAttribute="width" id="v1J-sQ-aLA"/>
                                         </constraints>
                                     </view>
-                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="U63-yq-ZMN" userLabel="Stop Listening Note Button">
+                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="U63-yq-ZMN" userLabel="Stop Listening Entry Button">
                                         <rect key="frame" x="127" y="0.0" width="32.5" height="70"/>
                                         <subviews>
                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Y0X-aX-rJJ">
                                                 <rect key="frame" x="0.0" y="0.0" width="32.5" height="70"/>
                                                 <connections>
-                                                    <action selector="stopListeningNote:" destination="BYZ-38-t0r" eventType="touchUpInside" id="ES3-WE-AuW"/>
+                                                    <action selector="stopListeningEntry:" destination="BYZ-38-t0r" eventType="touchUpInside" id="B19-Ez-DK7"/>
                                                 </connections>
                                             </button>
                                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="hand.raised" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="Tpv-w9-cMz" userLabel="Icon">
@@ -1161,7 +1161,7 @@
                                                 </constraints>
                                                 <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                             </imageView>
-                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Stop Note" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="zvc-u8-v90" userLabel="Label">
+                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Stop Entry" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="zvc-u8-v90" userLabel="Label">
                                                 <rect key="frame" x="0.0" y="39" width="32.5" height="25"/>
                                                 <constraints>
                                                     <constraint firstAttribute="height" constant="25" id="gu6-LK-qEK"/>
@@ -1205,7 +1205,7 @@
                                                 </constraints>
                                                 <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                             </imageView>
-                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Play Note" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="li3-1K-0pI" userLabel="Label">
+                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Play Entry" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="li3-1K-0pI" userLabel="Label">
                                                 <rect key="frame" x="0.0" y="39" width="32.5" height="25"/>
                                                 <constraints>
                                                     <constraint firstAttribute="height" constant="25" id="JUT-W4-gJW"/>
@@ -1249,7 +1249,7 @@
                                                 </constraints>
                                                 <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                             </imageView>
-                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Stop Note" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="nRH-NM-BNT" userLabel="Label">
+                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Stop Entry" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="nRH-NM-BNT" userLabel="Label">
                                                 <rect key="frame" x="0.0" y="39" width="32.5" height="25"/>
                                                 <constraints>
                                                     <constraint firstAttribute="height" constant="25" id="r2o-If-I0g"/>
@@ -1293,7 +1293,7 @@
                                                 </constraints>
                                                 <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                             </imageView>
-                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Echo Note" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="gAA-s9-9qv" userLabel="Label">
+                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Echo Entry" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="gAA-s9-9qv" userLabel="Label">
                                                 <rect key="frame" x="0.0" y="39" width="32.5" height="25"/>
                                                 <constraints>
                                                     <constraint firstAttribute="height" constant="25" id="9Z8-Kb-ktw"/>
@@ -1381,7 +1381,7 @@
                                                 </constraints>
                                                 <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                             </imageView>
-                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Walk Note" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Zrj-Nl-RIZ" userLabel="Label">
+                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Walk Entry" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Zrj-Nl-RIZ" userLabel="Label">
                                                 <rect key="frame" x="0.0" y="39" width="32.5" height="25"/>
                                                 <constraints>
                                                     <constraint firstAttribute="height" constant="25" id="pFH-xf-5ia"/>
@@ -1425,7 +1425,7 @@
                                                 </constraints>
                                                 <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="large"/>
                                             </imageView>
-                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Export Note" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="cw1-aN-5eo" userLabel="Label">
+                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Export Entry" textAlignment="center" lineBreakMode="wordWrap" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="cw1-aN-5eo" userLabel="Label">
                                                 <rect key="frame" x="0.0" y="39" width="32.5" height="25"/>
                                                 <constraints>
                                                     <constraint firstAttribute="height" constant="25" id="2Vs-wf-kqc"/>
@@ -1653,7 +1653,7 @@
                         <outlet property="deleteSelectionButton" destination="W2T-VK-Ovs" id="jrm-oP-pwk"/>
                         <outlet property="echoButton" destination="cnb-5X-cDY" id="yE5-GO-dxk"/>
                         <outlet property="echoRateButton" destination="6Wt-Ih-DqE" id="nxn-Rt-Z6K"/>
-                        <outlet property="editNoteButton" destination="GcS-hv-4ky" id="GdW-Al-bxL"/>
+                        <outlet property="editEntryButton" destination="GcS-hv-4ky" id="TvJ-JG-TuR"/>
                         <outlet property="exitSliderButton" destination="88x-K7-N2H" id="Hq4-2f-77G"/>
                         <outlet property="exitWalkRunButton" destination="WTY-vs-DOu" id="1td-9L-B5N"/>
                         <outlet property="exportButton" destination="pir-kT-Cor" id="Xc6-tW-o6G"/>
@@ -1670,7 +1670,7 @@
                         <outlet property="playCommitButton" destination="t5M-tA-0Yi" id="UAF-kB-2HI"/>
                         <outlet property="playbackRateButton" destination="YBi-jc-AO8" id="aYQ-7g-Udv"/>
                         <outlet property="redoButton" destination="v1x-94-15m" id="8IV-Hx-X8k"/>
-                        <outlet property="resumeNoteButton" destination="104-Bb-akr" id="7e7-9b-Qk2"/>
+                        <outlet property="resumeEntryButton" destination="104-Bb-akr" id="KAB-My-Afj"/>
                         <outlet property="runButton" destination="PeZ-QO-LMy" id="yNC-xK-lb0"/>
                         <outlet property="scrollView" destination="ztA-53-ezE" id="N6i-8m-TVc"/>
                         <outlet property="scrollViewPositionTop" destination="bLU-Q1-UJT" id="rXE-pm-GTS"/>
@@ -1682,9 +1682,9 @@
                         <outlet property="soundIntensityIndicator" destination="NP2-Ys-Ufm" id="f35-h9-3hf"/>
                         <outlet property="soundIntensityIndicatorHeight" destination="3IS-Ev-EYg" id="LZT-sD-gP3"/>
                         <outlet property="soundIntensityIndicatorPositionBottom" destination="1ar-Pc-ScE" id="XIj-DG-lL3"/>
-                        <outlet property="startNoteButton" destination="qmX-8T-RmB" id="9Jb-KI-Aka"/>
+                        <outlet property="startEntryButton" destination="qmX-8T-RmB" id="0x0-Jx-eMX"/>
                         <outlet property="stopEchoButton" destination="TIs-yf-gNU" id="EMD-zn-4Bv"/>
-                        <outlet property="stopListeningNoteButton" destination="U63-yq-ZMN" id="Lyt-gW-EYb"/>
+                        <outlet property="stopListeningEntryButton" destination="U63-yq-ZMN" id="gox-wp-wr2"/>
                         <outlet property="stopPlayingButton" destination="4yS-ds-3sg" id="HJ5-My-jsH"/>
                         <outlet property="textView" destination="qWP-6t-6mG" id="yRH-2e-WnQ"/>
                         <outlet property="textViewPositionBottom" destination="kr2-Rn-fbP" id="Xuy-Ta-AEu"/>
@@ -1695,7 +1695,7 @@
                         <outlet property="walkButton" destination="H0L-Fd-gxp" id="MZo-mJ-IhK"/>
                         <outlet property="walkNextElementButton" destination="rSh-4Z-F1B" id="N5X-Js-wlk"/>
                         <outlet property="walkPreviousElementButton" destination="diY-sg-ErT" id="JXi-SF-jAL"/>
-                        <segue destination="IXn-xi-Hmt" kind="unwind" identifier="moveFromDetailToNoteTable" unwindAction="unwindToNoteTableWithSegue:" id="SHq-w1-9o4"/>
+                        <segue destination="IXn-xi-Hmt" kind="unwind" identifier="moveFromDetailToEntryTable" unwindAction="unwindToEntryTableWithSegue:" id="SHq-w1-9o4"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="dkx-z0-nzr" sceneMemberID="firstResponder"/>
@@ -1759,7 +1759,7 @@
                         <outlet property="soundIntensityIndicatorPositionBottom" destination="RWq-on-AEL" id="KlM-0c-VYc"/>
                         <outlet property="wakePhraseLabel" destination="VPR-FV-5BA" id="kIa-9H-8FE"/>
                         <outlet property="wakePhraseSubtitleLabel" destination="uvq-Q4-3Bd" id="Xhq-Up-PLO"/>
-                        <segue destination="EZK-eh-z08" kind="show" identifier="moveFromSleepToNoteTable" id="BJP-dc-6yB"/>
+                        <segue destination="EZK-eh-z08" kind="show" identifier="moveFromSleepToEntryTable" id="BJP-dc-6yB"/>
                         <segue destination="BYZ-38-t0r" kind="show" identifier="moveFromSleepToDetail" id="tfs-dJ-LGA"/>
                     </connections>
                 </viewController>

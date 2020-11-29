@@ -9,10 +9,10 @@
 import Foundation
 import UIKit
 
-@objc class NoteSnapshot: NSObject {
+@objc class EntrySnapshot: NSObject {
     // MARK: - Properties
     
-    let note: Note
+    let entry: Entry
     let selectionAnchorCaret: Caret?
     let selectionFocusCaret: Caret?
     let selectionCachedAnchorCaret: Caret?
@@ -20,13 +20,13 @@ import UIKit
     
     // MARK: - Initialization
     init(
-        note: Note,
+        entry: Entry,
         selectionAnchorCaret: Caret?,
         selectionFocusCaret: Caret?,
         selectionCachedAnchorCaret: Caret?,
         undo message: String
     ) {
-        self.note = note
+        self.entry = entry
         self.selectionAnchorCaret = selectionAnchorCaret
         self.selectionFocusCaret = selectionFocusCaret
         self.selectionCachedAnchorCaret = selectionCachedAnchorCaret
@@ -34,16 +34,16 @@ import UIKit
     }
     
     public override var description: String {
-        return "NoteSnapshot {\n\tnote: \(self.note) \n\tanchorCaret: \(String(describing: self.selectionAnchorCaret)) \n\tfocusCaret: \(String(describing: self.selectionFocusCaret)) \n\tcachedAnchorCaret: \(String(describing: self.selectionCachedAnchorCaret)) \n\tmessage: \(self.message)\n}"
+        return "EntrySnapshot {\n\tentry: \(self.entry) \n\tanchorCaret: \(String(describing: self.selectionAnchorCaret)) \n\tfocusCaret: \(String(describing: self.selectionFocusCaret)) \n\tcachedAnchorCaret: \(String(describing: self.selectionCachedAnchorCaret)) \n\tmessage: \(self.message)\n}"
     }
     
     // MARK: - Types
     
     struct Diff {
-        let from: NoteSnapshot
-        let to: NoteSnapshot
+        let from: EntrySnapshot
+        let to: EntrySnapshot
 
-        fileprivate init(from: NoteSnapshot, to: NoteSnapshot) {
+        fileprivate init(from: EntrySnapshot, to: EntrySnapshot) {
             self.from = from
             self.to = to
         }
@@ -53,16 +53,16 @@ import UIKit
         }
     }
 
-    func diffed(with other: NoteSnapshot) -> Diff {
+    func diffed(with other: EntrySnapshot) -> Diff {
         return Diff(from: self, to: other)
     }
 }
 
 // MARK: - Equatable
 
-extension NoteSnapshot {
-    static func ==(_ firstSnapshot: NoteSnapshot, _ secondSnapshot: NoteSnapshot) -> Bool {
-        return firstSnapshot.note == secondSnapshot.note &&
+extension EntrySnapshot {
+    static func ==(_ firstSnapshot: EntrySnapshot, _ secondSnapshot: EntrySnapshot) -> Bool {
+        return firstSnapshot.entry == secondSnapshot.entry &&
             firstSnapshot.message == secondSnapshot.message &&
             firstSnapshot.selectionAnchorCaret == secondSnapshot.selectionAnchorCaret &&
             firstSnapshot.selectionFocusCaret == secondSnapshot.selectionFocusCaret &&

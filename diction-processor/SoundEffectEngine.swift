@@ -29,7 +29,7 @@ public final class SoundEffectEngine: NSObject {
     var naturePlayer: AVQueuePlayer? = nil
     var natureLooper: AVPlayerLooper? = nil
     var repeatPlayer: AVAudioPlayer? = nil
-    var saveNotePlayer: AVAudioPlayer? = nil
+    var saveEntryPlayer: AVAudioPlayer? = nil
     var startListeningPlayer: AVAudioPlayer? = nil
     var stopListeningPlayer: AVAudioPlayer? = nil
     var voiceCommandAcceptPlayer: AVAudioPlayer? = nil
@@ -134,15 +134,15 @@ public final class SoundEffectEngine: NSObject {
             print("===== [Error] There was a problem importing 'Repeat' sound =====")
         }
         
-        // Save Note
-        let saveNotePath = Bundle.main.path(forResource: "save", ofType: "wav")!
-        let saveNoteURL = URL(fileURLWithPath: saveNotePath)
+        // Save Entry
+        let saveEntryPath = Bundle.main.path(forResource: "save", ofType: "wav")!
+        let saveEntryURL = URL(fileURLWithPath: saveEntryPath)
 
         do {
-            self.saveNotePlayer = try AVAudioPlayer(contentsOf: saveNoteURL)
-            self.players.append(self.saveNotePlayer)
+            self.saveEntryPlayer = try AVAudioPlayer(contentsOf: saveEntryURL)
+            self.players.append(self.saveEntryPlayer)
         } catch {
-            print("===== [Error] There was a problem importing 'Save Note' sound =====")
+            print("===== [Error] There was a problem importing 'Save Entry' sound =====")
         }
         
         // Start Listening
@@ -319,9 +319,9 @@ public final class SoundEffectEngine: NSObject {
         repeatPlayer?.prepareToPlay()
         repeatPlayer?.play()
     }
-    func saveNote() {
-        saveNotePlayer?.prepareToPlay()
-        saveNotePlayer?.play()
+    func saveEntry() {
+        saveEntryPlayer?.prepareToPlay()
+        saveEntryPlayer?.play()
     }
     func startListening() {
         startListeningPlayer?.prepareToPlay()

@@ -1,5 +1,5 @@
 //
-//  Gender.swift
+//  VocalRegister.swift
 //  diction-processor
 //
 //  Created by Afika Nyati on 6/24/20.
@@ -8,7 +8,7 @@
 
 import Foundation
 
-enum Gender {
+enum VocalRegister {
     case male
     case female
 }

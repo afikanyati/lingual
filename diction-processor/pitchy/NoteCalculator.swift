@@ -6,7 +6,7 @@ public struct NoteCalculator {
     public static let octave = 4
   }
 
-  public static var letters: [MusicNote.Letter] = [
+  public static var letters: [Note.Letter] = [
     .A,
     .ASharp,
     .B,
@@ -76,7 +76,7 @@ public struct NoteCalculator {
     return pow(2, power) * Standard.frequency
   }
 
-  public static func letter(forIndex index: Int) throws -> MusicNote.Letter {
+  public static func letter(forIndex index: Int) throws -> Note.Letter {
     try validate(index: index)
 
     let count = letters.count
@@ -116,7 +116,7 @@ public struct NoteCalculator {
     return Int(round(count * log2(frequency / Standard.frequency)))
   }
 
-  public static func index(forLetter letter: MusicNote.Letter, octave: Int) throws -> Int {
+  public static func index(forLetter letter: Note.Letter, octave: Int) throws -> Int {
     try validate(octave: octave)
 
     let count = letters.count

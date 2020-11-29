@@ -1,4 +1,4 @@
-public struct MusicNote: Equatable {
+public struct Note: Equatable {
   public enum Letter: String {
     case C = "C"
     case CSharp = "C#"
@@ -38,11 +38,11 @@ public struct MusicNote: Equatable {
   public var string: String {
     return "\(self.letter.rawValue)\(self.octave)"
   }
-    public static func ==(_ firstMusicNote: MusicNote, _ secondMusicNote: MusicNote) -> Bool {
-        return firstMusicNote.index == secondMusicNote.index &&
-        firstMusicNote.letter == secondMusicNote.letter &&
-        firstMusicNote.octave == secondMusicNote.octave &&
-        firstMusicNote.frequency == secondMusicNote.frequency
+    public static func ==(_ firstNote: Note, _ secondNote: Note) -> Bool {
+        return firstNote.index == secondNote.index &&
+        firstNote.letter == secondNote.letter &&
+        firstNote.octave == secondNote.octave &&
+        firstNote.frequency == secondNote.frequency
     }
 
   // MARK: - Initialization
@@ -73,11 +73,11 @@ public struct MusicNote: Equatable {
 
   // MARK: - Closest Notes
 
-  public func lower() throws -> MusicNote {
-    return try MusicNote(index: index - 1)
+  public func lower() throws -> Note {
+    return try Note(index: index - 1)
   }
 
-  public func higher() throws -> MusicNote {
-    return try MusicNote(index: index + 1)
+  public func higher() throws -> Note {
+    return try Note(index: index + 1)
   }
 }

@@ -89,7 +89,7 @@ class Utils {
     static var WALKING_START_DELAY_DURATION: TimeInterval = 0.5
     static let DEFAULT_FIG_COUNT = 2
     static let TEMPORAL_DELTA = 0.01
-    static let DEFAULT_SEGMENT_DURATION: Double = 100000 // Must be high enough such that no user will record a note of this duration
+    static let DEFAULT_SEGMENT_DURATION: Double = 100000 // Must be high enough such that no user will record a entry of this duration
     static let TRANSCRIPTION_LATENCY_DURATION: Double = 0.3
     static let SOUND_INTENSITY_SIG_FIG_COUNT: Int = 4
     static let MAXIMUM_VOLUME: Float = 1
@@ -130,7 +130,7 @@ class Utils {
     static var TEXT_VIEW_PADDING_RIGHT: CGFloat = 10
     static var ENTRY_ITEM_PREVIEW_CHAR_COUNT = 50
     static let MIN_SEED_INTENSITY_POINTS = 15
-    /// Stores the current playback volume of note playback
+    /// Stores the current playback volume of entry playback
     static var playbackVolume: Float {
         return AVAudioSession.sharedInstance().outputVolume
     }
@@ -214,22 +214,22 @@ class Utils {
     // Cannot export to outputURL's that already exist
     // Reference: https://stackoverflow.com/questions/20203548/avassetexportsession-not-exporting-time-range
     // Deleting: https://stackoverflow.com/questions/42041405/delete-a-file-using-swift-in-ios
-    // Accessing Exported Note: https://stackoverflow.com/questions/60269542/how-to-get-m4a-file-from-recorded-audio-for-api-in-swift
-    public static func exportNote(
+    // Accessing Exported Entry: https://stackoverflow.com/questions/60269542/how-to-get-m4a-file-from-recorded-audio-for-api-in-swift
+    public static func exportEntry(
         state: StateManager,
-        note: Note,
+        entry: Entry,
         filename: String,
         fileType: String,
         timeRange: CMTimeRange,
-        onFinishHandler: ((_ noteURL: String) -> Void)? = nil
+        onFinishHandler: ((_ entryURL: String) -> Void)? = nil
     ) {
-        print("===== Utils: Export Note =====")
+        print("===== Utils: Export Entry =====")
         
         let filePath = Utils.getFileURL(of: "\(filename)\(fileType)").absoluteString
         Utils.deleteExistingFile(atPath: filePath)
 
-        if !AVAssetExportSession.exportPresets(compatibleWith: note).contains(AVAssetExportPresetAppleM4A) {
-            fatalError("\t[Error] Expected export preset value not compatible with note")
+        if !AVAssetExportSession.exportPresets(compatibleWith: entry).contains(AVAssetExportPresetAppleM4A) {
+            fatalError("\t[Error] Expected export preset value not compatible with entry")
         }
         
         // Normalize Segments
@@ -239,7 +239,7 @@ class Utils {
             print("\tRemove voice command segments...")
         }
         let normalizedExportSegments = Utils.cleanseSegments(
-            segments: note.noteSegments,
+            segments: entry.entrySegments,
             omitSilences: state.withOmitSilences,
             omitVoiceCommands: true,
             omitDeleted: true
@@ -252,17 +252,17 @@ class Utils {
         }
         
         // Normalize Transformations
-        var normalizedTransformations = [NoteTransformation]()
-        if note.transformations.count > 0 {
+        var normalizedTransformations = [EntryTransformation]()
+        if entry.transformations.count > 0 {
             if state.withOmitSilences {
                 print("\tRecompute transformation without silences and voice command segments")
             } else {
                 print("\tRecompute transformation without voice command segments...")
             }
 
-            print("\tNormalized before: ", note.transformations)
+            print("\tNormalized before: ", entry.transformations)
             normalizedTransformations = Utils.cleanseTransformations(
-                transformations: note.transformations,
+                transformations: entry.transformations,
                 segments: normalizedExportSegments,
                 segmentIndexMap: normalizedSegmentIndexMap,
                 omitSilences: state.withOmitSilences,
@@ -285,8 +285,8 @@ class Utils {
             }
             for transformation in normalizedTransformations {
                 // we can keep moving in until we catch a non silence
-                let lowerSegment = normalizedExportSegments[transformation.noteRange.lowerBound]
-                let upperSegment = normalizedExportSegments[transformation.noteRange.upperBound]
+                let lowerSegment = normalizedExportSegments[transformation.entryRange.lowerBound]
+                let upperSegment = normalizedExportSegments[transformation.entryRange.upperBound]
                 // playback rate
                 if transformation.type == .playbackRate {
                     let timeRange = CMTimeRangeFromTimeToTime(
@@ -297,7 +297,7 @@ class Utils {
                         value: Int64(Utils.DEFAULT_SEGMENT_TIMESCALE * (timeRange.duration.seconds * Double( 1 / transformation.value!))),
                         timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
                     )
-                    print("\tTransformation (\n\ttype: playbackRate \n\tuids: \(transformation.uids) \n\ttext: \(transformation.text) \n\tvalue: \(transformation.value!) \n\ttextRange: \(transformation.textRange) \n\tnoteRange: \(transformation.noteRange) \n\ttimeRange: \(timeRange) \n\tduration: \(duration)\n)")
+                    print("\tTransformation (\n\ttype: playbackRate \n\tuids: \(transformation.uids) \n\ttext: \(transformation.text) \n\tvalue: \(transformation.value!) \n\ttextRange: \(transformation.textRange) \n\tentryRange: \(transformation.entryRange) \n\ttimeRange: \(timeRange) \n\tduration: \(duration)\n)")
                     mutableComposition.scaleTimeRange(timeRange, toDuration: duration)
                 }
             }
@@ -324,10 +324,10 @@ class Utils {
         exporter.exportAsynchronously() {
             DispatchQueue.global(qos: .userInitiated).async {
                 if exporter.status == AVAssetExportSession.Status.completed {
-                    print("===== Note successfully exported: \(filename).m4a =====")
+                    print("===== Entry successfully exported: \(filename).m4a =====")
                     onFinishHandler?(url.lastPathComponent)
                 } else {
-                    print("===== [Error] Unable to export note =====")
+                    print("===== [Error] Unable to export entry =====")
                     if let error = exporter.error {
                         print("\tMessage: \(error.localizedDescription)")
                     }
@@ -662,35 +662,35 @@ class Utils {
     
     // Reference: https://stackoverflow.com/questions/57134259/how-to-resolve-keywindow-was-deprecated-in-ios-13-0
     // Reference: https://stackoverflow.com/questions/32201292/access-navigationcontroller-from-a-viewcontroller-that-i-opened-using-modal-in-s
-    public static func getSynthesizerVoice(withGender gender: Gender? = nil) -> AVSpeechSynthesisVoice? {
+    public static func getSynthesizerVoice(withRegister register: VocalRegister? = nil) -> AVSpeechSynthesisVoice? {
         var synthesizerVoice: AVSpeechSynthesisVoice?
         voicesLoop: for voice in AVSpeechSynthesisVoice.speechVoices() {
-            if (Locale.current.regionCode == "AU") && (gender == .male || gender == nil) && (voice.name == "Lee (Enhanced)" && voice.quality == .enhanced) {
+            if (Locale.current.regionCode == "AU") && (register == .male || register == nil) && (voice.name == "Lee (Enhanced)" && voice.quality == .enhanced) {
                 // AU
                 // Male = Lee
                 synthesizerVoice = voice
                 break
-            } else if (Locale.current.regionCode == "AU") && (gender == .female || gender == nil) && (voice.name == "Karen (Enhanced)" && voice.quality == .enhanced) {
+            } else if (Locale.current.regionCode == "AU") && (register == .female || register == nil) && (voice.name == "Karen (Enhanced)" && voice.quality == .enhanced) {
                 // AU
                 // Female = Karen
                 synthesizerVoice = voice
                 break
-            } else if (Locale.current.regionCode == "UK") && (gender == .male || gender == nil) && (voice.name == "Oliver (Enhanced)" && voice.quality == .enhanced) {
+            } else if (Locale.current.regionCode == "UK") && (register == .male || register == nil) && (voice.name == "Oliver (Enhanced)" && voice.quality == .enhanced) {
                 // UK
                 // Male = Oliver
                 synthesizerVoice = voice
                 break
-            } else if (Locale.current.regionCode == "UK") && (gender == .female || gender == nil) && (voice.name == "Kate (Enhanced)" && voice.quality == .enhanced) {
+            } else if (Locale.current.regionCode == "UK") && (register == .female || register == nil) && (voice.name == "Kate (Enhanced)" && voice.quality == .enhanced) {
                 // UK
                 // Female = Kate
                 synthesizerVoice = voice
                 break
-            } else if voice.name == "Tom (Enhanced)" && (gender == .male || gender == nil) && voice.quality == .enhanced {
+            } else if voice.name == "Tom (Enhanced)" && (register == .male || register == nil) && voice.quality == .enhanced {
                 // US
                 // Male = Tom
                 synthesizerVoice = voice
                 break
-            } else if voice.name == "Ava (Enhanced)" && (gender == .female || gender == nil) && voice.quality == .enhanced {
+            } else if voice.name == "Ava (Enhanced)" && (register == .female || register == nil) && voice.quality == .enhanced {
                 // US
                 // Female = Ava
                 synthesizerVoice = voice
@@ -703,27 +703,27 @@ class Utils {
         } else {
             var voiceName = "Tom"
             voicesLoop: for voice in AVSpeechSynthesisVoice.speechVoices() {
-                if (Locale.current.regionCode == "AU") && (gender == .male || gender == nil) && (voice.name == "Lee (Enhanced)" && voice.quality == .enhanced) {
+                if (Locale.current.regionCode == "AU") && (register == .male || register == nil) && (voice.name == "Lee (Enhanced)" && voice.quality == .enhanced) {
                     // AU
                     // Male = Lee
                     voiceName = "Lee"
-                } else if (Locale.current.regionCode == "AU") && (gender == .female || gender == nil) && (voice.name == "Karen (Enhanced)" && voice.quality == .enhanced) {
+                } else if (Locale.current.regionCode == "AU") && (register == .female || register == nil) && (voice.name == "Karen (Enhanced)" && voice.quality == .enhanced) {
                     // AU
                     // Female = Karen
                     voiceName = "Karen"
-                } else if (Locale.current.regionCode == "UK") && (gender == .male || gender == nil) && (voice.name == "Oliver (Enhanced)" && voice.quality == .enhanced) {
+                } else if (Locale.current.regionCode == "UK") && (register == .male || register == nil) && (voice.name == "Oliver (Enhanced)" && voice.quality == .enhanced) {
                     // UK
                     // Male = Oliver
                     voiceName = "Oliver"
-                } else if (Locale.current.regionCode == "UK") && (gender == .female || gender == nil) && (voice.name == "Kate (Enhanced)" && voice.quality == .enhanced) {
+                } else if (Locale.current.regionCode == "UK") && (register == .female || register == nil) && (voice.name == "Kate (Enhanced)" && voice.quality == .enhanced) {
                     // UK
                     // Female = Kate
                     voiceName = "Kate"
-                } else if voice.name == "Tom (Enhanced)" && (gender == .male || gender == nil) && voice.quality == .enhanced {
+                } else if voice.name == "Tom (Enhanced)" && (register == .male || register == nil) && voice.quality == .enhanced {
                     // US
                     // Male = Tom
                     voiceName = "Tom"
-                } else if voice.name == "Allison (Enhanced)" && (gender == .female || gender == nil) && voice.quality == .enhanced {
+                } else if voice.name == "Allison (Enhanced)" && (register == .female || register == nil) && voice.quality == .enhanced {
                     // US
                     // Female = Allison
                     voiceName = "Allison"
@@ -804,13 +804,13 @@ class Utils {
     
     // normalizes by changing target times not source times
     public static func cleanseSegments(
-        segments: [NoteSegment],
+        segments: [EntrySegment],
         omitSilences: Bool = false,
         omitVoiceCommands: Bool = false,
         omitDeleted: Bool = false
-    ) -> [NoteSegment] {
+    ) -> [EntrySegment] {
         print("===== Cleanse Segments =====")
-        var cleansedSegments = [NoteSegment]()
+        var cleansedSegments = [EntrySegment]()
         
         if omitSilences {
             print("\tFilter out silences...")
@@ -842,12 +842,12 @@ class Utils {
         // normalize segments array
         print("\tShift segments to close up gaps in time caused by removes segments...")
         var lastEnd = CMTime.zero
-        var normalizedCleansedSegments = [NoteSegment]()
+        var normalizedCleansedSegments = [EntrySegment]()
         var silenceIndices = [Int]()
         for (index, segment) in cleansedSegments.enumerated() {
             if segment.timeMapping.target.start.seconds != lastEnd.seconds {
-                let shiftedSegment = NoteSegment(
-                    note: segment.note,
+                let shiftedSegment = EntrySegment(
+                    entry: segment.entry,
                     speakerUID: segment.getSpeakerUID(),
                     word: segment.getText(),
                     clipUID: segment.getClipUID(),
@@ -932,18 +932,18 @@ class Utils {
                 }
                 
                 return result
-            }) / Double(normalizedCleansedSegments.first!.getNote()!.getDuration(filteredDuration: true).seconds / Double(TimeConstant.secsPerMin))
+            }) / Double(normalizedCleansedSegments.first!.getEntry()!.getDuration(filteredDuration: true).seconds / Double(TimeConstant.secsPerMin))
             speakingRate = speakingRate!.rounded(toPlaces: Utils.DEFAULT_FIG_COUNT)
         }
         
         // Update Index, Background Noise, AvgPauseDuration, SpeakingRate
-        var fullyNormalizedCleansedSegments = [NoteSegment]()
+        var fullyNormalizedCleansedSegments = [EntrySegment]()
         for (index, segment) in normalizedCleansedSegments.enumerated() {
             // Set segment index
             segment.setIndex(index: index)
             
             // Set backgroundNoise
-            segment.setBackgroundNoise(noise: normalizedCleansedSegments.first!.getNote()!.getBackgroundNoise())
+            segment.setBackgroundNoise(noise: normalizedCleansedSegments.first!.getEntry()!.getBackgroundNoise())
 
             // Set avgPauseDuration
             if let avgPauseDuration = avgPauseDuration {
@@ -962,16 +962,16 @@ class Utils {
     }
     
     public static func cleanseTransformations(
-        transformations: [NoteTransformation],
-        segments: [NoteSegment],
+        transformations: [EntryTransformation],
+        segments: [EntrySegment],
         segmentIndexMap: [String: Int],
         omitSilences: Bool,
         omitVoiceCommands: Bool,
         omitDeleted: Bool
-    ) -> [NoteTransformation] {
+    ) -> [EntryTransformation] {
         print("===== Cleanse Transformations =====")
 
-        var cleansedTransformations = [NoteTransformation]()
+        var cleansedTransformations = [EntryTransformation]()
         for transformation in transformations {
             print("\tTransformation -------")
             print(transformation)
@@ -1090,7 +1090,7 @@ class Utils {
                 let upperSegment = segments[range.upperBound]
 
                 // Compute text
-                let text = lowerSegment.note!.getText(
+                let text = lowerSegment.entry!.getText(
                     from: lowerSegment.timeMapping.target.start,
                     until: upperSegment.timeMapping.target.end,
                     segments: segments
@@ -1104,8 +1104,8 @@ class Utils {
                 }
                 
                 // Compute text range
-                let lowerRange = lowerSegment.note!.getSegmentTextRange(of: lowerSegment)
-                let upperRange = upperSegment.note!.getSegmentTextRange(of: upperSegment)
+                let lowerRange = lowerSegment.entry!.getSegmentTextRange(of: lowerSegment)
+                let upperRange = upperSegment.entry!.getSegmentTextRange(of: upperSegment)
                 let lowerLocation = lowerRange!.location
                 let upperLocation = upperRange!.location
                 let upperLength = upperRange!.length
@@ -1113,23 +1113,23 @@ class Utils {
                 print("\tCompute cleansed transformation textRange: ", textRange)
                 
                 // Compute range
-                let noteRange = range
-                print("\tCompute cleansed transformation noteRange: ", noteRange)
+                let entryRange = range
+                print("\tCompute cleansed transformation entryRange: ", entryRange)
                 
                 // Collect segment uids
                 var uids: [String: Int] = [:]
-                for segment in segments[noteRange] {
+                for segment in segments[entryRange] {
                     uids[segment.getUID()] = segment.getIndex()
                 }
                 print("\tCompute cleansed transformation segmentIndexMap: ", uids)
                 
-                let cleansedTransformation = NoteTransformation(
+                let cleansedTransformation = EntryTransformation(
                     type: transformation.type,
                     uids: uids,
                     text: text,
                     value: value,
                     textRange: textRange,
-                    noteRange: noteRange
+                    entryRange: entryRange
                 )
                 print("\tInstantiate cleansed transformation: ", cleansedTransformation)
                 
@@ -1179,7 +1179,7 @@ class Utils {
     public static func startRecordingUITimer(
         timer: Timer?,
         recording: Bool,
-        note: Note? = nil,
+        entry: Entry? = nil,
         speechRecognition: SpeechRecognitionEngine,
         selectionCursor: SelectionCursor
     ) -> Timer {
@@ -1231,7 +1231,7 @@ class Utils {
                 // present time of cursor
                 DispatchQueue.main.async {
                     let navigationController = Utils.getNavigationController()
-                    navigationController?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: speechRecognition.getDurationListening()))\(selectionCursor.cachedAnchor != nil && note != nil && selectionCursor.cachedAnchor! != Utils.getNoteNthLastSegment(segments: note!.noteSegments, selectionCursor: selectionCursor, n: 0) ? " [\(Utils.formattedTime(time: Float(selectionCursor.cachedAnchor!.timeMapping.target.end.seconds)))]" : "")"
+                    navigationController?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: speechRecognition.getDurationListening()))\(selectionCursor.cachedAnchor != nil && entry != nil && selectionCursor.cachedAnchor! != Utils.getEntryNthLastSegment(segments: entry!.entrySegments, selectionCursor: selectionCursor, n: 0) ? " [\(Utils.formattedTime(time: Float(selectionCursor.cachedAnchor!.timeMapping.target.end.seconds)))]" : "")"
                 }
             }
         }
@@ -1264,7 +1264,7 @@ class Utils {
     ) {
         // print("===== View Controller: On Pitch Update =====")
         let pitchDatum = notification.userInfo!["pitch"] as? PitchDatum
-        if let pitch = pitchDatum?.pitch, !speechPlayer.isPlayingNote {
+        if let pitch = pitchDatum?.pitch, !speechPlayer.isPlayingEntry {
             pitchLabel?.text = pitch.note.string
         }
     }
@@ -1290,7 +1290,7 @@ class Utils {
     }
     
     public static func onStartedListeningForWakePhrase(
-        withBackToNotesButton: Bool = false,
+        withBackToEntriesButton: Bool = false,
         notification: Notification,
         speechRecognition: SpeechRecognitionEngine
     ) {
@@ -1298,12 +1298,12 @@ class Utils {
         speechRecognition.activateListeningIndicator(
             withRecording: false,
             withStopListeningButton: true,
-            withBackToNotesButton: withBackToNotesButton
+            withBackToEntriesButton: withBackToEntriesButton
         )
     }
     
     public static func onStartedListeningForCommands(
-        withBackToNotesButton: Bool = false,
+        withBackToEntriesButton: Bool = false,
         notification: Notification,
         speechRecognition: SpeechRecognitionEngine
     ) {
@@ -1311,15 +1311,15 @@ class Utils {
         speechRecognition.activateListeningIndicator(
             withRecording: false,
             withStopListeningButton: true,
-            withBackToNotesButton: withBackToNotesButton
+            withBackToEntriesButton: withBackToEntriesButton
         )
     }
     
     public static func onStartedListeningForSpeech(
-        withBackToNotesButton: Bool = false,
+        withBackToEntriesButton: Bool = false,
         delayStartRecording: TimeInterval = 0,
         notification: Notification,
-        note: Note? = nil,
+        entry: Entry? = nil,
         speechRecognition: SpeechRecognitionEngine,
         selectionCursor: SelectionCursor,
         handler: (() -> Void)? = nil
@@ -1328,13 +1328,13 @@ class Utils {
         speechRecognition.activateListeningIndicator(
             withRecording: true,
             withStopListeningButton: false,
-            withBackToNotesButton: withBackToNotesButton
+            withBackToEntriesButton: withBackToEntriesButton
         )
         Timer.scheduledTimer(withTimeInterval: delayStartRecording, repeats: false) { timer in
             let timer = Utils.startRecordingUITimer(
                 timer: speechRecognition.listeningTimer,
                 recording: true,
-                note: note,
+                entry: entry,
                 speechRecognition: speechRecognition,
                 selectionCursor: selectionCursor
             )
@@ -1344,7 +1344,7 @@ class Utils {
     }
     
     public static func onPausedListening(
-        withBackToNotesButton: Bool = false,
+        withBackToEntriesButton: Bool = false,
         notification: Notification,
         speechRecognition: SpeechRecognitionEngine
     ) {
@@ -1352,12 +1352,12 @@ class Utils {
         speechRecognition.activateListeningIndicator(
             withRecording: false,
             withStopListeningButton: true,
-            withBackToNotesButton: withBackToNotesButton
+            withBackToEntriesButton: withBackToEntriesButton
         )
     }
     
     public static func onStoppedListening(
-        withBackToNotesButton: Bool = false,
+        withBackToEntriesButton: Bool = false,
         notification: Notification,
         speechRecognition: SpeechRecognitionEngine,
         soundIntensityIndicatorHeight: NSLayoutConstraint? = nil,
@@ -1370,7 +1370,7 @@ class Utils {
             speechRecognition.activateListeningIndicator(
                 withRecording: false,
                 withStopListeningButton: true,
-                withBackToNotesButton: withBackToNotesButton
+                withBackToEntriesButton: withBackToEntriesButton
             )
             
             let _ = Utils.stopRecordingUITimer(timer: speechRecognition.listeningTimer)
@@ -1410,7 +1410,7 @@ class Utils {
     
     public static func onStopNotification(
         notification: Notification,
-        note: Note? = nil,
+        entry: Entry? = nil,
         speechRecognition: SpeechRecognitionEngine,
         selectionCursor: SelectionCursor
     ) {
@@ -1424,7 +1424,7 @@ class Utils {
             let timer = Utils.startRecordingUITimer(
                 timer: speechRecognition.listeningTimer,
                 recording: true,
-                note: note,
+                entry: entry,
                 speechRecognition: speechRecognition,
                 selectionCursor: selectionCursor
             )
@@ -1463,27 +1463,27 @@ class Utils {
         }
     }
     
-    public static func onNoteStop(
+    public static func onEntryStop(
         notification: Notification,
         speechRecognition: SpeechRecognitionEngine,
         handler: (() -> Void)? = nil
     ) {
-        print("===== Utils: On Note Stop =====")
+        print("===== Utils: On Entry Stop =====")
 
         let _ = Utils.stopRecordingUITimer(timer: speechRecognition.listeningTimer)
         speechRecognition.setListeningTimer()
         handler?()
     }
     
-    public static func onNoteComplete(
+    public static func onEntryComplete(
         notification: Notification,
         speechRecognition: SpeechRecognitionEngine,
         soundIntensityIndicatorHeight: NSLayoutConstraint? = nil,
         handler: (() -> Void)? = nil
     ) {
-        print("===== Utils: On Note Complete =====")
+        print("===== Utils: On Entry Complete =====")
         // Play sound
-        soundEngine.saveNote()
+        soundEngine.saveEntry()
         
         let _ = Utils.stopRecordingUITimer(timer: speechRecognition.listeningTimer)
         speechRecognition.setListeningTimer()
@@ -1506,7 +1506,7 @@ class Utils {
         handler: (() -> Void)? = nil
     ) {
         print("===== Utils: On Speech Boundary Crossed =====")
-        print("From: '\((notification.userInfo!["previous"] as? NoteSegment)?.getText() ?? "nil")', To: '\((notification.userInfo!["next"] as? NoteSegment)?.getText() ?? "nil")'")
+        print("From: '\((notification.userInfo!["previous"] as? EntrySegment)?.getText() ?? "nil")', To: '\((notification.userInfo!["next"] as? EntrySegment)?.getText() ?? "nil")'")
         if let segment = speechPlayer.previousBoundarySegment, let pitch = segment.getPitch() {
             // update pitch
             pitchLabel?.text = pitch.note.string
@@ -1518,11 +1518,11 @@ class Utils {
         notification: Notification,
         speechRecognition: SpeechRecognitionEngine,
         speechPlayer: SpeechPlayerEngine,
-        noteManager: NoteManager
+        entryManager: EntryManager
     ) {
         print("===== Utils: On Speech Second Elapsed =====")
         print("Seconds: ", notification.userInfo!["seconds"] as! Double)
-        if !speechRecognition.isListeningForSpeech && !noteManager.isWalkingNote && !noteManager.isRunningNote && Float(speechPlayer.player.currentTime().seconds).isNormal && !Float(speechPlayer.player.currentTime().seconds).isNaN {
+        if !speechRecognition.isListeningForSpeech && !entryManager.isWalkingEntry && !entryManager.isRunningEntry && Float(speechPlayer.player.currentTime().seconds).isNormal && !Float(speechPlayer.player.currentTime().seconds).isNaN {
             let navigationController = Utils.getNavigationController()
             navigationController?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: Float(speechPlayer.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(speechPlayer.player.currentItem!.duration.seconds)))"
         }
@@ -1531,7 +1531,7 @@ class Utils {
     public static func onSpeechStopPlaying(
         notification: Notification,
         speechRecognition: SpeechRecognitionEngine,
-        noteManager: NoteManager,
+        entryManager: EntryManager,
         handler: (() -> Void)? = nil
     ) {
         print("===== Utils: On Speech Stop Playing =====")
@@ -1541,12 +1541,12 @@ class Utils {
             navigationController?.navigationBar.topItem?.title = ""
         }
         
-        if let note = noteManager.currentNote, noteManager.pausedWalkingNote {
-            note.walk() {
+        if let entry = entryManager.currentEntry, entryManager.pausedWalkingEntry {
+            entry.walk() {
                 stopHandler?()
             }
-        } else if let note = noteManager.currentNote, noteManager.pausedRunningNote {
-            note.run() {
+        } else if let entry = entryManager.currentEntry, entryManager.pausedRunningEntry {
+            entry.run() {
                 stopHandler?()
             }
         } else {
@@ -1557,40 +1557,40 @@ class Utils {
     }
     
     // Reference: https://stackoverflow.com/questions/50128462/how-to-save-document-to-files-app-in-swift
-    public static func onNoteAudioExported(
+    public static func onEntryAudioExported(
         notification: Notification,
         vc: UIViewController
     ) {
-        print("===== Utils: On Note Audio Exported =====")
+        print("===== Utils: On Entry Audio Exported =====")
         // Get exported file
-        let noteURL = notification.userInfo!["noteURL"] as! String
+        let entryURL = notification.userInfo!["entryURL"] as! String
 
         // Present to user
-        let noteFile = Utils.getFileURL(of: noteURL)
+        let entryFile = Utils.getFileURL(of: entryURL)
         let activityViewController = UIActivityViewController(
-            activityItems: [noteFile],
+            activityItems: [entryFile],
             applicationActivities: nil
         )
         vc.present(activityViewController, animated: true, completion: nil)
     }
     
-    public static func onSetNote(
+    public static func onSetEntry(
         notification: Notification,
         vc: UIViewController,
         identifier: String
     ) {
-        print("===== Utils: On Set Note =====")
+        print("===== Utils: On Set Entry =====")
         // push to detail view
         vc.performSegue(withIdentifier: identifier, sender: nil)
     }
     
-    public static func getNoteNthLastSegment(
-        segments: [NoteSegment],
-        bufferSegments: [NoteSegment]? = nil,
+    public static func getEntryNthLastSegment(
+        segments: [EntrySegment],
+        bufferSegments: [EntrySegment]? = nil,
         selectionCursor: SelectionCursor,
         n: Int
-    ) -> NoteSegment? {
-        let lastSegmentTuple = Utils.getNoteNthLastSegmentIndex(
+    ) -> EntrySegment? {
+        let lastSegmentTuple = Utils.getEntryNthLastSegmentIndex(
             segments: segments,
             bufferSegments: bufferSegments,
             selectionCursor: selectionCursor,
@@ -1608,27 +1608,27 @@ class Utils {
     public static func getIndicesInTextRange(
         textRange: UITextRange,
         textView: UITextView,
-        note: Note,
-        segments: [NoteSegment]
+        entry: Entry,
+        segments: [EntrySegment]
     ) -> [Int] {
         // Get index relative to text view at which textPosition begins
         let location = textView.offset(from: textView.beginningOfDocument, to: textRange.start)
         // Get the length of the text range
         let length = textView.offset(from: textRange.start, to: textRange.end)
-        // Get note text
-        let noteText = note.getText()
-        // Get index of lower part of text range relative to note text
-        var lowerIndex = noteText.index(noteText.startIndex, offsetBy: Int(location))
-        // Get index of upper part of text range relative to note text
-        var upperIndex = noteText.index(noteText.startIndex, offsetBy: Int(location) + length)
+        // Get entry text
+        let entryText = entry.getText()
+        // Get index of lower part of text range relative to entry text
+        var lowerIndex = entryText.index(entryText.startIndex, offsetBy: Int(location))
+        // Get index of upper part of text range relative to entry text
+        var upperIndex = entryText.index(entryText.startIndex, offsetBy: Int(location) + length)
         // Computer selection range
         var selectionRangeStringIndex = lowerIndex..<upperIndex
         // Get range text
-        var rangeText = String(noteText[selectionRangeStringIndex]).replace("\n\n", with: " ")
+        var rangeText = String(entryText[selectionRangeStringIndex]).replace("\n\n", with: " ")
         // Get all text before range
-        var beforeRangeText = String(noteText[noteText.startIndex..<lowerIndex]).replace("\n\n", with: " ")
+        var beforeRangeText = String(entryText[entryText.startIndex..<lowerIndex]).replace("\n\n", with: " ")
         // Get all text after range
-        var afterRangeText = String(noteText[upperIndex..<noteText.endIndex]).replace("\n\n", with: " ")
+        var afterRangeText = String(entryText[upperIndex..<entryText.endIndex]).replace("\n\n", with: " ")
         
         // Determine number of words before range
         var numLowerWords = beforeRangeText.split(separator: " ").count
@@ -1641,10 +1641,10 @@ class Utils {
         var i = 0
         while numLowerWords > numLowerSpaces && beforeRangeText.count > 0 && beforeRangeText.last != " " {
             i += 1
-            lowerIndex = noteText.index(noteText.startIndex, offsetBy: Int(location - i))
+            lowerIndex = entryText.index(entryText.startIndex, offsetBy: Int(location - i))
             selectionRangeStringIndex = lowerIndex..<upperIndex
-            rangeText = String(noteText[selectionRangeStringIndex]).replace("\n\n", with: " ")
-            beforeRangeText = String(noteText[noteText.startIndex..<lowerIndex]).replace("\n\n", with: " ")
+            rangeText = String(entryText[selectionRangeStringIndex]).replace("\n\n", with: " ")
+            beforeRangeText = String(entryText[entryText.startIndex..<lowerIndex]).replace("\n\n", with: " ")
             numLowerWords = beforeRangeText.split(separator: " ").count
             numLowerSpaces = beforeRangeText.filter { $0 == " " }.count
         }
@@ -1660,10 +1660,10 @@ class Utils {
         var j = 0
         while numRangeSpaces <= numRangeWords && afterRangeText.count > 0 && afterRangeText.first != " " {
             j += 1
-            upperIndex = noteText.index(noteText.startIndex, offsetBy: Int(location + length + j))
+            upperIndex = entryText.index(entryText.startIndex, offsetBy: Int(location + length + j))
             selectionRangeStringIndex = lowerIndex..<upperIndex
-            rangeText = String(noteText[selectionRangeStringIndex]).replace("\n\n", with: " ")
-            afterRangeText = String(noteText[upperIndex..<noteText.endIndex]).replace("\n\n", with: " ")
+            rangeText = String(entryText[selectionRangeStringIndex]).replace("\n\n", with: " ")
+            afterRangeText = String(entryText[upperIndex..<entryText.endIndex]).replace("\n\n", with: " ")
             numRangeWords = rangeText.split(separator: " ").count
             numRangeSpaces = rangeText.filter { $0 == " " }.count
         }
@@ -1694,19 +1694,19 @@ class Utils {
     public static func getIndexAtTextPosition(
         textPosition: UITextPosition,
         textView: UITextView,
-        note: Note,
-        segments: [NoteSegment]
+        entry: Entry,
+        segments: [EntrySegment]
     ) -> (Int?, Int?) {
         // Get index relative to text view at which textPosition begins
         let location = textView.offset(from: textView.beginningOfDocument, to: textPosition)
-        // Get note text
-        let noteText = note.getText()
-        // Get index relative to note text at which textPosition begins
-        var caretIndex = noteText.index(noteText.startIndex, offsetBy: Int(location))
+        // Get entry text
+        let entryText = entry.getText()
+        // Get index relative to entry text at which textPosition begins
+        var caretIndex = entryText.index(entryText.startIndex, offsetBy: Int(location))
         // Get all text before caret
-        var beforeCaretText = String(noteText[noteText.startIndex..<caretIndex]).replace("\n\n", with: " ")
+        var beforeCaretText = String(entryText[entryText.startIndex..<caretIndex]).replace("\n\n", with: " ")
         // Get all text after caret
-        var afterCaretText = String(noteText[caretIndex..<noteText.endIndex]).replace("\n\n", with: " ")
+        var afterCaretText = String(entryText[caretIndex..<entryText.endIndex]).replace("\n\n", with: " ")
         // Determine number of words before caret
         var numLowerWords = beforeCaretText.split(separator: " ").count
         
@@ -1716,9 +1716,9 @@ class Utils {
         var rightOffsetFromCaret = 0
         while afterCaretText.count > 0 && beforeCaretText.last != " " && afterCaretText.first != " "  {
             rightOffsetFromCaret += 1
-            caretIndex = noteText.index(noteText.startIndex, offsetBy: Int(location + rightOffsetFromCaret))
-            beforeCaretText = String(noteText[noteText.startIndex..<caretIndex]).replace("\n\n", with: " ")
-            afterCaretText = String(noteText[caretIndex..<noteText.endIndex]).replace("\n\n", with: " ")
+            caretIndex = entryText.index(entryText.startIndex, offsetBy: Int(location + rightOffsetFromCaret))
+            beforeCaretText = String(entryText[entryText.startIndex..<caretIndex]).replace("\n\n", with: " ")
+            afterCaretText = String(entryText[caretIndex..<entryText.endIndex]).replace("\n\n", with: " ")
             numLowerWords = beforeCaretText.split(separator: " ").count
         }
         
@@ -1745,8 +1745,8 @@ class Utils {
     
     // Assumes playbackSegments are sorted in ascending order of index values
     public static func getSegmentIndex(
-        segment: NoteSegment,
-        segments: [NoteSegment],
+        segment: EntrySegment,
+        segments: [EntrySegment],
         type: SegmentPosition,
         isWord: Bool = false,
         isCommitted: Bool = false
@@ -1820,13 +1820,13 @@ class Utils {
     
     public static func getSegment(
         forTrackTime: CMTime,
-        segments: [NoteSegment]? = nil,
-        note: Note? = nil,
-        isPlayingNote: Bool = false,
+        segments: [EntrySegment]? = nil,
+        entry: Entry? = nil,
+        isPlayingEntry: Bool = false,
         isWord: Bool = false,
         isCommitted: Bool = false
-    ) -> NoteSegment? {
-        if let segments = segments, isPlayingNote {
+    ) -> EntrySegment? {
+        if let segments = segments, isPlayingEntry {
             var segment = Utils.binarySearch(
                 in: segments,
                 isLower: { segment in
@@ -1853,10 +1853,10 @@ class Utils {
                 }
             }
             return segment
-        } else if let note = note {
+        } else if let entry = entry {
             // check committed segments
             var seg = Utils.binarySearch(
-                in: note.noteSegments,
+                in: entry.entrySegments,
                 isLower: { segment in
                     return segment.timeMapping.target.end < forTrackTime
                 },
@@ -1867,7 +1867,7 @@ class Utils {
             
             // Only return if we found it
             if let s = seg, isWord || isCommitted {
-                var currentSegmentIndex = s.getIndex() - note.noteSegments[0].getIndex()
+                var currentSegmentIndex = s.getIndex() - entry.entrySegments[0].getIndex()
                 while let segment = seg, (
                     (isWord && (
                         segment.isPunctuation() ||
@@ -1876,20 +1876,20 @@ class Utils {
                         segment.isDeleted()
                     )) ||
                     (isCommitted && !segment.isCommitted())
-                ) && currentSegmentIndex + 1 < note.noteSegments.count {
+                ) && currentSegmentIndex + 1 < entry.entrySegments.count {
                     currentSegmentIndex += 1
-                    seg = note.noteSegments[currentSegmentIndex]
+                    seg = entry.entrySegments[currentSegmentIndex]
                 }
                 return seg
             }
             
             // check buffer segments
-            let committedTrackLastSegment = note.noteSegments.last
+            let committedTrackLastSegment = entry.entrySegments.last
             if let committedTrackLastSegment = committedTrackLastSegment {
                 // We subtract because segments in track two do not factor time from track one
                 let boundaryTime = CMTimeSubtract(forTrackTime, committedTrackLastSegment.timeMapping.target.end)
                 var segment = Utils.binarySearch(
-                    in: note.noteBuffer,
+                    in: entry.entryBuffer,
                     isLower: { segment in
                         return segment.timeMapping.target.end < boundaryTime
                     },
@@ -1899,7 +1899,7 @@ class Utils {
                 )
                 
                 if let s = segment, isWord || isCommitted {
-                    var currentSegmentIndex = s.getIndex() - note.noteBuffer[0].getIndex()
+                    var currentSegmentIndex = s.getIndex() - entry.entryBuffer[0].getIndex()
                     while let seg = segment, (
                         (isWord && (
                             seg.isPunctuation() ||
@@ -1908,9 +1908,9 @@ class Utils {
                             seg.isDeleted()
                         )) ||
                         (isCommitted && !seg.isCommitted())
-                    ) && currentSegmentIndex + 1 < note.noteBuffer.count {
+                    ) && currentSegmentIndex + 1 < entry.entryBuffer.count {
                         currentSegmentIndex += 1
-                        segment = note.noteBuffer[currentSegmentIndex]
+                        segment = entry.entryBuffer[currentSegmentIndex]
                     }
                     return segment
                 }
@@ -1932,7 +1932,7 @@ class Utils {
     
     // Reference: https://learnappmaking.com/binary-search-swift-how-to/
     // Must be ordered segments and conditional
-    public static func binarySearch(in segments: [NoteSegment], isLower: (_ segment: NoteSegment) -> Bool, isHigher: (_ segment: NoteSegment) -> Bool) -> NoteSegment? {
+    public static func binarySearch(in segments: [EntrySegment], isLower: (_ segment: EntrySegment) -> Bool, isHigher: (_ segment: EntrySegment) -> Bool) -> EntrySegment? {
         let index = binarySearchIndex(in: segments, isLower: isLower, isHigher: isHigher)
         if let index = index {
             return segments[index]
@@ -1940,7 +1940,7 @@ class Utils {
         return nil
     }
     
-    public static func binarySearchIndex(in segments: [NoteSegment], isLower: (_ segment: NoteSegment) -> Bool, isHigher: (_ segment: NoteSegment) -> Bool) -> Int? {
+    public static func binarySearchIndex(in segments: [EntrySegment], isLower: (_ segment: EntrySegment) -> Bool, isHigher: (_ segment: EntrySegment) -> Bool) -> Int? {
         var left = 0
         var right = segments.count - 1
         
@@ -2001,8 +2001,8 @@ class Utils {
         return keyWindow?.rootViewController as? UINavigationController
     }
     
-    public static func duplicateSegments(segments: [NoteSegment]) -> [NoteSegment] {
-        var duplicateSegments = [NoteSegment]()
+    public static func duplicateSegments(segments: [EntrySegment]) -> [EntrySegment] {
+        var duplicateSegments = [EntrySegment]()
         
         for segment in segments {
             let duplicateSegment = segment.duplicate()
@@ -2014,8 +2014,8 @@ class Utils {
     
     // Reference: https://stackoverflow.com/questions/25827033/how-do-i-convert-a-swift-array-to-a-string
     // Reference: https://codeburst.io/swift-map-flatmap-filter-and-reduce-53959ebeb6aa
-    public static func stringifySegments(segments: [NoteSegment]) -> String {
-        let segments = segments.map({(segment: NoteSegment) -> String in
+    public static func stringifySegments(segments: [EntrySegment]) -> String {
+        let segments = segments.map({(segment: EntrySegment) -> String in
             if segment.isVoiceCommandWord() {
                 return "[Voice Command Word: '\(segment.getText())']"
             } else if segment.isDeleted() {
@@ -2027,15 +2027,15 @@ class Utils {
         return "[\(segments.joined(separator: ", "))]"
     }
     
-    public static func getNoteNthLastSegmentIndex(
-        segments: [NoteSegment],
-        bufferSegments: [NoteSegment]? = nil,
+    public static func getEntryNthLastSegmentIndex(
+        segments: [EntrySegment],
+        bufferSegments: [EntrySegment]? = nil,
         fromBuffer: Bool = false,
         selectionCursor: SelectionCursor,
         n: Int
-    ) -> (NoteTrackType?, Int?) {
+    ) -> (EntryTrackType?, Int?) {
         var lastSegmentIndex: Int?
-        var trackType: NoteTrackType?
+        var trackType: EntryTrackType?
         if bufferSegments == nil {
             // No buffer segments were supplied
             // Search for nth last segment in committed segments only
@@ -2057,15 +2057,15 @@ class Utils {
                 // Cached Anchor Caret exists
 
                 // Insert buffer at correct location within committed segments
-                var noteSegments = segments
+                var entrySegments = segments
                 let index = cachedAnchorCaret.index
-                noteSegments.insert(contentsOf: bufferSegments, at: index)
+                entrySegments.insert(contentsOf: bufferSegments, at: index)
                 
                 var i = 0
                 var segmentsIndex: Int?
                 if fromBuffer {
                     // Seeking nth last index from buffer segments only
-                    let permittedSegments = Array(noteSegments[0..<cachedAnchorCaret.index + bufferSegments.count])
+                    let permittedSegments = Array(entrySegments[0..<cachedAnchorCaret.index + bufferSegments.count])
                     for (index, segment) in permittedSegments.reversed().enumerated() {
                         if segment.isActive() && segmentsIndex == nil && i == n {
                             segmentsIndex = permittedSegments.count - index - 1
@@ -2077,9 +2077,9 @@ class Utils {
                     }
                 } else {
                     // Seeking last index from segment array that is a composition of committed and buffer segments.
-                    for (index, segment) in noteSegments.reversed().enumerated() {
+                    for (index, segment) in entrySegments.reversed().enumerated() {
                         if segment.isActive() && segmentsIndex == nil && i == n {
-                            segmentsIndex = noteSegments.count - index - 1
+                            segmentsIndex = entrySegments.count - index - 1
                             break
                         } else if segment.isActive() && segmentsIndex == nil {
                             // we've encountered another word, add to number of words encountered accumulator
@@ -2114,13 +2114,13 @@ class Utils {
                 // Cached Anchor Caret doesn't exist
                 
                 // Insert buffer at the end of committed segments
-                let noteSegments = segments + bufferSegments
+                let entrySegments = segments + bufferSegments
                 
                 var i = 0
                 var segmentsIndex: Int?
-                for (index, segment) in noteSegments.reversed().enumerated() {
+                for (index, segment) in entrySegments.reversed().enumerated() {
                     if segment.isActive() && segmentsIndex == nil && i == n {
-                        segmentsIndex = noteSegments.count - index - 1
+                        segmentsIndex = entrySegments.count - index - 1
                         break
                     } else if segment.isActive() && segmentsIndex == nil {
                         // we've encountered another word, add to number of words encountered accumulator

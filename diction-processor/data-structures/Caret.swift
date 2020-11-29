@@ -11,10 +11,10 @@ import Foundation
 // Reference: https://stackoverflow.com/questions/29027741/optional-dynamic-properties-in-swift
 class Caret: NSObject {
     let index: Int
-    let trackType: NoteTrackType
+    let trackType: EntryTrackType
     init(
         index: Int,
-        trackType: NoteTrackType
+        trackType: EntryTrackType
     ) {
         self.index = index
         self.trackType = trackType

@@ -11,10 +11,10 @@ import AVFoundation
 
 let AVATAR_URL = "https://firebasestorage.googleapis.com/v0/b/afika-nyati-website.appspot.com/o/resume%2Fafika.jpg?alt=media&token=f1d32c1d-07b4-48b0-abf9-2200290645c5"
 
-class NoteTableViewController: UITableViewController, SegueProtocol {
+class EntryTableViewController: UITableViewController, SegueProtocol {
     // MARK: - Notifications
-    static let onDidLoad = Notification.Name(Notifications.onNoteTableViewControllerDidLoad.rawValue)
-    static let onWillDisappear = Notification.Name(Notifications.onNoteTableViewControllerWillDisappear.rawValue)
+    static let onDidLoad = Notification.Name(Notifications.onEntryTableViewControllerDidLoad.rawValue)
+    static let onWillDisappear = Notification.Name(Notifications.onEntryTableViewControllerWillDisappear.rawValue)
     
     // MARK: - Outlets and Views
     
@@ -32,10 +32,10 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     var notifications: NotificationEngine!
     var speechPlayer: SpeechPlayerEngine!
     var selectionCursor: SelectionCursor!
-    var noteManager: NoteManager!
+    var entryManager: EntryManager!
     var uiManager: UIManager!
     override var undoManager: UndoManager {
-        return self.noteManager.undoManager
+        return self.entryManager.undoManager
     }
     
     // MARK: - ViewController References
@@ -45,13 +45,13 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     // MARK: - Lifecycle Methods
     
     override func viewWillAppear(_ animated: Bool) {
-        print("===== Note Table View Controller: View Will Appear =====")
+        print("===== Entry Table View Controller: View Will Appear =====")
         super.viewWillAppear(animated)
         
         let state = UIApplication.shared.applicationState
         if state == .background || state == .inactive {
             print("\tApp is in the background. Segue to Sleep.")
-            self.performSegue(withIdentifier: Segues.moveFromNoteTableToSleep.rawValue, sender: nil)
+            self.performSegue(withIdentifier: Segues.moveFromEntryTableToSleep.rawValue, sender: nil)
         }
         
         DispatchQueue.main.async { [weak self] in
@@ -78,19 +78,19 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     }
 
     override func viewDidLoad() {
-        print("===== Note Table View Controller: View Did Load =====")
+        print("===== Entry Table View Controller: View Did Load =====")
         super.viewDidLoad()
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "Entry")
         
         DispatchQueue.main.async {
             // add table view buttons
             let navigationController = Utils.getNavigationController()
-            navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self.getNewNoteButton()]
+            navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self.getNewEntryButton()]
         }
         
         // Notify observers of loading
         NotificationCenter.default.post(
-            name: NoteTableViewController.onDidLoad,
+            name: EntryTableViewController.onDidLoad,
             object: nil,
             userInfo: [:]
         )
@@ -102,7 +102,7 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     }
     
     override func viewWillDisappear(_ animated: Bool) {
-        print("===== Note Table View Controller: View Will Disappear =====")
+        print("===== Entry Table View Controller: View Will Disappear =====")
         super.viewWillDisappear(animated)
         
         // remove notification observers
@@ -110,7 +110,7 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
         
         // Notify observers of disappearing
         NotificationCenter.default.post(
-            name: NoteTableViewController.onWillDisappear,
+            name: EntryTableViewController.onWillDisappear,
             object: nil,
             userInfo: [:]
         )
@@ -296,68 +296,68 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
         // State
         notificationCenter.addObserver(
             self,
-            selector: #selector(onCreatedNote(notification:)),
-            name: NoteManager.onCreatedNote,
+            selector: #selector(onCreatedEntry(notification:)),
+            name: EntryManager.onCreatedEntry,
             object: nil
         )
         
-        // Note
+        // Entry
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteComplete(notification:)),
-            name: Note.onNoteComplete,
+            selector: #selector(onEntryComplete(notification:)),
+            name: Entry.onEntryComplete,
             object: nil
         )
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteListenStop(notification:)),
-            name: Note.onNoteListenStop,
+            selector: #selector(onEntryListenStop(notification:)),
+            name: Entry.onEntryListenStop,
             object: nil
         )
         
-        // NoteManager
+        // EntryManager
         notificationCenter.addObserver(
             self,
-            selector: #selector(onSetNote(notification:)),
-            name: NoteManager.onSetNote,
+            selector: #selector(onSetEntry(notification:)),
+            name: EntryManager.onSetEntry,
             object: nil
         )
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteAudioExported(notification:)),
-            name: NoteManager.onNoteAudioExported,
+            selector: #selector(onEntryAudioExported(notification:)),
+            name: EntryManager.onEntryAudioExported,
             object: nil
         )
         notificationCenter.addObserver(
             self,
-            selector: #selector(onNoteDeleted(notification:)),
-            name: NoteManager.onNoteDeleted,
+            selector: #selector(onEntryDeleted(notification:)),
+            name: EntryManager.onEntryDeleted,
             object: nil
         )
     }
     
     @objc func onDetailViewDidLoad(notification: Notification) {
-        print("===== Note Table View Controller: On Detail View Did Load =====")
+        print("===== Entry Table View Controller: On Detail View Did Load =====")
         self.detailViewController = storyboard?.instantiateViewController(withIdentifier: "DetailViewController") as? DetailViewController
     }
     
     @objc func onViewDidLoad(notification: Notification) {
-        print("===== Note Table View Controller: On View Did Load =====")
+        print("===== Entry Table View Controller: On View Did Load =====")
         self.viewController = storyboard?.instantiateViewController(withIdentifier: "ViewController") as? ViewController
     }
     
     @objc func onViewWillDisappear(notification: Notification) {
-        print("===== Note Table View Controller: On View Will Disappear =====")
+        print("===== Entry Table View Controller: On View Will Disappear =====")
         self.viewController = nil
     }
     
     @objc func onDetailViewWillDisappear(notification: Notification) {
-        print("===== Note Table View Controller: On Detail View Will Disappear =====")
+        print("===== Entry Table View Controller: On Detail View Will Disappear =====")
         self.detailViewController = nil
     }
     
-    @objc func onCreatedNote(notification: Notification) {
-        print("===== Note Table View Controller: On Created Note =====")
+    @objc func onCreatedEntry(notification: Notification) {
+        print("===== Entry Table View Controller: On Created Entry =====")
         DispatchQueue.main.async { [weak self] in
             // reload table
             self?.tableView.reloadData()
@@ -365,17 +365,17 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     }
     
     @objc func appMovedToBackground() {
-        print("===== Note Table View Controller: App Moved to Background =====")
+        print("===== Entry Table View Controller: App Moved to Background =====")
         DispatchQueue.main.async { [weak self] in
-            // keep recording outside of app if note started
+            // keep recording outside of app if entry started
             if !self!.speechRecognition.isListeningForSpeech {
-                self?.performSegue(withIdentifier: Segues.moveFromNoteTableToSleep.rawValue, sender: nil)
+                self?.performSegue(withIdentifier: Segues.moveFromEntryTableToSleep.rawValue, sender: nil)
             }
         }
     }
     
     @objc func audioSessionRouteChange(notification: Notification) {
-        print("===== Note Table View Controller: Audio Session Route Change =====")
+        print("===== Entry Table View Controller: Audio Session Route Change =====")
         guard let userInfo = notification.userInfo,
             let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
             let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else {
@@ -402,7 +402,7 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     }
     
     @objc func handleInterruption(notification: Notification) {
-        print("===== Note Table View Controller: Handle Interruption =====")
+        print("===== Entry Table View Controller: Handle Interruption =====")
         guard let userInfo = notification.userInfo,
             let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
             let type = AVAudioSession.InterruptionType(rawValue: typeValue) else {
@@ -431,7 +431,7 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     }
     
     @objc func handleSecondaryAudio(notification: Notification) {
-        print("===== Note Table View Controller: Handle Secondary Audio =====")
+        print("===== Entry Table View Controller: Handle Secondary Audio =====")
         // Determine hint type
         guard let userInfo = notification.userInfo,
             let typeValue = userInfo[AVAudioSessionSilenceSecondaryAudioHintTypeKey] as? UInt,
@@ -449,13 +449,13 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     }
     
     @objc func onPitchUpdate(notification: Notification) {
-        // print("===== Note Table View Controller: On Pitch Update =====")
+        // print("===== Entry Table View Controller: On Pitch Update =====")
         DispatchQueue.main.async { [weak self] in
             let pitchDatum = notification.userInfo!["pitch"] as? PitchDatum
             
-            if let pitch = pitchDatum?.pitch, self?.pitchLabel == nil && !self!.speechPlayer.isPlayingNote {
+            if let pitch = pitchDatum?.pitch, self?.pitchLabel == nil && !self!.speechPlayer.isPlayingEntry {
                 let navigationController = Utils.getNavigationController()
-                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getNewNoteButton(), self!.getPitchLabel(pitchText: pitch.note.string)]
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getNewEntryButton(), self!.getPitchLabel(pitchText: pitch.note.string)]
             }
             
             if let speechPlayer = self?.speechPlayer, let pitchLabel = self?.pitchLabel {
@@ -469,7 +469,7 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     }
     
     @objc func onPowerUpdate(notification: Notification) {
-        // print("===== Note Table View Controller: On Power Update =====")
+        // print("===== Entry Table View Controller: On Power Update =====")
         DispatchQueue.main.async { [weak self] in
             if let view = self?.view, let soundIntensityIndicatorHeight = self?.soundIntensityIndicatorHeight {
                 Utils.onPowerUpdate(
@@ -482,7 +482,7 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     }
     
     @objc func onStartedListeningForWakePhrase(notification: Notification) {
-        print("===== Note Table View Controller: On Started Listening For Wake Phrase =====")
+        print("===== Entry Table View Controller: On Started Listening For Wake Phrase =====")
         Utils.onStartedListeningForWakePhrase(
             notification: notification,
             speechRecognition: self.speechRecognition
@@ -490,7 +490,7 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     }
     
     @objc func onStartedListeningForCommands(notification: Notification) {
-        print("===== Note Table View Controller: On Started Listening For Commands =====")
+        print("===== Entry Table View Controller: On Started Listening For Commands =====")
         Utils.onStartedListeningForCommands(
             notification: notification,
             speechRecognition: self.speechRecognition
@@ -498,17 +498,17 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     }
     
     @objc func onStartedListeningForSpeech(notification: Notification) {
-        print("===== Note Table View Controller: On Started Listening For Speech =====")
+        print("===== Entry Table View Controller: On Started Listening For Speech =====")
         Utils.onStartedListeningForSpeech(
             notification: notification,
-            note: self.noteManager.currentNote,
+            entry: self.entryManager.currentEntry,
             speechRecognition: self.speechRecognition,
             selectionCursor: self.selectionCursor
         )
     }
     
     @objc func onPausedListening(notification: Notification) {
-        print("===== Note Table View Controller: On Paused Listening =====")
+        print("===== Entry Table View Controller: On Paused Listening =====")
         Utils.onPausedListening(
             notification: notification,
             speechRecognition: self.speechRecognition
@@ -516,7 +516,7 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     }
     
     @objc func onStoppedListening(notification: Notification) {
-        print("===== Note Table View Controller: On Stopped Listening =====")
+        print("===== Entry Table View Controller: On Stopped Listening =====")
         Utils.onStoppedListening(
             notification: notification,
             speechRecognition: self.speechRecognition,
@@ -525,16 +525,16 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
         )
     }
     
-    @objc func onNoteListenStop(notification: Notification) {
-        print("===== Note Table View Controller: On Note Listen Stop =====")
-        Utils.onNoteStop(
+    @objc func onEntryListenStop(notification: Notification) {
+        print("===== Entry Table View Controller: On Entry Listen Stop =====")
+        Utils.onEntryStop(
             notification: notification,
             speechRecognition: self.speechRecognition
         )
     }
     
     @objc func onStartTimedNotification(notification: Notification) {
-        print("===== Note Table View Controller: On Start Timed Notification =====")
+        print("===== Entry Table View Controller: On Start Timed Notification =====")
         Utils.onStartTimedNotification(
             notification: notification,
             speechRecognition: self.speechRecognition
@@ -542,17 +542,17 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     }
     
     @objc func onStopNotification(notification: Notification) {
-        print("===== Note Table View Controller: On Stop Timed Notification =====")
+        print("===== Entry Table View Controller: On Stop Timed Notification =====")
         Utils.onStopNotification(
             notification: notification,
-            note: self.noteManager.currentNote,
+            entry: self.entryManager.currentEntry,
             speechRecognition: self.speechRecognition,
             selectionCursor: self.selectionCursor
         )
     }
     
     @objc func onStartIndefiniteNotification(notification: Notification) {
-        print("===== Note Table View Controller: On Start Indefinite Notification =====")
+        print("===== Entry Table View Controller: On Start Indefinite Notification =====")
         Utils.onStartIndefiniteNotification(
             notification: notification,
             state: self.state,
@@ -560,10 +560,10 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
         )
     }
     
-    @objc func onNoteComplete(notification: Notification) {
-        print("===== Note Table View Controller: On Note Complete =====")
+    @objc func onEntryComplete(notification: Notification) {
+        print("===== Entry Table View Controller: On Entry Complete =====")
         DispatchQueue.main.async { [weak self] in
-            Utils.onNoteComplete(
+            Utils.onEntryComplete(
                 notification: notification,
                 speechRecognition: self!.speechRecognition,
                 soundIntensityIndicatorHeight: self!.soundIntensityIndicatorHeight
@@ -572,7 +572,7 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     }
     
     @objc func onSpeechStartPlaying(notification: Notification) {
-        print("===== Note Table View Controller: On Speech Start Playing =====")
+        print("===== Entry Table View Controller: On Speech Start Playing =====")
 //        DispatchQueue.main.async { [weak self] in
         DispatchQueue.main.async {
             Utils.onSpeechStartPlaying(notification: notification)
@@ -580,7 +580,7 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     }
     
     @objc func onSpeechBoundaryCrossed(notification: Notification) {
-        print("===== Note Table View Controller: On Speech Boundary Crossed =====")
+        print("===== Entry Table View Controller: On Speech Boundary Crossed =====")
         DispatchQueue.main.async { [weak self] in
             Utils.onSpeechBoundaryCrossed(
                 notification: notification,
@@ -591,45 +591,45 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     }
     
     @objc func onSpeechSecondElapsed(notification: Notification) {
-        print("===== Note Table View Controller: On Speech Second Elapsed =====")
+        print("===== Entry Table View Controller: On Speech Second Elapsed =====")
         DispatchQueue.main.async { [weak self] in
             Utils.onSpeechSecondElapsed(
                 notification: notification,
                 speechRecognition: self!.speechRecognition,
                 speechPlayer: self!.speechPlayer,
-                noteManager: self!.noteManager
+                entryManager: self!.entryManager
             )
         }
     }
     
     @objc func onSpeechStopPlaying(notification: Notification) {
-        print("===== Note Table View Controller: On Speech Stop Playing =====")
+        print("===== Entry Table View Controller: On Speech Stop Playing =====")
         DispatchQueue.main.async { [weak self] in
             Utils.onSpeechStopPlaying(
                 notification: notification,
                 speechRecognition: self!.speechRecognition,
-                noteManager: self!.noteManager
+                entryManager: self!.entryManager
             )
         }
     }
     
-    @objc func onSetNote(notification: Notification) {
-        print("===== Note Table View Controller: On Set Note =====")
+    @objc func onSetEntry(notification: Notification) {
+        print("===== Entry Table View Controller: On Set Entry =====")
         DispatchQueue.main.async { [weak self] in
-            let index = notification.userInfo!["currentNoteIndex"] as? Int
-            print("\tNote Index: ", index ?? "nil")
+            let index = notification.userInfo!["currentEntryIndex"] as? Int
+            print("\tEntry Index: ", index ?? "nil")
             if let _ = index {
-                Utils.onSetNote(
+                Utils.onSetEntry(
                     notification: notification,
                     vc: self!,
-                    identifier: Segues.moveFromNoteTableToDetail.rawValue
+                    identifier: Segues.moveFromEntryTableToDetail.rawValue
                 )
             }
         }
     }
     
-    @objc func onNoteDeleted(notification: Notification) {
-        print("===== Note Table View Controller: On Note Deleted =====")
+    @objc func onEntryDeleted(notification: Notification) {
+        print("===== Entry Table View Controller: On Entry Deleted =====")
         DispatchQueue.main.async { [weak self] in
             // reload table
             self?.tableView.reloadData()
@@ -637,10 +637,10 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     }
     
     // Reference: https://stackoverflow.com/questions/50128462/how-to-save-document-to-files-app-in-swift
-    @objc func onNoteAudioExported(notification: Notification) {
-        print("===== Note Table View Controller: On Note Audio Exported =====")
+    @objc func onEntryAudioExported(notification: Notification) {
+        print("===== Entry Table View Controller: On Entry Audio Exported =====")
         DispatchQueue.main.async { [weak self] in
-            Utils.onNoteAudioExported(
+            Utils.onEntryAudioExported(
                 notification: notification,
                 vc: self!
             )
@@ -656,8 +656,8 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
         }
 
         switch identifier {
-        case .moveFromNoteTableToDetail:
-            print(">>>>> Segue from NoteTableViewController to DetailViewController >>>>>")
+        case .moveFromEntryTableToDetail:
+            print(">>>>> Segue from EntryTableViewController to DetailViewController >>>>>")
             if let detailViewController = segue.destination as? DetailViewController {
                 detailViewController.state = self.state
                 detailViewController.speechRecognition = self.speechRecognition
@@ -666,16 +666,16 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
                 detailViewController.notifications = self.notifications
                 detailViewController.speechPlayer = self.speechPlayer
                 detailViewController.selectionCursor = self.selectionCursor
-                detailViewController.noteManager = self.noteManager
+                detailViewController.entryManager = self.entryManager
                 detailViewController.uiManager = self.uiManager
             }
             self.speechRecognition.activateListeningIndicator(
                 withRecording: self.speechRecognition.isListeningForSpeech,
                 withStopListeningButton: !self.speechRecognition.isListeningForSpeech,
-                withBackToNotesButton: true
+                withBackToEntriesButton: true
             )
-        case .moveFromNoteTableToSleep:
-            print(">>>>> Segue from NoteTableViewController to ViewController >>>>>")
+        case .moveFromEntryTableToSleep:
+            print(">>>>> Segue from EntryTableViewController to ViewController >>>>>")
             if let viewController = segue.destination as? ViewController {
                 viewController.state = self.state
                 viewController.speechRecognition = self.speechRecognition
@@ -684,19 +684,19 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
                 viewController.notifications = self.notifications
                 viewController.speechPlayer = self.speechPlayer
                 viewController.selectionCursor = self.selectionCursor
-                viewController.noteManager = self.noteManager
+                viewController.entryManager = self.entryManager
                 viewController.uiManager = self.uiManager
             }
             self.speechRecognition.activateListeningIndicator(
                 withRecording: false,
                 withStopListeningButton: true
             )
-        case .moveFromSleepToNoteTable:
-            print (">>>>> [Invalid Segue within NoteTableViewController] from ViewControlller to NoteTableViewController >>>>>")
+        case .moveFromSleepToEntryTable:
+            print (">>>>> [Invalid Segue within EntryTableViewController] from ViewControlller to EntryTableViewController >>>>>")
         case .moveFromSleepToDetail:
-            print (">>>>> [Invalid Segue within NoteTableViewController] from ViewControlller to DetailViewController >>>>>")
-        case .moveFromDetailToNoteTable:
-            print (">>>>> [Invalid Segue within NoteTableViewController] from DetailViewControlller to NoteTableViewController >>>>>")
+            print (">>>>> [Invalid Segue within EntryTableViewController] from ViewControlller to DetailViewController >>>>>")
+        case .moveFromDetailToEntryTable:
+            print (">>>>> [Invalid Segue within EntryTableViewController] from DetailViewControlller to EntryTableViewController >>>>>")
         case .noIdentifier:
             print (">>>>> [Error] No Segue Identifier in ViewController >>>>>")
         }
@@ -704,14 +704,14 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     
     // MARK: - Segues
     
-    @IBAction func unwindToNoteTable(segue: UIStoryboardSegue) {
+    @IBAction func unwindToEntryTable(segue: UIStoryboardSegue) {
         
     }
     
     // MARK: - Table View
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return self.state.activeNotes.count
+        return self.state.activeEntries.count
     }
     
     // Reference: https://stackoverflow.com/questions/25002017/how-to-change-font-of-uibutton-with-swift
@@ -722,19 +722,19 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
         let cell = tableView.dequeueReusableCell(withIdentifier: "Entry", for: indexPath)
         cell.accessoryType = .disclosureIndicator
         cell.contentView.superview?.backgroundColor = UIColor(hex: Utils.LINGUAL_WHITE) ?? UIColor.white
-        cell.textLabel?.attributedText = self.makeEntryAttributedString(entry: self.state.activeNotes[indexPath.row], index: indexPath.row)
+        cell.textLabel?.attributedText = self.makeEntryAttributedString(entry: self.state.activeEntries[indexPath.row], index: indexPath.row)
         cell.textLabel?.numberOfLines = 2
         return cell
     }
     
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        // Set note index
-        if let noteIndex = self.noteManager.currentIndex, self.speechRecognition.isListeningForSpeech && noteIndex != indexPath.row {
+        // Set entry index
+        if let entryIndex = self.entryManager.currentIndex, self.speechRecognition.isListeningForSpeech && entryIndex != indexPath.row {
             self.notifications.executeError(
-                text: "Error. Another note is being edited."
+                text: "Error. Another entry is being edited."
             )
         } else {
-            self.noteManager.setCurrentNote(index: indexPath.row)
+            self.entryManager.setCurrentEntry(index: indexPath.row)
         }
         
         // Give haptic feedback
@@ -744,17 +744,17 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     // Reference: https://www.hackingwithswift.com/example-code/uikit/how-to-swipe-to-delete-uitableviewcells
     override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
         if editingStyle == .delete {
-            self.noteManager.deleteNote(index: indexPath.row, withConfirmation: false)
+            self.entryManager.deleteEntry(index: indexPath.row, withConfirmation: false)
             tableView.deleteRows(at: [indexPath], with: .fade)
         } else if editingStyle == .insert {
             // Create a new instance of the appropriate class, insert it into the array, and add a new row to the table view.
         }
     }
     
-    func makeEntryAttributedString(entry: Note, index: Int) -> NSAttributedString {
+    func makeEntryAttributedString(entry: Entry, index: Int) -> NSAttributedString {
         let titleAttributes: [NSAttributedString.Key: Any] = [
             NSAttributedString.Key.font: UIFont.preferredFont(forTextStyle: .headline),
-            NSAttributedString.Key.foregroundColor: self.noteManager.currentIndex != nil && self.speechRecognition.isListeningForSpeech && index == self.noteManager.currentIndex! ? UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red : UIColor(hex: Utils.LINGUAL_DARK_PURPLE) ?? UIColor.black
+            NSAttributedString.Key.foregroundColor: self.entryManager.currentIndex != nil && self.speechRecognition.isListeningForSpeech && index == self.entryManager.currentIndex! ? UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red : UIColor(hex: Utils.LINGUAL_DARK_PURPLE) ?? UIColor.black
         ]
         var subtitleAttributes: [NSAttributedString.Key: Any] = [
             NSAttributedString.Key.font: UIFont.preferredFont(forTextStyle: .subheadline)
@@ -767,16 +767,16 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
         let timeFormatter = DateFormatter()
         timeFormatter.dateFormat = "h:mm:ss a"
         let timeString = timeFormatter.string(from: Date(timeIntervalSince1970: entry.dateCreated))
-        let titleString = NSMutableAttributedString(string: "Note: \(dateString) at \(timeString)", attributes: titleAttributes)
+        let titleString = NSMutableAttributedString(string: "Entry: \(dateString) at \(timeString)", attributes: titleAttributes)
 
         let entryText = entry.getText()
         let preview = entryText.count > Utils.ENTRY_ITEM_PREVIEW_CHAR_COUNT ? "\(entryText.substring(toIndex: Utils.ENTRY_ITEM_PREVIEW_CHAR_COUNT))..." : entryText
         if preview.count > 0 {
-            subtitleAttributes[NSAttributedString.Key.foregroundColor] = self.noteManager.currentIndex != nil && self.speechRecognition.isListeningForSpeech && index == self.noteManager.currentIndex! ? UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red : UIColor.darkGray
+            subtitleAttributes[NSAttributedString.Key.foregroundColor] = self.entryManager.currentIndex != nil && self.speechRecognition.isListeningForSpeech && index == self.entryManager.currentIndex! ? UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red : UIColor.darkGray
             let subtitleString = NSAttributedString(string: "\n\(preview)", attributes: subtitleAttributes)
             titleString.append(subtitleString)
         } else {
-            subtitleAttributes[NSAttributedString.Key.foregroundColor] = self.noteManager.currentIndex != nil && self.speechRecognition.isListeningForSpeech && index == self.noteManager.currentIndex! ? UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red : UIColor(hex: Utils.LINGUAL_GRAY) ?? UIColor.systemGray2
+            subtitleAttributes[NSAttributedString.Key.foregroundColor] = self.entryManager.currentIndex != nil && self.speechRecognition.isListeningForSpeech && index == self.entryManager.currentIndex! ? UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red : UIColor(hex: Utils.LINGUAL_GRAY) ?? UIColor.systemGray2
             let subtitleString = NSAttributedString(string: "\nBlank entry.", attributes: subtitleAttributes)
             titleString.append(subtitleString)
         }
@@ -784,13 +784,13 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
         return titleString
     }
     
-    func getNewNoteButton() -> UIBarButtonItem {
+    func getNewEntryButton() -> UIBarButtonItem {
         let button  = CenteredButton(type: .custom)
 
         button.frame = CGRect(x: 0.0, y: 0.0, width: Utils.NAVBAR_BUTTON_LENGTH, height: Utils.NAVBAR_BUTTON_LENGTH)
-        button.addTarget(self, action: #selector(self.createNote), for: .touchDown)
+        button.addTarget(self, action: #selector(self.createEntry), for: .touchDown)
         button.setImage(UIImage(systemName: "plus"), for: .normal)
-        button.setTitle("Create Note", for: .normal)
+        button.setTitle("Create Entry", for: .normal)
         button.titleLabel?.font = UIFont.systemFont(ofSize: 11)
         button.setTitleColor(UIColor.systemGray5, for: .normal)
         button.tintColor = UIColor.systemGray
@@ -816,10 +816,10 @@ class NoteTableViewController: UITableViewController, SegueProtocol {
     
     // MARK: - Methods
     
-    @objc func createNote(_ sender: Any? = nil) {
-        print("===== Note Table View Controller: Create Note =====")
-        let noteUID = self.noteManager.createNote(voiceCommand: false, withListening: false)
-        let _ = self.noteManager.getNote(uid: noteUID)
+    @objc func createEntry(_ sender: Any? = nil) {
+        print("===== Entry Table View Controller: Create Entry =====")
+        let entryUID = self.entryManager.createEntry(voiceCommand: false, withListening: false)
+        let _ = self.entryManager.getEntry(uid: entryUID)
         
         // Haptic Feedback
         hapticEngine.success()

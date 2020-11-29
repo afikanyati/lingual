@@ -13,9 +13,9 @@ enum Notifications: String {
     case onViewControllerDidLoad
     case onViewControllerWillDisappear
     
-    // NoteTableViewController
-    case onNoteTableViewControllerDidLoad
-    case onNoteTableViewControllerWillDisappear
+    // EntryTableViewController
+    case onEntryTableViewControllerDidLoad
+    case onEntryTableViewControllerWillDisappear
     
     // DetailViewController
     case onDetailViewControllerDidLoad
@@ -43,12 +43,12 @@ enum Notifications: String {
     // VoiceCommand
     case onProcessedVoiceCommand
     
-    // Note
+    // Entry
     case onRequestToUpdateView
-    case onNoteListenUpdate
-    case onNoteListenStop
-    case onNoteComplete
-    case onNoteCommittedBuffer
+    case onEntryListenUpdate
+    case onEntryListenStop
+    case onEntryComplete
+    case onEntryCommittedBuffer
     
     // Notification
     case onStartTimedNotification
@@ -66,12 +66,12 @@ enum Notifications: String {
     case onEchoUpdate
     case onEchoFinish
     
-    // NoteManager
-    case onCreatedNote
-    case onNoteDeleted
-    case onSetNote
-    case onExecuteNoteAction
-    case onNoteAudioExported
+    // EntryManager
+    case onCreatedEntry
+    case onEntryDeleted
+    case onSetEntry
+    case onExecuteEntryAction
+    case onEntryAudioExported
     
     // StorageManager
     case onFetchedStoredState
@@ -80,7 +80,7 @@ enum Notifications: String {
     case onClipboardChange
     
     // State Manager
-    case onFetchedNotes
+    case onFetchedEntries
     case onUndoManagerChange
     
     // UI Manager
