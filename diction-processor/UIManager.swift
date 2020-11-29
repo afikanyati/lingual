@@ -17,6 +17,7 @@ class UIManager: NSObject {
     // MARK: - App Modules
     
     var state: StateManager!
+    var speechSynthesis: SpeechSynthesisEngine!
     var notifications: NotificationEngine
     
     // MARK: - General Properties
@@ -145,6 +146,9 @@ class UIManager: NSObject {
                 title: act.title,
                 style: act.style,
                 handler: {action in
+                    if self.speechSynthesis.isPlayingEcho {
+                        self.speechSynthesis.stopEcho()
+                    }
                     self.dismissDialog()
                     act.handler?(action)
                 }

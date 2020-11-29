@@ -12,11 +12,11 @@ import UIKit
 @objc class NoteSnapshot: NSObject {
     // MARK: - Properties
     
-    var note: Note
-    var selectionAnchorCaret: Caret?
-    var selectionFocusCaret: Caret?
-    var selectionCachedAnchorCaret: Caret?
-    var message: String
+    let note: Note
+    let selectionAnchorCaret: Caret?
+    let selectionFocusCaret: Caret?
+    let selectionCachedAnchorCaret: Caret?
+    let message: String
     
     // MARK: - Initialization
     init(
@@ -31,6 +31,10 @@ import UIKit
         self.selectionFocusCaret = selectionFocusCaret
         self.selectionCachedAnchorCaret = selectionCachedAnchorCaret
         self.message = message
+    }
+    
+    public override var description: String {
+        return "NoteSnapshot {\n\tnote: \(self.note) \n\tanchorCaret: \(String(describing: self.selectionAnchorCaret)) \n\tfocusCaret: \(String(describing: self.selectionFocusCaret)) \n\tcachedAnchorCaret: \(String(describing: self.selectionCachedAnchorCaret)) \n\tmessage: \(self.message)\n}"
     }
     
     // MARK: - Types

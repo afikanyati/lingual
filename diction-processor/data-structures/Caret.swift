@@ -28,4 +28,8 @@ class Caret: NSObject {
         return firstCaret.index == secondCaret.index &&
             firstCaret.trackType == secondCaret.trackType
     }
+    
+    func duplicate() -> Caret {
+        return Caret(index: self.index, trackType: self.trackType)
+    }
 }

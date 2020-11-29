@@ -30,6 +30,7 @@ class NotificationEngine {
     private(set) var errorFeedbackTimer: Timer?
     /// Specifies whether view has been instructed to clear out contents of notification queue
     private(set) var isExhaustingNotificationQueue = false
+    private(set) var isPresentingVisualNotification = false
     
     // MARK: - Initialization and Deinitialization
     
@@ -142,6 +143,9 @@ class NotificationEngine {
             self.appNotificationTimer = nil
         }
         
+        // Activate presenting notification flag
+        self.isPresentingVisualNotification = true
+        
         NotificationCenter.default.post(
             name: NotificationEngine.onStartTimedNotification,
             object: nil,
@@ -154,6 +158,9 @@ class NotificationEngine {
             } else {
                 self?.appNotificationTimer?.invalidate()
                 self?.appNotificationTimer = nil
+                
+                // Deactivate presenting notification flag
+                self?.isPresentingVisualNotification = false
                 
                 NotificationCenter.default.post(
                     name: NotificationEngine.onStopNotification,
@@ -185,6 +192,9 @@ class NotificationEngine {
             self.appNotificationTimer?.invalidate()
             self.appNotificationTimer = nil
         }
+        
+        // Activate presenting notification flag
+        self.isPresentingVisualNotification = true
         
         NotificationCenter.default.post(
             name: NotificationEngine.onStartIndefiniteNotification,
@@ -218,6 +228,9 @@ class NotificationEngine {
         }
         
         self.emptyNotificationQueue()
+        
+        // Deactivate presenting notification flag
+        self.isPresentingVisualNotification = false
         
         NotificationCenter.default.post(
             name: NotificationEngine.onStopNotification,

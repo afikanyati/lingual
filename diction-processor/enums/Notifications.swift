@@ -32,6 +32,7 @@ enum Notifications: String {
     case onStartedListeningForSpeech
     case onPausedListeningForSpeech
     case onStoppedListeningForSpeech
+    case onRequestPrepareAudioFile
     case onPitchUpdate
     case onPowerUpdate
     case onSpeechUpdate

@@ -248,6 +248,10 @@ class DetailViewController: UIViewController, SegueProtocol {
                 withRecording: self.speechRecognition.isListeningForSpeech,
                 withStopListeningButton: !self.speechRecognition.isListeningForSpeech
             )
+            
+            // Remove textView and cursor from selectionCursor
+            self.selectionCursor.setTextView()
+            self.selectionCursor.setCursorView()
         case .moveFromSleepToNoteTable:
             print (">>>>> [Invalid Segue within DetailViewController] from ViewControlller to NoteTableViewController >>>>>")
         case .moveFromSleepToDetail:
@@ -359,7 +363,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         )
         notificationCenter.addObserver(
             self,
-            selector: #selector(onStoppedListening(notification:)),
+            selector: #selector(onStoppedListeningForSpeech(notification:)),
             name: SpeechRecognitionEngine.onStoppedListeningForSpeech,
             object: nil
         )
@@ -616,7 +620,11 @@ class DetailViewController: UIViewController, SegueProtocol {
  
         DispatchQueue.main.async { [weak self] in
             let navigationController = Utils.getNavigationController()
-            navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [] // remove delete button when listening for speech
+            if !self!.speechRecognition.isListeningForSpeech {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getDeleteNoteButton()]
+            } else {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [] // remove delete button when listening for speech
+            }
             if let _ = self?.selectionCursor.clipboard {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems?.insert(self!.getPasteClipboardButton(), at: 0)
             }
@@ -651,6 +659,22 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
     }
     
+    @objc func onStoppedListeningForSpeech(notification: Notification) {
+        print("===== Detail View Controller: On Stopped Listening For Speech =====")
+        Utils.onStoppedListening(
+            withBackToNotesButton: true,
+            notification: notification,
+            speechRecognition: self.speechRecognition,
+            soundIntensityIndicatorHeight: self.soundIntensityIndicatorHeight,
+            pitchLabel: self.pitchLabel
+        ) { [weak self] in
+            // Hide cursor
+            self?.setCursorVisibility(as: false)
+            self?.removeCursor()
+            self?.refreshView()
+        }
+    }
+    
     @objc func onStoppedListening(notification: Notification) {
         print("===== Detail View Controller: On Stopped Listening =====")
         Utils.onStoppedListening(
@@ -660,10 +684,7 @@ class DetailViewController: UIViewController, SegueProtocol {
             soundIntensityIndicatorHeight: self.soundIntensityIndicatorHeight,
             pitchLabel: self.pitchLabel
         ) { [weak self] in
-            // Hide cursor
-            self?.removeCursor()
             self?.refreshView()
-            self?.setCursorVisibility(as: false)
         }
     }
     
@@ -729,7 +750,11 @@ class DetailViewController: UIViewController, SegueProtocol {
         print("===== Detail View Controller: On Note Complete =====")
         DispatchQueue.main.async { [weak self] in
             let navigationController = Utils.getNavigationController()
-            navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getDeleteNoteButton()]
+            if !self!.speechRecognition.isListeningForSpeech {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getDeleteNoteButton()]
+            } else {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [] // remove delete button when listening for speech
+            }
             if let _ = self?.selectionCursor.clipboard {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems?.insert(self!.getPasteClipboardButton(), at: 0)
             }
@@ -770,14 +795,14 @@ class DetailViewController: UIViewController, SegueProtocol {
     
     @objc func onSpeechBoundaryCrossed(notification: Notification) {
         print("===== Detail View Controller: On Speech Boundary Crossed =====")
-        print("\tFrom: '\((notification.userInfo!["previous"] as? NoteSegment)?.getText() ?? "nil")', To: '\((notification.userInfo!["next"] as? NoteSegment)?.getText() ?? "nil")'")
+        print("\tWord: '\((notification.userInfo!["previous"] as? NoteSegment)?.getText() ?? "nil")'")
         DispatchQueue.main.async { [weak self] in
             Utils.onSpeechBoundaryCrossed(
                 notification: notification,
                 speechPlayer: self!.speechPlayer,
                 pitchLabel: self!.pitchLabel
             ) {
-                if let note = self?.noteManager.currentNote, let segment = notification.userInfo!["next"] as? NoteSegment, segment.getText().count > 0 && segment.isActive(), let range = note.getSegmentTextRange(of: segment) {
+                if let note = self?.noteManager.currentNote, let segment = notification.userInfo!["previous"] as? NoteSegment, segment.getText().count > 0 && segment.isActive(), let range = note.getSegmentTextRange(of: segment) {
                     self?.updateUIText(text: note.getText(), highlightRange: range, transformations: note.transformations)
                 }
             }
@@ -787,13 +812,16 @@ class DetailViewController: UIViewController, SegueProtocol {
     @objc func onSpeechSecondElapsed(notification: Notification) {
         print("===== Detail View Controller: On Speech Second Elapsed =====")
         print("\tSeconds: ", notification.userInfo!["seconds"] as! Double)
-        DispatchQueue.main.async { [weak self] in
-            Utils.onSpeechSecondElapsed(
-                notification: notification,
-                speechRecognition: self!.speechRecognition,
-                speechPlayer: self!.speechPlayer,
-                noteManager: self!.noteManager
-            )
+        
+        if !self.notifications.isPresentingVisualNotification {
+            DispatchQueue.main.async { [weak self] in
+                Utils.onSpeechSecondElapsed(
+                    notification: notification,
+                    speechRecognition: self!.speechRecognition,
+                    speechPlayer: self!.speechPlayer,
+                    noteManager: self!.noteManager
+                )
+            }
         }
     }
     
@@ -855,15 +883,14 @@ class DetailViewController: UIViewController, SegueProtocol {
         print("===== Detail View Controller: On Clipboard Change =====")
         DispatchQueue.main.async { [weak self] in
             let navigationController = Utils.getNavigationController()
-            if let _ = self?.selectionCursor.clipboard {
-                self?.adjustCommandBar()
+            self?.adjustCommandBar()
+            if !self!.speechRecognition.isListeningForSpeech {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getDeleteNoteButton()]
-                if let _ = self?.selectionCursor.clipboard {
-                    navigationController?.visibleViewController?.navigationItem.rightBarButtonItems?.insert(self!.getPasteClipboardButton(), at: 0)
-                }
             } else {
-                self?.adjustCommandBar()
-                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = nil
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [] // remove delete button when listening for speech
+            }
+            if let _ = self?.selectionCursor.clipboard {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems?.insert(self!.getPasteClipboardButton(), at: 0)
             }
         }
     }
@@ -940,7 +967,11 @@ class DetailViewController: UIViewController, SegueProtocol {
     func prepareNavbar() {
         DispatchQueue.main.async { [weak self] in
             let navigationController = Utils.getNavigationController()
-            navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getDeleteNoteButton()]
+            if !self!.speechRecognition.isListeningForSpeech {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getDeleteNoteButton()]
+            } else {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [] // remove delete button when listening for speech
+            }
             if let _ = self?.selectionCursor.clipboard {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems?.insert(self!.getPasteClipboardButton(), at: 0)
             }
@@ -1963,6 +1994,17 @@ class DetailViewController: UIViewController, SegueProtocol {
                 DispatchQueue.main.async { [weak self] in
                     self?.refreshView()
                     self?.setCursorVisibility(as: true)
+                    if self!.speechRecognition.isListeningForSpeech {
+                        // bring back listening timer
+                        let timer = Utils.startRecordingUITimer(
+                            timer: self!.speechRecognition.listeningTimer,
+                            recording: true,
+                            note: note,
+                            speechRecognition: self!.speechRecognition,
+                            selectionCursor: self!.selectionCursor
+                        )
+                        self?.speechRecognition.setListeningTimer(timer: timer)
+                    }
                 }
                 
                 Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { [weak self] timer in
@@ -2037,8 +2079,9 @@ class DetailViewController: UIViewController, SegueProtocol {
                     let segment = note.noteSegments[index]
                     print("\tFound Segment: ", segment.getText())
                     print("\tPlay note and Seek to segment...")
+                    let wasPlayingNote = self.speechPlayer.isPlayingNote && !self.speechPlayer.pausedPlayingNote
                     self.noteManager.stopPlayingNote(withFeedback: false) {
-                        if self.speechPlayer.isPlayingNote && !self.speechPlayer.pausedPlayingNote {
+                        if wasPlayingNote {
                             print("\tDon't pause note because it was playing before touch tap...")
                             self.noteManager.playNote(from: segment.timeMapping.target.start)
                         } else {

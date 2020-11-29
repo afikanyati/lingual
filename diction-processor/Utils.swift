@@ -142,7 +142,7 @@ class Utils {
     static let DEFAULT_START_LISTENING_DELAY: TimeInterval = 2
     static let COMMA_PAUSE_DURATION: Double = 2
     static let NEW_SENTENCE_PAUSE_DURATION: Double = 4
-    static let NEW_PARAGRAPH_PAUSE_DURATION: Double = 6 // Very nice
+    static let NEW_PARAGRAPH_PAUSE_DURATION: Double = 7
     static let DEFAULT_RESET_LISTENING_FLAG_DELAY: TimeInterval = 5 // Final Transcript should show up in five seconds without any sound
     
     static let pitchToFrequencyMap: [String : Double] = [
@@ -845,7 +845,7 @@ class Utils {
         var normalizedCleansedSegments = [NoteSegment]()
         var silenceIndices = [Int]()
         for (index, segment) in cleansedSegments.enumerated() {
-            if segment.timeMapping.target.start.seconds > lastEnd.seconds {
+            if segment.timeMapping.target.start.seconds != lastEnd.seconds {
                 let shiftedSegment = NoteSegment(
                     note: segment.note,
                     speakerUID: segment.getSpeakerUID(),
@@ -1203,19 +1203,27 @@ class Utils {
                 }
             }
             
-            if selectionCursor.hasSelection && selectionCursor.direction == .forwards {
+            if let anchor = selectionCursor.anchor,
+               let focus = selectionCursor.focus,
+               selectionCursor.hasSelection &&
+                selectionCursor.direction == .forwards
+            {
                 // we have selection in forwards direction
                 // visually present the time range of selection
                 DispatchQueue.main.async {
                     let navigationController = Utils.getNavigationController()
-                    navigationController?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: speechRecognition.getDurationListening()))\(" [\(Utils.formattedTime(time: Float(selectionCursor.anchor!.timeMapping.target.start.seconds))) - \(Utils.formattedTime(time: Float(selectionCursor.focus!.timeMapping.target.end.seconds)))]")"
+                    navigationController?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: speechRecognition.getDurationListening()))\(" [\(Utils.formattedTime(time: Float(anchor.timeMapping.target.start.seconds))) - \(Utils.formattedTime(time: Float(focus.timeMapping.target.end.seconds)))]")"
                 }
-            } else if selectionCursor.hasSelection && selectionCursor.direction == .backwards {
+            } else if let anchor = selectionCursor.anchor,
+                let focus = selectionCursor.focus,
+                selectionCursor.hasSelection &&
+                selectionCursor.direction == .backwards
+            {
                 // we have selection in backwards direction
                 // visually present the time range of selection
                 DispatchQueue.main.async {
                     let navigationController = Utils.getNavigationController()
-                    navigationController?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: speechRecognition.getDurationListening()))\(" [\(Utils.formattedTime(time: Float(selectionCursor.focus!.timeMapping.target.start.seconds))) - \(Utils.formattedTime(time: Float(selectionCursor.anchor!.timeMapping.target.end.seconds)))]")"
+                    navigationController?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: speechRecognition.getDurationListening()))\(" [\(Utils.formattedTime(time: Float(focus.timeMapping.target.start.seconds))) - \(Utils.formattedTime(time: Float(anchor.timeMapping.target.end.seconds)))]")"
                 }
             } else {
                 // we don't have a selection
@@ -2004,15 +2012,33 @@ class Utils {
         return duplicateSegments
     }
     
+    // Reference: https://stackoverflow.com/questions/25827033/how-do-i-convert-a-swift-array-to-a-string
+    // Reference: https://codeburst.io/swift-map-flatmap-filter-and-reduce-53959ebeb6aa
+    public static func stringifySegments(segments: [NoteSegment]) -> String {
+        let segments = segments.map({(segment: NoteSegment) -> String in
+            if segment.isVoiceCommandWord() {
+                return "[Voice Command Word: '\(segment.getText())']"
+            } else if segment.isDeleted() {
+                return "[Deleted: '\(segment.getText())']"
+            } else {
+                return "'\(segment.getText())'"
+            }
+        })
+        return "[\(segments.joined(separator: ", "))]"
+    }
+    
     public static func getNoteNthLastSegmentIndex(
         segments: [NoteSegment],
         bufferSegments: [NoteSegment]? = nil,
+        fromBuffer: Bool = false,
         selectionCursor: SelectionCursor,
         n: Int
     ) -> (NoteTrackType?, Int?) {
         var lastSegmentIndex: Int?
         var trackType: NoteTrackType?
         if bufferSegments == nil {
+            // No buffer segments were supplied
+            // Search for nth last segment in committed segments only
             trackType = .committed
             var i = 0
             for (index, segment) in segments.reversed().enumerated() {
@@ -2024,33 +2050,92 @@ class Utils {
                     i += 1
                 }
             }
-        } else {
-            trackType = .buffer
-            if selectionCursor.cachedAnchorCaret == nil {
+        } else if let bufferSegments = bufferSegments {
+            // Buffer segments were supplied
+            // Search for nth last segment from segment array that is a composition of committed and buffer segments.
+            if let cachedAnchorCaret = selectionCursor.cachedAnchorCaret {
+                // Cached Anchor Caret exists
+
+                // Insert buffer at correct location within committed segments
+                var noteSegments = segments
+                let index = cachedAnchorCaret.index
+                noteSegments.insert(contentsOf: bufferSegments, at: index)
+                
                 var i = 0
-                for (index, segment) in bufferSegments!.reversed().enumerated() {
-                    if segment.isActive() && lastSegmentIndex == nil && i == n {
-                        lastSegmentIndex = bufferSegments!.count - index - 1
+                var segmentsIndex: Int?
+                if fromBuffer {
+                    // Seeking nth last index from buffer segments only
+                    let permittedSegments = Array(noteSegments[0..<cachedAnchorCaret.index + bufferSegments.count])
+                    for (index, segment) in permittedSegments.reversed().enumerated() {
+                        if segment.isActive() && segmentsIndex == nil && i == n {
+                            segmentsIndex = permittedSegments.count - index - 1
+                            break
+                        } else if segment.isActive() && segmentsIndex == nil {
+                            // we've encountered another word, add to number of words encountered accumulator
+                            i += 1
+                        }
+                    }
+                } else {
+                    // Seeking last index from segment array that is a composition of committed and buffer segments.
+                    for (index, segment) in noteSegments.reversed().enumerated() {
+                        if segment.isActive() && segmentsIndex == nil && i == n {
+                            segmentsIndex = noteSegments.count - index - 1
+                            break
+                        } else if segment.isActive() && segmentsIndex == nil {
+                            // we've encountered another word, add to number of words encountered accumulator
+                            i += 1
+                        }
+                    }
+                }
+
+                if let segmentsIndex = segmentsIndex,
+                    segmentsIndex < cachedAnchorCaret.index &&
+                    !fromBuffer
+                {
+                    // Index is before location where buffer was inserted...
+                    trackType = .committed
+                    lastSegmentIndex = segmentsIndex
+                } else if let segmentsIndex = segmentsIndex,
+                 segmentsIndex >= cachedAnchorCaret.index &&
+                  segmentsIndex < cachedAnchorCaret.index + bufferSegments.count
+                {
+                    // Index is in buffer...
+                    trackType = .buffer
+                    lastSegmentIndex = segmentsIndex - cachedAnchorCaret.index
+                } else if let segmentsIndex = segmentsIndex,
+                    segmentsIndex >= cachedAnchorCaret.index + bufferSegments.count &&
+                    !fromBuffer
+                {
+                    // Index is after buffer...
+                    trackType = .committed
+                    lastSegmentIndex = segmentsIndex - bufferSegments.count
+                }
+            } else {
+                // Cached Anchor Caret doesn't exist
+                
+                // Insert buffer at the end of committed segments
+                let noteSegments = segments + bufferSegments
+                
+                var i = 0
+                var segmentsIndex: Int?
+                for (index, segment) in noteSegments.reversed().enumerated() {
+                    if segment.isActive() && segmentsIndex == nil && i == n {
+                        segmentsIndex = noteSegments.count - index - 1
                         break
-                    } else if segment.isActive() && lastSegmentIndex == nil {
+                    } else if segment.isActive() && segmentsIndex == nil {
                         // we've encountered another word, add to number of words encountered accumulator
                         i += 1
                     }
                 }
-            }
-            
-            // if hasn't been found, check committed segments
-            var j = bufferSegments!.count
-            if lastSegmentIndex == nil && segments.count > n - bufferSegments!.count {
-                for (index, segment) in segments.reversed().enumerated() {
-                    if segment.isActive() && lastSegmentIndex == nil && j == n {
-                        lastSegmentIndex = segments.count - index - 1
-                        trackType = .committed
-                        break
-                    } else if segment.isActive() && lastSegmentIndex == nil {
-                        // we've encountered another word, add to number of words encountered accumulator
-                        j += 1
-                    }
+
+                if let segmentsIndex = segmentsIndex, segmentsIndex >= segments.count {
+                    // Index is in buffer...
+                    trackType = .buffer
+                    lastSegmentIndex = segmentsIndex - segments.count
+                } else if let segmentsIndex = segmentsIndex, !fromBuffer {
+                    // Index is committed segment (before buffer)...
+                    trackType = .committed
+                    lastSegmentIndex = segmentsIndex
                 }
             }
         }

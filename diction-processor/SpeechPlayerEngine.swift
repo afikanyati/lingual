@@ -749,7 +749,7 @@ class SpeechPlayerEngine: NSObject {
             self.handlePeriodicTimeObserver()
         }
         
-        if let playbackSegments = self.playbackSegments, !selectionCursor.isLoopingSelection {
+        if let playbackSegments = self.playbackSegments {
             print("\tSet Playback Segment Boundary Handler...")
             // if we have a selection, animating through each word removes it
             var boundaryTimes = [NSValue]()
@@ -763,8 +763,10 @@ class SpeechPlayerEngine: NSObject {
         }
         
         print("\tSet Playback Finish Handler...")
-        self.completionObserverToken = self.player.addBoundaryTimeObserver(forTimes: [NSValue(time: self.stopPlaybackAt!)], queue: .main) {
-            self.handleCompletionObserver()
+        if let stopPlaybackAt = self.stopPlaybackAt {
+            self.completionObserverToken = self.player.addBoundaryTimeObserver(forTimes: [NSValue(time: stopPlaybackAt)], queue: .main) {
+                self.handleCompletionObserver()
+            }
         }
         
         print("\tPlaying from: \(self.startPlaybackAt!.seconds)")

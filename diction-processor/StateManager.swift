@@ -515,6 +515,8 @@ class StateManager: NSObject {
                 self.notes[index] = note
             }
         }
+        
+        self.save()
     }
     
     // message should start with a present progressive verb: -ing

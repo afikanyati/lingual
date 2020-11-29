@@ -21,6 +21,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     static let onStartedListeningForSpeech = Notification.Name(Notifications.onStartedListeningForSpeech.rawValue)
     static let onPausedListeningForSpeech = Notification.Name(Notifications.onPausedListeningForSpeech.rawValue)
     static let onStoppedListeningForSpeech = Notification.Name(Notifications.onStoppedListeningForSpeech.rawValue)
+    static let onRequestPrepareAudioFile = Notification.Name(Notifications.onRequestPrepareAudioFile.rawValue)
     static let onPowerUpdate = Notification.Name(Notifications.onPowerUpdate.rawValue)
     static let onSpeechUpdate = Notification.Name(Notifications.onSpeechUpdate.rawValue)
     static let onWakePhraseDetected = Notification.Name(Notifications.onWakePhraseDetected.rawValue)
@@ -417,16 +418,16 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         case .newDeviceAvailable: // New device found.
             // Reset listening for wake word
             if !self.state.appActivated && self.isListeningForWakePhrase {
-                self.stopListeningForWakePhrase() {[weak self] in
-                    self?.configureListeningForWakePhrase()
+                self.stopListeningForWakePhrase() {
+                    self.configureListeningForWakePhrase()
                 }
             } else if self.isListeningForSpeech {
-                self.stopListeningForSpeech() {[weak self] in
-                    self?.startListeningForSpeech()
+                self.stopListeningForSpeech() {
+                    self.startListeningForSpeech()
                 }
             } else if self.isListeningForCommands {
-                self.stopListeningForVoiceCommands() {[weak self] in
-                    self?.startListeningForVoiceCommands()
+                self.stopListeningForVoiceCommands() {
+                    self.startListeningForVoiceCommands()
                 }
             } else {
                 // Re-initiate Audio Engine to mend broken graph
@@ -435,16 +436,16 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         case .oldDeviceUnavailable: // Old device removed.
             // Reset listening for wake word
             if !self.state.appActivated {
-                self.stopListeningForWakePhrase() {[weak self] in
-                    self?.configureListeningForWakePhrase()
+                self.stopListeningForWakePhrase() {
+                    self.configureListeningForWakePhrase()
                 }
-            } else if self.isListeningForSpeech {
-                self.speechPlayer.stop(withFeedback: false) {[weak self] in
-                    self?.startListeningForSpeech()
+            } else if self.isListeningForSpeech && !self.selectionCursor.hasSelection {
+                self.speechPlayer.stop(withFeedback: false) {
+                    self.startListeningForSpeech()
                 }
             }  else if self.isListeningForCommands {
-                self.stopListeningForVoiceCommands() {[weak self] in
-                    self?.startListeningForVoiceCommands()
+                self.stopListeningForVoiceCommands() {
+                    self.startListeningForVoiceCommands()
                 }
             } else {
                 // Re-initiate Audio Engine to mend broken graph
@@ -748,6 +749,27 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     func startListeningForWakePhrase() {
         print("===== Speech Recognition Engine: Starting Listening for Wake Phrase =====")
         
+        // If we're waiting for another session to wrap up, stage this one.
+        if let stopListeningHandler = self.stopListeningHandler {
+            print("\t[NOTE] Encountered existing 'stopListeningHandler'. Stage method to execute after handler.")
+            let oldHandler = stopListeningHandler
+            self.stopListeningHandler = {
+                oldHandler()
+                self.startListeningForWakePhrase()
+            }
+            
+            return
+        } else if let pauseListeningHandler = self.pauseListeningHandler {
+            print("\t[NOTE] Encountered existing 'pauseListeningHandler'. Stage method to execute after handler.")
+            let oldHandler = pauseListeningHandler
+            self.pauseListeningHandler = {
+                oldHandler()
+                self.startListeningForWakePhrase()
+            }
+            
+            return
+        }
+        
         self.setLastRecognitionTask(task: RecognitionTask.WAKE_PHRASE)
         
         // Update Wake Phrase Flage
@@ -770,65 +792,58 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     func stopListeningForWakePhrase(onStopHandler: (() -> Void)? = nil) {
         print("===== Speech Recognition Engine: Stopping Listening for Wake Phrase =====")
         
+        // If we're waiting for another session to wrap up, stage this one.
+        if let stopListeningHandler = self.stopListeningHandler {
+            print("\t[NOTE] Encountered existing 'stopListeningHandler'. Stage method to execute after handler.")
+            let oldHandler = stopListeningHandler
+            self.stopListeningHandler = {
+                oldHandler()
+                self.stopListeningForWakePhrase(onStopHandler: onStopHandler)
+            }
+            
+            return
+        } else if let pauseListeningHandler = self.pauseListeningHandler {
+            print("\t[NOTE] Encountered existing 'pauseListeningHandler'. Stage method to execute after handler.")
+            let oldHandler = pauseListeningHandler
+            self.pauseListeningHandler = {
+                oldHandler()
+                self.stopListeningForWakePhrase(onStopHandler: onStopHandler)
+            }
+            
+            return
+        }
+        
         self.handleStopListening(type: .WAKE_PHRASE, onStopHandler: onStopHandler)
         
         // Update Wake Phrase Flage
         self.isListeningForWakePhrase = false
     }
     
-    func handleWakePhraseDetected() {
-        print("===== Speech Recognition Engine: Handle Wake Phrase Detected =====")
-        self.stopListeningForWakePhrase() { [weak self] in
-            // Play Sound
-            // We delay so that it can be heard
-            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
-                soundEngine.correctWakePhrase()
-            }
-            
-            if self!.state.withPunctuationSuggestions {
-                print("\tInvalidate punctuation suggestion timers...")
-                self?.sentenceSuggestionTimer?.invalidate()
-                self?.paragraphSuggestionTimer?.invalidate()
-            }
-            
-            self?.earlyValidVoiceCommandDetection = false
-            
-            // Give haptic feedback
-            hapticEngine.success()
-            
-            // start listening for voice commands
-            self?.startListeningForVoiceCommands()
-            
-            NotificationCenter.default.post(
-                name: SpeechRecognitionEngine.onWakePhraseDetected,
-                object: nil,
-                userInfo: [:]
-            )
-        }
-    }
-    
-    func handleWakePhraseError(text: String, transcription: SFTranscription) {
-        print("===== Speech Recognition Engine: Handle Wake Phrase Error =====")
-        // Play Sound
-        soundEngine.incorrectWakePhrase()
-        
-        // Give haptic feedback
-        hapticEngine.error()
-        
-        NotificationCenter.default.post(
-            name: SpeechRecognitionEngine.onIncorrectWakePhrase,
-            object: nil,
-            userInfo: [
-                "utterance": text,
-                "transcription": transcription
-            ]
-        )
-    }
-    
     func startListeningForVoiceCommands(
         onStartHandler: (() -> Void)? = nil
     ) {
         print("===== Speech Recognition Engine: Starting Listening For Voice Commands =====")
+        
+        // If we're waiting for another session to wrap up, stage this one.
+        if let stopListeningHandler = self.stopListeningHandler {
+            print("\t[NOTE] Encountered existing 'stopListeningHandler'. Stage method to execute after handler.")
+            let oldHandler = stopListeningHandler
+            self.stopListeningHandler = {
+                oldHandler()
+                self.startListeningForVoiceCommands(onStartHandler: onStartHandler)
+            }
+            
+            return
+        } else if let pauseListeningHandler = self.pauseListeningHandler {
+            print("\t[NOTE] Encountered existing 'pauseListeningHandler'. Stage method to execute after handler.")
+            let oldHandler = pauseListeningHandler
+            self.pauseListeningHandler = {
+                oldHandler()
+                self.startListeningForVoiceCommands(onStartHandler: onStartHandler)
+            }
+            
+            return
+        }
 
         // Make sure we're not listening for voice commands or speech already
         if self.isListeningForSpeech && !self.pausedListeningForSpeech {
@@ -859,6 +874,27 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     func pauseListeningForVoiceCommands(onPauseHandler: (() -> Void)? = nil) {
         print("===== Speech Recognition Engine: Pause Listening For Voice Commands =====")
         
+        // If we're waiting for another session to wrap up, stage this one.
+        if let stopListeningHandler = self.stopListeningHandler {
+            print("\t[NOTE] Encountered existing 'stopListeningHandler'. Stage method to execute after handler.")
+            let oldHandler = stopListeningHandler
+            self.stopListeningHandler = {
+                oldHandler()
+                self.pauseListeningForVoiceCommands(onPauseHandler: onPauseHandler)
+            }
+            
+            return
+        } else if let pauseListeningHandler = self.pauseListeningHandler {
+            print("\t[NOTE] Encountered existing 'pauseListeningHandler'. Stage method to execute after handler.")
+            let oldHandler = pauseListeningHandler
+            self.pauseListeningHandler = {
+                oldHandler()
+                self.pauseListeningForVoiceCommands(onPauseHandler: onPauseHandler)
+            }
+            
+            return
+        }
+        
         if !self.pausedListeningForCommands {
             self.pausedListeningForCommands = true
         }
@@ -869,6 +905,27 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     func stopListeningForVoiceCommands(onStopHandler: (() -> Void)? = nil) {
         print("===== Speech Recognition Engine: Stopping Listening For Voice Commands =====")
         
+        // If we're waiting for another session to wrap up, stage this one.
+        if let stopListeningHandler = self.stopListeningHandler {
+            print("\t[NOTE] Encountered existing 'stopListeningHandler'. Stage method to execute after handler.")
+            let oldHandler = stopListeningHandler
+            self.stopListeningHandler = {
+                oldHandler()
+                self.stopListeningForVoiceCommands(onStopHandler: onStopHandler)
+            }
+            
+            return
+        } else if let pauseListeningHandler = self.pauseListeningHandler {
+            print("\t[NOTE] Encountered existing 'pauseListeningHandler'. Stage method to execute after handler.")
+            let oldHandler = pauseListeningHandler
+            self.pauseListeningHandler = {
+                oldHandler()
+                self.stopListeningForVoiceCommands(onStopHandler: onStopHandler)
+            }
+            
+            return
+        }
+        
         self.handleStopListening(type: .VOICE_COMMAND, onStopHandler: onStopHandler)
         
         if self.isListeningForCommands {
@@ -877,7 +934,28 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     }
     
     func startListeningForSpeech(onStartHandler: (() -> Void)? = nil) {
-        print("===== Speech Recognition Engine: Starting Listening for Speech =====")
+        print("===== Speech Recognition Engine: Start Listening for Speech =====")
+        
+        // If we're waiting for another session to wrap up, stage this one.
+        if let stopListeningHandler = self.stopListeningHandler {
+            print("\t[NOTE] Encountered existing 'stopListeningHandler'. Stage method to execute after handler.")
+            let oldHandler = stopListeningHandler
+            self.stopListeningHandler = {
+                oldHandler()
+                self.startListeningForSpeech(onStartHandler: onStartHandler)
+            }
+            
+            return
+        } else if let pauseListeningHandler = self.pauseListeningHandler {
+            print("\t[NOTE] Encountered existing 'pauseListeningHandler'. Stage method to execute after handler.")
+            let oldHandler = pauseListeningHandler
+            self.pauseListeningHandler = {
+                oldHandler()
+                self.startListeningForSpeech(onStartHandler: onStartHandler)
+            }
+            
+            return
+        }
 
         // Make sure we're not listening for voice commands or speech already
         if self.isListeningForCommands {
@@ -920,8 +998,38 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     func pauseListeningForSpeech(
         userInitiated: Bool = false,
         preventListeningForCommands: Bool = false,
-        onPauseHandler: (() -> Void)? = nil) {
+        onPauseHandler: (() -> Void)? = nil
+    ) {
         print("===== Speech Recognition Engine: Pause Listening For Speech =====")
+        
+        // If we're waiting for another session to wrap up, stage this one.
+        if let stopListeningHandler = self.stopListeningHandler {
+            print("\t[NOTE] Encountered existing 'stopListeningHandler'. Stage method to execute after handler.")
+            let oldHandler = stopListeningHandler
+            self.stopListeningHandler = {
+                oldHandler()
+                self.pauseListeningForSpeech(
+                    userInitiated: userInitiated,
+                    preventListeningForCommands: preventListeningForCommands,
+                    onPauseHandler: onPauseHandler
+                )
+            }
+            
+            return
+        } else if let pauseListeningHandler = self.pauseListeningHandler {
+            print("\t[NOTE] Encountered existing 'pauseListeningHandler'. Stage method to execute after handler.")
+            let oldHandler = pauseListeningHandler
+            self.pauseListeningHandler = {
+                oldHandler()
+                self.pauseListeningForSpeech(
+                    userInitiated: userInitiated,
+                    preventListeningForCommands: preventListeningForCommands,
+                    onPauseHandler: onPauseHandler
+                )
+            }
+            
+            return
+        }
         
         if !self.pausedListeningForSpeech {
             self.pausedListeningForSpeech = true
@@ -939,8 +1047,29 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     }
     
     // make sure onStophandler is not also wrapped in DispatchQueue.main.async
-    func stopListeningForSpeech(pause: Bool = false, onStopHandler: (() -> Void)? = nil) {
+    func stopListeningForSpeech(onStopHandler: (() -> Void)? = nil) {
         print("===== Speech Recognition Engine: Stop Listening For Speech =====")
+        
+        // If we're waiting for another session to wrap up, stage this one.
+        if let stopListeningHandler = self.stopListeningHandler {
+            print("\t[NOTE] Encountered existing 'stopListeningHandler'. Stage method to execute after handler.")
+            let oldHandler = stopListeningHandler
+            self.stopListeningHandler = {
+                oldHandler()
+                self.stopListeningForSpeech(onStopHandler: onStopHandler)
+            }
+            
+            return
+        } else if let pauseListeningHandler = self.pauseListeningHandler {
+            print("\t[NOTE] Encountered existing 'pauseListeningHandler'. Stage method to execute after handler.")
+            let oldHandler = pauseListeningHandler
+            self.pauseListeningHandler = {
+                oldHandler()
+                self.stopListeningForSpeech(onStopHandler: onStopHandler)
+            }
+            
+            return
+        }
         
         self.listeningTimer?.invalidate()
         self.listeningTimer = nil
@@ -1162,13 +1291,12 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 print("\tNew Volume: ", outputVolume)
             }
         } else if keyPath == "hasSelection" {
-            print("\tKeyPath: hasSelection")
             if let newHasSelection = change?[.newKey] as? Bool, let oldHasSelection = change?[.oldKey] as? Bool, newHasSelection && !oldHasSelection && self.isListeningForSpeech {
+                print("\tKeyPath: hasSelection")
                 print("\tSelection established.")
-
                 // We show command bar when successfully paused listening for speech
                 // stop listening for speech, start listening for commands
-                if  self.isListeningForSpeech && !self.pausedListeningForSpeech {
+                if  self.isListeningForSpeech {
                     print("\tPause speech and start listening for commands.")
                     self.pauseListeningForSpeech()
                 }
@@ -1176,10 +1304,11 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
 //                    self.startListeningForVoiceCommands()
 //                }
             } else if let newHasSelection = change?[.newKey] as? Bool, let oldHasSelection = change?[.oldKey] as? Bool, !newHasSelection && oldHasSelection && self.isListeningForSpeech && self.isListeningForCommands && !self.speechPlayer.isPlayingNote && !self.speechSynthesis.isPlayingEcho && !self.speechSynthesis.isPlayingPassiveEcho {
+                print("\tKeyPath: hasSelection")
                 print("\tSelection removed.")
                 // start listening for speech again
-                if self.pausedListeningForSpeech {
-                    print("\tResume listening for comands.")
+                if self.pausedListeningForSpeech && !self.selectionCursor.isUpdatingSelection {
+                    print("\tResume listening for commands.")
                     self.startListeningForSpeech()
                 }
                 
@@ -1257,7 +1386,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             self.speechSynthesis.stopEcho(withFeedback: false)
         }
         
-        if self.speechPlayer.isPlayingNote && !self.speechPlayer.pausedPlayingNote {
+        if self.speechPlayer.isPlayingNote && !self.speechPlayer.pausedPlayingNote && !self.selectionCursor.hasSelection {
             // stop active playback
             self.speechPlayer.stop(withFeedback: false)
         }
@@ -1299,6 +1428,17 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 self.audioEngine.stop()
             }
             
+            // We must call this before we begin the SFSpeechAudioBufferRecognitionRequest
+            // so that the recording we create aligns in time with the speech recognition
+            // transcript
+            if type == .SPEECH {
+                NotificationCenter.default.post(
+                    name: SpeechRecognitionEngine.onRequestPrepareAudioFile,
+                    object: nil,
+                    userInfo: [:]
+                )
+            }
+            
             let node = self.audioEngine.inputNode
             let recordingFormat = node.outputFormat(forBus: self.recordBus)
             print("===== Recording Info ===== \n\tSoftware Format: \(recordingFormat.sampleRate)\n\tHardware Format: \(AVAudioSession.sharedInstance().sampleRate) \n\tInput Latency: \(self.session.inputLatency.rounded(toPlaces: 5)) \n\tOutput Latency: \(self.session.outputLatency.rounded(toPlaces: 5)) \n\tIOBufferDuration: \(self.session.ioBufferDuration.rounded(toPlaces: 5))")
@@ -1319,13 +1459,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             
             // Tap into microphone bus to receive and process audio input buffers
             node.installTap(onBus: self.recordBus, bufferSize: 1024, format: recordingFormat) { [unowned self] (buffer, _) in
-                // Broadcast buffer item
-                NotificationCenter.default.post(
-                    name: SpeechRecognitionEngine.onBufferItem,
-                    object: nil,
-                    userInfo: [ "buffer" : buffer ]
-                )
-                
                 // Capture buffer
                 self.request!.append(buffer)
 
@@ -1374,6 +1507,13 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                         userInfo: [ "power" : soundIntensityDatum]
                     )
                 }
+                
+                // Broadcast buffer item
+                NotificationCenter.default.post(
+                    name: SpeechRecognitionEngine.onBufferItem,
+                    object: nil,
+                    userInfo: [ "buffer" : buffer ]
+                )
             }
             
             // Prepare and start audio engine
@@ -1449,6 +1589,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 // which prevents us from receiving the final transcription.
                 recognitionTask.finish() // don't wrap in if statement because it is sometimes not .running
                 self.request!.endAudio() // don't add a request = nil because it results in request not being there sometimes.
+                
                 let isListening = executeListening()
                 
                 switch (type) {
@@ -1478,16 +1619,16 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         let node = self.audioEngine.inputNode
         node.removeTap(onBus: self.recordBus)
         
-        let executePause = { [weak self] in
-            self?.audioEngine.stop() // Things get message when we use self.audioEngine.pause(). Affects ability to listen again afterwards
+        let executePause = {
+            self.audioEngine.stop() // Things get message when we use self.audioEngine.pause(). Affects ability to listen again afterwards
             // When this is not in the main thread, the recognition task doesn't end correctly
             // which prevents us from receiving the final transcription.
-            self?.recognitionTask?.finish() // don't wrap in if statement because it is sometimes not .running
-            self?.request?.endAudio() // don't add a request = nil because it results in request not being there sometimes.
+            self.recognitionTask?.finish() // don't wrap in if statement because it is sometimes not .running
+            self.request?.endAudio() // don't add a request = nil because it results in request not being there sometimes.
             
             // We instantiate new audio engine in case headphones have been added or removed
             // Removing an audio node will create a broken graph: https://developer.apple.com/documentation/avfoundation/avaudioengine
-            self?.audioEngine = AVAudioEngine()
+            self.audioEngine = AVAudioEngine()
         }
         
         let handleBroadcast = {
@@ -1523,19 +1664,19 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 
                 self.pauseListeningHandler = pauseListeningHandler
             } else {
-                let pauseListeningHandler = { [weak self] in
+                let pauseListeningHandler = {
                     onPauseHandler?()
                     handleBroadcast()
-                    self?.checkRep()
+                    self.checkRep()
                 }
                 
                 self.pauseListeningHandler = pauseListeningHandler
             }
         } else {
-            let pauseListeningHandler = { [weak self] in
+            let pauseListeningHandler = {
                 onPauseHandler?()
                 handleBroadcast()
-                self?.checkRep()
+                self.checkRep()
             }
             
             self.pauseListeningHandler = pauseListeningHandler
@@ -1714,6 +1855,55 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         return
     }
     
+    func handleWakePhraseDetected() {
+        print("===== Speech Recognition Engine: Handle Wake Phrase Detected =====")
+        self.stopListeningForWakePhrase() {
+            // Play Sound
+            // We delay so that it can be heard
+            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                soundEngine.correctWakePhrase()
+            }
+            
+            if self.state.withPunctuationSuggestions {
+                print("\tInvalidate punctuation suggestion timers...")
+                self.sentenceSuggestionTimer?.invalidate()
+                self.paragraphSuggestionTimer?.invalidate()
+            }
+            
+            self.earlyValidVoiceCommandDetection = false
+            
+            // Give haptic feedback
+            hapticEngine.success()
+            
+            // start listening for voice commands
+            self.startListeningForVoiceCommands()
+            
+            NotificationCenter.default.post(
+                name: SpeechRecognitionEngine.onWakePhraseDetected,
+                object: nil,
+                userInfo: [:]
+            )
+        }
+    }
+    
+    func handleWakePhraseError(text: String, transcription: SFTranscription) {
+        print("===== Speech Recognition Engine: Handle Wake Phrase Error =====")
+        // Play Sound
+        soundEngine.incorrectWakePhrase()
+        
+        // Give haptic feedback
+        hapticEngine.error()
+        
+        NotificationCenter.default.post(
+            name: SpeechRecognitionEngine.onIncorrectWakePhrase,
+            object: nil,
+            userInfo: [
+                "utterance": text,
+                "transcription": transcription
+            ]
+        )
+    }
+    
     func handleDetectValidVoiceCommand(
         voiceCommandType: String,
         transcription: SFTranscription,
@@ -1775,7 +1965,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 voiceCommandEngine.process(
                     command: voiceCommandType,
                     utterance: transcription.formattedString
-                ) {
+                ) { [weak self] in
                     if voiceCommandType != "pause note" &&
                         voiceCommandType != "create note" &&
                         voiceCommandType != "open selection" &&
@@ -1795,23 +1985,28 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                         !isUpdatingSelection &&
                         !hasSelection &&
                         !voiceCommandEngine.isUIManagerCommand(command: voiceCommandType) &&
-                        self.pausedListeningForSpeech
+                        self!.pausedListeningForSpeech
                     {
                         // Start listening for speech again if paused
                         // It won't be paused if the processed voice command was 'stop note'
-                        self.startListeningForSpeech() {
-                            if let note = self.noteManager.currentNote, self.isListeningForSpeech {
-                                note.handleOnSpeechUpdate(text: note.getText())
-                            } else {
-                                NotificationCenter.default.post(
-                                    name: Note.onRequestToUpdateView,
-                                    object: nil,
-                                    userInfo: [:]
-                                )
+                        if !self!.selectionCursor.hasSelection {
+                            self?.startListeningForSpeech() { [weak self] in
+                                if let note = self!.noteManager.currentNote, self!.isListeningForSpeech {
+                                    note.handleOnSpeechUpdate(text: note.getText())
+                                } else {
+                                    NotificationCenter.default.post(
+                                        name: Note.onRequestToUpdateView,
+                                        object: nil,
+                                        userInfo: [:]
+                                    )
+                                }
                             }
                         }
                     } else {
-                        if let note = self.noteManager.currentNote, self.isListeningForSpeech && !self.selectionCursor.isUpdatingSelection {
+                        if let note = self?.noteManager.currentNote,
+                           self!.isListeningForSpeech &&
+                            !self!.selectionCursor.isUpdatingSelection
+                        {
                             note.handleOnSpeechUpdate(text: note.getText())
                         } else {
                             NotificationCenter.default.post(
@@ -1932,12 +2127,12 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         print("===== Speech Recognition Engine: didFinishSuccessfully =====")
         if let pauseListeningHandler = self.pauseListeningHandler {
             print("\tExecute paused listening handler...")
-            pauseListeningHandler()
             self.pauseListeningHandler = nil
+            pauseListeningHandler()
         } else if let stopListeningHandler = self.stopListeningHandler {
             print("\tExecute stop listening handler...")
-            stopListeningHandler()
             self.stopListeningHandler = nil
+            stopListeningHandler()
         }
     }
     

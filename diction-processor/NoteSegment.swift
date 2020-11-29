@@ -448,10 +448,6 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
         withSpacePrefix: Bool = false,
         forEcho: Bool = false
     ) -> String {
-        guard let note = self.note else {
-            fatalError("===== [Error] Segment is not associated with a note =====")
-        }
-        
         var argumentArr: [String] = []
         if withTemporalSuggestions {
             argumentArr.append("withTemporalSuggestions")
@@ -489,7 +485,7 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
         var previousWordIsSentenceTerminator = false
         var previousWordIsValidLastSentenceWord = false
         var i = 1
-        if self.isCommitted() && self.index > 0 && note.noteSegments.count > self.index {
+        if let note = self.note, self.isCommitted() && self.index > 0 && note.noteSegments.count > self.index {
             while self.index - i >= 0 {
                 let segments = self.isCommitted() ? note.noteSegments : note.noteBuffer
                 let previousSegment = segments[self.index - i]
@@ -525,7 +521,7 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
         var nextSegmentIsSentenceTerminator = false // If next segment is a sentence terminator, we won't have a comma
         var j = 1
         var existsWordsAfterVoiceCommandAndDeleted = false // If there are no words after the voice command, we want to have a sentence terminator
-        if self.isCommitted() && self.index + 1 < note.noteSegments.count  {
+        if let note = self.note, self.isCommitted() && self.index + 1 < note.noteSegments.count  {
             let nextSegment = note.noteSegments[self.index + 1]
             nextWordIsConjunction = nextSegment.getLexicalClass() == .conjunction
             nextSegmentIsPunctuation = nextSegment.isPunctuation()
@@ -1062,7 +1058,9 @@ class NoteSegment: AVCompositionTrackSegment, NSCoding {
         duplicateSegment.setIsDeleted(isDeleted: self.deleted)
         
         // Set Note
-        duplicateSegment.setNote(note: newNote != nil ? newNote! : self.note!)
+        if self.note != nil || newNote != nil {
+            duplicateSegment.setNote(note: newNote != nil ? newNote! : self.note!)
+        }
         
         // Set segment index
         duplicateSegment.setIndex(index: self.index)

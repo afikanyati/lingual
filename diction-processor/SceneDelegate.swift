@@ -37,6 +37,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             notifications: notifications
         )
         speechPlayer.speechSynthesis = speechSynthesis
+        uiManager.speechSynthesis = speechSynthesis
         let speechRecognition = SpeechRecognitionEngine(
             state: state,
             notifications: notifications,

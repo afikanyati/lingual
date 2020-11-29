@@ -63,7 +63,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         {
             return CMTimeRangeFromTimeToTime(
                 start: anchor.timeMapping.target.start,
-                end: focus.timeMapping.target.start
+                end: focus.timeMapping.target.end
             )
         } else if
                let anchor = self.anchor,
@@ -72,7 +72,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         {
             return CMTimeRangeFromTimeToTime(
                 start: focus.timeMapping.target.start,
-                end: anchor.timeMapping.target.start
+                end: anchor.timeMapping.target.end
             )
         }
         
@@ -126,13 +126,19 @@ class SelectionCursor: NSObject, UITextViewDelegate {
            let focus = self.focus,
             self.direction == .backwards
         {
-            return note.getText(from: focus.timeMapping.target.start, until: anchor.timeMapping.target.end)
+            return note.getText(
+                from: focus.timeMapping.target.start,
+                until: anchor.timeMapping.target.end
+            )
         } else if let note = self.noteManager.currentNote,
             let anchor = self.anchor,
             let focus = self.focus,
             self.direction == .forwards
         {
-            return note.getText(from: anchor.timeMapping.target.start, until: focus.timeMapping.target.end)
+            return note.getText(
+                from: anchor.timeMapping.target.start,
+                until: focus.timeMapping.target.end
+            )
         }
         
         return nil
@@ -375,12 +381,12 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         print("===== Selection Cursor: Collapse =====")
         if toAnchorSegment {
             self.willChangeValue(forKey: "focusCaret")
-            self.focusCaret = Caret(index: anchorCaret!.index, trackType: anchorCaret!.trackType)
+            self.focusCaret = anchorCaret?.duplicate()
             self.didChangeValue(forKey: "focusCaret")
             
         } else {
             self.willChangeValue(forKey: "anchorCaret")
-            self.anchorCaret = Caret(index: focusCaret!.index, trackType: focusCaret!.trackType)
+            self.anchorCaret = focusCaret?.duplicate()
             self.didChangeValue(forKey: "anchorCaret")
         }
         
@@ -417,13 +423,13 @@ class SelectionCursor: NSObject, UITextViewDelegate {
 
         // set new selection
         print("\tSetting carets...")
-        self.setAnchorCaret(caret: Caret(index: caret.index, trackType: caret.trackType))
+        self.setAnchorCaret(caret: caret.duplicate())
         self.setFocusCaret()
         
         // Used when we want to insert a buffer into the committed segments
         // allows us to determine segment of interest
         if cache && !self.isAtEndOfTextView {
-            self.setCachedAnchorCaret(caret: Caret(index: caret.index, trackType: caret.trackType))
+            self.setCachedAnchorCaret(caret: caret.duplicate())
         } else if self.isAtEndOfTextView {
             self.setCachedAnchorCaret()
         }
@@ -447,10 +453,10 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         
         var noteSegments: [NoteSegment]
         var oldAnchorIndex = Int(Utils.UNKNOWN)
-        if let anchorCaret = self.anchorCaret {
+        if let cachedAnchorCaret = self.cachedAnchorCaret {
             // insert buffer at the correct place based on cursor position
             noteSegments = note.noteSegments
-            oldAnchorIndex = anchorCaret.index
+            oldAnchorIndex = cachedAnchorCaret.index
             if oldAnchorIndex != Int(Utils.UNKNOWN) {
                 noteSegments.insert(contentsOf: note.noteBuffer, at: oldAnchorIndex)
             } else {
@@ -469,28 +475,53 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         )
         
         if let index = index {
-            print("\tSetting carets...")
-            let anchor = noteSegments[index]
-            let trackType: NoteTrackType = anchor.isCommitted() ? .buffer : .committed
-            var newAnchorIndex: Int
-            if trackType == .committed {
-                // Get index relative to committed segments
-                newAnchorIndex = anchor.getIndex()
+            // Setting carets...
+            var trackType: NoteTrackType?
+            var newAnchorIndex: Int?
+            if let cachedAnchorCaret = self.cachedAnchorCaret {
+                // Cached Anchor Caret exists. Seek for track type and index by dividing segments array into three sections
+                if index < cachedAnchorCaret.index {
+                    // Index is before location where buffer was inserted...
+                    trackType = .committed
+                    newAnchorIndex = index
+                } else if index >= cachedAnchorCaret.index && index < cachedAnchorCaret.index + note.noteBuffer.count
+                {
+                    // Index is in buffer...
+                    trackType = .buffer
+                    newAnchorIndex = index - cachedAnchorCaret.index
+                } else if index >= cachedAnchorCaret.index + note.noteBuffer.count {
+                    // Index is after buffer...
+                    trackType = .committed
+                    newAnchorIndex = index - note.noteBuffer.count
+                }
             } else {
-                // Get index relative to buffer segments
-                // The old anchor index should be the start of the buffer
-                //
-                // If old anchor index is Utils.UNKNOWN then buffer is at end of note
-                newAnchorIndex = oldAnchorIndex != Int(Utils.UNKNOWN) ? index - oldAnchorIndex : index - note.noteSegments.count
+                // Cached Anchor Caret doesn't exist. Seek for track type and index by dividing segments array into two sections...
+                if index >= note.noteSegments.count {
+                    // Index is in buffer...
+                    trackType = .buffer
+                    newAnchorIndex = index - note.noteSegments.count
+                } else {
+                    // Index is committed segment (before buffer)...
+                    trackType = .committed
+                    newAnchorIndex = index
+                }
             }
             
-            // we know this is an active word because Utils.getIndexAtTextPosition only returns active words
-            self.setAnchorCaret(caret: Caret(index: newAnchorIndex, trackType: trackType))
-            self.setFocusCaret()
+            if let newAnchorIndex = newAnchorIndex, let trackType = trackType {
+                // Setting anchor caret...
+                // we know this is an active word because Utils.getIndexAtTextPosition only returns active words
+                self.setAnchorCaret(caret: Caret(index: newAnchorIndex, trackType: trackType))
+                self.setFocusCaret()
+            }
             
             // Used when we want to insert a buffer into the committed segments
             // allows us to determine segment of interest
-            if cache && !self.isAtEndOfTextView {
+            if let newAnchorIndex = newAnchorIndex,
+               let trackType = trackType,
+               cache &&
+                !self.isAtEndOfTextView
+            {
+                // Update cached anchor index because we're not at the end of the text view...
                 self.setCachedAnchorCaret(caret: Caret(index: newAnchorIndex, trackType: trackType))
             } else if self.isAtEndOfTextView {
                 self.setCachedAnchorCaret()
@@ -864,7 +895,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         }
     }
     
-    func deleteSelection(isCommit: Bool = false, handler: (() -> Void)? = nil) {
+    func deleteSelection(withFeedback: Bool = true, isCommit: Bool = false, handler: (() -> Void)? = nil) {
         print("===== Selection Cursor: Delete Selection =====")
         // prevent illegal deletions
         guard let note = self.noteManager.currentNote, let selectionTimeRange = self.selectionTimeRange else {
@@ -876,7 +907,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             // stop playback
             print("\tStop playing selection...")
             self.stopPlayingSelection()
-
+            
             // remove focus
             print("\tRemove focus...")
             self.setFocusCaret() // So that we don't update it with a new focus
@@ -887,29 +918,34 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             {
                 print("\tCursor not at end of text view; update cached anchor...")
                 
-                let newCachedAnchorIndex = Utils.getSegmentIndex(
+                let newAnchorIndex = Utils.getSegmentIndex(
                     segment: anchor,
                     segments: note.noteSegments,
                     type: .previous,
                     isWord: true,
                     isCommitted: true
                 )
+
+                if let newAnchorIndex = newAnchorIndex {
+                    print("\tSetting new anchor with index: ", newAnchorIndex)
+                    self.setAnchorCaret(caret: Caret(index: newAnchorIndex, trackType: .committed))
+                }
                 
-                if let newCachedAnchorIndex = newCachedAnchorIndex {
-                    let cachedAnchor = self.getSegment(caret: Caret(index: newCachedAnchorIndex, trackType: .committed))
-                    print("\tNew cached anchor found: \(cachedAnchor?.getText() ?? "nil")")
-                    self.setCachedAnchorCaret(caret: Caret(index: newCachedAnchorIndex, trackType: .committed))
+                if let newAnchorIndex = newAnchorIndex, !self.isAtEndOfTextView {
+                    print("\tSetting new cached anchor with index: ", newAnchorIndex)
+                    self.setCachedAnchorCaret(caret: Caret(index: newAnchorIndex, trackType: .committed))
                 } else {
-                    print("\t[Error] New cached anchor not found...")
+                    print("\t[Error] New anchor not found...")
                     self.setCachedAnchorCaret()
                 }
             } else {
-                print("\tCursor at end of text view. Clear any cached anchor")
+                print("\tCursor at end of text view. Clear any anchors")
+                self.setAnchorCaret()
                 self.setCachedAnchorCaret()
             }
             
             // remove passage
-            print("\tRemove selection")
+            print("\tRemove selection with time range: start =\(selectionTimeRange.start.seconds), duration =\(selectionTimeRange.duration.seconds)")
             note.removePassage(range: selectionTimeRange)
             
             // move cursor
@@ -918,14 +954,14 @@ class SelectionCursor: NSObject, UITextViewDelegate {
                 self.moveCursor(caret: cachedAnchorCaret)
             }
             
-            if isCommit {
+            if isCommit && withFeedback {
                 // Present Feedback
                 self.notifications.executeFeedback(
                     visualMessage: "Delete Commit",
                     audioMessage: "commit deleted",
                     withHaptics: true
                 )
-            } else {
+            } else if withFeedback {
                 // Present Feedback
                 self.notifications.executeFeedback(
                     visualMessage: "Delete Selection",
@@ -1013,7 +1049,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             // clear update segments
             self.updateSegments = nil
             
-            // turn off prompting for selection acceptance flag
+            // IMPORTANT: turn off prompting for selection acceptance flag
             self.isPromptingForUpdateAcceptance = false
 
             // play to hear difference
@@ -1116,7 +1152,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
     }
     
     func acceptUpdateSelection(handler: (() -> Void)? = nil) {
-        print("===== Selection Cursor Commit: Accept Update Selection =====")
+        print("===== Selection Cursor: Accept Update Selection =====")
 
         // prevent illegal updating
         guard let note = self.noteManager.currentNote, let selectionTimeRange = self.selectionTimeRange, let updateSegments = self.updateSegments else { return }
@@ -1128,58 +1164,84 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         }
         
         // Update to new anchor
-        let firstSegment = segments.first
-        var anchorIndex: Int? = nil
-        if let segment = firstSegment, !firstSegment!.isActive() {
-            anchorIndex = Utils.getSegmentIndex(
-                segment: segment,
-                segments: segments,
-                type: .next,
-                isWord: true
-            )
-        }
-        
-        if let anchorIndex = anchorIndex {
-            let index = self.anchorCaret != nil ? self.anchorCaret!.index + anchorIndex : note.noteSegments.count + anchorIndex
-            self.setAnchorCaret(caret: Caret(index: index, trackType: .committed), broadcastChange: false)
-        }
-        
-
-        // Update to new focus
         let lastSegment = segments.last
-        var focusIndex: Int? = nil
+        var newAnchorIndex: Int? = nil
         if let _ = lastSegment, !lastSegment!.isActive() {
             let (_, index) = Utils.getNoteNthLastSegmentIndex(
                 segments: segments,
                 selectionCursor: self,
                 n: 0
             )
-            focusIndex = index
+            newAnchorIndex = index
+        } else if let _ = lastSegment, lastSegment!.isActive() {
+            newAnchorIndex = segments.count - 1
         }
         
-        if let focusIndex = focusIndex {
-            let index = self.anchorCaret != nil ?
-                self.anchorCaret!.index + focusIndex
-                :
-                note.noteSegments.count + focusIndex
-            self.setFocusCaret(caret: Caret(index: index, trackType: .committed), broadcastChange: false)
+        var anchorIndex: Int?
+        var cachedAnchorIndex: Int?
+        if let index = newAnchorIndex, let cachedAnchorCaret = self.cachedAnchorCaret {
+            print("\tCached Anchor and Anchor exist...")
+            print("\tUpdate anchor and cached anchor to be first segment in updated segments")
+            anchorIndex = cachedAnchorCaret.index + index
+            cachedAnchorIndex = cachedAnchorCaret.index + index
+        } else if let index = newAnchorIndex, let anchorCaret = self.anchorCaret {
+            print("\tOnly Anchor exists...")
+            print("\tUpdate anchor to be first segment in updated segments")
+            anchorIndex = anchorCaret.index + index
+        } else {
+            print("\tNeither anchor nor cached anchor exist")
+            print("\tDo nothing.")
         }
         
-        // Update to new cached anchor
-        if let _ = self.cachedAnchorCaret, let anchorIndex = anchorIndex {
-            let index = self.anchorCaret != nil ?
-                self.anchorCaret!.index + anchorIndex
-                :
-                note.noteSegments.count + anchorIndex
-            self.setCachedAnchorCaret(caret: Caret(index: index, trackType: .committed))
+        // Update to new focus
+        let firstSegment = segments.first
+        var newFocusIndex: Int? = nil
+        if let segment = firstSegment, !firstSegment!.isActive() {
+            newFocusIndex = Utils.getSegmentIndex(
+                segment: segment,
+                segments: segments,
+                type: .next,
+                isWord: true
+            )
+        } else if let _ = firstSegment, firstSegment!.isActive() {
+            newFocusIndex = 0
         }
-
+        
+        var focusIndex: Int?
+        if let index = newFocusIndex, let anchorCaret = self.anchorCaret {
+            print("\tUpdate focus to be last segment in updated segments")
+            focusIndex = anchorCaret.index + index
+        } else {
+            print("\tFocus or anchor does not exist.")
+            print("\tDo nothing.")
+        }
+        
         // Update Selection
         note.updatePassage(
             segments: segments,
             range: selectionTimeRange
         )
         
+        if let anchorIndex = anchorIndex,
+           let focusIndex = focusIndex {
+            print("\tSetting new selection: \(anchorIndex)...\(focusIndex)")
+            self.setSelection(
+                anchorCaret: Caret(index: anchorIndex, trackType: .committed),
+                focusCaret: Caret(index: focusIndex, trackType: .committed)
+            )
+        } else if let index = anchorIndex {
+            print("\tSetting new anchor: ", index)
+            self.setAnchorCaret(caret: Caret(index: index, trackType: .committed))
+        } else if let index = focusIndex {
+            print("\tSetting new focus: ", index)
+            self.setFocusCaret(caret: Caret(index: index, trackType: .committed))
+        }
+        
+        if let index = cachedAnchorIndex {
+            print("\tSetting new cached anchor: ", index)
+            self.setCachedAnchorCaret(caret: Caret(index: index, trackType: .committed))
+        }
+    
         // Clear accumulated buffer
         note.clearBuffer()
         
@@ -1287,7 +1349,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         }
     }
     
-    func copySelection() {
+    func copySelection(withFeedback: Bool = true) {
         print("===== Selection Cursor: Copy Selection =====")
 
         if let selectionSegments = self.selectionSegments {
@@ -1298,12 +1360,14 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             self.clipboard = duplicateSegments
         }
         
-        // Present Feedback
-        self.notifications.executeFeedback(
-            visualMessage: "Copy Selection",
-            audioMessage: "selection copied",
-            withHaptics: true
-        )
+        if withFeedback {
+            // Present Feedback
+            self.notifications.executeFeedback(
+                visualMessage: "Copy Selection",
+                audioMessage: "selection copied",
+                withHaptics: true
+            )
+        }
         
         // Notify Observers of Clipboard Change
         NotificationCenter.default.post(
@@ -1315,13 +1379,13 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         checkRep()
     }
     
-    func cutSelection() {
+    func cutSelection(handler: (() -> Void)? = nil) {
         print("===== Selection Cursor: Cut Selection =====")
         // copy selection
-        self.copySelection()
+        self.copySelection(withFeedback: false)
         
         // delete selection
-        self.deleteSelection()
+        self.deleteSelection(withFeedback: false)
         
         // Present Feedback
         self.notifications.executeFeedback(
@@ -1329,12 +1393,14 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             audioMessage: "selection cut",
             withHaptics: true
         )
+        
+        handler?()
 
         // play to hear difference
         checkRep()
     }
 
-    func pasteClipboard() {
+    func pasteClipboard(handler: (() -> Void)? = nil) {
         print("===== Selection Cursor: Paste Clipboard =====")
         if let note = self.noteManager.currentNote,
            let anchor = self.anchor,
@@ -1344,34 +1410,32 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             var pastedSegments = [NoteSegment]()
             for segment in clipboard {
                 let duplicateSegment = segment.duplicate(withNewUID: true)
+                duplicateSegment.setNote(note: note)
                 pastedSegments.append(duplicateSegment)
             }
 
             // Update to new anchor
-            let lastSegment = pastedSegments.last
-            var newIndex: Int?
-            if let _ = lastSegment, !lastSegment!.isActive() {
-                let (_, index) = Utils.getNoteNthLastSegmentIndex(
-                    segments: pastedSegments,
-                    selectionCursor: self,
-                    n: 0
-                )
-                
-                newIndex = index
-            }
+            let (_, newIndex) = Utils.getNoteNthLastSegmentIndex(
+                segments: note.noteSegments,
+                // we treat the pasted segments as a 'buffer' to compute cursor position
+                bufferSegments: pastedSegments,
+                fromBuffer: true,
+                selectionCursor: self,
+                n: 0
+            )
             
-            guard let relativeIndex = newIndex, pastedSegments[relativeIndex].isCommitted() else {
-                print("\t[Error] new anchor must be committed.")
-                return
-            }
-            
-            let index = anchorCaret!.index + relativeIndex
-            
-            self.setAnchorCaret(caret: Caret(index: index, trackType: .committed))
-            
-            // Update to new cached anchor
-            if let _ = self.cachedAnchorCaret {
-                self.setCachedAnchorCaret(caret: Caret(index: index, trackType: .committed))
+            var anchorIndex: Int?
+            if let index = newIndex, let cachedAnchorCaret = self.cachedAnchorCaret {
+                print("\tCached Anchor and Anchor exist...")
+                print("\tUpdate anchor and cached anchor to be last segment in pasted segments")
+                anchorIndex = cachedAnchorCaret.index + index + 1
+            } else if let index = newIndex, let anchorCaret = self.anchorCaret {
+                print("\tOnly Anchor exists...")
+                print("\tUpdate anchor to be last segment in pasted segments")
+                anchorIndex = anchorCaret.index + index + 1
+            } else {
+                print("\tNeither anchor nor cached anchor exist")
+                print("\tDo nothing.")
             }
             
             // Insert selection into note
@@ -1380,12 +1444,23 @@ class SelectionCursor: NSObject, UITextViewDelegate {
                 at: anchor.timeMapping.target.end
             )
             
+            if let index = anchorIndex, let _ = self.cachedAnchorCaret {
+                print("\tSetting new anchor and cached anchor: ", index)
+                self.setAnchorCaret(caret: Caret(index: index, trackType: .committed))
+                self.setCachedAnchorCaret(caret: Caret(index: index, trackType: .committed))
+            } else if let index = anchorIndex, let _ = self.anchorCaret {
+                print("\tSetting new anchor: ", index)
+                self.setAnchorCaret(caret: Caret(index: index, trackType: .committed))
+            }
+            
             // Present Feedback
             self.notifications.executeFeedback(
                 visualMessage: "Pasted!",
                 audioMessage: "clipboard pasted",
                 withHaptics: true
             )
+            
+            handler?()
         } else if self.clipboard == nil || self.clipboard!.count == 0 {
             self.notifications.executeError(
                 text: "Clipboard is empty."
@@ -1500,33 +1575,83 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         )
         
         if selectionIndices.count > 0 {
-            // Update to new anchor
+            // Setting carets...
+            
+            // Update anchor
             let anchorIndex = selectionIndices.first!
-            let anchor = noteSegments[anchorIndex]
-            let anchorTrackType: NoteTrackType = anchor.isCommitted() ? .buffer : .committed
-            var newAnchorIndex: Int
-            if anchorTrackType == .committed {
-                // Get index relative to committed segments
-                newAnchorIndex = anchor.getIndex()
+            var anchorTrackType: NoteTrackType?
+            var newAnchorIndex: Int?
+            if let cachedAnchorCaret = self.cachedAnchorCaret {
+                // Cached Anchor Caret exists. Seek for track type and index by dividing segments array into three sections
+                if anchorIndex < cachedAnchorCaret.index {
+                    // Index is before location where buffer was inserted...
+                    anchorTrackType = .committed
+                    newAnchorIndex = anchorIndex
+                } else if anchorIndex >= cachedAnchorCaret.index && anchorIndex < cachedAnchorCaret.index + note.noteBuffer.count
+                {
+                    // Index is in buffer...
+                    anchorTrackType = .buffer
+                    newAnchorIndex = anchorIndex - cachedAnchorCaret.index
+                } else if anchorIndex >= cachedAnchorCaret.index + note.noteBuffer.count {
+                    // Index is after buffer...
+                    anchorTrackType = .committed
+                    newAnchorIndex = anchorIndex - note.noteBuffer.count
+                }
             } else {
-                // Get index relative to buffer segments
-                newAnchorIndex = oldAnchorIndex != Int(Utils.UNKNOWN) ?
-                    anchorIndex - oldAnchorIndex
-                    :
-                    anchorIndex - note.noteSegments.count
+                // Cached Anchor Caret doesn't exist. Seek for track type and index by dividing segments array into two sections...
+                if anchorIndex >= note.noteSegments.count {
+                    // Index is in buffer...
+                    anchorTrackType = .buffer
+                    newAnchorIndex = anchorIndex - note.noteSegments.count
+                } else {
+                    // Index is committed segment (before buffer)...
+                    anchorTrackType = .committed
+                    newAnchorIndex = anchorIndex
+                }
             }
             
-            // we know this is an active word because Utils.getIndicesInTextRange only returns active words
-            self.setAnchorCaret(caret: Caret(index: newAnchorIndex, trackType: anchorTrackType))
-
-            // Update to new focus
-            let focusIndex = selectionIndices.last!
-            let focus = noteSegments[focusIndex]
-            let focusTrackType: NoteTrackType = focus.isCommitted() ? .buffer : .committed
-            let newFocusIndex = newAnchorIndex + (selectionIndices.count - 1)
+            if let anchorTrackType = anchorTrackType, let newAnchorIndex = newAnchorIndex {
+                // we know this is an active word because Utils.getIndicesInTextRange only returns active words
+                self.setAnchorCaret(caret: Caret(index: newAnchorIndex, trackType: anchorTrackType))
+            }
             
-            // we know this is an active word because Utils.getIndicesInTextRange only returns active words
-            self.setFocusCaret(caret: Caret(index: newFocusIndex, trackType: focusTrackType))
+            // Update focus
+            let focusIndex = selectionIndices.last!
+            var focusTrackType: NoteTrackType?
+            var newFocusIndex: Int?
+            if let cachedAnchorCaret = self.cachedAnchorCaret {
+                // Cached Anchor Caret exists. Seek for track type and index by dividing segments array into three sections
+                if focusIndex < cachedAnchorCaret.index {
+                    // Index is before location where buffer was inserted...
+                    focusTrackType = .committed
+                    newFocusIndex = focusIndex
+                } else if focusIndex >= cachedAnchorCaret.index && focusIndex < cachedAnchorCaret.index + note.noteBuffer.count
+                {
+                    // Index is in buffer...
+                    focusTrackType = .buffer
+                    newFocusIndex = focusIndex - cachedAnchorCaret.index
+                } else if focusIndex >= cachedAnchorCaret.index + note.noteBuffer.count {
+                    // Index is after buffer...
+                    focusTrackType = .committed
+                    newFocusIndex = focusIndex - note.noteBuffer.count
+                }
+            } else {
+                // Cached Anchor Caret doesn't exist. Seek for track type and index by dividing segments array into two sections...
+                if focusIndex >= note.noteSegments.count {
+                    // Index is in buffer...
+                    focusTrackType = .buffer
+                    newFocusIndex = focusIndex - note.noteSegments.count
+                } else {
+                    // Index is committed segment (before buffer)...
+                    focusTrackType = .committed
+                    newFocusIndex = focusIndex
+                }
+            }
+            
+            if let focusTrackType = focusTrackType, let newFocusIndex = newFocusIndex {
+                // we know this is an active word because Utils.getIndicesInTextRange only returns active words
+                self.setFocusCaret(caret: Caret(index: newFocusIndex, trackType: focusTrackType))
+            }
         } else {
             print("===== [Error] There was a problem finding selection note segments =====")
         }
@@ -1669,7 +1794,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
     }
     
     func setAnchorCaret(caret: Caret? = nil, broadcastChange: Bool = true) {
-        print("===== Selection Cursor: Set Anchor =====")
+        print("===== Selection Cursor: Set Anchor Caret =====")
         print("\tnew: '\(caret != nil ? self.getSegment(caret: caret!)?.getText() ?? "nil" : "nil")'")
         print("\told: '\(self.anchorCaret != nil ? self.getSegment(caret: self.anchorCaret!)?.getText() ?? "nil" : "nil")'")
         if let caret = caret,
@@ -1679,10 +1804,10 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             print("\tNew anchor: \(segment.getText())")
             if broadcastChange {
                 self.willChangeValue(forKey: "anchorCaret")
-                self.anchorCaret = Caret(index: caret.index, trackType: caret.trackType)
+                self.anchorCaret = caret.duplicate()
                 self.didChangeValue(forKey: "anchorCaret")
             } else {
-                self.anchorCaret = Caret(index: caret.index, trackType: caret.trackType)
+                self.anchorCaret = caret.duplicate()
             }
         } else if let _ = self.anchorCaret, caret == nil {
             print("\tClear anchor.")
@@ -1709,7 +1834,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
     }
     
     func setFocusCaret(caret: Caret? = nil, broadcastChange: Bool = true) {
-        print("===== Selection Cursor: Set Focus =====")
+        print("===== Selection Cursor: Set Focus Caret =====")
         print("\tnew: '\(caret != nil ? self.getSegment(caret: caret!)?.getText() ?? "nil" : "nil")'")
         print("\told: '\(self.focusCaret != nil ? self.getSegment(caret: self.focusCaret!)?.getText() ?? "nil" : "nil")'")
         if let caret = caret,
@@ -1718,10 +1843,10 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             print("\tNew focus: \(segment.getText())")
             if broadcastChange {
                 self.willChangeValue(forKey: "focusCaret")
-                self.focusCaret = Caret(index: caret.index, trackType: caret.trackType)
+                self.focusCaret = caret.duplicate()
                 self.didChangeValue(forKey: "focusCaret")
             } else {
-                self.focusCaret = Caret(index: caret.index, trackType: caret.trackType)
+                self.focusCaret = caret.duplicate()
             }
         } else if let _ = self.focusCaret, caret == nil {
             print("\tClear focus.")
@@ -1752,7 +1877,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         print("===== Selection Cursor: Set Cached Anchor =====")
         if let caret = caret {
             print("\tSet cached anchor: '\(self.getSegment(caret: caret)?.getText() ?? "nil")'")
-            self.cachedAnchorCaret = Caret(index: caret.index, trackType: caret.trackType)
+            self.cachedAnchorCaret = caret.duplicate()
         } else {
             print("\tClear cached anchor.")
             self.cachedAnchorCaret = nil
@@ -1927,7 +2052,8 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         } else {
             print("\tProcessing changes to model via voice or internal system...")
             // changes to model via voice
-            if let _ = self.focusCaret, let _ = self.anchorCaret,
+            if let _ = self.focusCaret,
+               let _ = self.anchorCaret,
                let selectedRange = self.selectionTextRange
             {
                 print("\tModel has selected text range.")
@@ -2009,16 +2135,17 @@ class SelectionCursor: NSObject, UITextViewDelegate {
     ) {
         print("===== Selection Cursor: Observe Value =====")
         if keyPath == "contentSize" {
-            print("\tKeyPath: contentSize")
+//            print("\tKeyPath: contentSize")
             if let newContentSize = change?[.newKey] as? CGSize,
                let oldContentSize = change?[.oldKey] as? CGSize,
                newContentSize.height > self.textView!.frame.height &&
                 self.isAtEndOfTextView
             {
+                print("\tKeyPath: contentSize")
                 print("\tNew Observation Value (contentSize):\n\t\tnew: '\(newContentSize)'\n\t\told: '\(oldContentSize)'")
                 self.scrollToBottom()
             } else {
-                print("\tUnhandled Content Size Change...")
+//                print("\tUnhandled Content Size Change...")
             }
         } else if keyPath == "selectedTextRange" {
             print("\tKeyPath: selectionTextRange")
@@ -2032,37 +2159,38 @@ class SelectionCursor: NSObject, UITextViewDelegate {
                 print("\tNo selection range. Clear selectionTextRange in model...")
             }
         } else if keyPath == "anchorCaret" {
-            print("\tKeyPath: anchor")
-            if let newAnchor = change?[.newKey] as? NoteSegment,
-               let oldAnchor = change?[.oldKey] as? NoteSegment
+            print("\tKeyPath: anchorCaret")
+            if let newAnchorCaret = change?[.newKey] as? Caret,
+               let oldAnchorCaret = change?[.oldKey] as? Caret
             {
-                print("\tNew Observation Value (Anchor):\n\t\tnew: '\(newAnchor.getText())'\n\t\told: '\(oldAnchor.getText())'")
+                print("\tNew Observation Value (Anchor Caret):\n\t\tnew: '\(self.getSegment(caret: newAnchorCaret)?.getText() ?? "nil")'\n\t\told: '\(self.getSegment(caret: oldAnchorCaret)?.getText() ?? "nil")'")
                 if self.speechRecognition.isListeningForSpeech {
                     self.executeSelectionUpdates(type: .model)
                 }
-            } else if let newAnchor = change?[.newKey] as? NoteSegment {
-                print("\tNew Observation Value (Anchor):\n\t\tnew: '\(newAnchor.getText())'\n\t\told: nil")
+            } else if let newAnchorCaret = change?[.newKey] as? Caret {
+                print("\tNew Observation Value (Anchor Caret):\n\t\tnew: '\(self.getSegment(caret: newAnchorCaret)?.getText() ?? "nil")'\n\t\told: nil")
                 if self.speechRecognition.isListeningForSpeech {
                     self.executeSelectionUpdates(type: .model)
                 }
             } else {
-                print("\tUnhandled Anchor: ", self.anchorCaret != nil ? self.getSegment(caret: self.anchorCaret!)?.getText() ?? "nil" : "nil")
+                print("\tUnhandled Anchor Caret: ", self.anchorCaret != nil ? self.getSegment(caret: self.anchorCaret!)?.getText() ?? "nil" : "nil")
             }
         } else if keyPath == "focusCaret" {
-            print("\tKeyPath: focus")
-            if let newFocus = change?[.newKey] as? NoteSegment,
-               let oldFocus = change?[.oldKey] as? NoteSegment {
-                print("New Observation Value (Focus):\n\t\tnew: '\(newFocus.getText())'\n\t\told: '\(oldFocus.getText())'")
+            print("\tKeyPath: focusCaret")
+            if let newFocusCaret = change?[.newKey] as? Caret,
+               let oldFocusCaret = change?[.oldKey] as? Caret
+            {
+                print("New Observation Value (Focus Caret):\n\t\tnew: '\(self.getSegment(caret: newFocusCaret)?.getText() ?? "nil")'\n\t\told: '\(self.getSegment(caret: oldFocusCaret)?.getText() ?? "nil")'")
                 if self.speechRecognition.isListeningForSpeech {
                     self.executeSelectionUpdates(type: .model)
                 }
-            } else if let newFocus = change?[.newKey] as? NoteSegment {
-                print("\tNew Observation Value (Focus):\n\t\tnew: '\(newFocus.getText())'\n\t\told: nil")
+            } else if let newFocusCaret = change?[.newKey] as? Caret {
+                print("\tNew Observation Value (Focus Caret):\n\t\tnew: '\(self.getSegment(caret: newFocusCaret)?.getText() ?? "nil")'\n\t\told: nil")
                 if self.speechRecognition.isListeningForSpeech {
                     self.executeSelectionUpdates(type: .model)
                 }
             } else {
-                print("\tUnhandled Focus: ", self.focusCaret != nil ? self.getSegment(caret: self.focusCaret!)?.getText() ?? "nil" : "nil")
+                print("\tUnhandled Focus Caret: ", self.focusCaret != nil ? self.getSegment(caret: self.focusCaret!)?.getText() ?? "nil" : "nil")
             }
         }
     }
@@ -2097,13 +2225,18 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             selectionCursor: self,
             n: 0
         )
-
+        let (lastBufferSegmentTrackType, lastBufferSegmentIndex) = Utils.getNoteNthLastSegmentIndex(
+            segments: note.noteSegments,
+            bufferSegments: note.noteBuffer,
+            fromBuffer: true,
+            selectionCursor: self,
+            n: 0
+        )
         if let cachedAnchorCaret = self.cachedAnchorCaret,
            let cachedAnchor = self.getSegment(caret: cachedAnchorCaret),
-           let caretIndex = lastSegmentIndex,
-           let caretTrackType = lastSegmentTrackType,
-           !cachedAnchor.isVoiceCommandWord() &&
-            !cachedAnchor.isDeleted() &&
+           let caretIndex = lastBufferSegmentIndex,
+           let caretTrackType = lastBufferSegmentTrackType,
+           cachedAnchor.isActive() &&
             note.noteBuffer.count > 0 &&
             !self.isUpdatingSelection &&
             !self.hasSelection
@@ -2113,8 +2246,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             self.moveCursor(caret: Caret(index: caretIndex, trackType: caretTrackType))
         } else if let cachedAnchorCaret = self.cachedAnchorCaret,
             let cachedAnchor = self.getSegment(caret: cachedAnchorCaret),
-            !cachedAnchor.isVoiceCommandWord() &&
-            !cachedAnchor.isDeleted() &&
+            cachedAnchor.isActive() &&
             note.noteBuffer.count == 0  &&
             !self.isUpdatingSelection &&
             !self.hasSelection
@@ -2125,7 +2257,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             print("\tMoves the cursor to the cached anchor if it exists and if the buffer is empty.")
             print("\tThis occurs after a buffer is committed while we have a cached anchor.")
             print("\tThe cached anchor is updated to be the last segment of the recently committed buffer.")
-            self.moveCursor(caret: cachedAnchorCaret)
+            self.moveCursor(caret: cachedAnchorCaret.duplicate())
         } else if let lastSegmentIndex = lastSegmentIndex,
             let lastSegmentTrackType = lastSegmentTrackType,
             note.noteBuffer.count > 0 &&

@@ -364,6 +364,12 @@ class Note: AVMutableComposition, NSCoding {
         )
         notificationCenter.addObserver(
             self,
+            selector: #selector(onRequestPrepareAudioFile(notification:)),
+            name: SpeechRecognitionEngine.onRequestPrepareAudioFile,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
             selector: #selector(onStoppedListeningForSpeech(notification:)),
             name: SpeechRecognitionEngine.onStoppedListeningForSpeech,
             object: nil
@@ -382,7 +388,7 @@ class Note: AVMutableComposition, NSCoding {
         )
     }
     
-    @objc func onStartedListeningForSpeech(notification: Notification) {
+    @objc func onRequestPrepareAudioFile(notification: Notification) {
         if self.noteManager == nil ||
             self.isDeleted ||
             noteManager.currentNote == nil ||
@@ -390,7 +396,7 @@ class Note: AVMutableComposition, NSCoding {
                 self.noteManager!.currentNote != nil &&
                 self.noteManager!.currentNote!.uid != self.uid
             ) { return }
-        print("===== Note \(self.uid): On Start Listening For Speech =====")
+        print("===== Note \(self.uid): On Request Prepare Audio File =====")
         
         // Create and save new clip used to create unique track URLs to write audio into
         self.generateNewClip()
@@ -400,6 +406,17 @@ class Note: AVMutableComposition, NSCoding {
 
         // Configure Audio Write File
         self.configureAudioWriteFile()
+    }
+    
+    @objc func onStartedListeningForSpeech(notification: Notification) {
+        if self.noteManager == nil ||
+            self.isDeleted ||
+            noteManager.currentNote == nil ||
+            (
+                self.noteManager!.currentNote != nil &&
+                self.noteManager!.currentNote!.uid != self.uid
+            ) { return }
+        print("===== Note \(self.uid): On Start Listening For Speech =====")
         
         if !self.authorizedToListenForSpeech {
             print("\t[Error] There was a problem while starting to listen for speech. Note is not authorized to listen.")
@@ -419,6 +436,9 @@ class Note: AVMutableComposition, NSCoding {
     
     @objc func onBufferItem(notification: Notification) {
         if self.noteManager == nil || self.isDeleted || (self.noteManager != nil && self.noteManager!.currentNote == nil) || (self.noteManager != nil && self.noteManager!.currentNote != nil && self.noteManager!.currentNote!.uid != self.uid) { return }
+        // When we create duplicates of notes because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same note writing to one file, we only allow the one that matches memory addresses with currentNote through
+        guard Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(self.noteManager.currentNote!).toOpaque() else { return }
 
         if let noteManager = self.noteManager, let recordFile = self.recordFile, let note = noteManager.currentNote, note.uid == self.uid && self.speechRecognition.isListeningForSpeech {
 //            print("===== Note: On Buffer Item =====")
@@ -439,6 +459,9 @@ class Note: AVMutableComposition, NSCoding {
     
     @objc func onSpeechUpdate(notification: Notification) {
         if self.noteManager == nil || self.tracks.count == 0 || self.isDeleted || self.noteManager!.currentNote == nil || (self.noteManager!.currentNote != nil && self.noteManager!.currentNote!.uid != self.uid) { return }
+        
+        // When we create duplicates of notes because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same note updating segments, we only allow the one that matches memory addresses with currentNote through
         guard Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(self.noteManager.currentNote!).toOpaque() else {
             print("\t[Error] Note has different memory address of current Note:")
             print("\tSelf: ", Unmanaged.passUnretained(self).toOpaque())
@@ -456,7 +479,7 @@ class Note: AVMutableComposition, NSCoding {
         if self.speechRecognition.isListeningForSpeech || (isVoiceCommand && voiceCommandType == "stop note") {
             print("\tProcessing transcript...")
             self.performTranscriptionUpdate(transcription)
-            print("\tBuffer: ", self.noteBuffer.map { $0.getText() })
+            print("\tBuffer: ", Utils.stringifySegments(segments: self.noteBuffer))
         }
         
         if self.selectionCursor.isUpdatingSelection && !self.selectionCursor.isPromptingForUpdateAcceptance && !isVoiceCommand && isFinalTranscription {
@@ -490,8 +513,12 @@ class Note: AVMutableComposition, NSCoding {
                 
                 // commit buffer
                 if !self.speechRecognition.pausedListeningForSpeech {
-                    // Play Sound
-                    soundEngine.commitBuffer()
+                    if !isVoiceCommand {
+                        // We don't want to pay commit buffer sound if we processed a voice command
+                        
+                        // Play Sound
+                        soundEngine.commitBuffer()
+                    }
 
                     self.commitBuffer()
                     
@@ -547,9 +574,10 @@ class Note: AVMutableComposition, NSCoding {
             self.handleFinish(normalize: true)
         } else if let currentNoteUndoSnapshot = self.noteManager.currentNoteUndoSnapshot,
             self.noteSegments.count != currentNoteUndoSnapshot.note.noteSegments.count &&
-            isFinalTranscription
+            isFinalTranscription &&
+            !isVoiceCommand
         {
-//            self.noteManager.registerNoteChange(note: self, undo: "committing new speech")
+            self.noteManager.registerNoteChange(note: self, undo: "committing new speech")
         }
     }
     
@@ -571,12 +599,12 @@ class Note: AVMutableComposition, NSCoding {
         
         // dateModified must be after dateCreated
         result = result && self.dateModified >= self.dateCreated
-//         print("dateModified must be after dateCreated: ", self.dateModified, self.dateCreated)
+//         print("dateModified must be after dateCreated: ", self.dateModified >= self.dateCreated, self.dateModified, self.dateCreated)
 //         print("current result: ", result)
 
         // startTime must be in front of endTime
         result = result && self.endTime >= self.startTime
-//        print("startTime must be in front of endTime: ", self.endTime >= self.startTime)
+//        print("startTime must be in front of endTime: ", self.endTime >= self.startTime, self.endTime, self.startTime)
 //        print("current result: ", result)
 
         // start of note segments should be the same as startTime
@@ -695,8 +723,6 @@ class Note: AVMutableComposition, NSCoding {
                 :
                 0
             
-            print("SEGMENT = '\(word)', TIMESTAMP: ", segment.timestamp, self.accumulatedDuration)
-            
             // Set duration
             duration = segment.duration > 0 ? floor(Utils.DEFAULT_SEGMENT_TIMESCALE * segment.duration) : 0
         }
@@ -805,6 +831,7 @@ class Note: AVMutableComposition, NSCoding {
         var segs = self.noteBuffer.count > 0 ? self.noteBuffer : self.noteSegments
         if let segments = segments {
             print("\tReceived custom segments. Setting as normalization contents...")
+            print("\tSegments: ", Utils.stringifySegments(segments: segments))
             segs = segments
         }
         
@@ -1105,9 +1132,8 @@ class Note: AVMutableComposition, NSCoding {
             // Set segment index
             segment.setIndex(index: index)
             
-            // Set backgroundNoise
-            let datum = self.speechRecognition.getRecordingSoundIntensityDatum(timestamp: segment.timeMapping.target.start.seconds)
-            segment.setBackgroundNoise(noise: datum.power.rounded(toPlaces: Utils.SOUND_INTENSITY_SIG_FIG_COUNT))
+            // Set background noise
+            segment.setBackgroundNoise(noise: self.getBackgroundNoise())
 
             // Set avgPauseDuration
             if let avgPauseDuration = avgPauseDuration {
@@ -1212,14 +1238,12 @@ class Note: AVMutableComposition, NSCoding {
 
         // duplicate note tracks
         print("\tDuplicating buffer segments...")
-        var bufferText = "\tBuffer Segments: "
         var segments = [NoteSegment]()
         for segment in self.noteBuffer {
-            bufferText += "'\(segment.getText())', "
             segments.append(segment.duplicate())
         }
         
-        print(bufferText)
+        print("\tBuffer Segments: ", Utils.stringifySegments(segments: segments))
         
         print("\tIdentifying insert time...")
         var insertTime: CMTime
@@ -1918,6 +1942,8 @@ class Note: AVMutableComposition, NSCoding {
             // Handle segment clips
             self.state.setClip(clipUID: segment.getClipUID(), noteUID: self.uid)
         }
+        
+        print("\tPassage: ", Utils.stringifySegments(segments: segments))
         
         if self.noteSegments.count > 0 {
             print("\tPlace within existing \(self.noteSegments.count) segments...")
@@ -2653,15 +2679,6 @@ class Note: AVMutableComposition, NSCoding {
         print("\tAdd computed transformations to stored transformations...")
         self.transformations.append(contentsOf: transformations)
         
-        // Present Feedback
-        if let value = value {
-            self.notifications.executeFeedback(
-                visualMessage: "Selection rate: \(value)x",
-                audioMessage: "Adjusted selection rate to \(value)x.",
-                withHaptics: true
-            )
-        }
-        
         // Check rep invariant
         self.handleMutation()
         checkRep()
@@ -2726,6 +2743,8 @@ class Note: AVMutableComposition, NSCoding {
                 type: .next,
                 isWord: true
             )
+        } else if let segment = currentSegment, segment.isActive() {
+            currentSegmentIndex = segment.getIndex()
         }
         
         // when current segment is != nil, it means the first segment
@@ -3414,8 +3433,9 @@ class Note: AVMutableComposition, NSCoding {
 
             if saveToLowLevelRepr {
                 // only save to mutable track if we're on first take or explicit flag is set
-                print("\tUpdating lower level track representation...")
+                print("\tUpdating lower level track representation: ", Utils.stringifySegments(segments: finalSegments))
                 try self.tracks[0].validateSegments(finalSegments)
+                print("\tNew segments are valid! Set to lower level track representation...")
                 self.tracks[0].segments = finalSegments
             }
             
@@ -4100,7 +4120,7 @@ class Note: AVMutableComposition, NSCoding {
                 if let newAnchorIndex = newAnchorIndex {
                     newAnchorTrackType = .buffer
                     let newAnchor = Array(self.noteBuffer[0..<lowestCommandIndex])[newAnchorIndex]
-                    print("\tFound new anchor: ", newAnchor)
+                    print("\tFound new anchor: '\(newAnchor.getText())'")
                 } else {
                     print("\tUnable to find replacement anchor in buffer. Search in committed segments...")
                     let segments = self.selectionCursor.cachedAnchor != nil ? Array(self.noteSegments[0..<self.selectionCursor.cachedAnchor!.getIndex() + 1]) : self.noteSegments // We add one because we want to include cached anchor
@@ -4113,7 +4133,7 @@ class Note: AVMutableComposition, NSCoding {
                     
                     if let newAnchorIndex = newAnchorIndex {
                         let newAnchor = segments[newAnchorIndex]
-                        print("\tFound new anchor: ", newAnchor)
+                        print("\tFound new anchor: '\(newAnchor.getText())'")
                     }
                 }
                 
@@ -4134,7 +4154,7 @@ class Note: AVMutableComposition, NSCoding {
                 
                 if let newAnchorIndex = newAnchorIndex {
                     let newAnchor = segments[newAnchorIndex]
-                    print("\tFound new anchor: ", newAnchor)
+                    print("\tFound new anchor: '\(newAnchor.getText())'")
                 }
                 
                 if let newAnchorIndex = newAnchorIndex {

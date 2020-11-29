@@ -96,7 +96,7 @@ class NoteManager: NSObject {
         super.init()
         
         print("\tSetting modules in notes")
-        self.setNoteModules()
+        self.setNoteModules() // Removing this will not show preview text on notes within note table
         
         self.configureNotificationObservers()
     }
@@ -391,7 +391,7 @@ class NoteManager: NSObject {
         case "undo":
             self.undo(handler: handler)
         case "redo":
-            if !self.selectionCursor.isPromptingForUpdateAcceptance {
+            if !self.selectionCursor.isUpdatingSelection && !self.selectionCursor.isPromptingForUpdateAcceptance {
                 self.redo(handler: handler)
             }
         default:
@@ -412,7 +412,9 @@ class NoteManager: NSObject {
 
         if keyPath == "currentNoteUndoSnapshot" {
             print("\tKeyPath: currentNoteUndoSnapshot")
-            if let newSnapshot = change?[.newKey] as? NoteSnapshot, let _ = change?[.oldKey] as? NoteSnapshot {
+            if let newSnapshot = change?[.newKey] as? NoteSnapshot,
+               let _ = change?[.oldKey] as? NoteSnapshot
+            {
                 print("\tNew Note Snapshot Received! Save to state")
                 let duplicateNote = newSnapshot.note.duplicate()
                 
@@ -460,12 +462,7 @@ class NoteManager: NSObject {
                     print("\tUpdated selection achor:")
                     print("\tFrom: ", self.selectionCursor.anchorCaret ?? "nil")
                     print("\tTo: ", anchorCaret)
-                    self.selectionCursor.setAnchorCaret(
-                        caret: Caret(
-                            index: anchorCaret.index,
-                            trackType: anchorCaret.trackType
-                        )
-                    )
+                    self.selectionCursor.setAnchorCaret(caret: anchorCaret.duplicate())
                 } else {
                     print("\tUpdated selection anchor:")
                     print("\tFrom: ", self.selectionCursor.anchorCaret ?? "nil")
@@ -477,12 +474,7 @@ class NoteManager: NSObject {
                     print("\tUpdated selection focus:")
                     print("\tFrom: ", self.selectionCursor.focusCaret ?? "nil")
                     print("\tTo: ", focusCaret)
-                    self.selectionCursor.setFocusCaret(
-                        caret: Caret(
-                            index: focusCaret.index,
-                            trackType: focusCaret.trackType
-                        )
-                    )
+                    self.selectionCursor.setFocusCaret(caret: focusCaret.duplicate())
                 } else {
                     print("\tUpdated selection focus:")
                     print("\tFrom: ", self.selectionCursor.focusCaret ?? "nil")
@@ -494,14 +486,9 @@ class NoteManager: NSObject {
                     print("\tUpdated selection cached anchor:")
                     print("\tFrom: ", self.selectionCursor.cachedAnchorCaret ?? "nil")
                     print("\tTo: ", cachedAnchorCaret)
-                    self.selectionCursor.setCachedAnchorCaret(
-                        caret: Caret(
-                            index: cachedAnchorCaret.index,
-                            trackType: cachedAnchorCaret.trackType
-                        )
-                    )
+                    self.selectionCursor.setCachedAnchorCaret(caret: cachedAnchorCaret.duplicate())
                 } else {
-                    print("\tUpdated selection cached anchot:")
+                    print("\tUpdated selection cached anchor:")
                     print("\tFrom: ", self.selectionCursor.cachedAnchorCaret ?? "nil")
                     print("\tTo: nil")
                     self.selectionCursor.setCachedAnchorCaret()
@@ -896,7 +883,11 @@ class NoteManager: NSObject {
         }
         
         guard let _ = self.currentNote else {
-            print("\t[Error] There was a problem executing command. Note not detected.")
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: handler
+            )
             return
         }
         
@@ -941,7 +932,11 @@ class NoteManager: NSObject {
         }
         
         guard let note = self.currentNote else {
-            print("\t[Error] There was a problem executing command. Note not detected.")
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: handler
+            )
             return
         }
         
@@ -1034,7 +1029,11 @@ class NoteManager: NSObject {
         }
         
         guard let note = self.currentNote else {
-            print("\t[Error] There was a problem executing command. Note not detected.")
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: handler
+            )
             return
         }
         
@@ -1100,7 +1099,11 @@ class NoteManager: NSObject {
         }
         
         guard let note = self.currentNote else {
-            print("\t[Error] There was a problem executing command. Note not detected.")
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: onFinishHandler
+            )
             return
         }
         
@@ -1179,7 +1182,11 @@ class NoteManager: NSObject {
         }
         
         guard let note = self.currentNote else {
-            print("\t[Error] There was a problem executing command. Note not detected.")
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: handler
+            )
             return
         }
         
@@ -1221,7 +1228,11 @@ class NoteManager: NSObject {
         }
         
         guard let note = self.currentNote else {
-            print("\t[Error] There was a problem executing command. Note not detected.")
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: handler
+            )
             return
         }
         
@@ -1294,7 +1305,11 @@ class NoteManager: NSObject {
         }
         
         guard let note = self.currentNote else {
-            print("\t[Error] There was a problem executing command. Note not detected.")
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: handler
+            )
             return
         }
         
@@ -1345,7 +1360,11 @@ class NoteManager: NSObject {
         }
         
         guard let note = self.currentNote else {
-            print("\t[Error] There was a problem executing command. Note not detected.")
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: handler
+            )
             return
         }
         
@@ -1531,7 +1550,11 @@ class NoteManager: NSObject {
         }
         
         guard let note = self.currentNote else {
-            print("\t[Error] There was a problem executing command. Note not detected.")
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: handler
+            )
             return
         }
         
@@ -1573,21 +1596,25 @@ class NoteManager: NSObject {
         if self.speechPlayer.isPlayingNote {
             print("\tPausing Playing Note...")
             self.speechPlayer.pause(withFeedback: withFeedback) {
-                self.notifications.executeFeedback(
-                    visualMessage: "Pause Playback",
-                    audioMessage: "playback paused",
-                    withHaptics: true
-                )
+                if withFeedback {
+                    self.notifications.executeFeedback(
+                        visualMessage: "Pause Playback",
+                        audioMessage: "playback paused",
+                        withHaptics: true
+                    )
+                }
                 handler?()
             }
         } else if self.speechRecognition.isListeningForSpeech {
             print("\tPausing Listening Note....")
             self.speechRecognition.pauseListeningForSpeech(userInitiated: true) {
-                self.notifications.executeFeedback(
-                    visualMessage: "Pause Note",
-                    audioMessage: "note paused",
-                    withHaptics: true
-                )
+                if withFeedback {
+                    self.notifications.executeFeedback(
+                        visualMessage: "Pause Note",
+                        audioMessage: "note paused",
+                        withHaptics: true
+                    )
+                }
                 
                 handler?()
             }
@@ -1613,7 +1640,11 @@ class NoteManager: NSObject {
         }
         
         guard let note = self.currentNote else {
-            print("\t[Error] There was a problem executing command. Note not detected.")
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: onFinishHandler
+            )
             return
         }
         
@@ -1688,7 +1719,11 @@ class NoteManager: NSObject {
         }
         
         guard let _ = self.currentNote else {
-            print("\t[Error] There was a problem executing command. Note not detected.")
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: handler
+            )
             return
         }
         
@@ -1834,7 +1869,11 @@ class NoteManager: NSObject {
         }
         
         guard let note = self.currentNote else {
-            print("\t[Error] There was a problem executing command. Note not detected.")
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: handler
+            )
             return
         }
         
@@ -1873,7 +1912,11 @@ class NoteManager: NSObject {
         }
         
         guard let note = self.currentNote else {
-            print("\t[Error] There was a problem executing command. Note not detected.")
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: handler
+            )
             return
         }
         
@@ -1912,7 +1955,11 @@ class NoteManager: NSObject {
         }
         
         guard let note = self.currentNote else {
-            print("\t[Error] There was a problem executing command. Note not detected.")
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: handler
+            )
             return
         }
         
@@ -1951,7 +1998,11 @@ class NoteManager: NSObject {
         }
         
         guard let note = self.currentNote else {
-            print("\t[Error] There was a problem executing command. Note not detected.")
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: handler
+            )
             return
         }
         
@@ -1993,20 +2044,32 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        if let note = self.currentNote {
-            print("\tRegistering a note change to the Undo Manager...")
-            self.registerNoteChange(note: note, undo: "increasing selection rate")
-        }
-        
-        self.selectionCursor.adjustRateSelection(direction: .up) { rate in
-            self.notifications.executeFeedback(
-                visualMessage: "Increase Selection Rate: \(rate.rounded(toPlaces: 2))",
-                audioMessage: "increased selection rate to \(rate.rounded(toPlaces: 2))",
-                withHaptics: true
+        guard let note = self.currentNote else {
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: handler
             )
+            return
         }
         
-        handler?()
+        print("\tRegistering a note change to the Undo Manager...")
+        self.registerNoteChange(note: note, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
+            self?.selectionCursor.adjustRateSelection(direction: .up) { [weak self] rate in
+                print("\tRegistering a note change to the Undo Manager...")
+                self?.registerNoteChange(
+                    note: self!.currentNote!,
+                    undo: "increasing selection rate",
+                    handler: handler
+                )
+                
+                self?.notifications.executeFeedback(
+                    visualMessage: "Increase Selection Rate: \(rate.rounded(toPlaces: 2))",
+                    audioMessage: "increased selection rate to \(rate.rounded(toPlaces: 2))",
+                    withHaptics: true
+                )
+            }
+        }
         
         NotificationCenter.default.post(
             name: NoteManager.onExecuteNoteAction,
@@ -2030,20 +2093,32 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        if let note = self.currentNote {
-            print("\tRegistering a note change to the Undo Manager...")
-            self.registerNoteChange(note: note, undo: "decreasing selection rate")
-        }
-        
-        self.selectionCursor.adjustRateSelection(direction: .down) { rate in
-            self.notifications.executeFeedback(
-                visualMessage: "Decrease Selection Rate: \(rate.rounded(toPlaces: 2))",
-                audioMessage: "decreased selection rate to \(rate.rounded(toPlaces: 2))",
-                withHaptics: true
+        guard let note = self.currentNote else {
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: handler
             )
+            return
         }
         
-        handler?()
+        print("\tRegistering a note change to the Undo Manager...")
+        self.registerNoteChange(note: note, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
+            self?.selectionCursor.adjustRateSelection(direction: .down) { [weak self] rate in
+                print("\tRegistering a note change to the Undo Manager...")
+                self?.registerNoteChange(
+                    note: self!.currentNote!,
+                    undo: "decreasing selection rate",
+                    handler: handler
+                )
+                
+                self?.notifications.executeFeedback(
+                    visualMessage: "Decrease Selection Rate: \(rate.rounded(toPlaces: 2))",
+                    audioMessage: "decreased selection rate to \(rate.rounded(toPlaces: 2))",
+                    withHaptics: true
+                )
+            }
+        }
         
         NotificationCenter.default.post(
             name: NoteManager.onExecuteNoteAction,
@@ -2067,12 +2142,28 @@ class NoteManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        if let note = self.currentNote {
-            print("\tRegistering a note change to the Undo Manager...")
-            self.registerNoteChange(note: note, undo: "deleting '\(self.selectionCursor.selectionText ?? "selection")'")
+        guard let note = self.currentNote else {
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
         }
         
-        self.selectionCursor.deleteSelection(isCommit: isCommit, handler: handler)
+        let undoMessage = "deleting '\(self.selectionCursor.selectionText ?? "selection")'"
+        
+        print("\tRegistering a note change to the Undo Manager...")
+        self.registerNoteChange(note: note, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
+            self?.selectionCursor.deleteSelection(isCommit: isCommit) { [weak self] in
+                print("\tRegistering a note change to the Undo Manager...")
+                self?.registerNoteChange(
+                    note: self!.currentNote!,
+                    undo: undoMessage,
+                    handler: handler
+                )
+            }
+        }
         
         NotificationCenter.default.post(
             name: NoteManager.onExecuteNoteAction,
@@ -2126,7 +2217,7 @@ class NoteManager: NSObject {
                 voiceCommand: true,
                 handler: handler
             )
-            return;
+            return
         }
         
         if self.selectionCursor.hasSelection && self.selectionCursor.isUpdatingSelection && self.selectionCursor.isPromptingForUpdateAcceptance {
@@ -2137,14 +2228,17 @@ class NoteManager: NSObject {
             print("\tClearing note buffer...")
             note.clearBuffer()
             
-            if let note = self.currentNote {
-                print("\tRegistering a note change to the Undo Manager...")
-                self.registerNoteChange(note: note, undo: "replacing '\(self.selectionCursor.selectionText ?? "selection")'")
+            print("\tRegistering a note change to the Undo Manager...")
+            self.registerNoteChange(note: note, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
+                self?.selectionCursor.acceptUpdateSelection(handler: { [weak self] in
+                    print("\tRegistering a note change to the Undo Manager...")
+                    self?.registerNoteChange(
+                        note: self!.currentNote!,
+                        undo: "replacing '\(self?.selectionCursor.selectionText ?? "selection")'",
+                        handler: handler
+                    )
+                })
             }
-            
-            // Accept Update
-            print("\tAccepting Update Selection...")
-            self.selectionCursor.acceptUpdateSelection(handler: handler)
         } else if !self.selectionCursor.hasSelection {
             self.notifications.executeError(
                 text: "No existing selection.",
@@ -2177,12 +2271,14 @@ class NoteManager: NSObject {
                 voiceCommand: true,
                 handler: handler
             )
-            return;
+            return
         }
 
         if self.selectionCursor.hasSelection && self.selectionCursor.isUpdatingSelection && self.selectionCursor.isPromptingForUpdateAcceptance {
-            // Turn off ambient track
-            soundEngine.stopModalAmbience()
+            // Turn on ambient track
+            if !soundEngine.isPlayingModalAmbience {
+                soundEngine.startModalAmbience()
+            }
 
             // Clear buffer segments
             print("\tClearing note buffer...")
@@ -2226,7 +2322,7 @@ class NoteManager: NSObject {
                 voiceCommand: true,
                 handler: handler
             )
-            return;
+            return
         }
         
         if voiceCommand {
@@ -2302,19 +2398,33 @@ class NoteManager: NSObject {
             print("\tTriggered by voice command.")
         }
         
+        guard let note = self.currentNote else {
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
         if voiceCommand {
             // Play Sound
             soundEngine.voiceCommandAccept()
         }
         
-        if let note = self.currentNote {
-            print("\tRegistering a note change to the Undo Manager...")
-            self.registerNoteChange(note: note, undo: "cutting '\(self.selectionCursor.selectionText ?? "selection")'")
+        let undoMessage = "cutting '\(self.selectionCursor.selectionText ?? "selection")'"
+        
+        print("\tRegistering a note change to the Undo Manager...")
+        self.registerNoteChange(note: note, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
+            self?.selectionCursor.cutSelection() { [weak self] in
+                print("\tRegistering a note change to the Undo Manager...")
+                self?.registerNoteChange(
+                    note: self!.currentNote!,
+                    undo: undoMessage,
+                    handler: handler
+                )
+            }
         }
-        
-        self.selectionCursor.cutSelection()
-        
-        handler?()
         
         NotificationCenter.default.post(
             name: NoteManager.onExecuteNoteAction,
@@ -2333,19 +2443,33 @@ class NoteManager: NSObject {
             print("\tTriggered by voice command.")
         }
         
+        guard let note = self.currentNote else {
+            self.notifications.executeError(
+                text: "No note selected.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
         if voiceCommand {
             // Play Sound
             soundEngine.voiceCommandAccept()
         }
         
-        if let note = self.currentNote {
-            print("\tRegistering a note change to the Undo Manager...")
-            self.registerNoteChange(note: note, undo: "pasting '\(self.selectionCursor.clipboard != nil ? Note.getText(segments: self.selectionCursor.clipboard!) : "clipboard")'")
-        }
+        let undoMessage = "pasting '\(self.selectionCursor.clipboard != nil ? Note.getText(segments: self.selectionCursor.clipboard!) : "clipboard")'"
         
-        self.selectionCursor.pasteClipboard()
-
-        handler?()
+        print("\tRegistering a note change to the Undo Manager...")
+        self.registerNoteChange(note: note, undo: "moving cursor") { [weak self] in
+            self?.selectionCursor.pasteClipboard() { [weak self] in
+                print("\tRegistering a note change to the Undo Manager...")
+                self?.registerNoteChange(
+                    note: self!.currentNote!,
+                    undo: undoMessage,
+                    handler: handler
+                )
+            }
+        }
         
         NotificationCenter.default.post(
             name: NoteManager.onExecuteNoteAction,
@@ -2367,7 +2491,7 @@ class NoteManager: NSObject {
                 voiceCommand: true,
                 handler: handler
             )
-            return;
+            return
         }
 
         if note.committedBufferRanges.count == 0 {
@@ -2402,6 +2526,8 @@ class NoteManager: NSObject {
                 type: .next,
                 isWord: true
             )
+        } else if let anchor = newAnchor, anchor.isActive() {
+            newAnchorIndex = anchor.getIndex()
         }
         
         let newFocus: NoteSegment? = lastCommit.last
@@ -2414,6 +2540,8 @@ class NoteManager: NSObject {
                 type: .previous,
                 isWord: true
             )
+        } else if let focus = newFocus, focus.isActive() {
+            newFocusIndex = focus.getIndex()
         }
         
         if let anchorIndex = newAnchorIndex,
@@ -2449,7 +2577,7 @@ class NoteManager: NSObject {
                 voiceCommand: true,
                 handler: handler
             )
-            return;
+            return
         }
 
         if note.committedBufferRanges.count == 0 {
@@ -2464,25 +2592,30 @@ class NoteManager: NSObject {
         // Play Sound
         soundEngine.voiceCommandAccept()
         
-        if let note = self.currentNote {
+        let executeRollback = {
             print("\tRegistering a note change to the Undo Manager...")
-            self.registerNoteChange(note: note, undo: "rolling back last commit")
-        }
-        
-        if !self.speechRecognition.pausedListeningForSpeech {
-            self.speechRecognition.pauseListeningForSpeech(preventListeningForCommands: true) { [weak self] in
+            self.registerNoteChange(note: note, undo: "moving cursor") { [weak self] in
                 // Select Previous Commit
                 self?.selectCommit()
                 
                 // Delete current selection
-                self?.deleteSelection(voiceCommand: true, isCommit: true, handler: handler)
+                self?.selectionCursor.deleteSelection(isCommit: true) { [weak self] in
+                    print("\tRegistering a note change to the Undo Manager...")
+                    self?.registerNoteChange(
+                        note: self!.currentNote!,
+                        undo: "rolling back last commit",
+                        handler: handler
+                    )
+                }
+            }
+        }
+        
+        if !self.speechRecognition.pausedListeningForSpeech {
+            self.speechRecognition.pauseListeningForSpeech(preventListeningForCommands: true) {
+                executeRollback()
             }
         } else {
-            // Select Previous Commit
-            self.selectCommit()
-            
-            // Delete current selection
-            self.deleteSelection(voiceCommand: true, isCommit: true, handler: handler)
+            executeRollback()
         }
         
         NotificationCenter.default.post(
@@ -2505,7 +2638,7 @@ class NoteManager: NSObject {
                 voiceCommand: true,
                 handler: handler
             )
-            return;
+            return
         }
 
         if note.committedBufferRanges.count == 0 {
@@ -2546,7 +2679,7 @@ class NoteManager: NSObject {
                 voiceCommand: true,
                 handler: handler
             )
-            return;
+            return
         }
 
         if note.committedBufferRanges.count == 0 {
@@ -2587,7 +2720,7 @@ class NoteManager: NSObject {
                 voiceCommand: true,
                 handler: handler
             )
-            return;
+            return
         }
         
         let currentAnchor = self.selectionCursor.anchor
@@ -2609,6 +2742,8 @@ class NoteManager: NSObject {
                     isWord: true,
                     isCommitted: true
                 )
+            } else {
+                selectionIndex = segment.getIndex()
             }
         } else if let segment = currentAnchor {
             // set word after anchor as selection
@@ -2627,8 +2762,12 @@ class NoteManager: NSObject {
                     isWord: true,
                     isCommitted: true
                 )
+            } else {
+                selectionIndex = segment.getIndex()
             }
         }
+        
+        print("Selection Index: ", selectionIndex ?? "nil")
         
         if let selectionIndex = selectionIndex {
             let selection = note.noteSegments[selectionIndex]
@@ -2650,7 +2789,7 @@ class NoteManager: NSObject {
         } else {
             print("\t[Error] There was a problem opening selection. Unable to locate suitable segment.")
             self.notifications.executeError(
-                text: "Unable to locate suitable segment.",
+                text: "Unable to locate suitable word to select.",
                 handler: handler
             )
         }
@@ -2667,7 +2806,7 @@ class NoteManager: NSObject {
                 voiceCommand: true,
                 handler: handler
             )
-            return;
+            return
         }
         
         if !self.selectionCursor.hasSelection {
@@ -2718,7 +2857,7 @@ class NoteManager: NSObject {
                 voiceCommand: true,
                 handler: handler
             )
-            return;
+            return
         }
 
         if !self.selectionCursor.hasSelection {
@@ -2799,7 +2938,7 @@ class NoteManager: NSObject {
                 voiceCommand: true,
                 handler: handler
             )
-            return;
+            return
         }
         
         if !self.selectionCursor.hasSelection {
@@ -2941,7 +3080,7 @@ class NoteManager: NSObject {
                 voiceCommand: true,
                 handler: handler
             )
-            return;
+            return
         }
 
         if note.committedBufferRanges.count == 0 {
@@ -3027,7 +3166,7 @@ class NoteManager: NSObject {
                 voiceCommand: true,
                 handler: handler
             )
-            return;
+            return
         }
 
         if note.noteSegments.count == 0 {
@@ -3067,7 +3206,7 @@ class NoteManager: NSObject {
                 voiceCommand: true,
                 handler: handler
             )
-            return;
+            return
         }
     
         if note.noteSegments.count == 0 {
@@ -3125,23 +3264,25 @@ class NoteManager: NSObject {
 
         // Update Undo/Redo History
         print("\tCreating and setting new snapshot...")
+        
         let newSnapshot = NoteSnapshot(
             note: note.duplicate(), // we duplicate so there's no memory leaks/pointers to same memory locations
-            selectionAnchorCaret: self.selectionCursor.anchorCaret,
-            selectionFocusCaret: self.selectionCursor.focusCaret,
-            selectionCachedAnchorCaret: self.selectionCursor.cachedAnchorCaret,
+            selectionAnchorCaret: self.selectionCursor.anchorCaret?.duplicate(),
+            selectionFocusCaret: self.selectionCursor.focusCaret?.duplicate(),
+            selectionCachedAnchorCaret: self.selectionCursor.cachedAnchorCaret?.duplicate(),
             undo: message
         )
-        self.modifyNote(snapshot: newSnapshot)
         
         self.noteChangeHandler = handler
+        
+        self.modifyNote(snapshot: newSnapshot)
         
         checkRep()
     }
     
     @objc func undo(handler: (() -> Void)? = nil) {
         print("===== Note Manager: Undo  =====")
-        if self.undoManager.canUndo {
+        let executeUndo = {
             let undoMessage = self.currentNoteUndoSnapshot!.message
             self.undoManager.undo()
             // Present Feedback
@@ -3151,6 +3292,18 @@ class NoteManager: NSObject {
                 withHaptics: true,
                 delay: 0
             )
+        }
+        
+        if self.undoManager.canUndo {
+            // Stop any active echo
+            // If segments change, it might throw error
+            if self.speechSynthesis.isPlayingEcho || self.speechSynthesis.isPlayingPassiveEcho {
+                self.speechSynthesis.stopEcho(withFeedback: false) {
+                    executeUndo()
+                }
+            } else {
+                executeUndo()
+            }
         } else {
             self.notifications.executeError(text: "Undo changes exhausted.")
         }
@@ -3160,7 +3313,8 @@ class NoteManager: NSObject {
     
     @objc func redo(handler: (() -> Void)? = nil) {
         print("===== Note Manager: Redo  =====")
-        if self.undoManager.canRedo {
+        
+        let executeRedo = {
             self.undoManager.redo()
             let redoMessage = self.currentNoteUndoSnapshot!.message
             // Present Feedback
@@ -3170,6 +3324,18 @@ class NoteManager: NSObject {
                 withHaptics: true,
                 delay: 0
             )
+        }
+        
+        if self.undoManager.canRedo {
+            // Stop any active echo
+            // If segments change, it might throw error
+            if self.speechSynthesis.isPlayingEcho || self.speechSynthesis.isPlayingPassiveEcho {
+                self.speechSynthesis.stopEcho(withFeedback: false) {
+                    executeRedo()
+                }
+            } else {
+                executeRedo()
+            }
         } else {
             self.notifications.executeError(text: "Redo changes exhausted.")
         }
