@@ -34,6 +34,7 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
     var selectionCursor: SelectionCursor!
     var entryManager: EntryManager!
     var uiManager: UIManager!
+    var voiceCommandEngine: VoiceCommandEngine!
     override var undoManager: UndoManager {
         return self.entryManager.undoManager
     }
@@ -668,6 +669,7 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
                 detailViewController.selectionCursor = self.selectionCursor
                 detailViewController.entryManager = self.entryManager
                 detailViewController.uiManager = self.uiManager
+                detailViewController.voiceCommandEngine = self.voiceCommandEngine
             }
             self.speechRecognition.activateListeningIndicator(
                 withRecording: self.speechRecognition.isListeningForSpeech,
@@ -686,6 +688,7 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
                 viewController.selectionCursor = self.selectionCursor
                 viewController.entryManager = self.entryManager
                 viewController.uiManager = self.uiManager
+                viewController.voiceCommandEngine = self.voiceCommandEngine
             }
             self.speechRecognition.activateListeningIndicator(
                 withRecording: false,
@@ -761,14 +764,8 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
         ]
 
         // Reference: http://www.gwtproject.org/javadoc/latest/com/google/gwt/i18n/client/DateTimeFormat.html
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "EEE MMM dd, yyyy"
-        let dateString = dateFormatter.string(from: Date(timeIntervalSince1970: entry.dateCreated))
-        let timeFormatter = DateFormatter()
-        timeFormatter.dateFormat = "h:mm:ss a"
-        let timeString = timeFormatter.string(from: Date(timeIntervalSince1970: entry.dateCreated))
-        let titleString = NSMutableAttributedString(string: "Entry: \(dateString) at \(timeString)", attributes: titleAttributes)
-
+        
+        let titleString = entry.getTitle(attributes: titleAttributes)
         let entryText = entry.getText()
         let preview = entryText.count > Utils.ENTRY_ITEM_PREVIEW_CHAR_COUNT ? "\(entryText.substring(toIndex: Utils.ENTRY_ITEM_PREVIEW_CHAR_COUNT))..." : entryText
         if preview.count > 0 {

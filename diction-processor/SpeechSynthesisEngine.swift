@@ -157,19 +157,19 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
     
     @objc func onProcessedVoiceCommand(notification: Notification) {
         print("===== Speech Synthesis Engine: On Processed Voice Command =====")
-        let command = notification.userInfo!["command"] as! String
+        let command = notification.userInfo!["command"] as! VoiceCommandEngine.VoiceCommand
         var handler: (() -> Void)?
         if notification.userInfo!["handler"] != nil {
             handler = notification.userInfo!["handler"] as? () -> Void
         }
         
         switch (command) {
-        case "increase echo rate":
+        case .INCREASE_ECHO_RATE:
             print("\tVoice Command: Increase Echo Rate")
             self.increaseEchoRate(
                 handler: handler
             )
-        case "decrease echo rate":
+        case .DECREASE_ECHO_RATE:
             print("\tVoice Command: Decrease Echo Rate")
             self.decreaseEchoRate(
                 handler: handler

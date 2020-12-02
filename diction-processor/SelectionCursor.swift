@@ -361,13 +361,13 @@ class SelectionCursor: NSObject, UITextViewDelegate {
     
     @objc func onProcessedVoiceCommand(notification: Notification) {
         print("===== Selection Cursor: On Processed Voice Command =====")
-        let command = notification.userInfo!["command"] as! String
+        let command = notification.userInfo!["command"] as! VoiceCommandEngine.VoiceCommand
         var handler: (() -> Void)?
         if notification.userInfo!["handler"] != nil {
             handler = notification.userInfo!["handler"] as? () -> Void
         }
         switch (command) {
-        case "inspect clipboard":
+        case .INSPECT_CLIPBOARD:
             self.inspectClipboard(voiceCommand: true, handler: handler)
         default:
             // Do Nothing
@@ -1101,7 +1101,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         let dialogActions = [
             DialogAction(
                 title: "Accept",
-                voiceCommand: "accept",
+                voiceCommand: .ACCEPT_SELECTION_UPDATE,
                 feedbackVisualMessage: "Updated!",
                 feedbackAudioMessage: "selection updated",
                 style: .default,
@@ -1113,7 +1113,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             ),
             DialogAction(
                 title: "Redo",
-                voiceCommand: "redo",
+                voiceCommand: .REDO_SELECTION_UPDATE,
                 feedbackVisualMessage: "Redo Update",
                 feedbackAudioMessage: "redo update",
                 style: .destructive,
@@ -1125,7 +1125,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             ),
             DialogAction(
                 title: "Cancel",
-                voiceCommand: "cancel",
+                voiceCommand: .CANCEL_DIALOG,
                 feedbackVisualMessage: "Canceled!",
                 feedbackAudioMessage: "Command canceled",
                 style: .cancel,

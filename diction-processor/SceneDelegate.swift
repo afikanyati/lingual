@@ -38,6 +38,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         )
         speechPlayer.speechSynthesis = speechSynthesis
         uiManager.speechSynthesis = speechSynthesis
+        notifications.speechSynthesis = speechSynthesis
         let speechRecognition = SpeechRecognitionEngine(
             state: state,
             notifications: notifications,
@@ -45,7 +46,6 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             speechSynthesis: speechSynthesis,
             uiManager: uiManager
         )
-        notifications.speechSynthesis = speechSynthesis
         notifications.speechRecognition = speechRecognition
         speechSynthesis.speechRecognition = speechRecognition
         speechPlayer.speechRecognition = speechRecognition
@@ -65,6 +65,15 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             state: state,
             speechRecognition: speechRecognition
         )
+        let voiceCommandEngine = VoiceCommandEngine(
+            speechPlayer: speechPlayer,
+            selectionCursor: selectionCursor,
+            uiManager: uiManager,
+            speechSynthesis: speechSynthesis,
+            speechRecognition: speechRecognition
+        )
+        uiManager.voiceCommandEngine = voiceCommandEngine
+        speechRecognition.voiceCommandEngine = voiceCommandEngine
         let entryManager = EntryManager(
             state: state,
             speechRecognition: speechRecognition,
@@ -73,13 +82,15 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             speechSynthesis: speechSynthesis,
             selectionCursor: selectionCursor,
             uiManager: uiManager,
-            pitchRecognition: pitchRecognition
+            pitchRecognition: pitchRecognition,
+            voiceCommandEngine: voiceCommandEngine
         )
         pitchRecognition.entryManager = entryManager
         speechPlayer.entryManager = entryManager
         speechSynthesis.entryManager = entryManager
         speechRecognition.entryManager = entryManager
         selectionCursor.entryManager = entryManager
+        voiceCommandEngine.entryManager = entryManager
         mainViewController.state = state
         mainViewController.notifications = notifications
         mainViewController.speechRecognition = speechRecognition
@@ -89,6 +100,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         mainViewController.selectionCursor = selectionCursor
         mainViewController.entryManager = entryManager
         mainViewController.uiManager = uiManager
+        mainViewController.voiceCommandEngine = voiceCommandEngine
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {

@@ -37,6 +37,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     var uiManager: UIManager
     @objc dynamic weak var selectionCursor: SelectionCursor!
     weak var entryManager: EntryManager!
+    weak var voiceCommandEngine: VoiceCommandEngine!
     
     // MARK: - Speech Recognition Properties
     
@@ -571,7 +572,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             let dialogActions = [
                 DialogAction(
                     title: "Grant Permission",
-                    voiceCommand: "grant permission",
+                    voiceCommand: .GRANT_PERMISSION,
                     feedbackVisualMessage: "Permission Granted!",
                     feedbackAudioMessage: "permission granted",
                     style: .default,
@@ -580,7 +581,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 }),
                 DialogAction(
                     title: "Cancel",
-                    voiceCommand: "cancel",
+                    voiceCommand: .CANCEL_DIALOG,
                     feedbackVisualMessage: "Canceled!",
                     feedbackAudioMessage: "Command canceled.",
                     style: .cancel,
@@ -987,7 +988,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             
             self.isListeningForSpeech = self.handleStartListening(
                 type: .SPEECH,
-                contextualStrings: VoiceCommandEngine.voiceCommands,
+                contextualStrings: VoiceCommandEngine.getContextualStrings(),
                 onStartHandler: onStartHandler
             )
             
@@ -1770,44 +1771,72 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         self.audioEngine = AVAudioEngine()
     }
     
-    func isValidVoiceCommand(query: String) -> (Bool, InvalidVoiceCommandType?, String?, Int?) {
+    func isValidVoiceCommand(query: String) -> (Bool, InvalidVoiceCommandType?, VoiceCommandEngine.VoiceCommand?, [Int]?) {
         print("===== Speech Recognition Engine: Is Valid Voice Command =====")
         print("\tVoice Command: ", query)
-        if let (type, numWordsBeforeVoiceCommand) = voiceCommandEngine.includesCommand(passage: query) {
-            if let lastVoiceCommand = self.voiceCommandStream.last, self.isListeningForSpeech && lastVoiceCommand.type == type && Date() < lastVoiceCommand.date.addingTimeInterval(Utils.MINIMUM_REST_BETWEEN_VOICE_COMMANDS) {
+        if let (command, indexList): (VoiceCommandEngine.VoiceCommand, [Int]) = self.voiceCommandEngine.isCommand(query: query) {
+            if let lastVoiceCommand = self.voiceCommandStream.last,
+               self.isListeningForSpeech &&
+                lastVoiceCommand.type == command && Date() < lastVoiceCommand.date.addingTimeInterval(Utils.MINIMUM_REST_BETWEEN_VOICE_COMMANDS)
+            {
                 // Likely too close to last voice command that was the same voice command
                 print("\t[Invalid] Likely too close to last voice command that was the same voice command")
-                return (false, .CLOSE_TO_LAST_VOICE_COMMAND, type, numWordsBeforeVoiceCommand)
-            } else if self.uiManager.dialogIsVisible && self.uiManager.dialogIsModal && !self.uiManager.modalContainsCommand(command: query).0 {
+                return (false, .CLOSE_TO_LAST_VOICE_COMMAND, command, indexList)
+            } else if self.uiManager.dialogIsVisible &&
+                self.uiManager.dialogIsModal &&
+                !self.uiManager.modalContainsCommand(command: command).0
+            {
                 // Attempting to make foreign command while modal dialog is visible
                 print("\t[Invalid] Attempting to make foreign command while modal dialog is visible")
-                return (false, .FOREIGN_COMMAND_WHILE_MODAL_VISIBLE, type, numWordsBeforeVoiceCommand)
-            } else if !self.selectionCursor.hasSelection && voiceCommandEngine.isSelectionVoiceCommand(command: type) {
+                return (false, .FOREIGN_COMMAND_WHILE_MODAL_VISIBLE, command, indexList)
+            } else if !self.selectionCursor.hasSelection &&
+                self.voiceCommandEngine.isSelectionVoiceCommand(command: command)
+            {
                 // Attempting to use selection voice command without selection
                 print("\t[Invalid] Attempting to use selection voice command without selection")
-                return (false, .SELECTION_COMMAND_WITHOUT_SELECTION, type, numWordsBeforeVoiceCommand)
-            } else if self.entryManager.currentEntry == nil && type != "start entry" && (voiceCommandEngine.isEntryVoiceCommand(command: type) || voiceCommandEngine.isEntryManagerCommand(command: type)) {
+                return (false, .SELECTION_COMMAND_WITHOUT_SELECTION, command, indexList)
+            } else if self.entryManager.currentEntry == nil &&
+                command != .START_ENTRY &&
+                command != .CREATE_ENTRY &&
+                (
+                    voiceCommandEngine.isEntryVoiceCommand(command: command) ||
+                    self.voiceCommandEngine.isEntryManagerCommand(command: command)
+                )
+            {
                 // Attempt to make entry command when no entry set
                 print("\t[Invalid] Attempt to make entry command when no entry set")
-                return (false, .ENTRY_COMMAND_WITHOUT_ENTRY_SET, type, numWordsBeforeVoiceCommand)
-            } else if !self.uiManager.dialogIsVisible && voiceCommandEngine.isUIManagerCommand(command: type) && (type != "cancel" && self.selectionCursor.isUpdatingSelection) {
+                return (false, .ENTRY_COMMAND_WITHOUT_ENTRY_SET, command, indexList)
+            } else if !self.uiManager.dialogIsVisible &&
+                self.voiceCommandEngine.isUIManagerCommand(command: command) &&
+                (
+                    command != .CANCEL_SELECTION_UPDATE &&
+                    self.selectionCursor.isUpdatingSelection
+                )
+            {
                 // User said ui manager vocie command when wasn't visible
                 print("\t[Invalid] User said ui manager voice command when wasn't visible")
-                return (false, .UI_MANAGER_COMMAND_WITHOUT_DIALOG_VISIBLE, type, numWordsBeforeVoiceCommand)
-            } else if type == "stop" && !self.speechPlayer.isPlayingEntry && !self.speechSynthesis.isPlayingEcho && !self.entryManager.isRunningEntry {
+                return (false, .UI_MANAGER_COMMAND_WITHOUT_DIALOG_VISIBLE, command, indexList)
+            } else if (command == .STOP_ECHO && !self.speechSynthesis.isPlayingEcho) ||
+                (command == .PAUSE_RUN && !self.entryManager.isRunningEntry)
+            {
                 // User said stop when no stoppable mode was active
                 print("\t[Invalid] User said stop when no stoppable mode was active")
-                return (false, .STOP_COMMAND_WITHOUT_SUITABLE_MODE, type, numWordsBeforeVoiceCommand)
-            } else if type == "delete" && self.isListeningForSpeech && !self.selectionCursor.hasSelection {
+                return (false, .STOP_COMMAND_WITHOUT_SUITABLE_MODE, command, indexList)
+            } else if command == .DELETE_ENTRY &&
+                self.isListeningForSpeech &&
+                !self.selectionCursor.hasSelection
+            {
                 // Attemping to delete entry while listening for speech without selection
                 print("\t[Invalid] Attemping to delete entry while listening for speech without selection")
-                return (false, .DELETE_ENTRY_WHILE_LISTENING_FOR_SPEECH, type, numWordsBeforeVoiceCommand)
+                return (false, .DELETE_ENTRY_WHILE_LISTENING_FOR_SPEECH, command, indexList)
             } else {
                 print("\t[Valid] Voice command is valid")
-                return (true, nil, type, numWordsBeforeVoiceCommand)
+                return (true, nil, command, indexList)
             }
         } else {
-            if let lastVoiceCommand = self.voiceCommandStream.last, self.isListeningForSpeech && Date() < lastVoiceCommand.date.addingTimeInterval(Utils.MINIMUM_REST_BETWEEN_VOICE_COMMANDS) {
+            if let lastVoiceCommand = self.voiceCommandStream.last,
+               self.isListeningForSpeech && Date() < lastVoiceCommand.date.addingTimeInterval(Utils.MINIMUM_REST_BETWEEN_VOICE_COMMANDS)
+            {
                 print("\t[Invalid] Voice command does not exist and too close to last voice command that was the same voice command.")
                 return (false, .CLOSE_TO_LAST_VOICE_COMMAND, nil, nil)
             }
@@ -1905,7 +1934,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     }
     
     func handleDetectValidVoiceCommand(
-        voiceCommandType: String,
+        voiceCommandType: VoiceCommandEngine.VoiceCommand,
         transcription: SFTranscription,
         earlyDetection: Bool = false,
         handled: Bool = false
@@ -1938,12 +1967,15 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             
             // Increment State Aggregate Count
             self.state.incrementVoiceCommandCount(timeInterval: date.timeIntervalSince1970)
+            
+            // Save changes
+            self.state.save()
         }
         
         if !handled {
             // Process Voice Command
-            if voiceCommandType == "stop entry" && AVAudioSession.isHeadphonesConnected {
-                voiceCommandEngine.process(
+            if voiceCommandType == .STOP_ENTRY && AVAudioSession.isHeadphonesConnected {
+                self.voiceCommandEngine.process(
                     command: voiceCommandType,
                     utterance: transcription.formattedString
                 ) {
@@ -1962,29 +1994,30 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 // uses the value that we had when the method was called
                 let hasSelection = self.selectionCursor.hasSelection
                 let isUpdatingSelection = self.selectionCursor.isUpdatingSelection
-                voiceCommandEngine.process(
+                self.voiceCommandEngine.process(
                     command: voiceCommandType,
                     utterance: transcription.formattedString
                 ) { [weak self] in
-                    if voiceCommandType != "pause entry" &&
-                        voiceCommandType != "create entry" &&
-                        voiceCommandType != "open selection" &&
-                        voiceCommandType != "select commit" &&
-                        voiceCommandType != "walk commit" &&
-                        voiceCommandType != "run commit" &&
-                        voiceCommandType != "walk selection" &&
-                        voiceCommandType != "run selection" &&
-                        voiceCommandType != "pause run" &&
-                        voiceCommandType != "next element" &&
-                        voiceCommandType != "remove selection" &&
-                        voiceCommandType != "delete selection" &&
-                        voiceCommandType != "previous element" &&
-                        voiceCommandType != "exit mode" &&
-                        voiceCommandType != "walk entry" &&
-                        voiceCommandType != "run entry" &&
+                    if voiceCommandType != .PAUSE_ENTRY &&
+                        voiceCommandType != .CREATE_ENTRY &&
+                        voiceCommandType != .OPEN_SELECTION &&
+                        voiceCommandType != .SELECT_COMMIT &&
+                        voiceCommandType != .WALK_COMMIT &&
+                        voiceCommandType != .RUN_COMMIT &&
+                        voiceCommandType != .WALK_SELECTION &&
+                        voiceCommandType != .RUN_SELECTION &&
+                        voiceCommandType != .PAUSE_RUN &&
+                        voiceCommandType != .SHIFT_NEXT_WALK_ELEMENT &&
+                        voiceCommandType != .REMOVE_SELECTION &&
+                        voiceCommandType != .DELETE_SELECTION &&
+                        voiceCommandType != .SHIFT_PREVIOUS_WALK_ELEMENT &&
+                        voiceCommandType != .EXIT_RUN &&
+                        voiceCommandType != .EXIT_WALK &&
+                        voiceCommandType != .WALK_ENTRY &&
+                        voiceCommandType != .RUN_ENTRY &&
                         !isUpdatingSelection &&
                         !hasSelection &&
-                        !voiceCommandEngine.isUIManagerCommand(command: voiceCommandType) &&
+                        !self!.voiceCommandEngine.isUIManagerCommand(command: voiceCommandType) &&
                         self!.pausedListeningForSpeech
                     {
                         // Start listening for speech again if paused
@@ -2035,8 +2068,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         // Get invalid voice command text
         let text = self.getTranscriptText(segments: transcription.segments)
         
-        let (foundAction, _) = self.uiManager.modalContainsCommand(command: text)
-        if let validOptions = self.uiManager.getValidOptionsString(), !foundAction && self.uiManager.dialogIsModal {
+        if let validOptions = self.uiManager.getValidOptionsString(), self.uiManager.dialogIsModal {
             print("\t[Error] Invalid Command. Remind user of valid commands.")
             self.notifications.executeError(
                 text: "'\(text)' is not a valid command. Please choose from: \(validOptions)",
@@ -2064,23 +2096,23 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             )
             
             self.voiceCommandStream.append(voiceCommandDatum)
-            
-            // Increment State Aggregate Count
-            self.state.incrementVoiceCommandCount(timeInterval: date.timeIntervalSince1970)
+
+            // Save changes
+            self.state.save()
         }
     }
     
     func broadcastSpeechUpdates(
         transcription: SFTranscription,
         isVoiceCommand: Bool,
-        voiceCommandType: String? = nil,
-        numWordsBeforeVoiceCommand: Int? = nil,
+        voiceCommandType: VoiceCommandEngine.VoiceCommand? = nil,
+        voiceCommandIndices: [Int]? = nil,
         isFinalTranscription: Bool
     ) {
         print("===== Speech Recognition Engine: Broadcast Speech Updates =====")
         print("\tTranscription: ", transcription.formattedString)
         print("\tIs Voice Command: ", isVoiceCommand)
-        print("\tNum Words Before Voice Command: ", numWordsBeforeVoiceCommand ?? "nil")
+        print("\tVoice Command Indices: ", voiceCommandIndices ?? "nil")
         print("\tIs Final Transcription: ", isFinalTranscription)
 
         var userInfo: [String : Any] = [
@@ -2091,8 +2123,8 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         if let voiceCommandType = voiceCommandType {
             userInfo["voiceCommandType"] = voiceCommandType
         }
-        if let numWordsBeforeVoiceCommand = numWordsBeforeVoiceCommand {
-            userInfo["numWordsBeforeVoiceCommand"] = numWordsBeforeVoiceCommand
+        if let voiceCommandIndices = voiceCommandIndices {
+            userInfo["voiceCommandIndices"] = voiceCommandIndices
         }
         NotificationCenter.default.post(
             name: SpeechRecognitionEngine.onSpeechUpdate,
@@ -2196,14 +2228,21 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 entry.handleOnSpeechUpdate(text: transcription.formattedString)
             }
             
-            if let voiceCommandType = voiceCommandType, isValidVoiceCommand {
+            if let voiceCommandType = voiceCommandType,
+                isValidVoiceCommand &&
+                !self.earlyValidVoiceCommandDetection
+            {
                 print("Handle detect valid voice command...")
                 self.handleDetectValidVoiceCommand(
                     voiceCommandType: voiceCommandType,
                     transcription: transcription,
                     earlyDetection: true
                 )
-            } else if let lastStartListeningDate = self.lastStartListeningDate, !isValidVoiceCommand && invalidType != .CLOSE_TO_LAST_VOICE_COMMAND && Utils.DEFAULT_START_LISTENING_DELAY + lastStartListeningDate.timeIntervalSinceNow < 0 {
+            } else if let lastStartListeningDate = self.lastStartListeningDate,
+                !isValidVoiceCommand &&
+                invalidType != .CLOSE_TO_LAST_VOICE_COMMAND &&
+                Utils.DEFAULT_START_LISTENING_DELAY + lastStartListeningDate.timeIntervalSinceNow < 0
+            {
                 print("Handle invalid voice command...")
                 self.handleInvalidVoiceCommand(
                     transcription: transcription,
@@ -2223,7 +2262,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             }
             
             // Analyze for voice commands
-            let (isValidVoiceCommand, invalidType, voiceCommandType, numWordsBeforeVoiceCommand) = self.isValidVoiceCommand(query: transcription.formattedString.lowercased())
+            let (isValidVoiceCommand, invalidType, voiceCommandType, voiceCommandIndices) = self.isValidVoiceCommand(query: transcription.formattedString.lowercased())
             
             // We place this before the voice command detection infrastructure
             // to make sure that we've processed voice commands into entry
@@ -2242,7 +2281,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                     transcription: transcription,
                     isVoiceCommand: isValidVoiceCommand,
                     voiceCommandType: voiceCommandType,
-                    numWordsBeforeVoiceCommand: numWordsBeforeVoiceCommand,
+                    voiceCommandIndices: voiceCommandIndices,
                     isFinalTranscription: false
                 )
             } else {
@@ -2270,7 +2309,10 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
 
             // We encountered a voice command while listening for speech
             // Add to voice command stream
-            if let voiceCommandType = voiceCommandType, isValidVoiceCommand {
+            if let voiceCommandType = voiceCommandType,
+               isValidVoiceCommand &&
+                !self.earlyValidVoiceCommandDetection
+            {
                 print("Handle detect valid voice command...")
                 self.handleDetectValidVoiceCommand(
                     voiceCommandType: voiceCommandType,
@@ -2295,7 +2337,9 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             self.searchForWakePhrase(transcription: result.bestTranscription)
         // MARK: - Edge Case and Voice Commands
         } else if (
-            self.isListeningForCommands
+            self.isListeningForCommands &&
+            self.entryManager.currentEntry?.entrySegments != nil &&
+            self.entryManager.currentEntry!.entrySegments.count == 0
         ) || (
             self.isListeningForSpeech &&
             self.pausedListeningForSpeech &&
@@ -2328,6 +2372,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                     transcription: result.bestTranscription
                 )
             } else if let lastStartListeningDate = self.lastStartListeningDate,
+                !self.earlyValidVoiceCommandDetection &&
                 !self.earlyInvalidVoiceCommandDetection &&
                 !isValidVoiceCommand &&
                 invalidType != .CLOSE_TO_LAST_VOICE_COMMAND &&
@@ -2340,13 +2385,13 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         } else if
             (
                 self.isListeningForSpeech ||
-                (self.voiceCommandStream.last != nil && self.voiceCommandStream.last!.type == "stop entry")
+                    (self.voiceCommandStream.last != nil && self.voiceCommandStream.last!.type == .STOP_ENTRY)
             ) &&
             !self.isListeningForCommands
         {
             print("\tListening for speech (handled and unhandled by didHypothesizeTranscription)...")
             // Analyze for voice commands
-            let (isValidVoiceCommand, invalidType, voiceCommandType, numWordsBeforeVoiceCommand) = self.isValidVoiceCommand(query: result.bestTranscription.formattedString.lowercased())
+            let (isValidVoiceCommand, invalidType, voiceCommandType, voiceCommandIndices) = self.isValidVoiceCommand(query: result.bestTranscription.formattedString.lowercased())
             
             // We place this before the voice command detection infrastructure
             // to make sure that we've processed voice commands into entry
@@ -2365,7 +2410,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                     transcription: result.bestTranscription,
                     isVoiceCommand: isValidVoiceCommand,
                     voiceCommandType: voiceCommandType,
-                    numWordsBeforeVoiceCommand: numWordsBeforeVoiceCommand,
+                    voiceCommandIndices: voiceCommandIndices,
                     isFinalTranscription: true
                 )
             } else {
@@ -2431,7 +2476,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         } else if self.isListeningForCommands {
             print("\tListening for commmands (handled by didHypothesizeTranscription)...")
             // Analyze for voice commands
-            let (isValidVoiceCommand, invalidType, voiceCommandType, numWordsBeforeVoiceCommand) = self.isValidVoiceCommand(query: result.bestTranscription.formattedString.lowercased())
+            let (isValidVoiceCommand, invalidType, voiceCommandType, voiceCommandIndices) = self.isValidVoiceCommand(query: result.bestTranscription.formattedString.lowercased())
             
             // We place this before the voice command detection infrastructure
             // to make sure that we've processed voice commands into entry
@@ -2450,7 +2495,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                     transcription: result.bestTranscription,
                     isVoiceCommand: isValidVoiceCommand,
                     voiceCommandType: voiceCommandType,
-                    numWordsBeforeVoiceCommand: numWordsBeforeVoiceCommand,
+                    voiceCommandIndices: voiceCommandIndices,
                     isFinalTranscription: true
                 )
             } else {
@@ -2475,13 +2520,22 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 print("\tEarly Broadcast Speech Rejection: ", self.earlyBroadcastSpeechRejection)
             }
 
-            if let voiceCommandType = voiceCommandType, isValidVoiceCommand && !self.earlyValidVoiceCommandDetection {
+            if let voiceCommandType = voiceCommandType,
+               isValidVoiceCommand &&
+                !self.earlyValidVoiceCommandDetection
+            {
                 print("Handle detect valid voice command...")
                 self.handleDetectValidVoiceCommand(
                     voiceCommandType: voiceCommandType,
                     transcription: result.bestTranscription
                 )
-            } else if let lastStartListeningDate = self.lastStartListeningDate, !self.earlyInvalidVoiceCommandDetection && !isValidVoiceCommand && invalidType != .CLOSE_TO_LAST_VOICE_COMMAND && Utils.DEFAULT_START_LISTENING_DELAY + lastStartListeningDate.timeIntervalSinceNow < 0 {
+            } else if let lastStartListeningDate = self.lastStartListeningDate,
+                !self.earlyValidVoiceCommandDetection &&
+                !self.earlyInvalidVoiceCommandDetection &&
+                !isValidVoiceCommand &&
+                invalidType != .CLOSE_TO_LAST_VOICE_COMMAND &&
+                Utils.DEFAULT_START_LISTENING_DELAY + lastStartListeningDate.timeIntervalSinceNow < 0
+            {
                 print("Handle invalid voice command...")
                 // We don't want to repeat an error twice, hence why we only let those that weren't caught early through
                 self.handleInvalidVoiceCommand(transcription: result.bestTranscription)

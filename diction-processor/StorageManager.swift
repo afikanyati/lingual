@@ -35,7 +35,8 @@ class StorageManager: NSObject {
                 "userSettings": self.fetchUserSettings() as Any,
                 "entries" : self.fetchEntries() as Any,
                 "voiceCommandStream": self.fetchVoiceCommandStream() as Any,
-                "appTelemetry": self.fetchAppTelemetry() as Any
+                "appTelemetry": self.fetchAppTelemetry() as Any,
+                "clips": self.fetchClips() as Any
             ]
         )
     }
@@ -66,11 +67,11 @@ class StorageManager: NSObject {
                 entryPlays: state.entryPlays,
                 entryTextExports: state.entryTextExports,
                 entryAudioExports: state.entryAudioExports,
+                activeEntryWordCounts: state.activeEntryWordCounts,
+                deletedEntryWordCounts: state.activeEntryWordCounts,
                 voiceCommands: state.voiceCommands
             )
-            if let speechRecognition = self.speechRecognition {
-                self.saveVoiceCommandStream(voiceCommandStream: speechRecognition.voiceCommandStream)
-            }
+            self.saveVoiceCommandStream(voiceCommandStream: self.speechRecognition.voiceCommandStream)
             self.saveClips(clips: state.clips)
         }
     }
@@ -371,6 +372,30 @@ class StorageManager: NSObject {
             print("\t[Error] There was a problem retrieving entryAudioExports Data object.")
         }
         
+        // Active Entry Word Counts
+        if let savedObj = defaults.object(forKey: "activeEntryWordCounts") as? Data {
+            if let activeEntryWordCounts = try? NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(savedObj) as? [Int] {
+                print("\tSuccessfully fetched \(activeEntryWordCounts.count) activeEntryWordCounts!")
+                appTelemetry["activeEntryWordCounts"] = activeEntryWordCounts
+            } else {
+                print("\t[Error] There was a problem fetching activeEntryWordCounts.")
+            }
+        } else {
+            print("\t[Error] There was a problem retrieving activeEntryWordCounts Data object.")
+        }
+        
+        // Deleted Entry Word Counts
+        if let savedObj = defaults.object(forKey: "deletedEntryWordCounts") as? Data {
+            if let deletedEntryWordCounts = try? NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(savedObj) as? [Int] {
+                print("\tSuccessfully fetched \(deletedEntryWordCounts.count) deletedEntryWordCounts!")
+                appTelemetry["deletedEntryWordCounts"] = deletedEntryWordCounts
+            } else {
+                print("\t[Error] There was a problem fetching deletedEntryWordCounts.")
+            }
+        } else {
+            print("\t[Error] There was a problem retrieving deletedEntryWordCounts Data object.")
+        }
+        
         // Voice Commands
         if let savedObj = defaults.object(forKey: "voiceCommands") as? Data {
             if let voiceCommands = try? NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(savedObj) as? [TimeInterval] {
@@ -554,6 +579,8 @@ class StorageManager: NSObject {
         entryPlays: [TimeInterval],
         entryTextExports: [TimeInterval],
         entryAudioExports: [TimeInterval],
+        activeEntryWordCounts: [Int],
+        deletedEntryWordCounts: [Int],
         voiceCommands: [TimeInterval]
     ) {
         print("===== Storage Manager: Save Telemetry =====")
@@ -610,6 +637,24 @@ class StorageManager: NSObject {
             print("\tSuccessfully saved \(entryAudioExports.count) entryAudioExports!")
         } else {
             print("\t[Error] There was a problem converting entryAudioExports to Data object.")
+        }
+        
+        // Active Entry Word Counts
+        if let savedData = try? NSKeyedArchiver.archivedData(withRootObject: activeEntryWordCounts, requiringSecureCoding: false) {
+            let defaults = UserDefaults.standard
+            defaults.set(savedData, forKey: "activeEntryWordCounts")
+            print("\tSuccessfully saved \(activeEntryWordCounts.count) activeEntryWordCounts!")
+        } else {
+            print("\t[Error] There was a problem converting activeEntryWordCounts to Data object.")
+        }
+        
+        // Deleted Entry Word Counts
+        if let savedData = try? NSKeyedArchiver.archivedData(withRootObject: deletedEntryWordCounts, requiringSecureCoding: false) {
+            let defaults = UserDefaults.standard
+            defaults.set(savedData, forKey: "deletedEntryWordCounts")
+            print("\tSuccessfully saved \(deletedEntryWordCounts.count) deletedEntryWordCounts!")
+        } else {
+            print("\t[Error] There was a problem converting deletedEntryWordCounts to Data object.")
         }
         
         // Voice Commands

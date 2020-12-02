@@ -51,6 +51,22 @@ class StateManager: NSObject {
     private(set) var entryPlays = [TimeInterval]()
     private(set) var entryTextExports = [TimeInterval]()
     private(set) var entryAudioExports = [TimeInterval]()
+    var activeEntryWordCounts: [Int] {
+        var wordCounts = [Int]()
+        for entry in self.activeEntries {
+            wordCounts.append(entry.wordCount)
+        }
+        
+        return wordCounts
+    }
+    var deletedEntryWordCounts: [Int] {
+        var wordCounts = [Int]()
+        for entry in self.deletedEntries {
+            wordCounts.append(entry.wordCount)
+        }
+        
+        return wordCounts
+    }
     private(set) var voiceCommands = [TimeInterval]()
     
     // MARK: - General
@@ -67,6 +83,9 @@ class StateManager: NSObject {
     @objc dynamic private(set) var entries = [Entry]()
     var activeEntries: [Entry] {
         return self.entries.filter { !$0.isDeleted }
+    }
+    var deletedEntries: [Entry] {
+        return self.entries.filter { $0.isDeleted }
     }
     private(set) var clips = [String: Set<String>]()
     private(set) var speaker = Speaker(uid: UUID().uuidString, device: UIDevice.current.name)
@@ -88,8 +107,6 @@ class StateManager: NSObject {
         super.init()
 
         self.configureNotificationObservers()
-        self.fetchStoredState()
-        self.incrementOpenCount()
         
         // We set punctuation suggestions
         // 1) if punctuation suggestions and temporal suggestions are true, we handle it in if-statement
@@ -100,7 +117,7 @@ class StateManager: NSObject {
             let dialogActions = [
                 DialogAction(
                     title: "Continue",
-                    voiceCommand: "continue",
+                    voiceCommand: .CONTINUE_DIALOG,
                     style: .cancel,
                     handler: nil
                 )
@@ -243,9 +260,9 @@ class StateManager: NSObject {
         // Switch over the route change reason.
         switch reason {
         case .newDeviceAvailable: // New device found.
-            self.handleAudioDeviceChange()
+            self.detectAudioDevice()
         case .oldDeviceUnavailable: // Old device removed.
-            break
+            self.detectAudioDevice()
         default:
             break
         }
@@ -265,6 +282,14 @@ class StateManager: NSObject {
         }
         
         self.mainViewReady = true
+        
+        // We fetch stored state once view has loaded because
+        // we know with reliability other modules would have been instantiated
+        //
+        // Any data that should have been set in modules would otherwise be lost
+        self.fetchStoredState()
+        self.incrementOpenCount()
+        self.detectAudioDevice()
     }
     
     @objc func onEntryTableViewDidLoad(notification: Notification) {
@@ -294,14 +319,14 @@ class StateManager: NSObject {
     
     @objc func onProcessedVoiceCommand(notification: Notification) {
         print("===== State Manager: On Processed Voice Command =====")
-        let command = notification.userInfo!["command"] as! String
+        let command = notification.userInfo!["command"] as! VoiceCommandEngine.VoiceCommand
         var handler: (() -> Void)?
         if notification.userInfo!["handler"] != nil {
             handler = notification.userInfo!["handler"] as? () -> Void
         }
         
         switch (command) {
-        case "activate punctuation":
+        case .ACTIVATE_PUNCTUATION:
             print("\tVoice Command: Activate Skip Punctuation")
             
             // Play Sound
@@ -309,14 +334,14 @@ class StateManager: NSObject {
 
             self.setWithSkipPunctuation(to: false)
             handler?()
-        case "deactivate punctuation":
+        case .DEACTIVATE_PUNCTUATION:
             print("\tVoice Command: Deactivate Skip Punctuation")
             // Play Sound
             soundEngine.voiceCommandAccept()
             
             self.setWithSkipPunctuation(to: true)
             handler?()
-        case "activate silences":
+        case .ACTIVATE_SILENCES:
             print("\tVoice Command: Activate Silence")
             
             // Play Sound
@@ -324,7 +349,7 @@ class StateManager: NSObject {
 
             self.setWithOmitSilences(to: false)
             handler?()
-        case "deactivate silences":
+        case .DEACTIVATE_SILENCES:
             print("\tVoice Command: Deactivate Silence")
             
             // Play Sound
@@ -332,7 +357,7 @@ class StateManager: NSObject {
 
             self.setWithOmitSilences(to: true)
             handler?()
-        case "activate temporal suggestions":
+        case .ACTIVATE_TEMPORAL_SUGGESTIONS:
             print("\tVoice Command: Activate Temporal Suggestions")
 
             // Play Sound
@@ -340,7 +365,7 @@ class StateManager: NSObject {
 
             self.setWithTemporalSuggestions(to: true)
             handler?()
-        case "deactivate temporal suggestions":
+        case .DEACTIVATE_TEMPORAL_SUGGESTIONS:
             print("\tVoice Command: Deactivate Temporal Suggestions")
 
             // Play Sound
@@ -348,7 +373,7 @@ class StateManager: NSObject {
 
             self.setWithTemporalSuggestions(to: false)
             handler?()
-        case "activate punctuation suggestions":
+        case .ACTIVATE_PUNCTUATION_SUGGESTIONS:
             print("\tVoice Command: Activate Punctuation Suggestions")
             
             // Play Sound
@@ -356,7 +381,7 @@ class StateManager: NSObject {
         
             self.setWithPunctuationSuggestions(to: true)
             handler?()
-        case "deactivate punctuation suggestions":
+        case .DEACTIVATE_PUNCTUATION_SUGGESTIONS:
             print("\tVoice Command: Deactivate Punctuation Suggestions")
             
             // Play Sound
@@ -364,7 +389,7 @@ class StateManager: NSObject {
         
             self.setWithPunctuationSuggestions(to: false)
             handler?()
-        case "activate formatting suggestions":
+        case .ACTIVATE_FORMATTING_SUGGESTIONS:
             print("\tVoice Command: Activate Formatting Suggestions")
             
             // Play Sound
@@ -372,7 +397,7 @@ class StateManager: NSObject {
             
             self.setWithFormattingSuggestions(to: true)
             handler?()
-        case "deactivate formatting suggestions":
+        case .DEACTIVATE_FORMATTING_SUGGESTIONS:
             print("\tVoice Command: Deactivate Formatting Suggestions")
             
             // Play Sound
@@ -380,7 +405,7 @@ class StateManager: NSObject {
             
             self.setWithFormattingSuggestions(to: false)
             handler?()
-        case "activate passive echo":
+        case .ACTIVATE_PASSIVE_ECHO:
             print("\tVoice Command: Activate Passive Echo")
             
             // Play Sound
@@ -388,7 +413,7 @@ class StateManager: NSObject {
             
             self.setWithPassiveEcho(to: true)
             handler?()
-        case "deactivate passive echo":
+        case .DEACTIVATE_PASSIVE_ECHO:
             print("\tVoice Command: Deactivate Passive Echo")
             
             // Play Sound
@@ -396,12 +421,12 @@ class StateManager: NSObject {
             
             self.setWithPassiveEcho(to: false)
             handler?()
-        case "increase volume":
+        case .INCREASE_VOLUME:
             print("\tVoice Command: Increase Volume")
             self.handleIncreaseVolume(
                 handler: handler
             )
-        case "decrease volume":
+        case .DECREASE_VOLUME:
             print("\tVoice Command: Decrease Volume")
             self.handleDecreaseVolume(
                 handler: handler
@@ -478,7 +503,10 @@ class StateManager: NSObject {
             self.entryAudioExports = [TimeInterval]()
             self.voiceCommands = [TimeInterval]()
         }
-
+        
+        // Clips
+        self.clips = notification.userInfo!["clips"] as? [String: Set<String>] ?? [String: Set<String>]()
+        
         NotificationCenter.default.post(
             name: StateManager.onFetchedEntries,
             object: nil,
@@ -489,14 +517,6 @@ class StateManager: NSObject {
     }
     
     // MARK: - Methods
-    
-    func incrementOpenCount() {
-        print("===== State Manager: Increment Open Count =====")
-        self.appOpens.append(Date().timeIntervalSince1970)
-        self.storageManager.save(state: self)
-        
-        checkRep()
-    }
     
     func fetchStoredState() {
         print("===== State Manager: Fetch Stored State  =====")
@@ -517,6 +537,7 @@ class StateManager: NSObject {
         }
         
         self.save()
+        checkRep()
     }
     
     // message should start with a present progressive verb: -ing
@@ -530,29 +551,46 @@ class StateManager: NSObject {
     
     // MARK: - Telemetry
     
+    func incrementOpenCount() {
+        print("===== State Manager: Increment Open Count =====")
+        self.appOpens.append(Date().timeIntervalSince1970)
+        self.save()
+        checkRep()
+    }
+    
     func incrementEntryViewCount(timeInterval: TimeInterval) {
         print("===== State Manager: Increment Entry View Count =====")
         self.entryViews.append(timeInterval)
+        self.save()
+        checkRep()
     }
     
     func incrementEntryPlayCount(timeInterval: TimeInterval) {
         print("===== State Manager: Increment Entry Play Count =====")
         self.entryPlays.append(timeInterval)
+        self.save()
+        checkRep()
     }
     
     func incrementEntryTextExportCount(timeInterval: TimeInterval) {
         print("===== State Manager: Increment Entry Text Export Count =====")
         self.entryTextExports.append(timeInterval)
+        self.save()
+        checkRep()
     }
     
     func incrementEntryAudioExportCount(timeInterval: TimeInterval) {
         print("===== State Manager: Increment Audio Export Count =====")
         self.entryAudioExports.append(timeInterval)
+        self.save()
+        checkRep()
     }
     
     func incrementVoiceCommandCount(timeInterval: TimeInterval) {
         print("===== State Manager: Increment Voice Command Count =====")
         self.voiceCommands.append(timeInterval)
+        self.save()
+        checkRep()
     }
     
     // MARK: - Setters
@@ -830,6 +868,9 @@ class StateManager: NSObject {
             let entrySet: Set = [entryUID]
             self.clips[clipUID] = entrySet
         }
+        
+        self.save()
+        checkRep()
     }
     
     func setSpeakerPitch(to pitch: Pitch?) {
@@ -925,15 +966,18 @@ class StateManager: NSObject {
                 
                 // Delete Clip
                 let filePath = Utils.getFileURL(of: "\(entry.filename)-\(clipUID)\(entry.fileType)").absoluteString
-                Utils.deleteExistingFile(atPath: filePath)
+                let _ = Utils.deleteIfExistingFile(atPath: filePath)
             }
         }
         
+        self.save()
         checkRep()
     }
     
-    func handleAudioDeviceChange() {
+    func detectAudioDevice() {
+        print("===== State Manager: Detect Audio Device =====")
         if AVAudioSession.isHeadphonesConnected && AVAudioSession.bluetoothAudioConnected {
+            print("\tRegistered Bluetooth Headphones...")
             // Bluetooth Headphones
             let audioDeviceDatum = AudioDeviceDatum(
                 date: Date(),
@@ -941,6 +985,7 @@ class StateManager: NSObject {
             )
             self.audioDeviceUse.append(audioDeviceDatum)
         } else if AVAudioSession.isHeadphonesConnected && !AVAudioSession.bluetoothAudioConnected {
+            print("\tRegistered Wired Headphones...")
             // Wired Headphones
             let audioDeviceDatum = AudioDeviceDatum(
                 date: Date(),
@@ -948,6 +993,7 @@ class StateManager: NSObject {
             )
             self.audioDeviceUse.append(audioDeviceDatum)
         } else {
+            print("\tRegistered Speakers...")
             // Speakers
             let audioDeviceDatum = AudioDeviceDatum(
                 date: Date(),
@@ -955,5 +1001,8 @@ class StateManager: NSObject {
             )
             self.audioDeviceUse.append(audioDeviceDatum)
         }
+        
+        self.save()
+        checkRep()
     }
 }

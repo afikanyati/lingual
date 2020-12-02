@@ -12,12 +12,12 @@ class VoiceCommandDatum: NSObject, NSCoding {
     var date: Date
     var utteredSpeech: String
     var isValid: Bool
-    var type: String?
+    var type: VoiceCommandEngine.VoiceCommand?
     init(
         date: Date,
         utteredSpeech: String,
         isValid: Bool,
-        type: String? = nil
+        type: VoiceCommandEngine.VoiceCommand? = nil
     ) {
         self.date = date
         self.utteredSpeech = utteredSpeech
@@ -31,14 +31,23 @@ class VoiceCommandDatum: NSObject, NSCoding {
         coder.encode(self.date, forKey: "date")
         coder.encode(self.utteredSpeech, forKey: "utteredSpeech")
         coder.encode(self.isValid, forKey: "isValid")
-        coder.encode(self.type, forKey: "type")
+        if let type = self.type {
+            coder.encode(type.value(), forKey: "type")
+        }
     }
 
     required init?(coder: NSCoder) {
         self.date = coder.decodeObject(forKey: "date") as! Date
         self.utteredSpeech = coder.decodeObject(forKey: "utteredSpeech") as! String
         self.isValid = coder.decodeBool(forKey: "isValid")
-        self.type = coder.decodeObject(forKey: "type") as! String?
+        if coder.containsValue(forKey: "type"),
+           let type = coder.decodeObject(forKey: "type") as? String,
+           let command = VoiceCommandEngine.VoiceCommand(rawValue: type)
+        {
+            self.type = command
+        } else {
+            self.type = nil
+        }
     }
 
     override var description: String {

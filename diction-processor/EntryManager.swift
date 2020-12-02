@@ -30,6 +30,7 @@ class EntryManager: NSObject {
     var selectionCursor: SelectionCursor
     var uiManager: UIManager
     var pitchRecognition: PitchRecognitionEngine
+    var voiceCommandEngine: VoiceCommandEngine
     private let _undoManager = UndoManager()
     var undoManager: UndoManager {
         return _undoManager
@@ -81,7 +82,8 @@ class EntryManager: NSObject {
         speechSynthesis: SpeechSynthesisEngine,
         selectionCursor: SelectionCursor,
         uiManager: UIManager,
-        pitchRecognition: PitchRecognitionEngine
+        pitchRecognition: PitchRecognitionEngine,
+        voiceCommandEngine: VoiceCommandEngine
     ) {
         print("===== Entry Manager: Initialization =====")
         self.state = state
@@ -92,6 +94,7 @@ class EntryManager: NSObject {
         self.selectionCursor = selectionCursor
         self.uiManager = uiManager
         self.pitchRecognition = pitchRecognition
+        self.voiceCommandEngine = voiceCommandEngine
         
         super.init()
         
@@ -170,114 +173,32 @@ class EntryManager: NSObject {
     
     @objc func onProcessedVoiceCommand(notification: Notification) {
         print("===== Entry Manager: On Processed Voice Command =====")
-        let command = notification.userInfo!["command"] as! String
+        let command = notification.userInfo!["command"] as! VoiceCommandEngine.VoiceCommand
         var handler: (() -> Void)?
         if notification.userInfo!["handler"] != nil {
             handler = notification.userInfo!["handler"] as? () -> Void
         }
-        
-        if voiceCommandEngine.isEntryManagerCommand(command: command) && self.currentEntry == nil && command != "start entry" {
-            self.notifications.executeError(
-                text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
-            )
-            
-            return
-        }
 
         switch (command) {
-        case "play entry", "play selection":
+        case .PLAY_ENTRY, .PLAY_SELECTION:
             self.playEntry(voiceCommand: true, onFinishHandler: handler)
-        case "pause entry":
+        case .PAUSE_ENTRY:
             self.pauseEntry(voiceCommand: true, handler: handler)
-        case "start entry":
+        case .START_ENTRY:
             if let _ = Utils.getNavigationController()?.visibleViewController as? EntryTableViewController, let _ = self.currentEntry {
                 print("\tFound existing entry while in Entry List after receving 'start entry' via voice command. Remove it to trigger new entry creation.")
                 self.setCurrentEntry()
             }
             self.startEntry(voiceCommand: true, handler: handler)
-        case "create entry":
-            self.startEntry(voiceCommand: true, handler: handler)
-        case "stop entry":
+        case .CREATE_ENTRY:
+            self.startEntry(voiceCommand: true, new: true, handler: handler)
+        case .STOP_ENTRY:
             if self.speechPlayer.isPlayingEntry {
                 self.stopPlayingEntry(voiceCommand: true, handler: handler)
             } else if let _ = self.currentEntry {
                 self.stopEntry(voiceCommand: true, handler: handler)
             }
-        case "resume entry":
-            self.resumeEntry(voiceCommand: true, handler: handler)
-        case "echo entry":
-            self.echoEntry(voiceCommand: true, handler: handler)
-        case "pause echo":
-            self.pauseEcho(voiceCommand: true, handler: handler)
-        case "stop echo":
-            self.stopEcho(voiceCommand: true, handler: handler)
-        case "delete selection":
-            self.deleteSelection(voiceCommand: true, handler: handler)
-        case "update selection":
-            self.updateSelection(voiceCommand: true, handler: handler)
-        case "copy selection":
-            self.copySelection(voiceCommand: true, handler: handler)
-        case "cut selection":
-            self.cutSelection(voiceCommand: true, handler: handler)
-        case "increase selection rate":
-            self.increaseRateSelection(voiceCommand: true, handler: handler)
-        case "decrease selection rate":
-            self.decreaseRateSelection(voiceCommand: true, handler: handler)
-        case "export", "export entry", "export selection":
-            self.exportEntry(voiceCommand: true, handler: handler)
-        case "pause playback":
-            self.pauseEntry(voiceCommand: true, handler: handler)
-        case "resume echo":
-            self.echoEntry(voiceCommand: true, handler: handler)
-        case "edit entry":
-            self.editEntry(voiceCommand: true, handler: handler)
-        case "play commit":
-            self.playCommit(voiceCommand: true, onFinishHandler: handler)
-        case "skip backward":
-            self.skipBackward(voiceCommand: true, handler: handler)
-        case "skip forward":
-            self.skipForward(voiceCommand: true, handler: handler)
-        case "stop playback":
-            self.stopPlayingEntry(voiceCommand: true, handler: handler)
-        case "pause":
-            if let _ = self.currentEntry, self.speechPlayer.isPlayingEntry {
-                self.pauseEntry(voiceCommand: true, handler: handler)
-            } else if let _ = self.currentEntry, self.speechSynthesis.isPlayingEcho {
-                self.pauseEcho(voiceCommand: true, handler: handler)
-            } else if let entry = self.currentEntry, self.isRunningEntry {
-                // Play Sound
-                soundEngine.voiceCommandAccept()
-
-                entry.pauseRun(handler: handler)
-            }
-        case "stop":
-            if let _ = self.currentEntry, self.speechPlayer.isPlayingEntry {
-                self.stopPlayingEntry(voiceCommand: true, handler: handler)
-            } else if let _ = self.currentEntry, self.speechSynthesis.isPlayingEcho {
-                self.stopEcho(voiceCommand: true, handler: handler)
-            } else if let entry = self.currentEntry, self.isRunningEntry {
-                // Play Sound
-                soundEngine.voiceCommandAccept()
-                
-                entry.pauseRun(handler: handler)
-            }
-        case "delete":
-            if self.selectionCursor.hasSelection {
-                self.deleteSelection(voiceCommand: true, handler: handler)
-            } else if let _ = self.currentEntry {
-                self.deleteEntry(voiceCommand: true, handler: handler)
-            }
-        case "echo":
-            if self.selectionCursor.hasSelection {
-                self.echoEntry(voiceCommand: true, handler: handler)
-            } else if let _ = self.currentEntry {
-                self.echoEntry(voiceCommand: true, handler: handler)
-            }
-        case "paste clipboard":
-            self.pasteClipboard(voiceCommand: true, handler: handler)
-        case "resume playback":
+        case .RESUME_ENTRY:
             if self.speechRecognition.pausedListeningForSpeech {
                 self.notifications.executeError(
                     text: "Entry not paused.",
@@ -286,33 +207,82 @@ class EntryManager: NSObject {
                 )
                 return
             }
+
+            self.resumeEntry(voiceCommand: true, handler: handler)
+        case .ECHO_ENTRY, .ECHO_SELECTION:
+            self.echoEntry(voiceCommand: true, handler: handler)
+        case .PAUSE_ECHO:
+            self.pauseEcho(voiceCommand: true, handler: handler)
+        case .STOP_ECHO:
+            self.stopEcho(voiceCommand: true, handler: handler)
+        case .DELETE_SELECTION:
+            self.deleteSelection(voiceCommand: true, handler: handler)
+        case .UPDATE_SELECTION:
+            self.updateSelection(voiceCommand: true, handler: handler)
+        case .COPY_SELECTION:
+            self.copySelection(voiceCommand: true, handler: handler)
+        case .CUT_SELECTION:
+            self.cutSelection(voiceCommand: true, handler: handler)
+        case .INCREASE_SELECTION_RATE:
+            self.increaseRateSelection(voiceCommand: true, handler: handler)
+        case .DECREASE_SELECTION_RATE:
+            self.decreaseRateSelection(voiceCommand: true, handler: handler)
+        case .EXPORT_ENTRY, .EXPORT_SELECTION:
+            self.exportEntry(voiceCommand: true, handler: handler)
+        case .PAUSE_PLAYBACK:
+            self.pauseEntry(voiceCommand: true, handler: handler)
+        case .RESUME_ECHO:
+            self.echoEntry(voiceCommand: true, handler: handler)
+        case .EDIT_ENTRY:
+            self.editEntry(voiceCommand: true, handler: handler)
+        case .PLAY_COMMIT:
+            self.playCommit(voiceCommand: true, onFinishHandler: handler)
+        case .SKIP_PLAYBACK_BACKWARD:
+            self.skipBackward(voiceCommand: true, handler: handler)
+        case .SKIP_PLAYBACK_FORWARD:
+            self.skipForward(voiceCommand: true, handler: handler)
+        case .STOP_PLAYBACK:
+            self.stopPlayingEntry(voiceCommand: true, handler: handler)
+        case .DELETE_ENTRY:
+            self.deleteEntry(voiceCommand: true, handler: handler)
+        case .PASTE_CLIPBOARD:
+            self.pasteClipboard(voiceCommand: true, handler: handler)
+        case .RESUME_PLAYBACK:
+            if self.speechPlayer.pausedPlayingEntry {
+                self.notifications.executeError(
+                    text: "Playback not paused.",
+                    voiceCommand: true,
+                    handler: handler
+                )
+                return
+            }
             
-            self.startEntry(voiceCommand: true, handler: handler)
-        case "select commit":
+            self.playEntry(voiceCommand: true, onFinishHandler: handler)
+        case .SELECT_COMMIT:
             self.selectCommit(
                 handler: handler
             )
-        case "walk commit":
+        case .WALK_COMMIT:
             self.walkCommit(
                 handler: handler
             )
-        case "run commit":
+        case .RUN_COMMIT:
             self.runCommit(
                 handler: handler
             )
-        case "rollback commit":
+        case .ROLLBACK_COMMIT:
             self.rollbackCommit(
                 handler: handler
             )
-        case "open selection":
+        case .OPEN_SELECTION:
             self.openSelection(
                 handler: handler
             )
-        case "remove selection":
+        case .REMOVE_SELECTION:
             self.removeSelection(
                 handler: handler
             )
-        case "cancel":
+        case .CANCEL_SELECTION_UPDATE:
             if self.selectionCursor.isUpdatingSelection && !self.selectionCursor.isPromptingForUpdateAcceptance {
                 self.cancelUpdateSelection(
                     voiceCommand: true,
@@ -326,71 +296,71 @@ class EntryManager: NSObject {
                     }
                 )
             }
-        case "shift anchor left":
+        case .SHIFT_ANCHOR_LEFT:
             self.shiftAnchor(
                 direction: .left,
                 handler: handler
             )
-        case "shift anchor right":
+        case .SHIFT_ANCHOR_RIGHT:
             self.shiftAnchor(
                 direction: .right,
                 handler: handler
             )
-        case "shift focus left":
+        case .SHIFT_FOCUS_LEFT:
             self.shiftFocus(
                 direction: .left,
                 handler: handler
             )
-        case "shift focus right":
+        case .SHIFT_FOCUS_RIGHT:
             self.shiftFocus(
                 direction: .right,
                 handler: handler
             )
-        case "shift forward":
+        case .SHIFT_SELECTION_FORWARD:
             self.shiftSelection(
                 direction: .right,
                 handler: handler
             )
-        case "shift backward":
+        case .SHIFT_SELECTION_BACKWARD:
             self.shiftSelection(
                 direction: .left,
                 handler: handler
             )
-        case "expand selection":
+        case .EXPAND_SELECTION:
             self.expandSelection(
                 handler: handler
             )
-        case "reduce selection":
+        case .REDUCE_SELECTION:
             self.reduceSelection(
                 handler: handler
             )
-        case "echo commit":
+        case .ECHO_COMMIT:
             self.echoCommit(
                 handler: handler
             )
-        case "echo previous sentence":
+        case .ECHO_PREVIOUS_SENTENCE:
             self.echoPreviousSentence(
                 handler: handler
             )
-        case "play previous sentence":
+        case .PLAY_PREVIOUS_SENTENCE:
             self.playPreviousSentence(
                 handler: handler
             )
-        case "run entry", "run selection":
+        case .RUN_ENTRY, .RUN_SELECTION:
             self.runEntry(voiceCommand: true, handler: handler)
-        case "walk entry", "walk selection":
+        case .WALK_ENTRY, .WALK_SELECTION:
             self.walkEntry(voiceCommand: true, handler: handler)
-        case "next element":
+        case .SHIFT_NEXT_WALK_ELEMENT:
             self.walkNextElement(voiceCommand: true, handler: handler)
-        case "previous element":
+        case .SHIFT_PREVIOUS_WALK_ELEMENT:
             self.walkPreviousElement(voiceCommand: true, handler: handler)
-        case "pause run":
+        case .PAUSE_RUN:
             self.pauseRun(voiceCommand: true, handler: handler)
-        case "exit mode":
+        case .EXIT_RUN, .EXIT_WALK:
             self.exitWalkRun(voiceCommand: true, handler: handler)
-        case "undo":
+        case .UNDO_CHANGE:
             self.undo(handler: handler)
-        case "redo":
+        case .REDO_CHANGE:
             if !self.selectionCursor.isUpdatingSelection && !self.selectionCursor.isPromptingForUpdateAcceptance {
                 self.redo(handler: handler)
             }
@@ -686,7 +656,7 @@ class EntryManager: NSObject {
             let dialogActions = [
                 DialogAction(
                     title: "Delete",
-                    voiceCommand: "delete",
+                    voiceCommand: .DELETE_ENTRY,
                     feedbackVisualMessage: "Delete Entry",
                     feedbackAudioMessage: "entry deleted",
                     style: .default,
@@ -696,7 +666,7 @@ class EntryManager: NSObject {
                 ),
                 DialogAction(
                     title: "Cancel",
-                    voiceCommand: "cancel",
+                    voiceCommand: .CANCEL_DIALOG,
                     feedbackVisualMessage: "Canceled!",
                     feedbackAudioMessage: "Command canceled.",
                     style: .cancel,
@@ -763,7 +733,7 @@ class EntryManager: NSObject {
         }
     }
 
-    func startEntry(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
+    func startEntry(voiceCommand: Bool = false, new: Bool = false, handler: (() -> Void)? = nil) {
         print("===== Entry Manager: Start Entry =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
@@ -786,7 +756,7 @@ class EntryManager: NSObject {
             let dialogActions = [
                 DialogAction(
                     title: "Grant Permission",
-                    voiceCommand: "grant permission",
+                    voiceCommand: .GRANT_PERMISSION,
                     feedbackVisualMessage: "Permission Granted!",
                     feedbackAudioMessage: "permission granted",
                     style: .default,
@@ -797,7 +767,7 @@ class EntryManager: NSObject {
                 }),
                 DialogAction(
                     title: "Cancel",
-                    voiceCommand: "cancel",
+                    voiceCommand: .CANCEL_DIALOG,
                     feedbackVisualMessage: "Canceled!",
                     feedbackAudioMessage: "Command canceled.",
                     style: .cancel,
@@ -814,6 +784,11 @@ class EntryManager: NSObject {
             self.uiManager.presentDialog(dialogItem: dialogItem)
             
             return
+        }
+        
+        if let _ = self.currentEntry, new {
+            // Clear past entry and make way for new one
+            self.setCurrentEntry()
         }
         
         if authStatus == .authorized && self.speechRecognition.session.recordPermission == .granted {
@@ -954,7 +929,7 @@ class EntryManager: NSObject {
             let dialogActions = [
                 DialogAction(
                     title: "Grant Permission",
-                    voiceCommand: "grant permission",
+                    voiceCommand: .GRANT_PERMISSION,
                     feedbackVisualMessage: "Permission Granted!",
                     feedbackAudioMessage: "permission granted",
                     style: .default,
@@ -965,7 +940,7 @@ class EntryManager: NSObject {
                 }),
                 DialogAction(
                     title: "Cancel",
-                    voiceCommand: "cancel",
+                    voiceCommand: .CANCEL_DIALOG,
                     feedbackVisualMessage: "Canceled!",
                     feedbackAudioMessage: "Command canceled.",
                     style: .cancel,
@@ -1409,7 +1384,7 @@ class EntryManager: NSObject {
             let dialogActions = [
                 DialogAction(
                     title: "Export Audio",
-                    voiceCommand: "export audio",
+                    voiceCommand: .EXPORT_AUDIO,
                     feedbackVisualMessage: "Exporting audio",
                     feedbackAudioMessage: "Exporting audio. Select selection destination on the screen.",
                     style: .default,
@@ -1436,7 +1411,7 @@ class EntryManager: NSObject {
                 }),
                 DialogAction(
                     title: "Export Text",
-                    voiceCommand: "export text",
+                    voiceCommand: .EXPORT_TEXT,
                     feedbackVisualMessage: "Selection text copied!",
                     feedbackAudioMessage: "Selection text copied to clipboard",
                     style: .default,
@@ -1446,7 +1421,7 @@ class EntryManager: NSObject {
                 }),
                 DialogAction(
                     title: "Cancel",
-                    voiceCommand: "cancel",
+                    voiceCommand: .CANCEL_DIALOG,
                     feedbackVisualMessage: "Canceled!",
                     feedbackAudioMessage: "Command canceled.",
                     style: .cancel,
@@ -1466,7 +1441,7 @@ class EntryManager: NSObject {
             let dialogActions = [
                 DialogAction(
                     title: "Export Audio",
-                    voiceCommand: "export audio",
+                    voiceCommand: .EXPORT_AUDIO,
                     feedbackVisualMessage: "Exporting audio",
                     feedbackAudioMessage: "Exporting audio. Select entry destination on the screen.",
                     style: .default,
@@ -1496,7 +1471,7 @@ class EntryManager: NSObject {
                 }),
                 DialogAction(
                     title: "Export Text",
-                    voiceCommand: "export text",
+                    voiceCommand: .EXPORT_TEXT,
                     feedbackVisualMessage: "Selection text copied!",
                     feedbackAudioMessage: "Selection text copied to clipboard",
                     style: .default,
@@ -1509,7 +1484,7 @@ class EntryManager: NSObject {
                 }),
                 DialogAction(
                     title: "Cancel",
-                    voiceCommand: "cancel",
+                    voiceCommand: .CANCEL_DIALOG,
                     feedbackVisualMessage: "Canceled!",
                     feedbackAudioMessage: "Command canceled.",
                     style: .cancel,
@@ -2053,6 +2028,15 @@ class EntryManager: NSObject {
             return
         }
         
+        guard self.selectionCursor.hasSelection else {
+            self.notifications.executeError(
+                text: "Select speech to execute action.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
         print("\tRegistering a entry change to the Undo Manager...")
         self.registerEntryChange(entry: entry, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
             self?.selectionCursor.adjustRateSelection(direction: .up) { [weak self] rate in
@@ -2096,6 +2080,15 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
+        guard self.selectionCursor.hasSelection else {
+            self.notifications.executeError(
+                text: "Select speech to execute action.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -2151,6 +2144,15 @@ class EntryManager: NSObject {
             return
         }
         
+        guard self.selectionCursor.hasSelection else {
+            self.notifications.executeError(
+                text: "Select speech to execute action.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
         let undoMessage = "deleting '\(self.selectionCursor.selectionText ?? "selection")'"
         
         print("\tRegistering a entry change to the Undo Manager...")
@@ -2187,6 +2189,15 @@ class EntryManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
+        guard self.selectionCursor.hasSelection else {
+            self.notifications.executeError(
+                text: "Select speech to execute action.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
         // Turn on ambient track
         if !soundEngine.isPlayingModalAmbience {
             soundEngine.startModalAmbience()
@@ -2214,6 +2225,15 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
+        guard self.selectionCursor.hasSelection else {
+            self.notifications.executeError(
+                text: "Select speech to execute action.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -2273,6 +2293,15 @@ class EntryManager: NSObject {
             )
             return
         }
+        
+        guard self.selectionCursor.hasSelection else {
+            self.notifications.executeError(
+                text: "Select speech to execute action.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
 
         if self.selectionCursor.hasSelection && self.selectionCursor.isUpdatingSelection && self.selectionCursor.isPromptingForUpdateAcceptance {
             // Turn on ambient track
@@ -2319,6 +2348,15 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
+        guard self.selectionCursor.hasSelection else {
+            self.notifications.executeError(
+                text: "Select speech to execute action.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -2377,6 +2415,24 @@ class EntryManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
+        guard let _ = self.currentEntry else {
+            self.notifications.executeError(
+                text: "No entry selected.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
+        guard self.selectionCursor.hasSelection else {
+            self.notifications.executeError(
+                text: "Select speech to execute action.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
         self.selectionCursor.copySelection()
         
         handler?()
@@ -2401,6 +2457,15 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
+        guard self.selectionCursor.hasSelection else {
+            self.notifications.executeError(
+                text: "Select speech to execute action.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -2446,6 +2511,15 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
+        guard self.selectionCursor.hasSelection else {
+            self.notifications.executeError(
+                text: "Select speech to execute action.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -2809,9 +2883,9 @@ class EntryManager: NSObject {
             return
         }
         
-        if !self.selectionCursor.hasSelection {
+        guard self.selectionCursor.hasSelection else {
             self.notifications.executeError(
-                text: "No selection exists.",
+                text: "Select speech to execute action.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -2859,10 +2933,10 @@ class EntryManager: NSObject {
             )
             return
         }
-
-        if !self.selectionCursor.hasSelection {
+        
+        guard self.selectionCursor.hasSelection else {
             self.notifications.executeError(
-                text: "No existing selection.",
+                text: "Select speech to execute action.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -2941,9 +3015,9 @@ class EntryManager: NSObject {
             return
         }
         
-        if !self.selectionCursor.hasSelection {
+        guard self.selectionCursor.hasSelection else {
             self.notifications.executeError(
-                text: "No existing selection.",
+                text: "Select speech to execute action.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -3016,6 +3090,24 @@ class EntryManager: NSObject {
         print("===== Entry Manager: Shift Selection =====")
         print("\tTriggered by voice command.")
         
+        guard let _ = self.currentEntry else {
+            self.notifications.executeError(
+                text: "No entry selected.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
+        guard self.selectionCursor.hasSelection else {
+            self.notifications.executeError(
+                text: "Select speech to execute action.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
         if direction == .right {
             // We want focus to move first
             self.shiftFocus(
@@ -3044,10 +3136,30 @@ class EntryManager: NSObject {
     ) {
         print("===== Entry Manager: Expand Selection =====")
         print("\tTriggered by voice command.")
+        
+        guard let _ = self.currentEntry else {
+            self.notifications.executeError(
+                text: "No entry selected.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
+        guard self.selectionCursor.hasSelection else {
+            self.notifications.executeError(
+                text: "Select speech to execute action.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
         self.shiftAnchor(
             direction: .left,
             withFeedback: false
         )
+        
         self.shiftFocus(
             direction: .right,
             handler: handler
@@ -3059,6 +3171,25 @@ class EntryManager: NSObject {
     ) {
         print("===== Entry Manager: Reduce Selection =====")
         print("\tTriggered by voice command.")
+        
+        guard let _ = self.currentEntry else {
+            self.notifications.executeError(
+                text: "No entry selected.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
+        guard self.selectionCursor.hasSelection else {
+            self.notifications.executeError(
+                text: "Select speech to execute action.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
         self.shiftAnchor(
             direction: .right,
             withFeedback: false
@@ -3178,9 +3309,9 @@ class EntryManager: NSObject {
             return
         }
 
-        let previousSentenceIndex = max(entry.numSentences - 1, 0)
+        let previousSentenceIndex = max(entry.sentenceCount - 1, 0)
         
-        if entry.numSentences == 1 {
+        if entry.sentenceCount == 1 {
             self.notifications.executeError(
                 text: "No previous sentence exists.",
                 voiceCommand: true,
@@ -3219,9 +3350,9 @@ class EntryManager: NSObject {
         }
 
         let executePlay = {
-            let previousSentenceIndex = max(entry.numSentences - 1, 0)
+            let previousSentenceIndex = max(entry.sentenceCount - 1, 0)
             
-            if entry.numSentences == 1 {
+            if entry.sentenceCount == 1 {
                 self.notifications.executeError(
                     text: "No previous sentence exists.",
                     voiceCommand: true,

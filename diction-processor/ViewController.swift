@@ -40,6 +40,7 @@ class ViewController: UIViewController, SegueProtocol {
     var selectionCursor: SelectionCursor!
     var entryManager: EntryManager!
     var uiManager: UIManager!
+    var voiceCommandEngine: VoiceCommandEngine!
     override var undoManager: UndoManager {
         return self.entryManager.undoManager
     }
@@ -129,6 +130,7 @@ class ViewController: UIViewController, SegueProtocol {
                 entryTableViewController.selectionCursor = self.selectionCursor
                 entryTableViewController.entryManager = self.entryManager
                 entryTableViewController.uiManager = self.uiManager
+                entryTableViewController.voiceCommandEngine = self.voiceCommandEngine
             }
             self.speechRecognition.activateListeningIndicator(
                 withRecording: self.speechRecognition.isListeningForSpeech,
@@ -146,6 +148,7 @@ class ViewController: UIViewController, SegueProtocol {
                 detailViewController.selectionCursor = self.selectionCursor
                 detailViewController.entryManager = self.entryManager
                 detailViewController.uiManager = self.uiManager
+                detailViewController.voiceCommandEngine = self.voiceCommandEngine
             }
             self.speechRecognition.activateListeningIndicator(
                 withRecording: self.speechRecognition.isListeningForSpeech,

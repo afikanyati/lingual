@@ -112,6 +112,7 @@ class DetailViewController: UIViewController, SegueProtocol {
     var selectionCursor: SelectionCursor!
     var entryManager: EntryManager!
     var uiManager: UIManager!
+    var voiceCommandEngine: VoiceCommandEngine!
     override var undoManager: UndoManager {
         return self.entryManager.undoManager
     }
@@ -243,6 +244,7 @@ class DetailViewController: UIViewController, SegueProtocol {
                 entryTableViewController.selectionCursor = self.selectionCursor
                 entryTableViewController.entryManager = self.entryManager
                 entryTableViewController.uiManager = self.uiManager
+                entryTableViewController.voiceCommandEngine = self.voiceCommandEngine
             }
             self.speechRecognition.activateListeningIndicator(
                 withRecording: self.speechRecognition.isListeningForSpeech,
@@ -1050,7 +1052,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         button.frame = CGRect(x: 0.0, y: 0.0, width: Utils.NAVBAR_BUTTON_LENGTH, height: Utils.NAVBAR_BUTTON_LENGTH)
         button.addTarget(self, action: #selector(self.handleDeleteEntry), for: .touchDown)
         button.setImage(UIImage(systemName: "trash"), for: .normal)
-        button.setTitle("Delete", for: .normal)
+        button.setTitle("Delete Entry", for: .normal)
         button.titleLabel?.font = UIFont.systemFont(ofSize: 11)
         button.setTitleColor(UIColor.systemGray5, for: .normal)
         button.tintColor = UIColor.systemGray
@@ -1123,6 +1125,15 @@ class DetailViewController: UIViewController, SegueProtocol {
                 // Add above UIView object as the main view's subview.
                 self?.view.addSubview(self!.cursorView!)
             } else if let _ = self?.cursorView, visible && self?.cursorView?.alpha == 0 {
+                // Move cursor to end of document if text already
+                if let selectionTextRange = self?.selectionCursor.selectionTextRange, let textView = self?.selectionCursor.textView, let caretViewRect = self?.selectionCursor.caretViewPositionRequiresUpdate(textPosition: selectionTextRange.toTextRange(textInput: textView)!.end) {
+                    print("\tSelection Cursor already has cursor position. Move it there.")
+                    self?.cursorView?.frame = caretViewRect
+                } else if let entry = self?.entryManager.currentEntry, let textPosition = self?.textView?.endOfDocument, let caretViewRect = self?.selectionCursor.caretViewPositionRequiresUpdate(textPosition: textPosition), entry.entrySegments.count > 0 {
+                    print("\tEntry already has speech. Move cursor to end of document.")
+                    self?.cursorView?.frame = caretViewRect
+                }
+                
                 // show cursor again
                 self?.cursorView!.alpha = 1
             } else if let _ = self?.cursorView, !visible && self!.speechRecognition.isListeningForSpeech {

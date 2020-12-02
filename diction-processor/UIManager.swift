@@ -18,6 +18,7 @@ class UIManager: NSObject {
     
     var state: StateManager!
     var speechSynthesis: SpeechSynthesisEngine!
+    weak var voiceCommandEngine: VoiceCommandEngine!
     var notifications: NotificationEngine
     
     // MARK: - General Properties
@@ -72,7 +73,7 @@ class UIManager: NSObject {
     
     @objc func onProcessedVoiceCommand(notification: Notification) {
         print("===== UIManager: On Processed Voice Command =====")
-        let command = notification.userInfo!["command"] as! String
+        let command = notification.userInfo!["command"] as! VoiceCommandEngine.VoiceCommand
         let utterance = notification.userInfo!["utterance"] as! String
         var handler: (() -> Void)?
         if notification.userInfo!["handler"] != nil {
@@ -149,7 +150,18 @@ class UIManager: NSObject {
                     if self.speechSynthesis.isPlayingEcho {
                         self.speechSynthesis.stopEcho()
                     }
+                    // Dismiss Dialog
                     self.dismissDialog()
+                    
+                    if act.feedbackVisualMessage != nil || act.feedbackAudioMessage != nil {
+                        self.notifications.executeFeedback(
+                            visualMessage: act.feedbackVisualMessage,
+                            audioMessage: act.feedbackAudioMessage,
+                            discardPrior: true,
+                            withHaptics: true
+                        )
+                    }
+                    
                     act.handler?(action)
                 }
             )
@@ -183,18 +195,18 @@ class UIManager: NSObject {
         }
     }
     
-    func modalContainsCommand(command: String) -> (Bool, DialogAction?) {
+    func modalContainsCommand(command: VoiceCommandEngine.VoiceCommand) -> (Bool, DialogAction?) {
         print("===== UIManager: Modal Contains Command =====")
-        print("\tLooking for action with voice command: '\(command)'")
+        print("\tLooking for action with voice command: '\(command.value())'")
         
         guard let dialogActions = self.dialogActions else {
             return (false, nil)
         }
         
         for action in dialogActions {
-            print("\tTesting action with voice command: '\(action.voiceCommand)'")
+            print("\tTesting action with voice command: '\(action.voiceCommand.value())'")
 
-            if voiceCommandEngine.voiceCommandMapping[action.voiceCommand] == voiceCommandEngine.voiceCommandMapping[command] {
+            if action.voiceCommand == command {
                 print("\tFound voice command!")
                 return (true, action)
             }
@@ -225,12 +237,36 @@ class UIManager: NSObject {
         for (index, action) in dialogActions.enumerated() {
             if index + 1 == dialogActions.count {
                 // last command
-                validOptions += "or '\(action.voiceCommand)'."
+                validOptions += "or '\(action.voiceCommand.value())'."
             } else {
-                validOptions += "'\(action.voiceCommand)', "
+                validOptions += "'\(action.voiceCommand.value())', "
             }
         }
         
         return validOptions
+    }
+    
+    func getActionVoiceCommandSets() -> [Set<VoiceCommandEngine.Token>]? {
+        print("===== UIManager: Get Action Voice Command Sets =====")
+        guard let dialogActions = self.dialogActions else {
+            return nil
+        }
+        
+        var voiceCommandSet = [Set<VoiceCommandEngine.Token>]()
+        for action in dialogActions {
+            let command = action.voiceCommand
+            let commandTokens = command.value().components(separatedBy: " ")
+            var tokenArr = [VoiceCommandEngine.Token]()
+            for token in commandTokens {
+                // Check to see if valid
+                if  let mappedToken = self.voiceCommandEngine.TokenMap[token] {
+                    // Determine index in bag of words
+                    tokenArr.append(mappedToken)
+                }
+            }
+            voiceCommandSet.append(Set(tokenArr))
+        }
+        
+        return voiceCommandSet
     }
 }

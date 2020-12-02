@@ -78,7 +78,7 @@ class Entry: AVMutableComposition, NSCoding {
     /// Stores the ending time of the entry
     private(set) var endTime: CMTime = CMTime.zero // When we remove or add we change this
     /// Stores the number of sentences in the entry
-    public var numSentences: Int {
+    public var sentenceCount: Int {
         var sentenceCount = Int(Utils.UNKNOWN)
         if let lastSegment = self.entryBuffer.last, self.entryBuffer.count > 0 && lastSegment.getSentence().number != Int(Utils.UNKNOWN) {
             sentenceCount = lastSegment.getSentence().number + 1
@@ -87,6 +87,17 @@ class Entry: AVMutableComposition, NSCoding {
         }
         
         return sentenceCount
+    }
+    /// Stores the number of words in the entry
+    public var wordCount: Int {
+        let wordCount: Int = self.entrySegments.reduce(0, { result, segment in
+            if segment.isValidWord() {
+                return result + 1
+            }
+            
+            return result
+        })
+        return wordCount
     }
     /// The language of the entry
     public var language: NLLanguage? {
@@ -302,7 +313,7 @@ class Entry: AVMutableComposition, NSCoding {
     }
     
     public override var description: String {
-        return "Entry {\n\tuid: \(self.uid) \n\tfilename: \(self.filename) \n\tfileType: \(self.fileType) \n\tdateCreated: \(Utils.getDateString(date: self.dateCreated) ?? "nil") \n\tdateModified: \(Utils.getDateString(date: self.dateModified) ?? "nil") \n\tcreatorUID: \(self.creatorUID) \n\tentrySegments: \(self.entrySegments) \n\tentryBuffer: \(self.entryBuffer) \n\tsegmentIndexMap: \(self.segmentIndexMap) \n\tdeletedSegmentIndexMap: \(self.deletedSegmentIndexMap) \n\tcommittedBufferRanges: \(String(describing: self.committedBufferRanges)) \n\ttransformations: \(self.transformations) \n\tstartTime: \(self.startTime) \n\tendTime: \(self.endTime) \n\tduration: \(self.getDuration()) \n\tnumSentences: \(self.numSentences) \n\tlanguage: \(String(describing: self.language)) \n\tavgSpeakingRate: \(self.avgSpeakingRate) \n\tauthorizedToListenForSpeech: \(self.authorizedToListenForSpeech) \n\tclips: \(self.clips) \n\tcurrentClipUID: \(self.currentClipUID ?? "nil") \n\trecordStartDate: \(String(describing: self.recordStartDate)) \n\taccumulatedDuration: \(self.accumulatedDuration) \n\tisDeleted: \(self.isDeleted) \n\tviews: \(self.views) \n\tplays: \(self.plays) \n\ttextExports: \(self.textExports) \n\taudioExports: \(self.audioExports)\n}"
+        return "Entry {\n\tuid: \(self.uid) \n\tfilename: \(self.filename) \n\tfileType: \(self.fileType) \n\tdateCreated: \(Utils.getDateString(date: self.dateCreated) ?? "nil") \n\tdateModified: \(Utils.getDateString(date: self.dateModified) ?? "nil") \n\tcreatorUID: \(self.creatorUID) \n\tentrySegments: \(self.entrySegments) \n\tentryBuffer: \(self.entryBuffer) \n\tsegmentIndexMap: \(self.segmentIndexMap) \n\tdeletedSegmentIndexMap: \(self.deletedSegmentIndexMap) \n\tcommittedBufferRanges: \(String(describing: self.committedBufferRanges)) \n\ttransformations: \(self.transformations) \n\tstartTime: \(self.startTime) \n\tendTime: \(self.endTime) \n\tduration: \(self.getDuration()) \n\tsentenceCount: \(self.sentenceCount) \n\twordCount: \(self.wordCount) \n\tlanguage: \(String(describing: self.language)) \n\tavgSpeakingRate: \(self.avgSpeakingRate) \n\tauthorizedToListenForSpeech: \(self.authorizedToListenForSpeech) \n\tclips: \(self.clips) \n\tcurrentClipUID: \(self.currentClipUID ?? "nil") \n\trecordStartDate: \(String(describing: self.recordStartDate)) \n\taccumulatedDuration: \(self.accumulatedDuration) \n\tisDeleted: \(self.isDeleted) \n\tviews: \(self.views) \n\tplays: \(self.plays) \n\ttextExports: \(self.textExports) \n\taudioExports: \(self.audioExports)\n}"
     }
     
     static func ==(_ firstEntry: Entry, _ secondEntry: Entry) -> Bool {
@@ -473,7 +484,7 @@ class Entry: AVMutableComposition, NSCoding {
         let transcription = notification.userInfo!["transcription"] as! SFTranscription
         let isVoiceCommand = notification.userInfo!["isVoiceCommand"] as! Bool
         let voiceCommandType = notification.userInfo!["voiceCommandType"] as? String
-        let numWordsBeforeVoiceCommand = notification.userInfo!["numWordsBeforeVoiceCommand"] as? Int
+        let voiceCommandIndices = notification.userInfo!["voiceCommandIndices"] as? [Int]
         let isFinalTranscription = notification.userInfo!["isFinalTranscription"] as! Bool
 
         if self.speechRecognition.isListeningForSpeech || (isVoiceCommand && voiceCommandType == "stop entry") {
@@ -503,11 +514,11 @@ class Entry: AVMutableComposition, NSCoding {
             // Commit Speech
             if self.entryBuffer.count > 0 {
                 // We want to process voice commands before we commit so we avoid punctuation suggestions being formed for new segments
-                if let numWordsBeforeVoiceCommand = numWordsBeforeVoiceCommand, isVoiceCommand {
+                if let voiceCommandIndices = voiceCommandIndices, isVoiceCommand {
                     print("\tProcess voice command...")
                     self.processVoiceCommandSegments(
                         command: transcription.formattedString,
-                        numWordsBeforeVoiceCommand: numWordsBeforeVoiceCommand
+                        voiceCommandIndices: voiceCommandIndices
                     )
                 }
                 
@@ -547,11 +558,11 @@ class Entry: AVMutableComposition, NSCoding {
             }
         } else if self.recordStartDate != nil {
             print("\tDo not commit buffer.")
-            if let numWordsBeforeVoiceCommand = numWordsBeforeVoiceCommand, isVoiceCommand && (self.speechRecognition.isListeningForSpeech || voiceCommandType == "stop entry" || self.speechRecognition.pausedListeningForSpeech) && self.entrySegments.count > 0 {
+            if let voiceCommandIndices = voiceCommandIndices, isVoiceCommand && (self.speechRecognition.isListeningForSpeech || voiceCommandType == "stop entry" || self.speechRecognition.pausedListeningForSpeech) && self.entrySegments.count > 0 {
                 print("\tProcess voice command...")
                 self.processVoiceCommandSegments(
                     command: transcription.formattedString,
-                    numWordsBeforeVoiceCommand: numWordsBeforeVoiceCommand
+                    voiceCommandIndices: voiceCommandIndices
                 )
             }
             
@@ -647,7 +658,7 @@ class Entry: AVMutableComposition, NSCoding {
         print("===== Entry: Perform Transcription Update =====")
         print("Transcript Text: ", transcription.formattedString)
         for (index, segment) in transcription.segments.enumerated() {
-            processTranscriptSegment(
+            self.processTranscriptSegment(
                 segment: segment,
                 transcriptionIndex: index,
                 transcription: transcription
@@ -1110,8 +1121,8 @@ class Entry: AVMutableComposition, NSCoding {
             avgPauseDuration = avgPauseDuration!.rounded(toPlaces: Utils.DEFAULT_FIG_COUNT)
         }
         
-        var speakingRate: Double = normalizedSegments.reduce(0, { result, item in
-            if !item.isPunctuation() && !item.isSilence() && !item.isValidCommaWord() && !item.isDeleted() {
+        var speakingRate: Double = normalizedSegments.reduce(0, { result, segment in
+            if segment.isValidWord() {
                 return result + 1
             }
             
@@ -4017,7 +4028,7 @@ class Entry: AVMutableComposition, NSCoding {
         )
     }
     
-    func processVoiceCommandSegments(command: String, numWordsBeforeVoiceCommand: Int) {
+    func processVoiceCommandSegments(command: String, voiceCommandIndices: [Int]) {
         print("===== Entry: Process Voice Command Segments =====")
         print("\tSeeking lowest voice command index...")
         
@@ -4029,203 +4040,173 @@ class Entry: AVMutableComposition, NSCoding {
             print("\tSourcing segments from committed segments because buffer is empty.")
             lastBufferRange = self.committedBufferRanges[self.committedBufferRanges.count - 1]
         }
-
-        var lowestCommandIndex: Int?
-        var numWordsEncountered: Int = 0
-        if self.entryBuffer.count > 0 {
-            for i in self.entryBuffer.startIndex..<self.entryBuffer.endIndex {
-                let segment = self.entryBuffer[i]
-                if segment.isActive() && numWordsEncountered == numWordsBeforeVoiceCommand {
-                    print("\tFound lowest voice command index: \(i) of \(self.entryBuffer.count - 1)")
-                    print("\tFound in entry buffer...")
-                    lowestCommandIndex = i
-                    break
-                } else if segment.isActive() && numWordsEncountered < numWordsBeforeVoiceCommand {
-                    numWordsEncountered += 1
-                }
-            }
-        } else {
-            for i in Array(self.entrySegments[lastBufferRange]).startIndex..<Array(self.entrySegments[lastBufferRange]).endIndex {
-                let segment = Array(self.entrySegments[lastBufferRange])[i]
-                if segment.isActive() && numWordsEncountered == numWordsBeforeVoiceCommand {
-                    print("\tFound lowest voice command index: \(i) of \(Array(self.entrySegments[lastBufferRange]).count - 1)")
-                    print("\tFound in entry committed segments...")
-                    lowestCommandIndex = i
-                    break
-                } else if segment.isActive() && numWordsEncountered < numWordsBeforeVoiceCommand {
-                    numWordsEncountered += 1
-                }
-            }
-        }
         
         var replaceSelectionAnchor = false
         var replaceSelectionFocus = false
         var replaceSelectionCachedAnchor = false
-        if let lowestCommandIndex = lowestCommandIndex {
-            print("\tFlipping every segment after lowest voice command index to be voice command word...")
-            let bufferSource = self.entryBuffer.count > 0 ? self.entryBuffer : Array(self.entrySegments[lastBufferRange])
-            for index in lowestCommandIndex..<bufferSource.distance(to: lastBufferRange.endIndex) {
-                // duplicate segment
-                let duplicateSegment = bufferSource[index].duplicate()
-                
-                // determine if we need to replace selection values
-                replaceSelectionAnchor = replaceSelectionAnchor || duplicateSegment == self.selectionCursor.anchor && self.selectionCursor.anchor != nil
-                replaceSelectionFocus = replaceSelectionFocus || duplicateSegment == self.selectionCursor.focus && self.selectionCursor.focus != nil
-                replaceSelectionCachedAnchor = replaceSelectionCachedAnchor || duplicateSegment == self.selectionCursor.cachedAnchor && self.selectionCursor.cachedAnchor != nil
-                
-                // set duplicate segment as voice command word
-                duplicateSegment.setIsVoiceCommandWord(to: true)
-                print("\t'\(duplicateSegment.getText())' == Voice Command")
-                
-                // set duplicate segment
-                if self.entryBuffer.count > 0 {
-                    self.entryBuffer[index] = duplicateSegment
-                } else {
-                    self.entrySegments[index] = duplicateSegment
-                }
-                
-                // determine track type
-                let trackType: EntryTrackType = self.entryBuffer.count > 0 ? .buffer : .committed
-                let index = self.entryBuffer.count > 0 ? index + lowestCommandIndex : duplicateSegment.getIndex()
-                
-                // update selection anchor
-                if duplicateSegment == self.selectionCursor.anchor {
-                    print("\tReplacing Selection Cursor Anchor with version that is not voice command word...")
-                    self.selectionCursor.setAnchorCaret(caret: Caret(index: index, trackType: trackType))
-                }
-                
-                // update selection focus
-                if duplicateSegment == self.selectionCursor.focus {
-                    print("\tReplacing Selection Cursor Focus with version that is voice command word...")
-                    self.selectionCursor.setFocusCaret(caret: Caret(index: index, trackType: trackType))
-                }
-                
-                // update selection cached anchor
-                if duplicateSegment == self.selectionCursor.cachedAnchor {
-                    print("\tReplacing Selection Cursor Cached Anchor with version that is voice command word...")
-                    self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: index, trackType: trackType))
-                }
+        print("\tFlipping every segment after lowest voice command index to be voice command word...")
+        let bufferSource = self.entryBuffer.count > 0 ? self.entryBuffer : Array(self.entrySegments[lastBufferRange])
+        for index in voiceCommandIndices {
+            // duplicate segment
+            let duplicateSegment = bufferSource[index].duplicate()
+            
+            // determine if we need to replace selection values
+            replaceSelectionAnchor = replaceSelectionAnchor || duplicateSegment == self.selectionCursor.anchor && self.selectionCursor.anchor != nil
+            replaceSelectionFocus = replaceSelectionFocus || duplicateSegment == self.selectionCursor.focus && self.selectionCursor.focus != nil
+            replaceSelectionCachedAnchor = replaceSelectionCachedAnchor || duplicateSegment == self.selectionCursor.cachedAnchor && self.selectionCursor.cachedAnchor != nil
+            
+            // set duplicate segment as voice command word
+            duplicateSegment.setIsVoiceCommandWord(to: true)
+            print("\t'\(duplicateSegment.getText())' == Voice Command")
+            
+            // set duplicate segment
+            if self.entryBuffer.count > 0 {
+                self.entryBuffer[index] = duplicateSegment
+            } else {
+                self.entrySegments[index] = duplicateSegment
             }
             
-            if let anchor = self.selectionCursor.anchor, replaceSelectionAnchor && self.entryBuffer.count > 0 && !anchor.isCommitted() {
-                print("\tReplacing anchor. We cannot have a voice command anchor.")
-                print("\tSearching in entry buffer...")
-                var newAnchorIndex = Utils.getEntryNthLastSegmentIndex(
-                    segments: Array(self.entryBuffer[0..<lowestCommandIndex]),
-                    selectionCursor: self.selectionCursor,
-                    n: 0
-                ).1
-                var newAnchorTrackType: EntryTrackType
-                
-                if let newAnchorIndex = newAnchorIndex {
-                    newAnchorTrackType = .buffer
-                    let newAnchor = Array(self.entryBuffer[0..<lowestCommandIndex])[newAnchorIndex]
-                    print("\tFound new anchor: '\(newAnchor.getText())'")
-                } else {
-                    print("\tUnable to find replacement anchor in buffer. Search in committed segments...")
-                    let segments = self.selectionCursor.cachedAnchor != nil ? Array(self.entrySegments[0..<self.selectionCursor.cachedAnchor!.getIndex() + 1]) : self.entrySegments // We add one because we want to include cached anchor
-                    newAnchorIndex = Utils.getEntryNthLastSegmentIndex(
-                        segments: segments,
-                        selectionCursor: self.selectionCursor,
-                        n: 0
-                    ).1
-                    newAnchorTrackType = .committed
-                    
-                    if let newAnchorIndex = newAnchorIndex {
-                        let newAnchor = segments[newAnchorIndex]
-                        print("\tFound new anchor: '\(newAnchor.getText())'")
-                    }
-                }
-                
-                if let newAnchorIndex = newAnchorIndex {
-                    print("\tUpdating Selection Anchor...")
-                    self.selectionCursor.setAnchorCaret(caret: Caret(index: newAnchorIndex, trackType: newAnchorTrackType))
-                }
-            } else if let _ = self.selectionCursor.anchor, replaceSelectionAnchor {
-                print("\tReplacing anchor. We cannot have a voice command anchor.")
-                print("\tSearching in entry committed segments...")
+            // determine track type
+            let trackType: EntryTrackType = self.entryBuffer.count > 0 ? .buffer : .committed
+            let index = self.entryBuffer.count > 0 ? index : duplicateSegment.getIndex()
+            
+            // update selection anchor
+            if duplicateSegment == self.selectionCursor.anchor {
+                print("\tReplacing Selection Cursor Anchor with version that is not voice command word...")
+                self.selectionCursor.setAnchorCaret(caret: Caret(index: index, trackType: trackType))
+            }
+            
+            // update selection focus
+            if duplicateSegment == self.selectionCursor.focus {
+                print("\tReplacing Selection Cursor Focus with version that is voice command word...")
+                self.selectionCursor.setFocusCaret(caret: Caret(index: index, trackType: trackType))
+            }
+            
+            // update selection cached anchor
+            if duplicateSegment == self.selectionCursor.cachedAnchor {
+                print("\tReplacing Selection Cursor Cached Anchor with version that is voice command word...")
+                self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: index, trackType: trackType))
+            }
+        }
+        
+        if let anchor = self.selectionCursor.anchor, replaceSelectionAnchor && self.entryBuffer.count > 0 && !anchor.isCommitted() {
+            print("\tReplacing anchor. We cannot have a voice command anchor.")
+            print("\tSearching in entry buffer...")
+            var newAnchorIndex = Utils.getEntryNthLastSegmentIndex(
+                segments: self.entryBuffer,
+                selectionCursor: self.selectionCursor,
+                n: 0
+            ).1
+            var newAnchorTrackType: EntryTrackType
+            
+            if let newAnchorIndex = newAnchorIndex {
+                newAnchorTrackType = .buffer
+                let newAnchor = self.entryBuffer[newAnchorIndex]
+                print("\tFound new anchor: '\(newAnchor.getText())'")
+            } else {
+                print("\tUnable to find replacement anchor in buffer. Search in committed segments...")
                 let segments = self.selectionCursor.cachedAnchor != nil ? Array(self.entrySegments[0..<self.selectionCursor.cachedAnchor!.getIndex() + 1]) : self.entrySegments // We add one because we want to include cached anchor
-                let newAnchorIndex = Utils.getEntryNthLastSegmentIndex(
+                newAnchorIndex = Utils.getEntryNthLastSegmentIndex(
                     segments: segments,
                     selectionCursor: self.selectionCursor,
                     n: 0
                 ).1
-                let newAnchorTrackType: EntryTrackType = .committed
+                newAnchorTrackType = .committed
                 
                 if let newAnchorIndex = newAnchorIndex {
                     let newAnchor = segments[newAnchorIndex]
                     print("\tFound new anchor: '\(newAnchor.getText())'")
                 }
-                
-                if let newAnchorIndex = newAnchorIndex {
-                    print("\tUpdating Selection Anchor...")
-                    self.selectionCursor.setAnchorCaret(caret: Caret(index: newAnchorIndex, trackType: newAnchorTrackType))
-                }
             }
             
-            print("\tClear focus...")
-            if !self.selectionCursor.hasSelection {
-                self.selectionCursor.setFocusCaret()
+            if let newAnchorIndex = newAnchorIndex {
+                print("\tUpdating Selection Anchor...")
+                self.selectionCursor.setAnchorCaret(caret: Caret(index: newAnchorIndex, trackType: newAnchorTrackType))
+            }
+        } else if let _ = self.selectionCursor.anchor, replaceSelectionAnchor {
+            print("\tReplacing anchor. We cannot have a voice command anchor.")
+            print("\tSearching in entry committed segments...")
+            let segments = self.selectionCursor.cachedAnchor != nil ? Array(self.entrySegments[0..<self.selectionCursor.cachedAnchor!.getIndex() + 1]) : self.entrySegments // We add one because we want to include cached anchor
+            let newAnchorIndex = Utils.getEntryNthLastSegmentIndex(
+                segments: segments,
+                selectionCursor: self.selectionCursor,
+                n: 0
+            ).1
+            let newAnchorTrackType: EntryTrackType = .committed
+            
+            if let newAnchorIndex = newAnchorIndex {
+                let newAnchor = segments[newAnchorIndex]
+                print("\tFound new anchor: '\(newAnchor.getText())'")
             }
             
-            if let cachedAnchor = self.selectionCursor.cachedAnchor, replaceSelectionCachedAnchor && self.entryBuffer.count > 0 && !cachedAnchor.isCommitted() {
-                print("\tReplacing cached anchor. We cannot have a voice command cached anchor.")
-                print("\tSearching in entry buffer...")
-                let newCachedAnchorIndex = Utils.getEntryNthLastSegmentIndex(
-                    segments: Array(self.entryBuffer[0..<cachedAnchor.getIndex() + 1]), // We add one because we want to include cached anchor
-                    selectionCursor: self.selectionCursor,
-                    n: 0
-                ).1
-                var newCachedAnchorTrackType: EntryTrackType
-                
-                if let newCachedAnchorIndex = newCachedAnchorIndex {
-                    newCachedAnchorTrackType = .buffer
-                    let newCachedAnchor = Array(self.entryBuffer[0..<cachedAnchor.getIndex() + 1])[newCachedAnchorIndex] // We add one because we want to include cached anchor
-                    print("\tFound new cached anchor: ", newCachedAnchor)
-                } else {
-                    print("\tUnable to find replacement cached anchor in buffer. Search in committed segments...")
-                    let newCachedAnchorIndex = Utils.getEntryNthLastSegmentIndex(
-                        segments: self.entrySegments,
-                        selectionCursor: self.selectionCursor,
-                        n: 0
-                    ).1
-                    newCachedAnchorTrackType = .committed
-                    
-                    if let newCachedAnchorIndex = newCachedAnchorIndex {
-                        let newCachedAnchor = self.entrySegments[newCachedAnchorIndex]
-                        print("\tFound new cached anchor: ", newCachedAnchor)
-                    }
-                }
-                
-                if let newCachedAnchorIndex = newCachedAnchorIndex {
-                    print("\tUpdating Selection Cached Anchor...")
-                    self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: newCachedAnchorIndex, trackType: newCachedAnchorTrackType))
-                }
-            } else if let cachedAnchor = self.selectionCursor.cachedAnchor, replaceSelectionCachedAnchor {
-                print("\tReplacing cached anchor. We cannot have a voice command anchor.")
-                print("\tSearching in entry committed segments...")
-                let newCachedAnchorIndex = Utils.getEntryNthLastSegmentIndex(
-                    segments: Array(self.entryBuffer[0..<cachedAnchor.getIndex() + 1]), // We add one because we want to include cached anchor
-                    selectionCursor: self.selectionCursor,
-                    n: 0
-                ).1
-                let newCachedAnchorTrackType: EntryTrackType = .committed
-                
-                if let newCachedAnchorIndex = newCachedAnchorIndex {
-                    let newCachedAnchor = Array(self.entryBuffer[0..<cachedAnchor.getIndex() + 1])[newCachedAnchorIndex] // We add one because we want to include cached anchor
-                    print("\tFound new cached anchor: ", newCachedAnchor)
-                }
-                
-                if let newCachedAnchorIndex = newCachedAnchorIndex {
-                    print("\tUpdating Selection Cached Anchor...")
-                    self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: newCachedAnchorIndex, trackType: newCachedAnchorTrackType))
-                }
+            if let newAnchorIndex = newAnchorIndex {
+                print("\tUpdating Selection Anchor...")
+                self.selectionCursor.setAnchorCaret(caret: Caret(index: newAnchorIndex, trackType: newAnchorTrackType))
             }
-            
-            print("\tSegment count after processing voice commands: \(self.entrySegments.count) committed and \(self.entryBuffer.count) in buffer.")
-            self.handleMutation()
-            self.checkRep()
         }
+        
+        print("\tClear focus...")
+        if !self.selectionCursor.hasSelection {
+            self.selectionCursor.setFocusCaret()
+        }
+        
+        if let cachedAnchor = self.selectionCursor.cachedAnchor, replaceSelectionCachedAnchor && self.entryBuffer.count > 0 && !cachedAnchor.isCommitted() {
+            print("\tReplacing cached anchor. We cannot have a voice command cached anchor.")
+            print("\tSearching in entry buffer...")
+            let newCachedAnchorIndex = Utils.getEntryNthLastSegmentIndex(
+                segments: Array(self.entryBuffer[0..<cachedAnchor.getIndex() + 1]), // We add one because we want to include cached anchor
+                selectionCursor: self.selectionCursor,
+                n: 0
+            ).1
+            var newCachedAnchorTrackType: EntryTrackType
+            
+            if let newCachedAnchorIndex = newCachedAnchorIndex {
+                newCachedAnchorTrackType = .buffer
+                let newCachedAnchor = Array(self.entryBuffer[0..<cachedAnchor.getIndex() + 1])[newCachedAnchorIndex] // We add one because we want to include cached anchor
+                print("\tFound new cached anchor: ", newCachedAnchor)
+            } else {
+                print("\tUnable to find replacement cached anchor in buffer. Search in committed segments...")
+                let newCachedAnchorIndex = Utils.getEntryNthLastSegmentIndex(
+                    segments: self.entrySegments,
+                    selectionCursor: self.selectionCursor,
+                    n: 0
+                ).1
+                newCachedAnchorTrackType = .committed
+                
+                if let newCachedAnchorIndex = newCachedAnchorIndex {
+                    let newCachedAnchor = self.entrySegments[newCachedAnchorIndex]
+                    print("\tFound new cached anchor: ", newCachedAnchor)
+                }
+            }
+            
+            if let newCachedAnchorIndex = newCachedAnchorIndex {
+                print("\tUpdating Selection Cached Anchor...")
+                self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: newCachedAnchorIndex, trackType: newCachedAnchorTrackType))
+            }
+        } else if let cachedAnchor = self.selectionCursor.cachedAnchor, replaceSelectionCachedAnchor {
+            print("\tReplacing cached anchor. We cannot have a voice command anchor.")
+            print("\tSearching in entry committed segments...")
+            let newCachedAnchorIndex = Utils.getEntryNthLastSegmentIndex(
+                segments: Array(self.entryBuffer[0..<cachedAnchor.getIndex() + 1]), // We add one because we want to include cached anchor
+                selectionCursor: self.selectionCursor,
+                n: 0
+            ).1
+            let newCachedAnchorTrackType: EntryTrackType = .committed
+            
+            if let newCachedAnchorIndex = newCachedAnchorIndex {
+                let newCachedAnchor = Array(self.entryBuffer[0..<cachedAnchor.getIndex() + 1])[newCachedAnchorIndex] // We add one because we want to include cached anchor
+                print("\tFound new cached anchor: ", newCachedAnchor)
+            }
+            
+            if let newCachedAnchorIndex = newCachedAnchorIndex {
+                print("\tUpdating Selection Cached Anchor...")
+                self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: newCachedAnchorIndex, trackType: newCachedAnchorTrackType))
+            }
+        }
+        
+        print("\tSegment count after processing voice commands: \(self.entrySegments.count) committed and \(self.entryBuffer.count) in buffer.")
+        self.handleMutation()
+        self.checkRep()
     }
     
     func handleOnSpeechUpdate(text: String, highlightRange: NSRange? = nil) {
@@ -4360,5 +4341,17 @@ class Entry: AVMutableComposition, NSCoding {
         self.cachedSegmentUIDSet = nil
         self.cachedDurationArgsSet = nil
         self.cachedBackgroundNoise = nil
+    }
+    
+    func getTitle(attributes: [NSAttributedString.Key: Any] = [:], withDashes: Bool = false) -> NSMutableAttributedString {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "EEE MMM dd, yyyy"
+        let dateString = dateFormatter.string(from: Date(timeIntervalSince1970: self.dateCreated))
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "h\(withDashes ? "-" : ":")mm\(withDashes ? "-" : ":")ss a"
+        let timeString = timeFormatter.string(from: Date(timeIntervalSince1970: self.dateCreated))
+        let titleString = NSMutableAttributedString(string: "Entry\(withDashes ? " -" : "") \(dateString) at \(timeString)", attributes: attributes)
+        
+        return titleString
     }
 }

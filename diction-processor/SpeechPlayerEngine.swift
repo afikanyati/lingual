@@ -132,19 +132,19 @@ class SpeechPlayerEngine: NSObject {
     
     @objc func onProcessedVoiceCommand(notification: Notification) {
         print("===== Speech Player Engine: On Processed Voice Command =====")
-        let command = notification.userInfo!["command"] as! String
+        let command = notification.userInfo!["command"] as! VoiceCommandEngine.VoiceCommand
         var handler: (() -> Void)?
         if notification.userInfo!["handler"] != nil {
             handler = notification.userInfo!["handler"] as? () -> Void
         }
         
         switch (command) {
-        case "increase playback rate":
+        case .INCREASE_PLAYBACK_RATE:
             print("\tVoice Command: Increase Playback Rate")
             self.increasePlaybackRate(
                 handler: handler
             )
-        case "decrease playback rate":
+        case .DECREASE_PLAYBACK_RATE:
             print("\tVoice Command Engine: Decrease Playback Rate")
             self.decreasePlaybackRate(
                 handler: handler

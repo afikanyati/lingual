@@ -226,7 +226,7 @@ class Utils {
         print("===== Utils: Export Entry =====")
         
         let filePath = Utils.getFileURL(of: "\(filename)\(fileType)").absoluteString
-        Utils.deleteExistingFile(atPath: filePath)
+        let _ = Utils.deleteIfExistingFile(atPath: filePath)
 
         if !AVAssetExportSession.exportPresets(compatibleWith: entry).contains(AVAssetExportPresetAppleM4A) {
             fatalError("\t[Error] Expected export preset value not compatible with entry")
@@ -314,7 +314,14 @@ class Utils {
             fatalError("\t[Error] Expected export file type not compatible with exporter")
         }
 
-        let url = Utils.getFileURL(of: "\(filename).m4a")
+        let entryName = entry.getTitle(withDashes: true).string
+        var number: Int = 1
+        var url = Utils.getFileURL(of: "\(entryName) no. \(number).m4a")
+        let fileManager = FileManager.default
+        while fileManager.fileExists(atPath: url.path) {
+            number += 1
+            url = Utils.getFileURL(of: "\(entryName) no. \(number).m4a")
+        }
         exporter.outputURL = url
         exporter.outputFileType = .m4a
         exporter.timeRange = timeRange
@@ -337,7 +344,7 @@ class Utils {
         }
     }
     
-    public static func deleteExistingFile(atPath path: String) {
+    public static func deleteIfExistingFile(atPath path: String) -> Bool {
         do {
             let fileManager = FileManager.default
             // Check if file exists
@@ -349,11 +356,14 @@ class Utils {
             } else {
                 print("\tFile location is available to write a new file...")
             }
-
         } catch let error as NSError {
             print("\t[Error] There was a problem while checking for and deleting existing file")
-            fatalError("\tMessage: \(error)")
+            print("\tMessage: \(error)")
+            
+            return false
         }
+        
+        return true
     }
     
     public static func setMainVolume(to volume: Float) {
@@ -624,6 +634,23 @@ class Utils {
     public static func getTempFileURL(of filename: String) -> URL {
         // return URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(filename)
         return FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+    }
+    
+    // Reference: https://stackoverflow.com/questions/19959642/uiactivityviewcontroller-with-alternate-filename
+    public static func generateLinkToFile(at fileURL: URL, withName fileName: String) -> URL? {
+        let fileManager = FileManager.default               // the default file maneger
+        let tempDirectoryURL = fileManager.temporaryDirectory   // get the temp directory
+        let linkURL = tempDirectoryURL.appendingPathComponent(fileName) // and append the new file name
+        do {                                                // try the operations
+            if fileManager.fileExists(atPath: linkURL.path) {   // there is already a hard link with that name
+                try fileManager.removeItem(at: linkURL)     // get rid of it
+            }
+            try fileManager.linkItem(at: fileURL, to: linkURL)  // create the hard link
+            return linkURL                                  // and return it
+        } catch let error as NSError {                      // something wrong
+            print("\(error)")                               // debug print out
+            return nil                                      // and signal to caller
+        }
     }
     
     public static func formattedTime(time: Float) -> String {
@@ -2141,5 +2168,25 @@ class Utils {
         }
         
         return (trackType, lastSegmentIndex)
+    }
+    
+    // Reference: https://stackoverflow.com/questions/33021064/how-to-generate-all-possible-combinations
+    public static func permute(list: [String], minWordJoins: Int = 1, maxWordJoins: Int = 10, separator: String = "") -> Set<String> {
+        func permute(fromList: [String], toList: [String], minWordJoins: Int, maxWordJoins: Int, separator: String, set: inout Set<String>) {
+            if toList.count >= minWordJoins && toList.count <= maxWordJoins {
+                set.insert(toList.joined(separator: separator))
+            }
+            if !fromList.isEmpty {
+                for (index, item) in fromList.enumerated() {
+                    var newFrom = fromList
+                    newFrom.remove(at: index)
+                    permute(fromList: newFrom, toList: toList + [item], minWordJoins: minWordJoins, maxWordJoins: maxWordJoins, separator: separator, set: &set)
+                }
+            }
+        }
+
+        var set = Set<String>()
+        permute(fromList: list, toList:[], minWordJoins: minWordJoins, maxWordJoins: maxWordJoins, separator: separator, set: &set)
+        return set
     }
 }
