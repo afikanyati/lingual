@@ -20,6 +20,7 @@ public class VoiceCommandEngine: NSObject {
     var speechPlayer: SpeechPlayerEngine
     var selectionCursor: SelectionCursor
     weak var entryManager: EntryManager!
+    var entryListManager: EntryListManager!
     var uiManager: UIManager
     var speechSynthesis: SpeechSynthesisEngine
     var speechRecognition: SpeechRecognitionEngine
@@ -63,25 +64,41 @@ public class VoiceCommandEngine: NSObject {
         if self.speechPlayer.isPlayingEntry &&
             !self.selectionCursor.hasSelection && // We could still end playback while in selection, but we don't infer it
             !self.entryManager.isWalkingEntry &&
-            !self.entryManager.isRunningEntry
+            !self.entryManager.isRunningEntry &&
+            !self.entryListManager.isWalkingEntryList &&
+            !self.entryListManager.isRunningEntryList
         {
             entityTokens.append(.PLAYBACK)
-        } else if self.speechSynthesis.isPlayingEcho &&
+        }
+        
+        if self.speechSynthesis.isPlayingEcho &&
             !self.selectionCursor.hasSelection && // We could still end playback while in selection, but we don't infer it
             !self.entryManager.isWalkingEntry &&
-            !self.entryManager.isRunningEntry
+            !self.entryManager.isRunningEntry &&
+            !self.entryListManager.isWalkingEntryList &&
+            !self.entryListManager.isRunningEntryList
         {
             actionEntityTokens.append(.ECHO)
-        } else if self.selectionCursor.isPromptingForUpdateAcceptance {
+        }
+        
+        if self.selectionCursor.isPromptingForUpdateAcceptance {
             entityTokens.append(.SELECTION_UPDATE)
-        } else if self.entryManager.isRunningEntry {
+        }
+        
+        if self.entryManager.isRunningEntry || self.entryListManager.isRunningEntryList {
             actionEntityTokens.append(.RUN)
-        } else if self.entryManager.isWalkingEntry {
+        }
+        
+        if self.entryManager.isWalkingEntry || self.entryListManager.isWalkingEntryList {
             actionEntityTokens.append(.WALK)
-        } else if self.selectionCursor.hasSelection {
+        }
+        
+        if self.selectionCursor.hasSelection {
             entityTokens.append(.SELECTION)
             entityTokens.append(.SELECTION_RATE)
-        } else if self.uiManager.dialogIsVisible {
+        }
+        
+        if self.uiManager.dialogIsVisible {
             // Get other entity tokens from UI Manager
             if let voiceCommandSets = self.uiManager.getActionVoiceCommandSets() {
                 // Loop through voice commands
@@ -111,6 +128,11 @@ public class VoiceCommandEngine: NSObject {
 //            entityTokens.append(.ENTRY)
 //        }
         // isUpdatingSelection -> .SELECTION_UPDATE
+        
+        print("\tEntity Tokens: ", entityTokens)
+        print("\tAction Entity Tokens: ", actionEntityTokens)
+        print("\tAction Tokens: ", actionTokens)
+        print("\tSpatial Tokens: ", spatialRelationTokens)
 
         // Compute all permutations of two words to find valid tokens
         let bagOfWords = query.lowercased().components(separatedBy: " ")
@@ -125,7 +147,7 @@ public class VoiceCommandEngine: NSObject {
             }
         }
         
-        print("\tFiltered Bag of Words: ", bagOfWords)
+        print("\tFiltered Bag of Words: ", filteredBagOfWords)
         
         let possibleTokens = Utils.permute(
             list: filteredBagOfWords,
@@ -141,7 +163,7 @@ public class VoiceCommandEngine: NSObject {
         //
         // We also cache token mappings to refer to to extract token indices at the end of method
         // Reference: https://stackoverflow.com/questions/44074794/string-to-enum-mapping-in-swift/44074929
-        for possibleToken in bagOfWords {
+        for possibleToken in possibleTokens {
             if let validToken = TokenMap[possibleToken],
             ActionToken.contains(validToken) &&
             !actionTokens.contains(validToken)
@@ -230,6 +252,22 @@ public class VoiceCommandEngine: NSObject {
         // Determine if entity can be inferred
         if actionTokens.contains(.UNDO) || actionTokens.contains(.REDO) {
             entityTokens.append(.CHANGE)
+        }
+        
+        // We can add entry token if we're walking entry list
+        //
+        // We place it here so it doesn't affect seeking spatial relation tokens above
+        //
+        // Only add if we received any other token
+        if let _ = Utils.getNavigationController()?.visibleViewController as? EntryTableViewController,
+            let _ = self.entryManager.currentEntry,
+            (
+                self.entryListManager.isWalkingEntryList ||
+                self.entryListManager.isRunningEntryList
+            ) &&
+            possibleTokens.count > 0
+        {
+            entityTokens.append(.ENTRY)
         }
 
         // Verify we have suitable number of types of tokens to continue
@@ -368,9 +406,12 @@ public class VoiceCommandEngine: NSObject {
         if self.speechPlayer.isPlayingEntry &&
             !self.selectionCursor.hasSelection && // We could still end playback while in selection, but we don't infer it
             !self.entryManager.isWalkingEntry &&
-            !self.entryManager.isRunningEntry
+            !self.entryManager.isRunningEntry &&
+            !self.entryListManager.isWalkingEntryList &&
+            !self.entryListManager.isRunningEntryList
         {
             // Play Mode
+            print("\tPlay Mode...")
             for commandSet in viableVoiceCommandSets {
                 if commandSet.contains(.PLAYBACK) {
                     voiceCommand = VoiceCommandMap[commandSet]
@@ -381,8 +422,11 @@ public class VoiceCommandEngine: NSObject {
         } else if self.speechSynthesis.isPlayingEcho &&
             !self.selectionCursor.hasSelection && // We could still end playback while in selection, but we don't infer it
             !self.entryManager.isWalkingEntry &&
-            !self.entryManager.isRunningEntry
+            !self.entryManager.isRunningEntry &&
+            !self.entryListManager.isWalkingEntryList &&
+            !self.entryListManager.isRunningEntryList
         {
+            print("\tEcho Mode...")
             // Echo Mode
             for commandSet in viableVoiceCommandSets {
                 if commandSet.contains(.ECHO) {
@@ -393,6 +437,7 @@ public class VoiceCommandEngine: NSObject {
             }
         } else if self.selectionCursor.isPromptingForUpdateAcceptance {
             // Updating Selection Mode
+            print("\tUpdating Selection Mode...")
             for commandSet in viableVoiceCommandSets {
                 if commandSet.contains(.SELECTION_UPDATE) {
                     voiceCommand = VoiceCommandMap[commandSet]
@@ -402,6 +447,7 @@ public class VoiceCommandEngine: NSObject {
             }
         } else if self.entryManager.isRunningEntry {
             // Run Mode
+            print("\tRun Mode...")
             for commandSet in viableVoiceCommandSets {
                 if commandSet.contains(.RUN) {
                     voiceCommand = VoiceCommandMap[commandSet]
@@ -411,6 +457,7 @@ public class VoiceCommandEngine: NSObject {
             }
         } else if self.entryManager.isWalkingEntry {
             // Walk Mode
+            print("\tWalk Mode...")
             for commandSet in viableVoiceCommandSets {
                 if commandSet.contains(.WALK) {
                     voiceCommand = VoiceCommandMap[commandSet]
@@ -418,8 +465,125 @@ public class VoiceCommandEngine: NSObject {
                     break
                 }
             }
+        } else if self.entryListManager.isRunningEntryList {
+            // Run Entry List Mode
+            print("\tRun Entry List Mode...")
+            
+            var utteredWords = [Token]()
+            for word in filteredBagOfWords {
+                if let token = TokenMap[word] {
+                    utteredWords.append(token)
+                }
+            }
+            let utteredWordsSet = Set(utteredWords)
+            
+            // Prioritize commands with entry in them
+            for commandSet in viableVoiceCommandSets {
+                if !commandSet.contains(.ENTRY) && commandSet.intersection(utteredWordsSet).count > 0 {
+                    print("\tPrioritizing voice commands with uttered words...")
+                    // We want to prioritize other commands before settling for walk entry
+                    voiceCommand = VoiceCommandMap[commandSet]
+                    voiceCommandSet = commandSet
+                    break
+                }
+            }
+            
+            if voiceCommand == nil &&
+                voiceCommandSet == nil {
+                for commandSet in viableVoiceCommandSets {
+                    if commandSet.contains(.ENTRY) && !commandSet.contains(.RUN) {
+                        print("\tPrioritizing entry voice command...")
+                        // We want to prioritize other commands before settling for run entry
+                        voiceCommand = VoiceCommandMap[commandSet]
+                        voiceCommandSet = commandSet
+                        break
+                    }
+                }
+            }
+            
+            if voiceCommand == nil &&
+                voiceCommandSet == nil {
+                for commandSet in viableVoiceCommandSets {
+                    if commandSet.subtracting(Set([.RUN, .ENTRY])).count > 0 {
+                        print("\tPrioritizing non-run entry voice command...")
+                        // We want to prioritize other commands before settling for run entry
+                        voiceCommand = VoiceCommandMap[commandSet]
+                        voiceCommandSet = commandSet
+                        break
+                    }
+                }
+            }
+            
+            // Choose first voice command
+            if let firstVoiceCommandSet = viableVoiceCommandSets.first,
+               let firstVoiceCommand = VoiceCommandMap[firstVoiceCommandSet],
+               voiceCommand == nil &&
+                voiceCommandSet == nil
+            {
+                voiceCommand = firstVoiceCommand
+                voiceCommandSet = firstVoiceCommandSet
+            }
+        } else if self.entryListManager.isWalkingEntryList {
+            // Walk Entry List Mode
+            print("\tWalk Entry List Mode...")
+            
+            var utteredWords = [Token]()
+            for word in filteredBagOfWords {
+                if let token = TokenMap[word] {
+                    utteredWords.append(token)
+                }
+            }
+            let utteredWordsSet = Set(utteredWords)
+            
+            // Prioritize commands with entry in them
+            for commandSet in viableVoiceCommandSets {
+                if !commandSet.contains(.ENTRY) && commandSet.intersection(utteredWordsSet).count > 0 {
+                    print("\tPrioritizing voice commands with uttered words...")
+                    // We want to prioritize other commands before settling for walk entry
+                    voiceCommand = VoiceCommandMap[commandSet]
+                    voiceCommandSet = commandSet
+                    break
+                }
+            }
+            
+            if voiceCommand == nil &&
+                voiceCommandSet == nil {
+                for commandSet in viableVoiceCommandSets {
+                    if commandSet.contains(.ENTRY) && !commandSet.contains(.WALK) {
+                        print("\tPrioritizing entry voice command...")
+                        // We want to prioritize other commands before settling for walk entry
+                        voiceCommand = VoiceCommandMap[commandSet]
+                        voiceCommandSet = commandSet
+                        break
+                    }
+                }
+            }
+            
+            if voiceCommand == nil &&
+                voiceCommandSet == nil {
+                for commandSet in viableVoiceCommandSets {
+                    if commandSet.subtracting(Set([.WALK, .ENTRY])).count > 0 {
+                        print("\tPrioritizing non-walk entry voice command...")
+                        // We want to prioritize other commands before settling for run entry
+                        voiceCommand = VoiceCommandMap[commandSet]
+                        voiceCommandSet = commandSet
+                        break
+                    }
+                }
+            }
+            
+            // Choose first voice command
+            if let firstVoiceCommandSet = viableVoiceCommandSets.first,
+               let firstVoiceCommand = VoiceCommandMap[firstVoiceCommandSet],
+               voiceCommand == nil &&
+                voiceCommandSet == nil
+            {
+                voiceCommand = firstVoiceCommand
+                voiceCommandSet = firstVoiceCommandSet
+            }
         } else if self.selectionCursor.hasSelection {
             // Selection Mode
+            print("\tSelection Mode...")
             for commandSet in viableVoiceCommandSets {
                 if commandSet.contains(.SELECTION) || commandSet.contains(.SELECTION_RATE) {
                     voiceCommand = VoiceCommandMap[commandSet]
@@ -429,6 +593,7 @@ public class VoiceCommandEngine: NSObject {
             }
         } else if self.uiManager.dialogIsVisible {
             // Dialog Mode
+            print("\tDialog Mode...")
             // Choose first voice command
             if let firstVoiceCommandSet = viableVoiceCommandSets.first,
                let firstVoiceCommand = VoiceCommandMap[firstVoiceCommandSet]
@@ -437,7 +602,8 @@ public class VoiceCommandEngine: NSObject {
                 voiceCommandSet = firstVoiceCommandSet
             }
         } else {
-            // Other
+            // No Mode
+            print("\tNo Mode...")
             // Choose first voice command
             if let firstVoiceCommandSet = viableVoiceCommandSets.first,
                let firstVoiceCommand = VoiceCommandMap[firstVoiceCommandSet]
@@ -502,7 +668,6 @@ public class VoiceCommandEngine: NSObject {
             command == .SHIFT_NEXT_WALK_ELEMENT ||
             command == .SHIFT_PREVIOUS_WALK_ELEMENT ||
             command == .REMOVE_SELECTION ||
-            command == .EXIT_RUN ||
             command == .EXIT_WALK ||
             command == .SHIFT_ANCHOR_RIGHT ||
             command == .SHIFT_ANCHOR_LEFT ||
@@ -522,6 +687,7 @@ public class VoiceCommandEngine: NSObject {
     func isEntryVoiceCommand(command: VoiceCommand) -> Bool {
         if (
             // Entry Manager
+            command == .ENTER_ENTRY ||
             command == .PLAY_ENTRY ||
             command == .PAUSE_ENTRY ||
             command == .START_ENTRY ||
@@ -554,7 +720,7 @@ public class VoiceCommandEngine: NSObject {
             command == .SKIP_PLAYBACK_BACKWARD ||
             command == .SKIP_PLAYBACK_FORWARD ||
             command == .STOP_PLAYBACK ||
-            command == .OPEN_SELECTION ||
+            command == .ENTER_SELECTION ||
             command == .REMOVE_SELECTION ||
             command == .SHIFT_ANCHOR_LEFT ||
             command == .SHIFT_ANCHOR_RIGHT ||
@@ -575,7 +741,6 @@ public class VoiceCommandEngine: NSObject {
             command == .SHIFT_NEXT_WALK_ELEMENT ||
             command == .SHIFT_PREVIOUS_WALK_ELEMENT ||
             command == .PAUSE_RUN ||
-            command == .EXIT_RUN ||
             command == .EXIT_WALK ||
             command == .CANCEL_SELECTION_UPDATE ||
             command == .REDO_CHANGE ||
@@ -593,8 +758,25 @@ public class VoiceCommandEngine: NSObject {
         return false
     }
     
-    func isEntryManagerCommand(command: VoiceCommand) -> Bool {
+    func isEntryListVoiceCommand(command: VoiceCommand) -> Bool {
         if (
+            command == .ENTER_ENTRY_LIST ||
+            command == .WALK_ENTRY_LIST ||
+            command == .RUN_ENTRY_LIST ||
+            command == .SHIFT_NEXT_WALK_ELEMENT ||
+            command == .SHIFT_PREVIOUS_WALK_ELEMENT ||
+            command == .PAUSE_RUN ||
+            command == .EXIT_WALK
+        ) {
+            return true
+        }
+        
+        return false
+    }
+    
+    func isEntryManagerVoiceCommand(command: VoiceCommand) -> Bool {
+        if (
+            command == .ENTER_ENTRY ||
             command == .PLAY_ENTRY ||
             command == .PAUSE_ENTRY ||
             command == .START_ENTRY ||
@@ -627,7 +809,7 @@ public class VoiceCommandEngine: NSObject {
             command == .SKIP_PLAYBACK_BACKWARD ||
             command == .SKIP_PLAYBACK_FORWARD ||
             command == .STOP_PLAYBACK ||
-            command == .OPEN_SELECTION ||
+            command == .ENTER_SELECTION ||
             command == .REMOVE_SELECTION ||
             command == .SHIFT_ANCHOR_LEFT ||
             command == .SHIFT_ANCHOR_RIGHT ||
@@ -648,7 +830,6 @@ public class VoiceCommandEngine: NSObject {
             command == .SHIFT_NEXT_WALK_ELEMENT ||
             command == .SHIFT_PREVIOUS_WALK_ELEMENT ||
             command == .PAUSE_RUN ||
-            command == .EXIT_RUN ||
             command == .EXIT_WALK ||
             command == .CANCEL_SELECTION_UPDATE ||
             command == .REDO_CHANGE ||
@@ -660,7 +841,23 @@ public class VoiceCommandEngine: NSObject {
         return false
     }
     
-    func isStateCommand(command: VoiceCommand) -> Bool {
+    func isEntryListManagerVoiceCommand(command: VoiceCommand) -> Bool {
+        if (
+            command == .ENTER_ENTRY_LIST ||
+            command == .WALK_ENTRY_LIST ||
+            command == .RUN_ENTRY_LIST ||
+            command == .SHIFT_NEXT_WALK_ELEMENT ||
+            command == .SHIFT_PREVIOUS_WALK_ELEMENT ||
+            command == .PAUSE_RUN ||
+            command == .EXIT_WALK
+        ) {
+            return true
+        }
+        
+        return false
+    }
+    
+    func isStateVoiceCommand(command: VoiceCommand) -> Bool {
         if (
             command == .ACTIVATE_PUNCTUATION ||
             command == .DEACTIVATE_PUNCTUATION ||
@@ -683,7 +880,7 @@ public class VoiceCommandEngine: NSObject {
         return false
     }
     
-    func isSpeechPlayerCommand(command: VoiceCommand) -> Bool {
+    func isSpeechPlayerVoiceCommand(command: VoiceCommand) -> Bool {
         if (
             command == .INCREASE_PLAYBACK_RATE ||
             command == .DECREASE_PLAYBACK_RATE
@@ -694,7 +891,7 @@ public class VoiceCommandEngine: NSObject {
         return false
     }
     
-    func isSpeechSynthesisCommand(command: VoiceCommand) -> Bool {
+    func isSpeechSynthesisVoiceCommand(command: VoiceCommand) -> Bool {
         if (
             command == .INCREASE_ECHO_RATE ||
             command == .DECREASE_ECHO_RATE
@@ -705,7 +902,7 @@ public class VoiceCommandEngine: NSObject {
         return false
     }
     
-    func isSelectionCursorCommand(command: VoiceCommand) -> Bool {
+    func isSelectionCursorVoiceCommand(command: VoiceCommand) -> Bool {
         if (
             command == .INSPECT_CLIPBOARD
         ) {
@@ -715,7 +912,7 @@ public class VoiceCommandEngine: NSObject {
         return false
     }
     
-    func isUIManagerCommand(command: VoiceCommand) -> Bool {
+    func isUIManagerVoiceCommand(command: VoiceCommand) -> Bool {
         if (
             command == .ACCEPT_SELECTION_UPDATE ||
             command == .REDO_SELECTION_UPDATE ||
@@ -742,12 +939,13 @@ public class VoiceCommandEngine: NSObject {
         print("\tVoice Command: \(command)")
         print("\tUtterance: \"\(utterance)\"")
 
-        if self.isEntryManagerCommand(command: command) ||
-            self.isStateCommand(command: command) ||
-            self.isSpeechPlayerCommand(command: command) ||
-            self.isSpeechSynthesisCommand(command: command) ||
-            self.isSelectionCursorCommand(command: command) ||
-            self.isUIManagerCommand(command: command)
+        if self.isEntryManagerVoiceCommand(command: command) ||
+            self.isEntryListManagerVoiceCommand(command: command) ||
+            self.isStateVoiceCommand(command: command) ||
+            self.isSpeechPlayerVoiceCommand(command: command) ||
+            self.isSpeechSynthesisVoiceCommand(command: command) ||
+            self.isSelectionCursorVoiceCommand(command: command) ||
+            self.isUIManagerVoiceCommand(command: command)
         {
             print("\tBroadcast processed voice command...")
             // Broadcast Voice Command
@@ -791,7 +989,6 @@ public class VoiceCommandEngine: NSObject {
         case INSPECT = "inspect"
         case SKIP = "skip"
         case ACCEPT = "accept"
-        case OPEN = "open"
         case REMOVE = "remove"
         case UNDO = "undo"
         case REDO = "redo"
@@ -805,7 +1002,7 @@ public class VoiceCommandEngine: NSObject {
         case CANCEL = "cancel"
         case CONTINUE = "continue"
         case PASTE = "paste"
-        case SHOW = "show"
+        case ENTER = "enter"
         
         // ENTITIES
         case ENTRY = "entry"
@@ -833,6 +1030,9 @@ public class VoiceCommandEngine: NSObject {
         case BEGINNING = "beginning"
         case CHANGE = "change"
         case DIALOG = "dialog"
+        case ENTRY_LIST = "entry list"
+        case LIST = "list"
+        case RATE = "rate"
     //        case HELP = "help"
             
         // ACTION ENTITIES
@@ -874,6 +1074,12 @@ public class VoiceCommandEngine: NSObject {
         case WALK_ENTRY = "walk entry"
         case EDIT_ENTRY = "edit entry"
         case EXPORT_ENTRY = "export entry"
+        case ENTER_ENTRY = "enter entry"
+        
+        // Entry List
+        case WALK_ENTRY_LIST = "walk entry list"
+        case RUN_ENTRY_LIST = "run entry list"
+        case ENTER_ENTRY_LIST = "enter entry list"
         // Echo
         case PLAY_ECHO = "play echo"
         case START_ECHO = "start echo"
@@ -925,14 +1131,13 @@ public class VoiceCommandEngine: NSObject {
         case EXPORT_SELECTION = "export selection"
         case RUN_SELECTION = "run selection"
         case WALK_SELECTION = "walk selection"
-        case OPEN_SELECTION = "open selection"
+        case ENTER_SELECTION = "enter selection"
         case REMOVE_SELECTION = "remove selection"
         case EXPAND_SELECTION = "expand selection"
         case REDUCE_SELECTION = "reduce selection"
         case PLAY_SELECTION = "play selection"
         case ECHO_SELECTION = "echo selection"
         case PAUSE_RUN = "pause run"
-        case EXIT_RUN = "exit run"
         case EXIT_WALK = "exit walk"
         case SHIFT_ANCHOR_RIGHT = "shift anchor right"
         case SHIFT_ANCHOR_LEFT = "shift anchor left"
@@ -967,7 +1172,7 @@ public class VoiceCommandEngine: NSObject {
         // General
         case UNDO_CHANGE = "undo change"
         case REDO_CHANGE = "redo change"
-    //        case SHOW_HELP = "show help"
+    //        case VIEW_HELP = "view help"
         case GRANT_PERMISSION = "grant permission"
         case CANCEL_DIALOG = "cancel dialog"
         case CONTINUE_DIALOG = "continue dialog"
@@ -992,103 +1197,108 @@ public class VoiceCommandEngine: NSObject {
             case 10: self = .WALK_ENTRY
             case 11: self = .EDIT_ENTRY
             case 12: self = .EXPORT_ENTRY
+            case 13: self = .ENTER_ENTRY
+            
+            // Entry List
+            case 15: self = .WALK_ENTRY_LIST
+            case 16: self = .RUN_ENTRY_LIST
+            case 17: self = .ENTER_ENTRY_LIST
             // Echo
-            case 13: self = .PLAY_ECHO
-            case 14: self = .START_ECHO
-            case 15: self = .PAUSE_ECHO
-            case 16: self = .STOP_ECHO
-            case 17: self = .RESUME_ECHO
+            case 18: self = .PLAY_ECHO
+            case 19: self = .START_ECHO
+            case 20: self = .PAUSE_ECHO
+            case 21: self = .STOP_ECHO
+            case 22: self = .RESUME_ECHO
             // Playback
-            case 18: self = .PAUSE_PLAYBACK
-            case 19: self = .RESUME_PLAYBACK
-            case 20: self = .STOP_PLAYBACK
-            case 21: self = .SKIP_PLAYBACK_BACKWARD
-            case 22: self = .SKIP_PLAYBACK_FORWARD
+            case 23: self = .PAUSE_PLAYBACK
+            case 24: self = .RESUME_PLAYBACK
+            case 25: self = .STOP_PLAYBACK
+            case 26: self = .SKIP_PLAYBACK_BACKWARD
+            case 27: self = .SKIP_PLAYBACK_FORWARD
             // Sentence
-            case 23: self = .PLAY_PREVIOUS_SENTENCE
-            case 24: self = .ECHO_PREVIOUS_SENTENCE
+            case 28: self = .PLAY_PREVIOUS_SENTENCE
+            case 29: self = .ECHO_PREVIOUS_SENTENCE
             // Punctuation
-            case 25: self = .ACTIVATE_PUNCTUATION
-            case 26: self = .DEACTIVATE_PUNCTUATION
+            case 30: self = .ACTIVATE_PUNCTUATION
+            case 31: self = .DEACTIVATE_PUNCTUATION
             // Silences
-            case 27: self = .ACTIVATE_SILENCES
-            case 28: self = .DEACTIVATE_SILENCES
+            case 32: self = .ACTIVATE_SILENCES
+            case 33: self = .DEACTIVATE_SILENCES
             // Temporal Suggestions
-            case 29: self = .ACTIVATE_TEMPORAL_SUGGESTIONS
-            case 30: self = .DEACTIVATE_TEMPORAL_SUGGESTIONS
+            case 34: self = .ACTIVATE_TEMPORAL_SUGGESTIONS
+            case 35: self = .DEACTIVATE_TEMPORAL_SUGGESTIONS
             // Punctuation Suggestions
-            case 31: self = .ACTIVATE_PUNCTUATION_SUGGESTIONS
-            case 32: self = .DEACTIVATE_PUNCTUATION_SUGGESTIONS
+            case 36: self = .ACTIVATE_PUNCTUATION_SUGGESTIONS
+            case 37: self = .DEACTIVATE_PUNCTUATION_SUGGESTIONS
             // Formatting Suggestions
-            case 33: self = .ACTIVATE_FORMATTING_SUGGESTIONS
-            case 34: self = .DEACTIVATE_FORMATTING_SUGGESTIONS
+            case 38: self = .ACTIVATE_FORMATTING_SUGGESTIONS
+            case 39: self = .DEACTIVATE_FORMATTING_SUGGESTIONS
             // Passive Echo
-            case 35: self = .ACTIVATE_PASSIVE_ECHO
-            case 36: self = .DEACTIVATE_PASSIVE_ECHO
+            case 40: self = .ACTIVATE_PASSIVE_ECHO
+            case 41: self = .DEACTIVATE_PASSIVE_ECHO
             // Volume
-            case 37: self = .INCREASE_VOLUME
-            case 38: self = .DECREASE_VOLUME
+            case 42: self = .INCREASE_VOLUME
+            case 43: self = .DECREASE_VOLUME
     //        case ADJUST_VOLUME = "adjust volume"
             // Echo Rate
-            case 39: self = .INCREASE_ECHO_RATE
-            case 40: self = .DECREASE_ECHO_RATE
+            case 44: self = .INCREASE_ECHO_RATE
+            case 45: self = .DECREASE_ECHO_RATE
             // Playback Rate
-            case 41: self = .INCREASE_PLAYBACK_RATE
-            case 42: self = .DECREASE_PLAYBACK_RATE
+            case 46: self = .INCREASE_PLAYBACK_RATE
+            case 47: self = .DECREASE_PLAYBACK_RATE
             // Selection
-            case 43: self = .DELETE_SELECTION
-            case 44: self = .UPDATE_SELECTION
-            case 45: self = .COPY_SELECTION
-            case 46: self = .CUT_SELECTION
-            case 47: self = .EXPORT_SELECTION
-            case 48: self = .RUN_SELECTION
-            case 49: self = .WALK_SELECTION
-            case 50: self = .OPEN_SELECTION
-            case 51: self = .REMOVE_SELECTION
-            case 52: self = .EXPAND_SELECTION
-            case 53: self = .REDUCE_SELECTION
-            case 54: self = .PLAY_SELECTION
-            case 55: self = .ECHO_SELECTION
-            case 56: self = .PAUSE_RUN
-            case 57: self = .EXIT_RUN
-            case 58: self = .EXIT_WALK
-            case 59: self = .SHIFT_ANCHOR_RIGHT
-            case 60: self = .SHIFT_ANCHOR_LEFT
-            case 61: self = .SHIFT_FOCUS_RIGHT
-            case 62: self = .SHIFT_FOCUS_LEFT
-            case 63: self = .SHIFT_SELECTION_FORWARD
-            case 64: self = .SHIFT_SELECTION_BACKWARD
-            case 65: self = .SHIFT_NEXT_WALK_ELEMENT
-            case 66: self = .SHIFT_PREVIOUS_WALK_ELEMENT
+            case 48: self = .DELETE_SELECTION
+            case 49: self = .UPDATE_SELECTION
+            case 50: self = .COPY_SELECTION
+            case 51: self = .CUT_SELECTION
+            case 52: self = .EXPORT_SELECTION
+            case 53: self = .RUN_SELECTION
+            case 54: self = .WALK_SELECTION
+            case 55: self = .ENTER_SELECTION
+            case 56: self = .REMOVE_SELECTION
+            case 57: self = .EXPAND_SELECTION
+            case 58: self = .REDUCE_SELECTION
+            case 59: self = .PLAY_SELECTION
+            case 60: self = .ECHO_SELECTION
+            case 61: self = .PAUSE_RUN
+            case 62: self = .EXIT_WALK
+            case 63: self = .SHIFT_ANCHOR_RIGHT
+            case 64: self = .SHIFT_ANCHOR_LEFT
+            case 65: self = .SHIFT_FOCUS_RIGHT
+            case 66: self = .SHIFT_FOCUS_LEFT
+            case 67: self = .SHIFT_SELECTION_FORWARD
+            case 68: self = .SHIFT_SELECTION_BACKWARD
+            case 69: self = .SHIFT_NEXT_WALK_ELEMENT
+            case 70: self = .SHIFT_PREVIOUS_WALK_ELEMENT
             // Selection Update
-            case 67: self = .ACCEPT_SELECTION_UPDATE
-            case 68: self = .REDO_SELECTION_UPDATE
-            case 69: self = .CANCEL_SELECTION_UPDATE
+            case 71: self = .ACCEPT_SELECTION_UPDATE
+            case 72: self = .REDO_SELECTION_UPDATE
+            case 73: self = .CANCEL_SELECTION_UPDATE
             // Selection Rate
-            case 70: self = .INCREASE_SELECTION_RATE
-            case 71: self = .DECREASE_SELECTION_RATE
+            case 74: self = .INCREASE_SELECTION_RATE
+            case 75: self = .DECREASE_SELECTION_RATE
             // Cursor
     //        case SHIFT_HERE = "shift here"
             // Commmit
-            case 72: self = .PLAY_COMMIT
-            case 73: self = .ECHO_COMMIT
-            case 74: self = .SELECT_COMMIT
-            case 75: self = .ROLLBACK_COMMIT
-            case 76: self = .WALK_COMMIT
-            case 77: self = .RUN_COMMIT
+            case 76: self = .PLAY_COMMIT
+            case 77: self = .ECHO_COMMIT
+            case 78: self = .SELECT_COMMIT
+            case 79: self = .ROLLBACK_COMMIT
+            case 80: self = .WALK_COMMIT
+            case 81: self = .RUN_COMMIT
             // Clipboard
-            case 78: self = .INSPECT_CLIPBOARD
-            case 79: self = .PASTE_CLIPBOARD
+            case 82: self = .INSPECT_CLIPBOARD
+            case 83: self = .PASTE_CLIPBOARD
             // Output
-            case 80: self = .EXPORT_AUDIO
-            case 81: self = .EXPORT_TEXT
+            case 84: self = .EXPORT_AUDIO
+            case 85: self = .EXPORT_TEXT
             // General
-            case 82: self = .UNDO_CHANGE
-            case 83: self = .REDO_CHANGE
-    //        case SHOW_HELP = "show help"
-            case 84: self = .GRANT_PERMISSION
-            case 85: self = .CANCEL_DIALOG
-            case 86: self = .CONTINUE_DIALOG
+            case 86: self = .UNDO_CHANGE
+            case 87: self = .REDO_CHANGE
+    //        case VIEW_HELP = "show help"
+            case 88: self = .GRANT_PERMISSION
+            case 89: self = .CANCEL_DIALOG
+            case 90: self = .CONTINUE_DIALOG
             default: return nil
             }
         }
@@ -1130,18 +1340,23 @@ public class VoiceCommandEngine: NSObject {
         Token.SKIP.value() : .SKIP,
         Token.ACCEPT.value() : .ACCEPT,
         "except" : .ACCEPT,
-        Token.OPEN.value() : .OPEN,
-        "add" : .OPEN,
-        "wake" : .OPEN,
-        "make" : .OPEN,
-        "makes" : .OPEN,
-        "begin": .OPEN,
+        Token.ENTER.value() : .ENTER,
+        "open": .ENTER,
+        "view": .ENTER,
+        "add" : .ENTER,
+        "wake" : .ENTER,
+        "make" : .ENTER,
+        "makes" : .ENTER,
+        "begin": .ENTER,
         Token.REMOVE.value() : .REMOVE,
         "clear" : .REMOVE,
         "unselect" : .REMOVE,
         Token.UNDO.value() : .UNDO,
         Token.REDO.value() : .REDO,
         Token.EXIT.value() : .EXIT,
+        "hide" : .EXIT,
+        "close" : .EXIT,
+        "leave" : .EXIT,
         Token.SELECT.value() : .SELECT,
         Token.ROLLBACK.value() : .ROLLBACK,
         "reverse" : .ROLLBACK,
@@ -1157,7 +1372,6 @@ public class VoiceCommandEngine: NSObject {
         Token.CANCEL.value() : .CANCEL,
         Token.CONTINUE.value() : .CONTINUE,
         Token.PASTE.value() : .PASTE,
-        Token.SHOW.value() : .SHOW,
         
         // ENTITY
         Token.ENTRY.value() : .ENTRY,
@@ -1171,6 +1385,9 @@ public class VoiceCommandEngine: NSObject {
         Token.PASSIVE_ECHO.value() : .PASSIVE_ECHO,
         Token.VOLUME.value() : .VOLUME,
         Token.ECHO_RATE.value() : .ECHO_RATE,
+        "ecko rate" : .ECHO_RATE,
+        "ecko rates" : .ECHO_RATE,
+        "accurate" : .ECHO_RATE,
         Token.PLAYBACK_RATE.value() : .PLAYBACK_RATE,
         Token.PLAYBACK.value() : .PLAYBACK,
         Token.SELECTION.value() : .SELECTION,
@@ -1187,6 +1404,10 @@ public class VoiceCommandEngine: NSObject {
         Token.BEGINNING.value() : .BEGINNING,
         Token.CHANGE.value() : .CHANGE,
         Token.DIALOG.value() : .DIALOG,
+        Token.ENTRY_LIST.value() : .ENTRY_LIST,
+        Token.RATE.value() : .RATE,
+        "rates": .RATE,
+        Token.LIST.value() : .LIST,
     //        Token.HELP.value() : .HELP,
 
         // ACTION-ENTITY
@@ -1194,6 +1415,7 @@ public class VoiceCommandEngine: NSObject {
         "ecko": .ECHO,
         Token.RUN.value() : .RUN,
         Token.WALK.value() : .WALK,
+        "work" : .WALK,
         Token.END.value() : .END,
         "ending" : .END,
 
@@ -1238,6 +1460,16 @@ public class VoiceCommandEngine: NSObject {
         Set([.WALK, .ENTRY]) : .WALK_ENTRY,
         Set([.EDIT, .ENTRY]) : .EDIT_ENTRY,
         Set([.EXPORT, .ENTRY]) : .EXPORT_ENTRY,
+        Set([.ENTER, .ENTRY]) : .ENTER_ENTRY,
+        Set([.INSPECT, .ENTRY]) : .ENTER_ENTRY,
+        Set([.EXIT, .ENTRY]) : .ENTER_ENTRY_LIST,
+        // Entry List
+        Set([.ENTER, .ENTRY_LIST]) : .ENTER_ENTRY_LIST,
+        Set([.ENTER, .LIST]) : .ENTER_ENTRY_LIST,
+        Set([.WALK, .ENTRY_LIST]) : .WALK_ENTRY_LIST,
+        Set([.WALK, .LIST]) : .WALK_ENTRY_LIST,
+        Set([.RUN, .ENTRY_LIST]) : .RUN_ENTRY_LIST,
+        Set([.RUN, .LIST]) : .RUN_ENTRY_LIST,
         // Echo
         Set([.PLAY, .ECHO]) : .PLAY_ECHO,
         Set([.START, .ECHO]) : .START_ECHO,
@@ -1297,7 +1529,9 @@ public class VoiceCommandEngine: NSObject {
     //        Set([.ADJUST, .VOLUME]) : .ADJUST_VOLUME,
         // Echo Rate
         Set([.INCREASE, .ECHO_RATE]) : .INCREASE_ECHO_RATE,
+        Set([.INCREASE, .ECHO, .RIGHT]) : .INCREASE_ECHO_RATE,
         Set([.DECREASE, .ECHO_RATE]) : .DECREASE_ECHO_RATE,
+        Set([.DECREASE, .ECHO, .RIGHT]) : .DECREASE_ECHO_RATE,
         // Playback Rate
         Set([.INCREASE, .PLAYBACK_RATE]) : .INCREASE_PLAYBACK_RATE,
         Set([.DECREASE, .PLAYBACK_RATE]) : .DECREASE_PLAYBACK_RATE,
@@ -1309,8 +1543,8 @@ public class VoiceCommandEngine: NSObject {
         Set([.EXPORT, .SELECTION]) : .EXPORT_SELECTION,
         Set([.RUN, .SELECTION]) : .RUN_SELECTION,
         Set([.WALK, .SELECTION]) : .WALK_SELECTION,
-        Set([.OPEN, .SELECTION]) : .OPEN_SELECTION,
-        Set([.START, .SELECTION]) : .OPEN_SELECTION,
+        Set([.ENTER, .SELECTION]) : .ENTER_SELECTION,
+        Set([.START, .SELECTION]) : .ENTER_SELECTION,
         Set([.REMOVE, .SELECTION]) : .REMOVE_SELECTION,
         Set([.END, .SELECTION]) : .REMOVE_SELECTION,
         Set([.STOP, .SELECTION]) : .REMOVE_SELECTION,
@@ -1321,7 +1555,7 @@ public class VoiceCommandEngine: NSObject {
         Set([.ECHO, .SELECTION]) : .ECHO_SELECTION,
         Set([.PAUSE, .RUN]) : .PAUSE_RUN,
         Set([.STOP, .RUN]) : .PAUSE_RUN,
-        Set([.EXIT, .RUN]) : .EXIT_RUN,
+        Set([.EXIT, .RUN]) : .PAUSE_RUN,
         Set([.EXIT, .WALK]) : .EXIT_WALK,
         // Shift Anchor Right
         Set([.SHIFT, .ANCHOR, .RIGHT]) : .SHIFT_ANCHOR_RIGHT,
@@ -1368,10 +1602,10 @@ public class VoiceCommandEngine: NSObject {
         Set([.SHIFT, .SELECTION, .RIGHT]) : .SHIFT_SELECTION_FORWARD,
         Set([.SHIFT, .SELECTION, .PREVIOUS]) : .SHIFT_SELECTION_BACKWARD,
         Set([.SHIFT, .SELECTION, .LEFT]) : .SHIFT_SELECTION_BACKWARD,
-        // Shift Next Walk Element
+        // Shift Next Entry Walk Element
         Set([.SHIFT, .WALK, .NEXT]) : .SHIFT_NEXT_WALK_ELEMENT,
         Set([.SHIFT, .WALK, .RIGHT]) : .SHIFT_NEXT_WALK_ELEMENT,
-        // Shift Previous Walk Element
+        // Shift Previous Entry Walk Element
         Set([.SHIFT, .WALK, .PREVIOUS]) : .SHIFT_PREVIOUS_WALK_ELEMENT,
         Set([.SHIFT, .WALK, .LEFT]) : .SHIFT_PREVIOUS_WALK_ELEMENT,
         // Selection Update
@@ -1401,7 +1635,7 @@ public class VoiceCommandEngine: NSObject {
         // General
         Set([.UNDO, .CHANGE]) : .UNDO_CHANGE,
         Set([.REDO, .CHANGE]) : .REDO_CHANGE,
-    //        Set([.SHOW, .HELP]) : .SHOW_HELP,
+    //        Set([.VIEW, .HELP]) : .VIEW_HELP,
         Set([.GRANT, .PERMISSION]) : .GRANT_PERMISSION,
         Set([.CANCEL, .DIALOG]) : .CANCEL_DIALOG,
         Set([.CONTINUE, .DIALOG]) : .CONTINUE_DIALOG
@@ -1427,7 +1661,7 @@ public class VoiceCommandEngine: NSObject {
         .INSPECT,
         .SKIP,
         .ACCEPT,
-        .OPEN,
+        .ENTER,
         .REMOVE,
         .UNDO,
         .REDO,
@@ -1441,7 +1675,6 @@ public class VoiceCommandEngine: NSObject {
         .CANCEL,
         .CONTINUE,
         .PASTE,
-        .SHOW
     ]
     
     let ActionEntityToken: Set<Token> = [
@@ -1477,7 +1710,10 @@ public class VoiceCommandEngine: NSObject {
         .AUDIO,
         .TEXT,
         .CHANGE,
-        .DIALOG
+        .DIALOG,
+        .ENTRY_LIST,
+        .RATE,
+        .LIST
     //        .HELP
     ]
     
@@ -1511,7 +1747,14 @@ public class VoiceCommandEngine: NSObject {
             .WALK,
             .EDIT,
             .EXPORT,
-            .CONTINUE
+            .CONTINUE,
+            .ENTER,
+            .EXIT
+        ]),
+        .ENTRY_LIST: Set([
+            .RUN,
+            .WALK,
+            .ENTER
         ]),
         .ECHO: Set([
             .PLAY,
@@ -1585,7 +1828,7 @@ public class VoiceCommandEngine: NSObject {
             .EXPORT,
             .RUN,
             .WALK,
-            .OPEN,
+            .ENTER,
             .START,
             .REMOVE,
             .END,
@@ -1604,9 +1847,8 @@ public class VoiceCommandEngine: NSObject {
         ]),
         .RUN: Set([
             .PAUSE,
-            .RUN,
-            .EXIT,
-            .STOP
+            .STOP,
+            .EXIT
         ]),
         .WALK: Set([
             .SHIFT,
@@ -1664,7 +1906,13 @@ public class VoiceCommandEngine: NSObject {
         .DIALOG: Set([
             .CANCEL,
             .CONTINUE
-        ])
+        ]),
+        .RATE: Set([]),
+        .LIST: Set([
+            .RUN,
+            .WALK,
+            .ENTER
+        ]),
     ]
     
     let PossibleEntitySpatialRelations: [Token: Set<Token>] = [

@@ -25,6 +25,7 @@ class SpeechPlayerEngine: NSObject {
     weak var speechSynthesis: SpeechSynthesisEngine!
     weak var speechRecognition: SpeechRecognitionEngine!
     weak var entryManager: EntryManager!
+    weak var entryListManager: EntryListManager!
     
     // MARK: - Audio Playback
     
@@ -156,7 +157,7 @@ class SpeechPlayerEngine: NSObject {
     }
     
     @objc func onEntryDeleted(notification: Notification) {
-        print("===== Speech Player Engine: On Deleted Entry =====")
+        print("===== Speech Player Engine: On Entry Deleted=====")
         self.stop(withFeedback: false)
         
         checkRep()
@@ -193,7 +194,12 @@ class SpeechPlayerEngine: NSObject {
         if self.pausedPlayingEntry {
             print("\tEntry was paused. Resume playback")
             // Play Sound
-            if !self.speechRecognition.isListeningForSpeech && !self.selectionCursor.hasSelection {
+            if !self.speechRecognition.isListeningForSpeech &&
+                !self.selectionCursor.hasSelection &&
+                !self.entryManager.isRunningEntry &&
+                !self.entryManager.isWalkingEntry &&
+                !self.entryListManager.isRunningEntryList
+            {
                 // should not play if we have a selection
                 soundEngine.play()
             }
@@ -223,7 +229,13 @@ class SpeechPlayerEngine: NSObject {
         print("\tInitiate new playback...")
         let playHandler = {
             // Play Sound
-            if !self.speechRecognition.isListeningForSpeech && !self.selectionCursor.hasSelection {
+            if !self.speechRecognition.isListeningForSpeech &&
+                !self.selectionCursor.hasSelection &&
+                !self.entryManager.isRunningEntry &&
+                !self.entryManager.isWalkingEntry &&
+                !self.entryListManager.isRunningEntryList &&
+                !self.entryListManager.isWalkingEntryList
+            {
                 // should not play if we have a selection
                 soundEngine.play()
             }
@@ -319,7 +331,13 @@ class SpeechPlayerEngine: NSObject {
         print("\tInitiate new playback...")
         let playHandler = {
             // Play Sound
-            if !self.speechRecognition.isListeningForSpeech && !self.selectionCursor.hasSelection {
+            if !self.speechRecognition.isListeningForSpeech &&
+                !self.selectionCursor.hasSelection &&
+                !self.entryManager.isRunningEntry &&
+                !self.entryManager.isWalkingEntry &&
+                !self.entryListManager.isRunningEntryList &&
+                !self.entryListManager.isWalkingEntryList
+            {
                 // should not play if we have a selection
                 soundEngine.play()
             }
@@ -495,7 +513,7 @@ class SpeechPlayerEngine: NSObject {
     
     func setPlaybackRate(to rate: Float) {
         print("===== Speech Player Engine: Set Playback Rate =====")
-        print("Setting rate to: ", rate)
+        print("\tSetting rate to: ", rate)
 
         if self.isPlayingEntry {
             self.player.rate = rate
@@ -606,11 +624,6 @@ class SpeechPlayerEngine: NSObject {
             // Play Sound
             soundEngine.voiceCommandAccept()
             self.setPlaybackRate(to: newPlaybackRate)
-            self.notifications.executeFeedback(
-                visualMessage: "Playback Rate: \(newPlaybackRate)",
-                audioMessage: "Playback Rate increased to \(newPlaybackRate)x",
-                withHaptics: true
-            )
 
             handler?()
         } else {
@@ -633,11 +646,6 @@ class SpeechPlayerEngine: NSObject {
             // Play Sound
             soundEngine.voiceCommandAccept()
             self.setPlaybackRate(to: newPlaybackRate)
-            self.notifications.executeFeedback(
-                visualMessage: "Playback Rate: \(newPlaybackRate)",
-                audioMessage: "Playback Rate decreased to \(newPlaybackRate)x",
-                withHaptics: true
-            )
 
             handler?()
         } else {
@@ -769,24 +777,25 @@ class SpeechPlayerEngine: NSObject {
             }
         }
         
+        let firstPlayableSegment = Utils.getSegment(
+            forTrackTime: CMTime.zero,
+            segments: self.playbackSegments,
+            entry: self.entryManager.currentEntry,
+            isWord: true
+        )
+        
         print("\tPlaying from: \(self.startPlaybackAt!.seconds)")
         self.player.seek(to: self.startPlaybackAt!)
         self.player.play()
-        if (!self.entryManager.isWalkingEntry || self.entryManager.pausedWalkingEntry) &&
-            (!self.entryManager.isRunningEntry || self.entryManager.pausedRunningEntry)
+        if let firstPlayableSegment = firstPlayableSegment,
+           let playbackSegments = self.playbackSegments,
+           firstPlayableSegment.getIndex() > playbackSegments[0].getIndex()
         {
             self.handleBoundaryTimeObserver(start: true)
         }
         
-        let firstPlayableSegment = Utils.getSegment(
-            forTrackTime: CMTimeMake(
-                value: Int64(Utils.DEFAULT_SEGMENT_TIMESCALE * (self.startPlaybackAt!.seconds + Utils.TEMPORAL_DELTA)),
-                timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
-            ),
-            segments: self.playbackSegments,
-            entry: self.entryManager.currentEntry,
-            isPlayingEntry: self.isPlayingEntry
-        )
+        print("\tPlaying asset with duration: \(self.player.currentItem!.duration.seconds)s and \(self.player.currentItem!.asset.tracks[0].segments.count) segments.")
+        
         let rate = firstPlayableSegment?.getRate() ?? self.playbackRate
         let rateWasSet = self.setPlayerRate(rate: rate)
         if rateWasSet {
@@ -794,7 +803,6 @@ class SpeechPlayerEngine: NSObject {
         } else {
             print("\t[Error] There was a problem setting player rate. Player had not been started yet.")
         }
-        print("\tPlaying asset with duration: \(self.player.currentItem!.duration.seconds)s and \(self.player.currentItem!.asset.tracks[0].segments.count) segments.")
         
         print("\tExecute On Start Handler...")
         self.onStartHandler?()
@@ -996,7 +1004,7 @@ class SpeechPlayerEngine: NSObject {
 
         if let stopPlaybackAt = self.stopPlaybackAt, let startPlaybackAt = self.startPlaybackAt, self.selectionCursor.hasSelection && self.selectionCursor.isLoopingSelection && !self.entryManager.isWalkingEntry && !self.entryManager.isRunningEntry {
             // Stop Playing
-            self.stop()
+            self.stop(withFeedback: false)
             
             let delayBetweenLooping = CMTimeSubtract(stopPlaybackAt, startPlaybackAt).seconds + 1
             self.playerLoopTimer = Timer.scheduledTimer(withTimeInterval: delayBetweenLooping, repeats: false) { timer in

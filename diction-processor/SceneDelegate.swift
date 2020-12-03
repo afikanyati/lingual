@@ -91,6 +91,17 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         speechRecognition.entryManager = entryManager
         selectionCursor.entryManager = entryManager
         voiceCommandEngine.entryManager = entryManager
+        let entryListManager = EntryListManager(
+            state: state,
+            speechPlayer: speechPlayer,
+            entryManager: entryManager,
+            notifications: notifications,
+            speechRecognition: speechRecognition
+        )
+        voiceCommandEngine.entryListManager = entryListManager
+        speechPlayer.entryListManager = entryListManager
+        entryManager.entryListManager = entryListManager
+        speechRecognition.entryListManager = entryListManager
         mainViewController.state = state
         mainViewController.notifications = notifications
         mainViewController.speechRecognition = speechRecognition
@@ -99,6 +110,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         mainViewController.speechPlayer = speechPlayer
         mainViewController.selectionCursor = selectionCursor
         mainViewController.entryManager = entryManager
+        mainViewController.entryListManager = entryListManager
         mainViewController.uiManager = uiManager
         mainViewController.voiceCommandEngine = voiceCommandEngine
     }

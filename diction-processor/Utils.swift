@@ -144,6 +144,7 @@ class Utils {
     static let NEW_SENTENCE_PAUSE_DURATION: Double = 4
     static let NEW_PARAGRAPH_PAUSE_DURATION: Double = 7
     static let DEFAULT_RESET_LISTENING_FLAG_DELAY: TimeInterval = 5 // Final Transcript should show up in five seconds without any sound
+    static let PREVIEW_ENTRY_DURATION: Double = 10
     
     static let pitchToFrequencyMap: [String : Double] = [
         "C0": 16,
@@ -1601,7 +1602,7 @@ class Utils {
         vc.present(activityViewController, animated: true, completion: nil)
     }
     
-    public static func onSetEntry(
+    public static func onEntrySet(
         notification: Notification,
         vc: UIViewController,
         identifier: String
@@ -1947,6 +1948,17 @@ class Utils {
         }
         
         return nil
+    }
+    
+    public static func getSegments(entry: Entry, from: CMTime = CMTime.zero, until: CMTime) -> [EntrySegment] {
+        var segments = [EntrySegment]()
+        for segment in entry.entrySegments {
+            if segment.timeMapping.target.start >= from && segment.timeMapping.target.end <= until {
+                segments.append(segment)
+            }
+        }
+        
+        return segments
     }
     
     // MARK: - Helper Functions

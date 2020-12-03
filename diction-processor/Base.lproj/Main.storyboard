@@ -109,13 +109,13 @@
                                                     <constraint firstItem="llG-1j-9WT" firstAttribute="width" secondItem="WTY-vs-DOu" secondAttribute="width" id="wSQ-XF-yxw"/>
                                                 </constraints>
                                             </view>
-                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="diY-sg-ErT" userLabel="Walk Previous Element Button">
+                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="diY-sg-ErT" userLabel="Walk Previous Word Button">
                                                 <rect key="frame" x="103" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="4S9-Ni-KcJ">
                                                         <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="walkPreviousElement:" destination="BYZ-38-t0r" eventType="touchUpInside" id="L1T-y8-0nN"/>
+                                                            <action selector="walkPreviousWord:" destination="BYZ-38-t0r" eventType="touchUpInside" id="gJQ-mI-lhU"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="arrow.left" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="LkK-TP-uxD" userLabel="Icon">
@@ -152,13 +152,13 @@
                                                     <constraint firstAttribute="bottom" secondItem="4S9-Ni-KcJ" secondAttribute="bottom" id="xqA-I5-b8R"/>
                                                 </constraints>
                                             </view>
-                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="rSh-4Z-F1B" userLabel="Walk Next Element Button">
+                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="rSh-4Z-F1B" userLabel="Walk Next Word Button">
                                                 <rect key="frame" x="206" y="0.0" width="93" height="60"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="WUi-IX-70u">
                                                         <rect key="frame" x="0.0" y="0.0" width="93" height="60"/>
                                                         <connections>
-                                                            <action selector="walkNextElement:" destination="BYZ-38-t0r" eventType="touchUpInside" id="Ven-NS-krT"/>
+                                                            <action selector="walkNextWord:" destination="BYZ-38-t0r" eventType="touchUpInside" id="qty-oC-7Ic"/>
                                                         </connections>
                                                     </button>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="arrow.right" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="4sP-Mc-Rar" userLabel="Icon">
@@ -1693,8 +1693,8 @@
                         <outlet property="undoButton" destination="sVW-Yq-JIG" id="AzA-X1-qVt"/>
                         <outlet property="updateSelectionButton" destination="2AY-97-AlQ" id="09C-I7-YTj"/>
                         <outlet property="walkButton" destination="H0L-Fd-gxp" id="MZo-mJ-IhK"/>
-                        <outlet property="walkNextElementButton" destination="rSh-4Z-F1B" id="N5X-Js-wlk"/>
-                        <outlet property="walkPreviousElementButton" destination="diY-sg-ErT" id="JXi-SF-jAL"/>
+                        <outlet property="walkNextWordButton" destination="rSh-4Z-F1B" id="3iP-ea-vdT"/>
+                        <outlet property="walkPreviousWordButton" destination="diY-sg-ErT" id="bp7-ey-Qbe"/>
                         <segue destination="IXn-xi-Hmt" kind="unwind" identifier="moveFromDetailToEntryTable" unwindAction="unwindToEntryTableWithSegue:" id="SHq-w1-9o4"/>
                     </connections>
                 </viewController>
@@ -1788,7 +1788,7 @@
         </scene>
     </scenes>
     <inferredMetricsTieBreakers>
-        <segue reference="tfs-dJ-LGA"/>
+        <segue reference="BkO-te-Mgf"/>
     </inferredMetricsTieBreakers>
     <resources>
         <image name="arrow.2.squarepath" catalog="system" width="128" height="89"/>

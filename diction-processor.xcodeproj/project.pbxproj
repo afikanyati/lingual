@@ -133,6 +133,7 @@
 		8BCA1B0324A43DB70068BABB /* VocalRegister.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BCA1B0224A43DB70068BABB /* VocalRegister.swift */; };
 		8BD595C7249AE45D000B3127 /* Entry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BD595C6249AE45D000B3127 /* Entry.swift */; };
 		8BE2EB1924BA44BC00E2D519 /* Determiners.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE2EB1824BA44BC00E2D519 /* Determiners.swift */; };
+		8BE508402577669A001400A7 /* EntryListManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE5083F2577669A001400A7 /* EntryListManager.swift */; };
 		8BEC136824906FF30056E767 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEC136724906FF30056E767 /* AppDelegate.swift */; };
 		8BEC136A24906FF30056E767 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEC136924906FF30056E767 /* SceneDelegate.swift */; };
 		8BEC136C24906FF30056E767 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEC136B24906FF30056E767 /* ViewController.swift */; };
@@ -290,6 +291,7 @@
 		8BCA1B0224A43DB70068BABB /* VocalRegister.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VocalRegister.swift; sourceTree = "<group>"; };
 		8BD595C6249AE45D000B3127 /* Entry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Entry.swift; sourceTree = "<group>"; };
 		8BE2EB1824BA44BC00E2D519 /* Determiners.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Determiners.swift; sourceTree = "<group>"; };
+		8BE5083F2577669A001400A7 /* EntryListManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryListManager.swift; sourceTree = "<group>"; };
 		8BEC136424906FF30056E767 /* diction-processor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "diction-processor.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BEC136724906FF30056E767 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		8BEC136924906FF30056E767 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -556,6 +558,7 @@
 				8BA3055C24CB99AC0056E4DF /* VoiceCommandEngine.swift */,
 				8B7421CD254E26FA002B43EF /* StateManager.swift */,
 				8B57A05A25552440005A5D17 /* EntryManager.swift */,
+				8BE5083F2577669A001400A7 /* EntryListManager.swift */,
 				8B7421D5254E285C002B43EF /* SpeechRecognitionEngine.swift */,
 				8B7421E5254E2FD3002B43EF /* SpeechSynthesisEngine.swift */,
 				8B7421DD254E2872002B43EF /* PitchRecognitionEngine.swift */,
@@ -793,6 +796,7 @@
 				8B766F5024AC2AB200D41A13 /* InputSignalTracker.swift in Sources */,
 				8BCA1AFD24A3DA3B0068BABB /* SegmentPosition.swift in Sources */,
 				8BA3055724C919920056E4DF /* Queue.swift in Sources */,
+				8BE508402577669A001400A7 /* EntryListManager.swift in Sources */,
 				8BCA1B0124A43D530068BABB /* Speaker.swift in Sources */,
 				8B766E8C24A8094300D41A13 /* SoundIntensityDatum.swift in Sources */,
 				8B766F5B24AC2AB200D41A13 /* FFTTransformer.swift in Sources */,

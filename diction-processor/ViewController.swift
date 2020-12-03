@@ -39,6 +39,7 @@ class ViewController: UIViewController, SegueProtocol {
     var speechPlayer: SpeechPlayerEngine!
     var selectionCursor: SelectionCursor!
     var entryManager: EntryManager!
+    var entryListManager: EntryListManager!
     var uiManager: UIManager!
     var voiceCommandEngine: VoiceCommandEngine!
     override var undoManager: UndoManager {
@@ -129,6 +130,7 @@ class ViewController: UIViewController, SegueProtocol {
                 entryTableViewController.speechPlayer = self.speechPlayer
                 entryTableViewController.selectionCursor = self.selectionCursor
                 entryTableViewController.entryManager = self.entryManager
+                entryTableViewController.entryListManager = self.entryListManager
                 entryTableViewController.uiManager = self.uiManager
                 entryTableViewController.voiceCommandEngine = self.voiceCommandEngine
             }
@@ -147,6 +149,7 @@ class ViewController: UIViewController, SegueProtocol {
                 detailViewController.speechPlayer = self.speechPlayer
                 detailViewController.selectionCursor = self.selectionCursor
                 detailViewController.entryManager = self.entryManager
+                detailViewController.entryListManager = self.entryListManager
                 detailViewController.uiManager = self.uiManager
                 detailViewController.voiceCommandEngine = self.voiceCommandEngine
             }
@@ -337,8 +340,8 @@ class ViewController: UIViewController, SegueProtocol {
         // EntryManager
         notificationCenter.addObserver(
             self,
-            selector: #selector(onSetEntry(notification:)),
-            name: EntryManager.onSetEntry,
+            selector: #selector(onNavigateToDetailPage(notification:)),
+            name: EntryManager.onNavigateToDetailPage,
             object: nil
         )
         notificationCenter.addObserver(
@@ -369,17 +372,21 @@ class ViewController: UIViewController, SegueProtocol {
         self.detailViewController = nil
     }
     
-    @objc func onSetEntry(notification: Notification) {
-        print("===== View Controller: On Set Entry =====")
+    @objc func onNavigateToDetailPage(notification: Notification) {
+        print("===== View Controller: On Entry Set =====")
         DispatchQueue.main.async { [weak self] in
-            let index = notification.userInfo!["currentEntryIndex"] as? Int
-            if let _ = index {
-                Utils.onSetEntry(
-                    notification: notification,
-                    vc: self!,
-                    identifier: Segues.moveFromSleepToDetail.rawValue
-                )
-            }
+            self?.notifications.executeFeedback(
+                visualMessage: "Navigate into Entry",
+                audioMessage: "Navigated into entry.",
+                discardPrior: true,
+                withHaptics: true
+            )
+            
+            Utils.onEntrySet(
+                notification: notification,
+                vc: self!,
+                identifier: Segues.moveFromSleepToDetail.rawValue
+            )
         }
     }
     
@@ -458,6 +465,12 @@ class ViewController: UIViewController, SegueProtocol {
     @objc func onWakePhraseDetected(notification: Notification) {
         print("===== View Controller: On Wake Phrase Detected =====")
         DispatchQueue.main.async { [weak self] in
+            self?.notifications.executeFeedback(
+                visualMessage: "Navigate to Entry List",
+                audioMessage: "Navigated to entry list.",
+                discardPrior: true,
+                withHaptics: true
+            )
             self?.performSegue(withIdentifier: Segues.moveFromSleepToEntryTable.rawValue, sender: nil)
         }
     }

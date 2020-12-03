@@ -67,11 +67,14 @@ enum Notifications: String {
     case onEchoFinish
     
     // EntryManager
-    case onCreatedEntry
+    case onEntryCreated
     case onEntryDeleted
-    case onSetEntry
     case onExecuteEntryAction
     case onEntryAudioExported
+    case onNavigateToDetailPage
+    
+    // Entry List Manager
+    case onEntrySelected
     
     // StorageManager
     case onFetchedStoredState

@@ -33,6 +33,7 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
     var speechPlayer: SpeechPlayerEngine!
     var selectionCursor: SelectionCursor!
     var entryManager: EntryManager!
+    var entryListManager: EntryListManager!
     var uiManager: UIManager!
     var voiceCommandEngine: VoiceCommandEngine!
     override var undoManager: UndoManager {
@@ -55,10 +56,10 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
             self.performSegue(withIdentifier: Segues.moveFromEntryTableToSleep.rawValue, sender: nil)
         }
         
+        // reload table
+        self.reloadTable()
+        
         DispatchQueue.main.async { [weak self] in
-            // reload table
-            self?.tableView.reloadData()
-            
             if let indexPath = self?.tableView.indexPathForSelectedRow {
                 self!.tableView.deselectRow(at: indexPath, animated: true)
             }
@@ -297,8 +298,8 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
         // State
         notificationCenter.addObserver(
             self,
-            selector: #selector(onCreatedEntry(notification:)),
-            name: EntryManager.onCreatedEntry,
+            selector: #selector(onEntryCreated(notification:)),
+            name: EntryManager.onEntryCreated,
             object: nil
         )
         
@@ -319,8 +320,8 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
         // EntryManager
         notificationCenter.addObserver(
             self,
-            selector: #selector(onSetEntry(notification:)),
-            name: EntryManager.onSetEntry,
+            selector: #selector(onNavigateToDetailPage(notification:)),
+            name: EntryManager.onNavigateToDetailPage,
             object: nil
         )
         notificationCenter.addObserver(
@@ -333,6 +334,14 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
             self,
             selector: #selector(onEntryDeleted(notification:)),
             name: EntryManager.onEntryDeleted,
+            object: nil
+        )
+        
+        // Entry List Manager
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onEntrySelected(notification:)),
+            name: EntryListManager.onEntrySelected,
             object: nil
         )
     }
@@ -357,12 +366,9 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
         self.detailViewController = nil
     }
     
-    @objc func onCreatedEntry(notification: Notification) {
-        print("===== Entry Table View Controller: On Created Entry =====")
-        DispatchQueue.main.async { [weak self] in
-            // reload table
-            self?.tableView.reloadData()
-        }
+    @objc func onEntryCreated(notification: Notification) {
+        print("===== Entry Table View Controller: On Entry Created =====")
+        self.reloadTable()
     }
     
     @objc func appMovedToBackground() {
@@ -614,27 +620,26 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
         }
     }
     
-    @objc func onSetEntry(notification: Notification) {
-        print("===== Entry Table View Controller: On Set Entry =====")
+    @objc func onNavigateToDetailPage(notification: Notification) {
+        print("===== Entry Table View Controller: On Navigate To Detail Page =====")
         DispatchQueue.main.async { [weak self] in
-            let index = notification.userInfo!["currentEntryIndex"] as? Int
-            print("\tEntry Index: ", index ?? "nil")
-            if let _ = index {
-                Utils.onSetEntry(
-                    notification: notification,
-                    vc: self!,
-                    identifier: Segues.moveFromEntryTableToDetail.rawValue
-                )
-            }
+            self?.notifications.executeFeedback(
+                visualMessage: "Navigate into Entry",
+                audioMessage: "Navigated into entry.",
+                discardPrior: true,
+                withHaptics: true
+            )
+            Utils.onEntrySet(
+                notification: notification,
+                vc: self!,
+                identifier: Segues.moveFromEntryTableToDetail.rawValue
+            )
         }
     }
     
     @objc func onEntryDeleted(notification: Notification) {
         print("===== Entry Table View Controller: On Entry Deleted =====")
-        DispatchQueue.main.async { [weak self] in
-            // reload table
-            self?.tableView.reloadData()
-        }
+        self.reloadTable()
     }
     
     // Reference: https://stackoverflow.com/questions/50128462/how-to-save-document-to-files-app-in-swift
@@ -645,6 +650,14 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
                 notification: notification,
                 vc: self!
             )
+        }
+    }
+    
+    @objc func onEntrySelected(notification: Notification) {
+        print("===== Entry Table View Controller: On Entry Selected =====")
+        let index = notification.userInfo!["index"] as! Int?
+        DispatchQueue.main.async { [weak self] in
+            self?.selectTableRow(index: index, scrollIntoView: true)
         }
     }
     
@@ -668,6 +681,7 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
                 detailViewController.speechPlayer = self.speechPlayer
                 detailViewController.selectionCursor = self.selectionCursor
                 detailViewController.entryManager = self.entryManager
+                detailViewController.entryListManager = self.entryListManager
                 detailViewController.uiManager = self.uiManager
                 detailViewController.voiceCommandEngine = self.voiceCommandEngine
             }
@@ -687,6 +701,7 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
                 viewController.speechPlayer = self.speechPlayer
                 viewController.selectionCursor = self.selectionCursor
                 viewController.entryManager = self.entryManager
+                viewController.entryListManager = self.entryListManager
                 viewController.uiManager = self.uiManager
                 viewController.voiceCommandEngine = self.voiceCommandEngine
             }
@@ -722,10 +737,23 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
     // Reference: https://stackoverflow.com/questions/6322798/adding-the-little-arrow-to-the-right-side-of-a-cell-in-an-iphone-tableview-cell
     // Reference: https://stackoverflow.com/questions/3484511/altering-the-background-color-of-cell-accessoryview-and-cell-editingaccessoryvie
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        // Get reusable cell
         let cell = tableView.dequeueReusableCell(withIdentifier: "Entry", for: indexPath)
+        
+        // Adding disclosure indicator to cell
         cell.accessoryType = .disclosureIndicator
+        
+        // Changing background of table view
         cell.contentView.superview?.backgroundColor = UIColor(hex: Utils.LINGUAL_WHITE) ?? UIColor.white
+        
+        // Create orange selection color
+        let selectedBackgroundView = UIView()
+        selectedBackgroundView.backgroundColor = UIColor(hex: Utils.LINGUAL_ORANGE) ?? UIColor.orange
+        cell.selectedBackgroundView = selectedBackgroundView
+        
+        // Add custom text to cell
         cell.textLabel?.attributedText = self.makeEntryAttributedString(entry: self.state.activeEntries[indexPath.row], index: indexPath.row)
+        // Allow text to span two lines
         cell.textLabel?.numberOfLines = 2
         return cell
     }
@@ -738,6 +766,13 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
             )
         } else {
             self.entryManager.setCurrentEntry(index: indexPath.row)
+            self.notifications.executeFeedback(
+                visualMessage: "Navigate into Entry",
+                audioMessage: "Navigated into entry.",
+                discardPrior: true,
+                withHaptics: true
+            )
+            self.performSegue(withIdentifier: Segues.moveFromEntryTableToDetail.rawValue, sender: nil)
         }
         
         // Give haptic feedback
@@ -809,6 +844,38 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
         barButton.isEnabled = false
         
         return barButton
+    }
+    
+    func reloadTable() {
+        print("===== Entry Table View Controller: Reload Table =====")
+        DispatchQueue.main.async { [weak self] in
+            self?.tableView.reloadData()
+        }
+    }
+    
+    func scrollToTableRow(index: Int) {
+        print("===== Entry Table View Controller: Scroll To Table Row =====")
+        print("\tIndex: ", index)
+        DispatchQueue.main.async { [weak self] in
+            let indexPath = IndexPath(row: index, section: 0)
+            self?.tableView.scrollToRow(at: indexPath, at: .middle, animated: true)
+        }
+    }
+    
+    func selectTableRow(index: Int? = nil, scrollIntoView: Bool = false) {
+        print("===== Entry Table View Controller: Select Table Row =====")
+        print("\tIndex: ", index ?? "nil")
+        DispatchQueue.main.async { [weak self] in
+            if let index = index {
+                let indexPath = IndexPath(row: index, section: 0)
+                self?.tableView.selectRow(at: indexPath, animated: true, scrollPosition: .middle)
+                if scrollIntoView {
+                    self?.scrollToTableRow(index: index)
+                }
+            } else if let currentSelectedIndexPath = self?.tableView.indexPathForSelectedRow {
+                self?.tableView.deselectRow(at: currentSelectedIndexPath, animated: true)
+            }
+        }
     }
     
     // MARK: - Methods

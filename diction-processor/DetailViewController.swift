@@ -88,8 +88,8 @@ class DetailViewController: UIViewController, SegueProtocol {
     @IBOutlet weak var exitSliderButton: UIView?
     
     // Walk
-    @IBOutlet weak var walkNextElementButton: UIView?
-    @IBOutlet weak var walkPreviousElementButton: UIView?
+    @IBOutlet weak var walkNextWordButton: UIView?
+    @IBOutlet weak var walkPreviousWordButton: UIView?
     @IBOutlet weak var exitWalkRunButton: UIView?
     
     // Run
@@ -111,6 +111,7 @@ class DetailViewController: UIViewController, SegueProtocol {
     var speechPlayer: SpeechPlayerEngine!
     var selectionCursor: SelectionCursor!
     var entryManager: EntryManager!
+    var entryListManager: EntryListManager!
     var uiManager: UIManager!
     var voiceCommandEngine: VoiceCommandEngine!
     override var undoManager: UndoManager {
@@ -243,6 +244,7 @@ class DetailViewController: UIViewController, SegueProtocol {
                 entryTableViewController.speechPlayer = self.speechPlayer
                 entryTableViewController.selectionCursor = self.selectionCursor
                 entryTableViewController.entryManager = self.entryManager
+                entryTableViewController.entryListManager = self.entryListManager
                 entryTableViewController.uiManager = self.uiManager
                 entryTableViewController.voiceCommandEngine = self.voiceCommandEngine
             }
@@ -847,15 +849,15 @@ class DetailViewController: UIViewController, SegueProtocol {
     
     @objc func onExecuteEntryAction(notification: Notification) {
         print("===== Detail View Controller: On Execute Entry Action =====")
-        let type = notification.userInfo!["type"] as? String
+        let type = notification.userInfo!["type"] as? VoiceCommandEngine.VoiceCommand
         if let type = type {
             switch (type) {
-            case "cancel update selection":
+            case .CANCEL_SELECTION_UPDATE:
                 DispatchQueue.main.async { [weak self] in
                     print("\tHide cursor...")
                     self?.setCursorVisibility(as: false)
                 }
-            case "exit mode":
+            case .EXIT_WALK:
                 DispatchQueue.main.async { [weak self] in
                     print("\tRefresh view...")
                     self?.refreshView()
@@ -908,7 +910,7 @@ class DetailViewController: UIViewController, SegueProtocol {
     }
     
     @objc func onEntryDeleted(notification: Notification) {
-        print("===== Detail View Controller: On Deleted Entry =====")
+        print("===== Detail View Controller: On Entry Deleted =====")
 
         DispatchQueue.main.async { [weak self] in
             self?.textView?.attributedText = NSMutableAttributedString(string: "")
@@ -916,6 +918,12 @@ class DetailViewController: UIViewController, SegueProtocol {
             navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = nil
             self?.refreshView()
             self?.setCursorVisibility(as: false)
+            self?.notifications.executeFeedback(
+                visualMessage: "Navigate to Entry List",
+                audioMessage: "Navigated to entry list.",
+                discardPrior: true,
+                withHaptics: true
+            )
             self?.performSegue(withIdentifier: Segues.moveFromDetailToEntryTable.rawValue, sender: nil)
         }
     }
@@ -1793,9 +1801,9 @@ class DetailViewController: UIViewController, SegueProtocol {
             self.entryManager.walkingIndex != firstWalkingSegmentIndex
         {
             numActiveButtons += 1
-            self.showButton(self.walkPreviousElementButton)
+            self.showButton(self.walkPreviousWordButton)
         } else {
-            self.hideButton(self.walkPreviousElementButton)
+            self.hideButton(self.walkPreviousWordButton)
         }
 
         // Next Walk Element Button
@@ -1810,9 +1818,9 @@ class DetailViewController: UIViewController, SegueProtocol {
             self.entryManager.walkingIndex < lastWalkingSegmentIndex
         {
             numActiveButtons += 1
-            self.showButton(self.walkNextElementButton)
+            self.showButton(self.walkNextWordButton)
         } else {
-            self.hideButton(self.walkNextElementButton)
+            self.hideButton(self.walkNextWordButton)
         }
         
         // Exit Walk Run Button
@@ -2376,12 +2384,12 @@ class DetailViewController: UIViewController, SegueProtocol {
         handler?()
     }
     
-    @IBAction func walkNextElement(_ sender: Any? = nil) {
-        self.entryManager.walkNextElement()
+    @IBAction func walkNextWord(_ sender: Any? = nil) {
+        self.entryManager.walkNextWord()
     }
     
-    @IBAction func walkPreviousElement(_ sender: Any? = nil) {
-        self.entryManager.walkPreviousElement()
+    @IBAction func walkPreviousWord(_ sender: Any? = nil) {
+        self.entryManager.walkPreviousWord()
     }
     
     @IBAction func pauseRun(_ sender: Any? = nil) {

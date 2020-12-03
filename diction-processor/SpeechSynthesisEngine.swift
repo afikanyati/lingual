@@ -181,7 +181,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
     }
     
     @objc func onEntryDeleted(notification: Notification) {
-        print("===== Speech Synthesis Engine: On Deleted Entry =====")
+        print("===== Speech Synthesis Engine: On Entry Deleted =====")
         self.stopEcho(withFeedback: false)
     }
     
@@ -659,11 +659,6 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
             // Play Sound
             soundEngine.voiceCommandAccept()
             self.setEchoRate(to: newEchoRate)
-            self.notifications.executeFeedback(
-                visualMessage: "Echo Rate: \(newEchoRate)",
-                audioMessage: "Echo Rate increased to \(newEchoRate)",
-                withHaptics: true
-            )
     
             handler?()
         } else {
@@ -688,12 +683,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
             // Play Sound
             soundEngine.voiceCommandAccept()
             self.setEchoRate(to: newEchoRate)
-            self.notifications.executeFeedback(
-                visualMessage: "Echo Rate: \(newEchoRate)",
-                audioMessage: "Echo Rate decreased to \(newEchoRate)",
-                withHaptics: true
-            )
-    
+            
             handler?()
         } else {
             self.notifications.executeError(

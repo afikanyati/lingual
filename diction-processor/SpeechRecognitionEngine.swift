@@ -37,6 +37,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     var uiManager: UIManager
     @objc dynamic weak var selectionCursor: SelectionCursor!
     weak var entryManager: EntryManager!
+    weak var entryListManager: EntryListManager!
     weak var voiceCommandEngine: VoiceCommandEngine!
     
     // MARK: - Speech Recognition Properties
@@ -505,7 +506,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     }
     
     @objc func onEntryDeleted(notification: Notification) {
-        print("===== Speech Recognition Engine: On Deleted Entry =====")
+        print("===== Speech Recognition Engine: On Entry Deleted =====")
     }
     
     @objc func onExecuteEntryAction(notification: Notification) {
@@ -662,7 +663,13 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     
     @objc func handleBackToEntries(_ sender: Any) {
         print("===== Speech Recognition Engine: Handle Back To Entries =====")
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            self?.notifications.executeFeedback(
+                visualMessage: "Navigate to Entry List",
+                audioMessage: "Navigated to entry list.",
+                discardPrior: true,
+                withHaptics: true
+            )
             Utils.getNavigationController()?.visibleViewController?.performSegue(withIdentifier: Segues.moveFromDetailToEntryTable.rawValue, sender: nil)
         }
     }
@@ -1790,7 +1797,8 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 print("\t[Invalid] Attempting to make foreign command while modal dialog is visible")
                 return (false, .FOREIGN_COMMAND_WHILE_MODAL_VISIBLE, command, indexList)
             } else if !self.selectionCursor.hasSelection &&
-                self.voiceCommandEngine.isSelectionVoiceCommand(command: command)
+                self.voiceCommandEngine.isSelectionVoiceCommand(command: command) &&
+                !self.voiceCommandEngine.isEntryListManagerVoiceCommand(command: command)
             {
                 // Attempting to use selection voice command without selection
                 print("\t[Invalid] Attempting to use selection voice command without selection")
@@ -1800,14 +1808,14 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 command != .CREATE_ENTRY &&
                 (
                     voiceCommandEngine.isEntryVoiceCommand(command: command) ||
-                    self.voiceCommandEngine.isEntryManagerCommand(command: command)
+                    self.voiceCommandEngine.isEntryManagerVoiceCommand(command: command)
                 )
             {
                 // Attempt to make entry command when no entry set
                 print("\t[Invalid] Attempt to make entry command when no entry set")
                 return (false, .ENTRY_COMMAND_WITHOUT_ENTRY_SET, command, indexList)
             } else if !self.uiManager.dialogIsVisible &&
-                self.voiceCommandEngine.isUIManagerCommand(command: command) &&
+                self.voiceCommandEngine.isUIManagerVoiceCommand(command: command) &&
                 (
                     command != .CANCEL_SELECTION_UPDATE &&
                     self.selectionCursor.isUpdatingSelection
@@ -1817,7 +1825,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 print("\t[Invalid] User said ui manager voice command when wasn't visible")
                 return (false, .UI_MANAGER_COMMAND_WITHOUT_DIALOG_VISIBLE, command, indexList)
             } else if (command == .STOP_ECHO && !self.speechSynthesis.isPlayingEcho) ||
-                (command == .PAUSE_RUN && !self.entryManager.isRunningEntry)
+                (command == .PAUSE_RUN && !self.entryManager.isRunningEntry && !self.entryListManager.isRunningEntryList)
             {
                 // User said stop when no stoppable mode was active
                 print("\t[Invalid] User said stop when no stoppable mode was active")
@@ -1990,65 +1998,74 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                     }
                 }
             } else {
-                // we want to cache hasSelection so that the process(query:) handler
-                // uses the value that we had when the method was called
-                let hasSelection = self.selectionCursor.hasSelection
-                let isUpdatingSelection = self.selectionCursor.isUpdatingSelection
-                self.voiceCommandEngine.process(
-                    command: voiceCommandType,
-                    utterance: transcription.formattedString
-                ) { [weak self] in
-                    if voiceCommandType != .PAUSE_ENTRY &&
-                        voiceCommandType != .CREATE_ENTRY &&
-                        voiceCommandType != .OPEN_SELECTION &&
-                        voiceCommandType != .SELECT_COMMIT &&
-                        voiceCommandType != .WALK_COMMIT &&
-                        voiceCommandType != .RUN_COMMIT &&
-                        voiceCommandType != .WALK_SELECTION &&
-                        voiceCommandType != .RUN_SELECTION &&
-                        voiceCommandType != .PAUSE_RUN &&
-                        voiceCommandType != .SHIFT_NEXT_WALK_ELEMENT &&
-                        voiceCommandType != .REMOVE_SELECTION &&
-                        voiceCommandType != .DELETE_SELECTION &&
-                        voiceCommandType != .SHIFT_PREVIOUS_WALK_ELEMENT &&
-                        voiceCommandType != .EXIT_RUN &&
-                        voiceCommandType != .EXIT_WALK &&
-                        voiceCommandType != .WALK_ENTRY &&
-                        voiceCommandType != .RUN_ENTRY &&
-                        !isUpdatingSelection &&
-                        !hasSelection &&
-                        !self!.voiceCommandEngine.isUIManagerCommand(command: voiceCommandType) &&
-                        self!.pausedListeningForSpeech
-                    {
-                        // Start listening for speech again if paused
-                        // It won't be paused if the processed voice command was 'stop entry'
-                        if !self!.selectionCursor.hasSelection {
-                            self?.startListeningForSpeech() { [weak self] in
-                                if let entry = self!.entryManager.currentEntry, self!.isListeningForSpeech {
-                                    entry.handleOnSpeechUpdate(text: entry.getText())
-                                } else {
-                                    NotificationCenter.default.post(
-                                        name: Entry.onRequestToUpdateView,
-                                        object: nil,
-                                        userInfo: [:]
-                                    )
+                let processCommand = {
+                    // we want to cache hasSelection so that the process(query:) handler
+                    // uses the value that we had when the method was called
+                    let hasSelection = self.selectionCursor.hasSelection
+                    let isUpdatingSelection = self.selectionCursor.isUpdatingSelection
+                    self.voiceCommandEngine.process(
+                        command: voiceCommandType,
+                        utterance: transcription.formattedString
+                    ) { [weak self] in
+                        if voiceCommandType != .PAUSE_ENTRY &&
+                            voiceCommandType != .CREATE_ENTRY &&
+                            voiceCommandType != .ENTER_SELECTION &&
+                            voiceCommandType != .SELECT_COMMIT &&
+                            voiceCommandType != .WALK_COMMIT &&
+                            voiceCommandType != .RUN_COMMIT &&
+                            voiceCommandType != .WALK_SELECTION &&
+                            voiceCommandType != .RUN_SELECTION &&
+                            voiceCommandType != .PAUSE_RUN &&
+                            voiceCommandType != .SHIFT_NEXT_WALK_ELEMENT &&
+                            voiceCommandType != .REMOVE_SELECTION &&
+                            voiceCommandType != .DELETE_SELECTION &&
+                            voiceCommandType != .SHIFT_PREVIOUS_WALK_ELEMENT &&
+                            voiceCommandType != .EXIT_WALK &&
+                            voiceCommandType != .WALK_ENTRY &&
+                            voiceCommandType != .RUN_ENTRY &&
+                            !isUpdatingSelection &&
+                            !hasSelection &&
+                            !self!.voiceCommandEngine.isUIManagerVoiceCommand(command: voiceCommandType) &&
+                            self!.pausedListeningForSpeech
+                        {
+                            // Start listening for speech again if paused
+                            // It won't be paused if the processed voice command was 'stop entry'
+                            if !self!.selectionCursor.hasSelection {
+                                self?.startListeningForSpeech() { [weak self] in
+                                    if let entry = self!.entryManager.currentEntry, self!.isListeningForSpeech {
+                                        entry.handleOnSpeechUpdate(text: entry.getText())
+                                    } else {
+                                        NotificationCenter.default.post(
+                                            name: Entry.onRequestToUpdateView,
+                                            object: nil,
+                                            userInfo: [:]
+                                        )
+                                    }
                                 }
                             }
-                        }
-                    } else {
-                        if let entry = self?.entryManager.currentEntry,
-                           self!.isListeningForSpeech &&
-                            !self!.selectionCursor.isUpdatingSelection
-                        {
-                            entry.handleOnSpeechUpdate(text: entry.getText())
                         } else {
-                            NotificationCenter.default.post(
-                                name: Entry.onRequestToUpdateView,
-                                object: nil,
-                                userInfo: [:]
-                            )
+                            if let entry = self?.entryManager.currentEntry,
+                               self!.isListeningForSpeech &&
+                                !self!.selectionCursor.isUpdatingSelection
+                            {
+                                entry.handleOnSpeechUpdate(text: entry.getText())
+                            } else {
+                                NotificationCenter.default.post(
+                                    name: Entry.onRequestToUpdateView,
+                                    object: nil,
+                                    userInfo: [:]
+                                )
+                            }
                         }
                     }
+                }
+                
+                if self.entryListManager.isRunningEntryList || self.entryListManager.isWalkingEntryList {
+                    self.entryListManager.exitWalkRun(clearCurrentEntry: false) {
+                        processCommand()
+                    }
+                } else {
+                    processCommand()
                 }
             }
         }
@@ -2238,16 +2255,10 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                     transcription: transcription,
                     earlyDetection: true
                 )
-            } else if let lastStartListeningDate = self.lastStartListeningDate,
-                !isValidVoiceCommand &&
-                invalidType != .CLOSE_TO_LAST_VOICE_COMMAND &&
-                Utils.DEFAULT_START_LISTENING_DELAY + lastStartListeningDate.timeIntervalSinceNow < 0
-            {
-                print("Handle invalid voice command...")
-                self.handleInvalidVoiceCommand(
-                    transcription: transcription,
-                    earlyDetection: true
-                )
+            } else {
+                print("\t[Error] Did not handle valid voice command:")
+                print("\tIs Valid Voice Command: ", isValidVoiceCommand)
+                print("\tEarly Valid Voice Command Detection: ", self.earlyValidVoiceCommandDetection)
             }
         // MARK: - Listening for Speech
         } else if self.isListeningForSpeech &&

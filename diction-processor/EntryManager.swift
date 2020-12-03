@@ -13,9 +13,9 @@ import Foundation
 class EntryManager: NSObject {
     // MARK: - Notifications
     
-    static let onCreatedEntry = Notification.Name(Notifications.onCreatedEntry.rawValue)
+    static let onEntryCreated = Notification.Name(Notifications.onEntryCreated.rawValue)
     static let onEntryDeleted = Notification.Name(Notifications.onEntryDeleted.rawValue)
-    static let onSetEntry = Notification.Name(Notifications.onSetEntry.rawValue)
+    static let onNavigateToDetailPage = Notification.Name(Notifications.onNavigateToDetailPage.rawValue)
     static let onExecuteEntryAction = Notification.Name(Notifications.onExecuteEntryAction.rawValue)
     static let onEntryAudioExported = Notification.Name(Notifications.onEntryAudioExported.rawValue)
     static let onUndoManagerChange = Notification.Name(Notifications.onUndoManagerChange.rawValue)
@@ -31,6 +31,7 @@ class EntryManager: NSObject {
     var uiManager: UIManager
     var pitchRecognition: PitchRecognitionEngine
     var voiceCommandEngine: VoiceCommandEngine
+    weak var entryListManager: EntryListManager!
     private let _undoManager = UndoManager()
     var undoManager: UndoManager {
         return _undoManager
@@ -180,6 +181,8 @@ class EntryManager: NSObject {
         }
 
         switch (command) {
+        case .ENTER_ENTRY:
+            self.enterEntry(voiceCommand: true, handler: handler)
         case .PLAY_ENTRY, .PLAY_SELECTION:
             self.playEntry(voiceCommand: true, onFinishHandler: handler)
         case .PAUSE_ENTRY:
@@ -274,8 +277,8 @@ class EntryManager: NSObject {
             self.rollbackCommit(
                 handler: handler
             )
-        case .OPEN_SELECTION:
-            self.openSelection(
+        case .ENTER_SELECTION:
+            self.enterSelection(
                 handler: handler
             )
         case .REMOVE_SELECTION:
@@ -351,13 +354,21 @@ class EntryManager: NSObject {
         case .WALK_ENTRY, .WALK_SELECTION:
             self.walkEntry(voiceCommand: true, handler: handler)
         case .SHIFT_NEXT_WALK_ELEMENT:
-            self.walkNextElement(voiceCommand: true, handler: handler)
+            if self.isWalkingEntry {
+                self.walkNextWord(voiceCommand: true, handler: handler)
+            }
         case .SHIFT_PREVIOUS_WALK_ELEMENT:
-            self.walkPreviousElement(voiceCommand: true, handler: handler)
+            if self.isWalkingEntry {
+                self.walkPreviousWord(voiceCommand: true, handler: handler)
+            }
         case .PAUSE_RUN:
-            self.pauseRun(voiceCommand: true, handler: handler)
-        case .EXIT_RUN, .EXIT_WALK:
-            self.exitWalkRun(voiceCommand: true, handler: handler)
+            if self.isRunningEntry {
+                self.pauseRun(voiceCommand: true, handler: handler)
+            }
+        case .EXIT_WALK:
+            if self.isWalkingEntry {
+                self.exitWalkRun(voiceCommand: true, handler: handler)
+            }
         case .UNDO_CHANGE:
             self.undo(handler: handler)
         case .REDO_CHANGE:
@@ -534,6 +545,39 @@ class EntryManager: NSObject {
         return nil
     }
     
+    func enterEntry(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
+        print("===== Entry Manager: Enter Entry =====")
+        if !voiceCommand {
+            print("\tTriggered by screen button.")
+        } else {
+            print("\tTriggered by voice command.")
+        }
+        
+        guard let _ = self.currentEntry else {
+            self.notifications.executeError(
+                text: "No entry selected.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
+        // Navigate to detail page
+        NotificationCenter.default.post(
+            name: EntryManager.onNavigateToDetailPage,
+            object: nil,
+            userInfo: [:]
+        )
+        
+        NotificationCenter.default.post(
+            name: EntryManager.onExecuteEntryAction,
+            object: nil,
+            userInfo: [:]
+        )
+        
+        checkRep()
+    }
+    
     func createEntry(voiceCommand: Bool = false, withListening: Bool = false, handler: (() -> Void)? = nil) -> String {
         print("===== Entry Manager: Create Entry =====")
         if !voiceCommand {
@@ -557,7 +601,7 @@ class EntryManager: NSObject {
         self.setEntryModules(index: index)
         
         NotificationCenter.default.post(
-            name: EntryManager.onCreatedEntry,
+            name: EntryManager.onEntryCreated,
             object: nil,
             userInfo: [:]
         )
@@ -605,7 +649,9 @@ class EntryManager: NSObject {
         
         let handleDelete: (_ handler: (() -> Void)?) -> Void = { [weak self] handler in
             // Reset Selection Cursor
-            self?.selectionCursor.reset()
+            if let _ = Utils.getNavigationController()?.visibleViewController as? DetailViewController {
+                self?.selectionCursor.reset()
+            }
             
             // Set Entry to Deleted
             let entryUID = self!.state.activeEntries[index].uid
@@ -624,11 +670,13 @@ class EntryManager: NSObject {
                 self?.setCurrentEntry()
             }
             
-            NotificationCenter.default.post(
-                name: EntryManager.onEntryDeleted,
-                object: nil,
-                userInfo: [:]
-            )
+            if let _ = Utils.getNavigationController()?.visibleViewController as? DetailViewController {
+                NotificationCenter.default.post(
+                    name: EntryManager.onEntryDeleted,
+                    object: nil,
+                    userInfo: [:]
+                )
+            }
             
             self?.notifications.executeFeedback(
                 visualMessage: "Delete Entry",
@@ -803,6 +851,13 @@ class EntryManager: NSObject {
                     soundEngine.voiceCommandAccept()
                 }
                 
+                // Navigate to detail page if we're not there already
+                NotificationCenter.default.post(
+                    name: EntryManager.onNavigateToDetailPage,
+                    object: nil,
+                    userInfo: [:]
+                )
+                
                 print("\tStarting Entry...")
                 self.speechRecognition.startListeningForSpeech() {
                     self.notifications.executeFeedback(
@@ -871,6 +926,13 @@ class EntryManager: NSObject {
                 // Play Sound
                 soundEngine.voiceCommandAccept()
             }
+            
+            // Navigate to detail page if we're not there already
+            NotificationCenter.default.post(
+                name: EntryManager.onNavigateToDetailPage,
+                object: nil,
+                userInfo: [:]
+            )
 
             self.speechRecognition.startListeningForSpeech() {
                 self.notifications.executeFeedback(
@@ -966,6 +1028,14 @@ class EntryManager: NSObject {
                     // Play Sound
                     soundEngine.voiceCommandAccept()
                 }
+                
+                // Navigate to detail page if we're not there already
+                NotificationCenter.default.post(
+                    name: EntryManager.onNavigateToDetailPage,
+                    object: nil,
+                    userInfo: [:]
+                )
+                
                 print("\tStarting Entry...")
                 self.speechRecognition.startListeningForSpeech() {
                     self.notifications.executeFeedback(
@@ -1006,6 +1076,15 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
+        guard self.speechRecognition.isListeningForSpeech else {
+            self.notifications.executeError(
+                text: "Must be editing entry to stop it.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -1103,6 +1182,13 @@ class EntryManager: NSObject {
                 print("\tPlay selection.")
                 playSegments(selectionSegments)
             } else {
+                // Navigate to detail page if we're not there already
+                NotificationCenter.default.post(
+                    name: EntryManager.onNavigateToDetailPage,
+                    object: nil,
+                    userInfo: [:]
+                )
+                
                 print("\tPlay entry from: \(startTime.seconds)")
                 self.speechPlayer.play(
                     entry: entry,
@@ -1224,6 +1310,13 @@ class EntryManager: NSObject {
             } else if self.selectionCursor.hasSelection {
                 segments = self.selectionCursor.selectionSegments!
             } else {
+                // Navigate to detail page if we're not there already
+                NotificationCenter.default.post(
+                    name: EntryManager.onNavigateToDetailPage,
+                    object: nil,
+                    userInfo: [:]
+                )
+                
                 segments = entry.entrySegments
             }
             self.speechSynthesis.startEcho(
@@ -1343,10 +1436,26 @@ class EntryManager: NSObject {
             return
         }
         
+        guard self.speechRecognition.isListeningForSpeech else {
+            self.notifications.executeError(
+                text: "Must be editing entry to walk it.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
         if voiceCommand {
             // Play Sound
             soundEngine.voiceCommandAccept()
         }
+        
+        // Navigate to detail page if we're not there already
+        NotificationCenter.default.post(
+            name: EntryManager.onNavigateToDetailPage,
+            object: nil,
+            userInfo: [:]
+        )
         
         if let selectionSegments = self.selectionCursor.selectionSegments, self.selectionCursor.hasSelection {
             // Walk Selection
@@ -1533,10 +1642,26 @@ class EntryManager: NSObject {
             return
         }
         
+        guard self.speechRecognition.isListeningForSpeech else {
+            self.notifications.executeError(
+                text: "Must be editing entry to run it.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
         if voiceCommand {
             // Play Sound
             soundEngine.voiceCommandAccept()
         }
+        
+        // Navigate to detail page if we're not there already
+        NotificationCenter.default.post(
+            name: EntryManager.onNavigateToDetailPage,
+            object: nil,
+            userInfo: [:]
+        )
         
         if let selectionSegments = self.selectionCursor.selectionSegments, self.selectionCursor.hasSelection {
             // Run Selection
@@ -1561,6 +1686,15 @@ class EntryManager: NSObject {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
+        }
+        
+        guard self.speechRecognition.isListeningForSpeech else {
+            self.notifications.executeError(
+                text: "Must be editing entry to pause it.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
         }
         
         if voiceCommand {
@@ -1619,6 +1753,15 @@ class EntryManager: NSObject {
                 text: "No entry selected.",
                 voiceCommand: true,
                 handler: onFinishHandler
+            )
+            return
+        }
+        
+        guard self.speechRecognition.isListeningForSpeech else {
+            self.notifications.executeError(
+                text: "Must be editing entry to play last commit.",
+                voiceCommand: true,
+                handler: onStartHandler
             )
             return
         }
@@ -1835,8 +1978,8 @@ class EntryManager: NSObject {
         checkRep()
     }
     
-    func walkNextElement(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Entry Manager: Walk Next Element =====")
+    func walkNextWord(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
+        print("===== Entry Manager: Walk Next Word =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
@@ -1854,7 +1997,7 @@ class EntryManager: NSObject {
         
         if !self.isWalkingEntry {
             self.notifications.executeError(
-                text: "Not walking entry or selection.",
+                text: "Not walking \(self.selectionCursor.hasSelection ? "selection" : "entry").",
                 handler: handler
             )
             return
@@ -1867,8 +2010,6 @@ class EntryManager: NSObject {
         
         entry.walkToNextSegment(handler: handler)
 
-        handler?()
-        
         NotificationCenter.default.post(
             name: EntryManager.onExecuteEntryAction,
             object: nil,
@@ -1878,8 +2019,8 @@ class EntryManager: NSObject {
         checkRep()
     }
     
-    func walkPreviousElement(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        print("===== Entry Manager: Walk Previous Element =====")
+    func walkPreviousWord(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
+        print("===== Entry Manager: Walk Previous Word =====")
         if !voiceCommand {
             print("\tTriggered by screen button.")
         } else {
@@ -1897,7 +2038,7 @@ class EntryManager: NSObject {
         
         if !self.isWalkingEntry {
             self.notifications.executeError(
-                text: "Not walking entry or selection.",
+                text: "Not walking \(self.selectionCursor.hasSelection ? "selection" : "entry").",
                 handler: handler
             )
             return
@@ -1909,8 +2050,6 @@ class EntryManager: NSObject {
         }
         
         entry.walkToPreviousSegment(handler: handler)
-        
-        handler?()
         
         NotificationCenter.default.post(
             name: EntryManager.onExecuteEntryAction,
@@ -1940,7 +2079,7 @@ class EntryManager: NSObject {
         
         if !self.isRunningEntry {
             self.notifications.executeError(
-                text: "Not running entry or selection.",
+                text: "Not running \(self.selectionCursor.hasSelection ? "selection" : "entry").",
                 handler: handler
             )
             return
@@ -1952,8 +2091,6 @@ class EntryManager: NSObject {
         }
         
         entry.pauseRun(handler: handler)
-        
-        handler?()
         
         NotificationCenter.default.post(
             name: EntryManager.onExecuteEntryAction,
@@ -1983,7 +2120,7 @@ class EntryManager: NSObject {
         
         if !self.isWalkingEntry && !self.isRunningEntry {
             self.notifications.executeError(
-                text: "Not walking or running entry or selection.",
+                text: "Not walking or running \(self.selectionCursor.hasSelection ? "selection" : "entry").",
                 handler: handler
             )
             return
@@ -1999,7 +2136,7 @@ class EntryManager: NSObject {
             NotificationCenter.default.post(
                 name: EntryManager.onExecuteEntryAction,
                 object: nil,
-                userInfo: ["type": "exit mode"]
+                userInfo: ["type": VoiceCommandEngine.VoiceCommand.EXIT_WALK]
             )
         }
         
@@ -2396,7 +2533,7 @@ class EntryManager: NSObject {
         NotificationCenter.default.post(
             name: EntryManager.onExecuteEntryAction,
             object: nil,
-            userInfo: ["type": "cancel update selection"]
+            userInfo: ["type": VoiceCommandEngine.VoiceCommand.CANCEL_SELECTION_UPDATE]
         )
         
         checkRep()
@@ -2517,15 +2654,6 @@ class EntryManager: NSObject {
             return
         }
         
-        guard self.selectionCursor.hasSelection else {
-            self.notifications.executeError(
-                text: "Select speech to execute action.",
-                voiceCommand: true,
-                handler: handler
-            )
-            return
-        }
-        
         if voiceCommand {
             // Play Sound
             soundEngine.voiceCommandAccept()
@@ -2562,6 +2690,15 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
+        guard self.speechRecognition.isListeningForSpeech else {
+            self.notifications.executeError(
+                text: "Must be editing entry to select last commit.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -2653,6 +2790,15 @@ class EntryManager: NSObject {
             )
             return
         }
+        
+        guard self.speechRecognition.isListeningForSpeech else {
+            self.notifications.executeError(
+                text: "Must be editing entry to rollback last commit.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
 
         if entry.committedBufferRanges.count == 0 {
             self.notifications.executeError(
@@ -2714,6 +2860,15 @@ class EntryManager: NSObject {
             )
             return
         }
+        
+        guard self.speechRecognition.isListeningForSpeech else {
+            self.notifications.executeError(
+                text: "Must be editing entry to walk last commit.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
 
         if entry.committedBufferRanges.count == 0 {
             self.notifications.executeError(
@@ -2755,6 +2910,15 @@ class EntryManager: NSObject {
             )
             return
         }
+        
+        guard self.speechRecognition.isListeningForSpeech else {
+            self.notifications.executeError(
+                text: "Must be editing entry to run last commit.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
 
         if entry.committedBufferRanges.count == 0 {
             self.notifications.executeError(
@@ -2783,14 +2947,23 @@ class EntryManager: NSObject {
         checkRep()
     }
     
-    func openSelection(
+    func enterSelection(
         handler: (() -> Void)? = nil
     ) {
-        print("===== Entry Manager: Open Selection =====")
+        print("===== Entry Manager: Enter Selection =====")
         print("\tTriggered by voice command.")
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
+        guard self.speechRecognition.isListeningForSpeech else {
+            self.notifications.executeError(
+                text: "Must be editing entry to make selection.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -2877,6 +3050,15 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
+        guard self.speechRecognition.isListeningForSpeech else {
+            self.notifications.executeError(
+                text: "Must be editing entry to remove selection.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -3299,6 +3481,15 @@ class EntryManager: NSObject {
             )
             return
         }
+        
+        guard self.speechRecognition.isListeningForSpeech else {
+            self.notifications.executeError(
+                text: "Must be editing entry to echo previous sentence.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
 
         if entry.entrySegments.count == 0 {
             self.notifications.executeError(
@@ -3334,6 +3525,15 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
+        guard self.speechRecognition.isListeningForSpeech else {
+            self.notifications.executeError(
+                text: "Must be editing entry to play previous sentence.",
                 voiceCommand: true,
                 handler: handler
             )
@@ -3483,7 +3683,9 @@ class EntryManager: NSObject {
             self.currentIndex = index
             self.setEntryModules(index: index)
             // Increment Entry Views
-            self.currentEntry!.incrementViewCount()
+            if !self.entryListManager.isWalkingEntryList && !self.entryListManager.isRunningEntryList {
+                self.currentEntry!.incrementViewCount()
+            }
             
             self.currentEntryUndoSnapshot = EntrySnapshot(
                 entry: self.currentEntry!.duplicate(), // we duplicate so there's no memory leaks/pointers to same memory locations
@@ -3493,7 +3695,7 @@ class EntryManager: NSObject {
                 undo: "to start of entry"
             )
             
-            print("Entry Segments: ", self.currentEntry!.entrySegments)
+            print("Entry Segments: ", Utils.stringifySegments(segments: self.currentEntry!.entrySegments))
         } else {
             self.currentIndex = nil
             self.currentEntryUndoSnapshot = nil
@@ -3504,12 +3706,7 @@ class EntryManager: NSObject {
         if let currentIndex = self.currentIndex {
             userInfo["currentEntryIndex"] = currentIndex
         }
-        NotificationCenter.default.post(
-            name: EntryManager.onSetEntry,
-            object: nil,
-            userInfo: userInfo
-        )
-        
+
         checkRep()
     }
     
