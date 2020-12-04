@@ -38,7 +38,10 @@ class PitchDatum: NSObject, NSCoding {
     }
 
     override var description: String {
-        return "PitchDatum {\n\tdate: \(date)\n\tpitch:\(String(describing: pitch))\n}"
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
+        let dateString = dateFormatter.string(from: self.date)
+        return "PitchDatum {\n\tdate: \(dateString)\n\tpitch:\(String(describing: self.pitch))\n}"
     }
    
    func setDate(value: Date) {

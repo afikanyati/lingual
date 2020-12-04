@@ -624,7 +624,7 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
         print("===== Entry Table View Controller: On Navigate To Detail Page =====")
         DispatchQueue.main.async { [weak self] in
             self?.notifications.executeFeedback(
-                visualMessage: "Navigate into Entry",
+                visualMessage: "Entry",
                 audioMessage: "Navigated into entry.",
                 discardPrior: true,
                 withHaptics: true
@@ -690,6 +690,9 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
                 withStopListeningButton: !self.speechRecognition.isListeningForSpeech,
                 withBackToEntriesButton: true
             )
+            if self.entryListManager.isRunningEntryList || self.entryListManager.isWalkingEntryList {
+                self.entryListManager.exitWalkRun(clearCurrentEntry: false)
+            }
         case .moveFromEntryTableToSleep:
             print(">>>>> Segue from EntryTableViewController to ViewController >>>>>")
             if let viewController = segue.destination as? ViewController {
@@ -767,7 +770,7 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
         } else {
             self.entryManager.setCurrentEntry(index: indexPath.row)
             self.notifications.executeFeedback(
-                visualMessage: "Navigate into Entry",
+                visualMessage: "Entry",
                 audioMessage: "Navigated into entry.",
                 discardPrior: true,
                 withHaptics: true

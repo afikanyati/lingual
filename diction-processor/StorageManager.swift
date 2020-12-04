@@ -8,6 +8,7 @@
 
 import Foundation
 import UIKit
+import CloudKit
 
 class StorageManager: NSObject {
     // MARK: - Notifications
@@ -44,6 +45,21 @@ class StorageManager: NSObject {
     func save(state: StateManager) {
         print("===== Storage Manager: Save =====")
         DispatchQueue.global(qos: .utility).async {
+            self.saveToCloud(
+                speaker: state.speaker,
+                playbackRate: state._playbackRate,
+                echoRate: state._echoRate,
+                appOpens: state.appOpens,
+                audioDeviceUse: state.audioDeviceUse,
+                entryViews: state.entryViews,
+                entryPlays: state.entryPlays,
+                entryTextExports: state.entryTextExports,
+                entryAudioExports: state.entryAudioExports,
+                activeEntryWordCounts: state.activeEntryWordCounts,
+                deletedEntryWordCounts: state.activeEntryWordCounts,
+                voiceCommands: state.voiceCommands,
+                voiceCommandStream: self.speechRecognition.voiceCommandStream
+            )
             self.saveEntries(entries: state.entries)
             self.saveUserSettings(
                 speaker: state.speaker,
@@ -676,6 +692,289 @@ class StorageManager: NSObject {
             print("\tSuccessfully saved \(voiceCommandStream.count) voice commmands!")
         } else {
             print("\t[Error] There was a problem converting voice commands to Data object.")
+        }
+    }
+    
+    // Reference: https://stackoverflow.com/questions/29315598/how-to-get-the-current-user-id-in-cloudkit
+    // Reference: https://stackoverflow.com/questions/54332381/cloudkit-public-and-private-database-messaging-platform
+    func saveToCloud(
+        speaker: Speaker,
+        playbackRate: Float,
+        echoRate: Float,
+        appOpens: [TimeInterval],
+        audioDeviceUse: [AudioDeviceDatum],
+        entryViews: [TimeInterval],
+        entryPlays: [TimeInterval],
+        entryTextExports: [TimeInterval],
+        entryAudioExports: [TimeInterval],
+        activeEntryWordCounts: [Int],
+        deletedEntryWordCounts: [Int],
+        voiceCommands: [TimeInterval],
+        voiceCommandStream: [VoiceCommandDatum]
+    ) {
+        print("===== Storage Manager: Save To Cloud =====")
+        let handleSave: () -> Void = {
+            if let recordName = speaker.cloudKitRecordID {
+                print("\tFound existing record. Modify existing user record...")
+                let recordID = CKRecord.ID.init(recordName: recordName)
+                CKContainer(identifier: Utils.CLOUD_KIT_CONTAINER_IDENTIFIER).publicCloudDatabase.fetch(withRecordID: recordID) { (record, err) in
+                    if let err = err {
+                        print("\t[Error] There was a problem fetching user record.")
+                        print("\tMessage: ", err.localizedDescription)
+                        return
+                    }
+                    guard let record = record else { return }
+                    
+                    // Save UID
+                    if let uid = speaker.uid {
+                        record["speakerUID"] = uid as CKRecordValue
+                    }
+                    // Save Device
+                    record["speakerDevice"] = speaker.device as CKRecordValue
+                    // Save Clout Kit Record ID
+                    if let cloudKitRecordID = speaker.cloudKitRecordID {
+                        record["speakerCloudKitRecordID"] = cloudKitRecordID as CKRecordValue
+                    }
+                    // Save Name
+                    if let name = speaker.name {
+                        record["speakerName"] = name as CKRecordValue
+                    }
+                    // Save Avatar URL
+                    if let avatarURL = speaker.avatarURL {
+                        record["speakerAvatarURL"] = avatarURL.absoluteString as CKRecordValue
+                    }
+                    // Save Pitch
+                    if let pitch = speaker.pitch {
+                        record["speakerPitchFrequency"] = pitch.frequency as CKRecordValue
+                    }
+                    
+                    // Save Playback Rates
+                    record["playbackRate"] = playbackRate as CKRecordValue
+                    record["echoRate"] = echoRate as CKRecordValue
+                    
+                    // Set App Telemetry
+                    if appOpens.count > 0 {
+                        let opens = appOpens.map({(interval: TimeInterval) -> String in
+                            let dateFormatter = DateFormatter()
+                            dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
+                            let dateString = dateFormatter.string(from: Date(timeIntervalSince1970: interval))
+                            return dateString
+                        })
+                        record["appOpens"] = opens as CKRecordValue
+                    }
+                    if audioDeviceUse.count > 0 {
+                        let audioUse = audioDeviceUse.map { String(describing: $0) }
+                        record["audioDeviceUse"] = audioUse as CKRecordValue
+                    }
+                    if entryViews.count > 0 {
+                        let views = entryViews.map({(interval: TimeInterval) -> String in
+                            let dateFormatter = DateFormatter()
+                            dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
+                            let dateString = dateFormatter.string(from: Date(timeIntervalSince1970: interval))
+                            return dateString
+                        })
+                        record["entryViews"] = views as CKRecordValue
+                    }
+                    if entryPlays.count > 0 {
+                        let plays = entryPlays.map({(interval: TimeInterval) -> String in
+                            let dateFormatter = DateFormatter()
+                            dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
+                            let dateString = dateFormatter.string(from: Date(timeIntervalSince1970: interval))
+                            return dateString
+                        })
+                        record["entryPlays"] = plays as CKRecordValue
+                    }
+                    if entryTextExports.count > 0 {
+                        let textExports = entryTextExports.map({(interval: TimeInterval) -> String in
+                            let dateFormatter = DateFormatter()
+                            dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
+                            let dateString = dateFormatter.string(from: Date(timeIntervalSince1970: interval))
+                            return dateString
+                        })
+                        record["entryTextExports"] = textExports as CKRecordValue
+                    }
+                    if entryAudioExports.count > 0 {
+                        let audioExports = entryAudioExports.map({(interval: TimeInterval) -> String in
+                            let dateFormatter = DateFormatter()
+                            dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
+                            let dateString = dateFormatter.string(from: Date(timeIntervalSince1970: interval))
+                            return dateString
+                        })
+                        record["entryAudioExports"] = audioExports as CKRecordValue
+                    }
+                    if activeEntryWordCounts.count > 0 {
+                        record["activeEntryWordCounts"] = activeEntryWordCounts as CKRecordValue
+                    }
+                    if deletedEntryWordCounts.count > 0 {
+                        record["deletedEntryWordCounts"] = deletedEntryWordCounts as CKRecordValue
+                    }
+                    if voiceCommands.count > 0 {
+                        let commands = voiceCommands.map({(interval: TimeInterval) -> String in
+                            let dateFormatter = DateFormatter()
+                            dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
+                            let dateString = dateFormatter.string(from: Date(timeIntervalSince1970: interval))
+                            return dateString
+                        })
+                        record["voiceCommands"] = commands as CKRecordValue
+                    }
+                    
+                    // Save Voice Command Stream
+                    if voiceCommandStream.count > 0 {
+                        let stream = voiceCommandStream.map { String(describing: $0) }
+                        record["voiceCommandStream"] = stream as CKRecordValue
+                    }
+                    
+                    CKContainer(identifier: Utils.CLOUD_KIT_CONTAINER_IDENTIFIER).publicCloudDatabase.save(record) { record, err in
+                        if let err = err {
+                            print("\t[Error] There was a problem save user record.")
+                            print("\tMessage: ", err.localizedDescription)
+                            return
+                        } else {
+                            print("\tSuccessfully saved user record to CloudKit")
+                        }
+                    }
+                }
+            } else {
+                print("\tNo existing record. Generate new user record...")
+                let userRecord = CKRecord(recordType: "Telemetry")
+                
+                // Save UID
+                if let uid = speaker.uid {
+                    userRecord["speakerUID"] = uid as CKRecordValue
+                }
+                // Save Device
+                userRecord["speakerDevice"] = speaker.device as CKRecordValue
+
+                // Save Name
+                if let name = speaker.name {
+                    userRecord["speakerName"] = name as CKRecordValue
+                }
+                // Save Avatar URL
+                if let avatarURL = speaker.avatarURL {
+                    userRecord["speakerAvatarURL"] = avatarURL.absoluteString as CKRecordValue
+                }
+                // Save Pitch
+                if let pitch = speaker.pitch {
+                    userRecord["speakerPitchFrequency"] = pitch.frequency as CKRecordValue
+                }
+                
+                // Save Playback Rates
+                userRecord["playbackRate"] = playbackRate as CKRecordValue
+                userRecord["echoRate"] = echoRate as CKRecordValue
+                
+                // Set App Telemetry
+                if appOpens.count > 0 {
+                    let opens = appOpens.map({(interval: TimeInterval) -> String in
+                        let dateFormatter = DateFormatter()
+                        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
+                        let dateString = dateFormatter.string(from: Date(timeIntervalSince1970: interval))
+                        return dateString
+                    })
+                    userRecord["appOpens"] = opens as CKRecordValue
+                }
+                if audioDeviceUse.count > 0 {
+                    let audioUse = audioDeviceUse.map { String(describing: $0) }
+                    userRecord["audioDeviceUse"] = audioUse as CKRecordValue
+                }
+                if entryViews.count > 0 {
+                    let views = entryViews.map({(interval: TimeInterval) -> String in
+                        let dateFormatter = DateFormatter()
+                        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
+                        let dateString = dateFormatter.string(from: Date(timeIntervalSince1970: interval))
+                        return dateString
+                    })
+                    userRecord["entryViews"] = views as CKRecordValue
+                }
+                if entryPlays.count > 0 {
+                    let plays = entryPlays.map({(interval: TimeInterval) -> String in
+                        let dateFormatter = DateFormatter()
+                        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
+                        let dateString = dateFormatter.string(from: Date(timeIntervalSince1970: interval))
+                        return dateString
+                    })
+                    userRecord["entryPlays"] = plays as CKRecordValue
+                }
+                if entryTextExports.count > 0 {
+                    let textExports = entryTextExports.map({(interval: TimeInterval) -> String in
+                        let dateFormatter = DateFormatter()
+                        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
+                        let dateString = dateFormatter.string(from: Date(timeIntervalSince1970: interval))
+                        return dateString
+                    })
+                    userRecord["entryTextExports"] = textExports as CKRecordValue
+                }
+                if entryAudioExports.count > 0 {
+                    let audioExports = entryAudioExports.map({(interval: TimeInterval) -> String in
+                        let dateFormatter = DateFormatter()
+                        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
+                        let dateString = dateFormatter.string(from: Date(timeIntervalSince1970: interval))
+                        return dateString
+                    })
+                    userRecord["entryAudioExports"] = audioExports as CKRecordValue
+                }
+                if activeEntryWordCounts.count > 0 {
+                    userRecord["activeEntryWordCounts"] = activeEntryWordCounts as CKRecordValue
+                }
+                if deletedEntryWordCounts.count > 0 {
+                    userRecord["deletedEntryWordCounts"] = deletedEntryWordCounts as CKRecordValue
+                }
+                if voiceCommands.count > 0 {
+                    let commands = voiceCommands.map({(interval: TimeInterval) -> String in
+                        let dateFormatter = DateFormatter()
+                        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
+                        let dateString = dateFormatter.string(from: Date(timeIntervalSince1970: interval))
+                        return dateString
+                    })
+                    userRecord["voiceCommands"] = commands as CKRecordValue
+                }
+                
+                // Save Voice Command Stream
+                if voiceCommandStream.count > 0 {
+                    let stream = voiceCommandStream.map { String(describing: $0) }
+                    userRecord["voiceCommandStream"] = stream as CKRecordValue
+                }
+                
+                CKContainer(identifier: Utils.CLOUD_KIT_CONTAINER_IDENTIFIER).publicCloudDatabase.save(userRecord) { record, err in
+                    if let err = err {
+                        print("\t[Error] There was a problem save user record.")
+                        print("\tMessage: ", err.localizedDescription)
+                        return
+                    }
+                    guard let record = record else { return }
+                    let id = record.recordID.recordName
+                    speaker.setCloudKitRecordID(to: id)
+                    record["speakerCloudKitRecordID"] = id as CKRecordValue
+                    CKContainer(identifier: Utils.CLOUD_KIT_CONTAINER_IDENTIFIER).publicCloudDatabase.save(record) { record, err in
+                        if let err = err {
+                            print("\t[Error] There was a problem save user record.")
+                            print("\tMessage: ", err.localizedDescription)
+                            return
+                        } else {
+                            print("\tSuccessfully saved user record to CloudKit")
+                        }
+                    }
+                }
+            }
+        }
+        
+        if let _ = speaker.uid {
+            print("\tSpeaker has existing Cloud Kit ID. Proceed as usual...")
+            // We have user's record id
+            handleSave()
+        } else {
+            print("\tSpeaker doesn't have existing Cloud Kit ID. Fetch it...")
+            // Get user's record id
+            CKContainer(identifier: Utils.CLOUD_KIT_CONTAINER_IDENTIFIER).fetchUserRecordID(completionHandler: { (recordId, error) in
+                if let id = recordId?.recordName {
+                    print("\tiCloud ID: " + id)
+                    // Set id in speaker
+                    speaker.setUID(to: id)
+                    handleSave()
+                } else if let error = error {
+                    print("\t[Error] There was a problem fetching User Record ID.")
+                    print("\tMessage: ", error.localizedDescription)
+                }
+            })
         }
     }
 }

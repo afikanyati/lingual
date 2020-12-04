@@ -51,6 +51,9 @@ class VoiceCommandDatum: NSObject, NSCoding {
     }
 
     override var description: String {
-        return "VoiceCommandDatum (\n\tdate: \(date) \n\tutteredSpeech:\(utteredSpeech) \n\tisValid:\(isValid) \n\ttype:\(String(describing: type))\n)"
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
+        let dateString = dateFormatter.string(from: self.date)
+        return "VoiceCommandDatum (\n\tdate: \(dateString) \n\tutteredSpeech:\(self.utteredSpeech) \n\tisValid:\(self.isValid) \n\ttype:\(String(describing: self.type))\n)"
     }
 }

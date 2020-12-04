@@ -376,7 +376,7 @@ class ViewController: UIViewController, SegueProtocol {
         print("===== View Controller: On Entry Set =====")
         DispatchQueue.main.async { [weak self] in
             self?.notifications.executeFeedback(
-                visualMessage: "Navigate into Entry",
+                visualMessage: "Entry",
                 audioMessage: "Navigated into entry.",
                 discardPrior: true,
                 withHaptics: true
@@ -466,7 +466,7 @@ class ViewController: UIViewController, SegueProtocol {
         print("===== View Controller: On Wake Phrase Detected =====")
         DispatchQueue.main.async { [weak self] in
             self?.notifications.executeFeedback(
-                visualMessage: "Navigate to Entry List",
+                visualMessage: "Entry List",
                 audioMessage: "Navigated to entry list.",
                 discardPrior: true,
                 withHaptics: true

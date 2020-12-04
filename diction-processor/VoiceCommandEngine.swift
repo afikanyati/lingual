@@ -261,10 +261,6 @@ public class VoiceCommandEngine: NSObject {
         // Only add if we received any other token
         if let _ = Utils.getNavigationController()?.visibleViewController as? EntryTableViewController,
             let _ = self.entryManager.currentEntry,
-            (
-                self.entryListManager.isWalkingEntryList ||
-                self.entryListManager.isRunningEntryList
-            ) &&
             possibleTokens.count > 0
         {
             entityTokens.append(.ENTRY)
@@ -1529,12 +1525,16 @@ public class VoiceCommandEngine: NSObject {
     //        Set([.ADJUST, .VOLUME]) : .ADJUST_VOLUME,
         // Echo Rate
         Set([.INCREASE, .ECHO_RATE]) : .INCREASE_ECHO_RATE,
+        Set([.INCREASE, .ECHO]) : .INCREASE_ECHO_RATE,
         Set([.INCREASE, .ECHO, .RIGHT]) : .INCREASE_ECHO_RATE,
         Set([.DECREASE, .ECHO_RATE]) : .DECREASE_ECHO_RATE,
+        Set([.DECREASE, .ECHO]) : .DECREASE_ECHO_RATE,
         Set([.DECREASE, .ECHO, .RIGHT]) : .DECREASE_ECHO_RATE,
         // Playback Rate
         Set([.INCREASE, .PLAYBACK_RATE]) : .INCREASE_PLAYBACK_RATE,
+        Set([.INCREASE, .PLAYBACK]) : .INCREASE_PLAYBACK_RATE,
         Set([.DECREASE, .PLAYBACK_RATE]) : .DECREASE_PLAYBACK_RATE,
+        Set([.DECREASE, .PLAYBACK]) : .DECREASE_PLAYBACK_RATE,
         // Selection
         Set([.DELETE, .SELECTION]) : .DELETE_SELECTION,
         Set([.UPDATE, .SELECTION]) : .UPDATE_SELECTION,
@@ -1764,7 +1764,9 @@ public class VoiceCommandEngine: NSObject {
             .END,
             .FINISH,
             .RESUME,
-            .CONTINUE
+            .CONTINUE,
+            .INCREASE,
+            .DECREASE
         ]),
         .PLAYBACK: Set([
             .PAUSE,
@@ -1773,7 +1775,9 @@ public class VoiceCommandEngine: NSObject {
             .END,
             .FINISH,
             .SKIP,
-            .CONTINUE
+            .CONTINUE,
+            .INCREASE,
+            .DECREASE
         ]),
         .SENTENCE: Set([
             .PLAY,

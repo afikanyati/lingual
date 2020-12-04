@@ -144,7 +144,8 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         return nil
     }
     var selectionSegments: [EntrySegment]? {
-        guard let entry = self.entryManager.currentEntry, entry.entryBuffer.count == 0 else { return nil }
+        guard let entry = self.entryManager.currentEntry,
+              entry.entryBuffer.count == 0 else { return nil }
 
         var startIndex: Int?
         var endIndex: Int?
@@ -316,9 +317,6 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         
         // Don't have update segments unless you're updating
         result = result && ((self.updateSegments != nil && self.isUpdatingSelection) || self.updateSegments == nil)
-        
-        // Dont be visible without entry
-        result = result && ((self.isVisible && self.entryManager.currentEntry != nil) || !self.isVisible)
         
         if !result {
             fatalError("===== [Error] SelectionCursor Representation Invariants were broken =====")

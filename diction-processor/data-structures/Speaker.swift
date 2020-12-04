@@ -10,8 +10,9 @@ import UIKit
 import AVFoundation
 
 class Speaker: NSObject, NSCoding {
-    var uid: String
+    var uid: String?
     var device: String
+    var cloudKitRecordID: String?
     var name: String?
     var avatarURL: URL?
     var pitch: Pitch?
@@ -23,25 +24,52 @@ class Speaker: NSObject, NSCoding {
         return .male
     }
     
-    init(uid: String, device: String) {
-        self.uid = uid
+    init(device: String) {
         self.device = device
     }
     
     func encode(with coder: NSCoder) {
-        coder.encode(self.uid, forKey: "uid")
+        if let uid = self.uid {
+            coder.encode(uid, forKey: "uid")
+        }
         coder.encode(self.device, forKey: "device")
-        coder.encode(self.name, forKey: "name")
-        coder.encode(self.avatarURL?.absoluteString, forKey: "avatarURL")
-        coder.encode(self.pitch?.frequency, forKey: "pitchFrequency")
+        if let cloudKitRecordID = self.cloudKitRecordID {
+            coder.encode(cloudKitRecordID, forKey: "cloudKitRecordID")
+        }
+        if let name = self.name {
+            coder.encode(name, forKey: "name")
+        }
+        if let avatarURL = self.avatarURL {
+            coder.encode(avatarURL.absoluteString, forKey: "avatarURL")
+        }
+        if let pitch = self.pitch {
+            coder.encode(pitch.frequency, forKey: "pitchFrequency")
+        }
     }
 
     required init?(coder: NSCoder) {
-        self.uid = coder.decodeObject(forKey: "uid") as! String
+        if coder.containsValue(forKey: "uid") {
+            self.uid = coder.decodeObject(forKey: "uid") as? String
+        } else {
+            self.uid = nil
+        }
         self.device = coder.decodeObject(forKey: "device") as! String
-        self.name = coder.decodeObject(forKey: "name") as! String?
-        if let avatarURL = coder.decodeObject(forKey: "avatarURL") as? String {
+        if coder.containsValue(forKey: "cloudKitRecordID") {
+            self.cloudKitRecordID = coder.decodeObject(forKey: "cloudKitRecordID") as? String
+        } else {
+            self.cloudKitRecordID = nil
+        }
+        if coder.containsValue(forKey: "name") {
+            self.name = coder.decodeObject(forKey: "name") as? String
+        } else {
+            self.name = nil
+        }
+        if coder.containsValue(forKey: "avatarURL"),
+           let avatarURL = coder.decodeObject(forKey: "avatarURL") as? String
+        {
             self.avatarURL = URL(string: avatarURL)
+        } else {
+            self.avatarURL = nil
         }
         let frequency = coder.decodeObject(forKey: "pitchFrequency") as? Double
         if let frequency = frequency {
@@ -56,9 +84,18 @@ class Speaker: NSObject, NSCoding {
     static func ==(_ firstSpeaker: Speaker, _ secondSpeaker: Speaker) -> Bool {
         return firstSpeaker.uid == secondSpeaker.uid &&
             firstSpeaker.device == secondSpeaker.device &&
+            firstSpeaker.cloudKitRecordID == secondSpeaker.cloudKitRecordID &&
             firstSpeaker.name == secondSpeaker.name &&
             firstSpeaker.avatarURL == secondSpeaker.avatarURL &&
             firstSpeaker.pitch == secondSpeaker.pitch
+    }
+    
+    func setUID(to uid: String) {
+        self.uid = uid
+    }
+    
+    func setCloudKitRecordID(to id: String) {
+        self.cloudKitRecordID = id
     }
     
     func setName(to name: String?) {
@@ -74,6 +111,6 @@ class Speaker: NSObject, NSCoding {
     }
     
     override var description: String {
-        return "Speaker (\n\tuid: \(self.uid) \n\tdevice: \(self.device) \n\tname: \(String(describing: self.name)) \n\tavatarURL: \(String(describing: self.avatarURL?.absoluteString)) \n\tpitch: \(String(describing: self.pitch?.note.string)) \n\tregister: \(self.register)\n)"
+        return "Speaker (\n\tuid: \(String(describing: self.uid)) \n\tdevice: \(self.device) \n\tcloudKitRecordID: \(String(describing: self.cloudKitRecordID)) \n\tname: \(String(describing: self.name)) \n\tavatarURL: \(String(describing: self.avatarURL?.absoluteString)) \n\tpitch: \(String(describing: self.pitch?.note.string)) \n\tregister: \(self.register)\n)"
     }
 }

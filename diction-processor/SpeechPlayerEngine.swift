@@ -197,8 +197,7 @@ class SpeechPlayerEngine: NSObject {
             if !self.speechRecognition.isListeningForSpeech &&
                 !self.selectionCursor.hasSelection &&
                 !self.entryManager.isRunningEntry &&
-                !self.entryManager.isWalkingEntry &&
-                !self.entryListManager.isRunningEntryList
+                !self.entryManager.isWalkingEntry
             {
                 // should not play if we have a selection
                 soundEngine.play()
@@ -232,9 +231,7 @@ class SpeechPlayerEngine: NSObject {
             if !self.speechRecognition.isListeningForSpeech &&
                 !self.selectionCursor.hasSelection &&
                 !self.entryManager.isRunningEntry &&
-                !self.entryManager.isWalkingEntry &&
-                !self.entryListManager.isRunningEntryList &&
-                !self.entryListManager.isWalkingEntryList
+                !self.entryManager.isWalkingEntry
             {
                 // should not play if we have a selection
                 soundEngine.play()
@@ -334,9 +331,7 @@ class SpeechPlayerEngine: NSObject {
             if !self.speechRecognition.isListeningForSpeech &&
                 !self.selectionCursor.hasSelection &&
                 !self.entryManager.isRunningEntry &&
-                !self.entryManager.isWalkingEntry &&
-                !self.entryListManager.isRunningEntryList &&
-                !self.entryListManager.isWalkingEntryList
+                !self.entryManager.isWalkingEntry
             {
                 // should not play if we have a selection
                 soundEngine.play()
@@ -777,12 +772,24 @@ class SpeechPlayerEngine: NSObject {
             }
         }
         
-        let firstPlayableSegment = Utils.getSegment(
-            forTrackTime: CMTime.zero,
-            segments: self.playbackSegments,
-            entry: self.entryManager.currentEntry,
-            isWord: true
-        )
+        var firstPlayableSegment: EntrySegment?
+        if self.isPlayingExternalSegments {
+            firstPlayableSegment = Utils.getSegment(
+                forTrackTime: self.playbackSegments!.first!.timeMapping.target.start,
+                segments: self.playbackSegments,
+                entry: self.entryManager.currentEntry,
+                isPlayingEntry: true, // Must be true because we anticipate it being true but not true yet
+                isWord: true
+            )
+        } else {
+            firstPlayableSegment = Utils.getSegment(
+                forTrackTime: self.startPlaybackAt!,
+                segments: self.playbackSegments,
+                entry: self.entryManager.currentEntry,
+                isPlayingEntry: true, // Must be true because we anticipate it being true but not true yet
+                isWord: true
+            )
+        }
         
         print("\tPlaying from: \(self.startPlaybackAt!.seconds)")
         self.player.seek(to: self.startPlaybackAt!)
@@ -796,7 +803,8 @@ class SpeechPlayerEngine: NSObject {
         
         print("\tPlaying asset with duration: \(self.player.currentItem!.duration.seconds)s and \(self.player.currentItem!.asset.tracks[0].segments.count) segments.")
         
-        let rate = firstPlayableSegment?.getRate() ?? self.playbackRate
+        let rate = (firstPlayableSegment?.getRate() ?? self.playbackRate) * self.playbackRate
+        
         let rateWasSet = self.setPlayerRate(rate: rate)
         if rateWasSet {
             print("\tPlayer rate was successfully set: ", rate)

@@ -627,6 +627,12 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                         let stopListeningButton = self!.getStopListeningButton(withStopIndicator: true)
                         buttons.append(stopListeningButton)
                         Utils.getNavigationController()?.visibleViewController?.navigationItem.leftBarButtonItems = buttons
+                        self?.notifications.executeFeedback(
+                            visualMessage: "Stop Listening",
+                            audioMessage: "Stopped listening for speech.",
+                            discardPrior: true,
+                            withHaptics: true
+                        )
                     }
                 }
             } else {
@@ -641,6 +647,12 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                         let stopListeningButton = self!.getStopListeningButton(withStopIndicator: true)
                         buttons.append(stopListeningButton)
                         Utils.getNavigationController()?.visibleViewController?.navigationItem.leftBarButtonItems = buttons
+                        self?.notifications.executeFeedback(
+                            visualMessage: "Start Listening",
+                            audioMessage: "Started listening for speech.",
+                            discardPrior: true,
+                            withHaptics: true
+                        )
                     }
                 }
             }
@@ -665,7 +677,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         print("===== Speech Recognition Engine: Handle Back To Entries =====")
         DispatchQueue.main.async { [weak self] in
             self?.notifications.executeFeedback(
-                visualMessage: "Navigate to Entry List",
+                visualMessage: "Entry List",
                 audioMessage: "Navigated to entry list.",
                 discardPrior: true,
                 withHaptics: true
@@ -1962,23 +1974,21 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         // Set early detection flag on
         self.earlyValidVoiceCommandDetection = earlyDetection
         
-        // Capture valid voice command if we are composing a entry
-        if let _ = self.entryManager.currentEntry, self.isListeningForSpeech {
-            let date = Date()
-            let voiceCommandDatum = VoiceCommandDatum(
-                date: date,
-                utteredSpeech: transcription.formattedString,
-                isValid: true,
-                type: voiceCommandType
-            )
-            self.voiceCommandStream.append(voiceCommandDatum)
-            
-            // Increment State Aggregate Count
-            self.state.incrementVoiceCommandCount(timeInterval: date.timeIntervalSince1970)
-            
-            // Save changes
-            self.state.save()
-        }
+        // Capture valid voice command
+        let date = Date()
+        let voiceCommandDatum = VoiceCommandDatum(
+            date: date,
+            utteredSpeech: transcription.formattedString,
+            isValid: true,
+            type: voiceCommandType
+        )
+        self.voiceCommandStream.append(voiceCommandDatum)
+        
+        // Increment State Aggregate Count
+        self.state.incrementVoiceCommandCount(timeInterval: date.timeIntervalSince1970)
+        
+        // Save changes
+        self.state.save()
         
         if !handled {
             // Process Voice Command
@@ -2060,7 +2070,11 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                     }
                 }
                 
-                if self.entryListManager.isRunningEntryList || self.entryListManager.isWalkingEntryList {
+                if (
+                    self.entryListManager.isRunningEntryList ||
+                    self.entryListManager.isWalkingEntryList
+                ) && !self.voiceCommandEngine.isEntryListManagerVoiceCommand(command: voiceCommandType)
+                {
                     self.entryListManager.exitWalkRun(clearCurrentEntry: false) {
                         processCommand()
                     }
@@ -2103,20 +2117,17 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             )
         }
         
-        // Capture invalid voice command if we are composing a entry
-        if let _ = self.entryManager.currentEntry, self.isListeningForSpeech {
-            let date = Date()
-            let voiceCommandDatum = VoiceCommandDatum(
-                date: date,
-                utteredSpeech: transcription.formattedString,
-                isValid: false
-            )
-            
-            self.voiceCommandStream.append(voiceCommandDatum)
+        let date = Date()
+        let voiceCommandDatum = VoiceCommandDatum(
+            date: date,
+            utteredSpeech: transcription.formattedString,
+            isValid: false
+        )
+        
+        self.voiceCommandStream.append(voiceCommandDatum)
 
-            // Save changes
-            self.state.save()
-        }
+        // Save changes
+        self.state.save()
     }
     
     func broadcastSpeechUpdates(
@@ -2238,7 +2249,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         } else if self.isListeningForCommands && Utils.validSpeechPower(soundIntensityStream: self.soundIntensityStream, backgroundNoise: self.getBackgroundNoise()) {
             print("\tListening for Commands...")
             // Analyze for voice commands
-            let (isValidVoiceCommand, invalidType, voiceCommandType, _) = self.isValidVoiceCommand(query: transcription.formattedString.lowercased())
+            let (isValidVoiceCommand, _, voiceCommandType, _) = self.isValidVoiceCommand(query: transcription.formattedString.lowercased())
 
             // Add voice command text to the text view if entry is empty
             if let entry = self.entryManager.currentEntry, !self.isListeningForSpeech && entry.entrySegments.count == 0 {

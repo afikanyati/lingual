@@ -239,7 +239,11 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
         
         let executeEcho = {
             // Play Sound
-            if !self.speechRecognition.isListeningForSpeech {
+            if !self.speechRecognition.isListeningForSpeech &&
+                !self.selectionCursor.hasSelection &&
+                !self.entryManager.isRunningEntry &&
+                !self.entryManager.isWalkingEntry
+            {
                 soundEngine.play()
             }
             
@@ -283,7 +287,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
                 // cache range of echo segments
                 self.echoSegments = segments
                 self.echoSegmentsTrackType = .other
-                self.echoRange = segments.first!.getIndex()..<segments.last!.getIndex() + 1
+                self.echoRange = 0..<segments.count
                 
                 if let onFinishHandler = onFinishHandler {
                     self.setEchoHandler(handler: onFinishHandler)
@@ -528,7 +532,10 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
                 }
             }
 
-            if let entry = self.entryManager.currentEntry, let lowestEchoSegment = lowestEchoSegment, let lowestEchoSegmentRange = entry.getSegmentTextRange(of: lowestEchoSegment), self.speechRecognition.isListeningForSpeech {
+            if let entry = self.entryManager.currentEntry,
+               let lowestEchoSegment = lowestEchoSegment,
+               let lowestEchoSegmentRange = entry.getSegmentTextRange(of: lowestEchoSegment)
+            {
                 textRange = NSRange(location: lowestEchoSegmentRange.location + characterRange.location, length: characterRange.length)
             }
             

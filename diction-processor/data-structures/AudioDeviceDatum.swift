@@ -11,10 +11,6 @@ import Foundation
 class AudioDeviceDatum: NSObject, NSCoding {
     var date: Date
     var deviceType: AudioDeviceType
-
-    override var description: String {
-        return "AudioDeviceDatum (\n\tdate: \(self.date)\n\tdeviceType:\(self.deviceType)\n)"
-    }
     
     init(
         date: Date,
@@ -32,6 +28,13 @@ class AudioDeviceDatum: NSObject, NSCoding {
     required init?(coder: NSCoder) {
         self.date = coder.decodeObject(forKey: "date") as! Date
         self.deviceType = AudioDeviceType.fromRawValue(rawValue: Int(truncatingIfNeeded: coder.decodeInt64(forKey: "deviceType")))!
+    }
+    
+    override var description: String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
+        let dateString = dateFormatter.string(from: self.date)
+        return "AudioDeviceDatum (\n\tdate: \(dateString) \n\tdeviceType: \(self.deviceType)\n)"
     }
    
     func setDate(value: Date) {

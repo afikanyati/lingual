@@ -134,6 +134,7 @@
 		8BD595C7249AE45D000B3127 /* Entry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BD595C6249AE45D000B3127 /* Entry.swift */; };
 		8BE2EB1924BA44BC00E2D519 /* Determiners.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE2EB1824BA44BC00E2D519 /* Determiners.swift */; };
 		8BE508402577669A001400A7 /* EntryListManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE5083F2577669A001400A7 /* EntryListManager.swift */; };
+		8BE508492578B919001400A7 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8BE508482578B919001400A7 /* CloudKit.framework */; };
 		8BEC136824906FF30056E767 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEC136724906FF30056E767 /* AppDelegate.swift */; };
 		8BEC136A24906FF30056E767 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEC136924906FF30056E767 /* SceneDelegate.swift */; };
 		8BEC136C24906FF30056E767 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEC136B24906FF30056E767 /* ViewController.swift */; };
@@ -292,6 +293,8 @@
 		8BD595C6249AE45D000B3127 /* Entry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Entry.swift; sourceTree = "<group>"; };
 		8BE2EB1824BA44BC00E2D519 /* Determiners.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Determiners.swift; sourceTree = "<group>"; };
 		8BE5083F2577669A001400A7 /* EntryListManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryListManager.swift; sourceTree = "<group>"; };
+		8BE508442578B848001400A7 /* diction-processor.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "diction-processor.entitlements"; sourceTree = "<group>"; };
+		8BE508482578B919001400A7 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
 		8BEC136424906FF30056E767 /* diction-processor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "diction-processor.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BEC136724906FF30056E767 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		8BEC136924906FF30056E767 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -317,6 +320,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				EFCD311834F5FA424F68B4E4 /* libPods-diction-processor.a in Frameworks */,
+				8BE508492578B919001400A7 /* CloudKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -340,6 +344,7 @@
 		70479DC371D157611D2B3E32 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				8BE508482578B919001400A7 /* CloudKit.framework */,
 				D1458E52ABFDE185D82A961F /* libPods-diction-processor.a */,
 			);
 			name = Frameworks;
@@ -542,6 +547,7 @@
 				8BA3052F24C2867D0056E4DF /* sounds */,
 				8B766F1A24AC2A2A00D41A13 /* beethoven */,
 				8B766F1924AC2A2300D41A13 /* pitchy */,
+				8BE508442578B848001400A7 /* diction-processor.entitlements */,
 				8BEC136724906FF30056E767 /* AppDelegate.swift */,
 				8BEC136924906FF30056E767 /* SceneDelegate.swift */,
 				8BEC136B24906FF30056E767 /* ViewController.swift */,
@@ -1061,6 +1067,7 @@
 			baseConfigurationReference = DB540E91EDCF2D33D7D8D9EA /* Pods-diction-processor.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "diction-processor/diction-processor.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 4XCHA6YC28;
 				INFOPLIST_FILE = "diction-processor/Info.plist";
@@ -1080,6 +1087,7 @@
 			baseConfigurationReference = 8B2248761A827D8C70EFC8A2 /* Pods-diction-processor.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "diction-processor/diction-processor.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 4XCHA6YC28;
 				INFOPLIST_FILE = "diction-processor/Info.plist";

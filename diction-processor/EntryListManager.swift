@@ -178,7 +178,7 @@ class EntryListManager: NSObject {
         // Segue to note list
         DispatchQueue.main.async { [weak self] in
             self?.notifications.executeFeedback(
-                visualMessage: "Navigate to Entry List",
+                visualMessage: "Entry List",
                 audioMessage: "Navigated to entry list.",
                 discardPrior: true,
                 withHaptics: true
@@ -190,7 +190,7 @@ class EntryListManager: NSObject {
         self.entryManager.setCurrentEntry()
         
         self.notifications.executeFeedback(
-            visualMessage: "Navigate to Entry List",
+            visualMessage: "Entry List",
             audioMessage: "Navigated to entry list.",
             withHaptics: true
         )
@@ -360,7 +360,7 @@ class EntryListManager: NSObject {
             onStartHandler?()
             
             // start automated walking
-            let runningTimer = Timer.scheduledTimer(withTimeInterval: Utils.PREVIEW_ENTRY_DURATION, repeats: true) { [weak self] timer in
+            let runningTimer = Timer.scheduledTimer(withTimeInterval: Utils.PREVIEW_ENTRY_DURATION * TimeInterval( 1 / self.speechPlayer.playbackRate), repeats: true) { [weak self] timer in
                 if let currentIndex = self?.entryManager.currentIndex, currentIndex + 1 < self!.state.activeEntries.count {
                     self?.walkNextEntry(runOverride: true)
                 } else {
@@ -718,9 +718,9 @@ class EntryListManager: NSObject {
     
     func exitWalkRun(clearCurrentEntry: Bool = true, handler: (() -> Void)? = nil) {
         if self.isRunningEntryList {
-            print("===== Entry: Exit Run =====")
+            print("===== Entry List Manager: Exit Run =====")
         } else {
-            print("===== Entry: Exit Walk =====")
+            print("===== Entry List Manager: Exit Walk =====")
         }
         print("\tTriggered by voice command.")
         

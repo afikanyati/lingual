@@ -10,6 +10,7 @@ import UIKit
 import Speech
 import Foundation
 import AVFoundation
+import CloudKit
 
 class StateManager: NSObject {
     // MARK: - Notifications
@@ -88,7 +89,7 @@ class StateManager: NSObject {
         return self.entries.filter { $0.isDeleted }
     }
     private(set) var clips = [String: Set<String>]()
-    private(set) var speaker = Speaker(uid: UUID().uuidString, device: UIDevice.current.name)
+    private(set) var speaker = StateManager.generateEmptySpeaker()
     
     // MARK: - Playback
     
@@ -448,7 +449,7 @@ class StateManager: NSObject {
         let userSettings = notification.userInfo!["userSettings"] as? [String: Any]
         if let userSettings = userSettings {
             print("\tAble to cast userSettings as [String: Any]")
-            self.speaker = userSettings["speaker"] as? Speaker ?? Speaker(uid: UUID().uuidString, device: UIDevice.current.name)
+            self.speaker = userSettings["speaker"] as? Speaker ?? StateManager.generateEmptySpeaker()
             self.withOnDeviceRecognition = userSettings["withOnDeviceRecognition"] as? Bool ?? Utils.DEFAULT_WITH_ON_DEVICE_RECOGNITION
             self.withTemporalSuggestions = userSettings["withTemporalSuggestions"] as? Bool ?? Utils.DEFAULT_WITH_TEMPORAL_SUGGESTIONS
             self.withPunctuationSuggestions = userSettings["withPunctuationSuggestions"] as? Bool ?? Utils.DEFAULT_WITH_PUNCTUATION_SUGGESTIONS
@@ -467,7 +468,7 @@ class StateManager: NSObject {
             }
         } else {
             print("\t[Error] Unable to cast userSettings as [String: Any]")
-            self.speaker = Speaker(uid: UUID().uuidString, device: UIDevice.current.name)
+            self.speaker = StateManager.generateEmptySpeaker()
             self.withOnDeviceRecognition = Utils.DEFAULT_WITH_ON_DEVICE_RECOGNITION
             self.withTemporalSuggestions = Utils.DEFAULT_WITH_TEMPORAL_SUGGESTIONS
             self.withPunctuationSuggestions = Utils.DEFAULT_WITH_PUNCTUATION_SUGGESTIONS
@@ -608,14 +609,14 @@ class StateManager: NSObject {
         if rate > self._playbackRate {
             self.notifications.executeFeedback(
                 visualMessage: "Increase Playback Rate: \(rate.rounded(toPlaces: 2))",
-                audioMessage: "increased rate to \(rate.rounded(toPlaces: 2))",
+                audioMessage: "increased playback rate to \(rate.rounded(toPlaces: 2))",
                 discardPrior: true,
                 withHaptics: true
             )
         } else if rate < self._playbackRate {
             self.notifications.executeFeedback(
                 visualMessage: "Decrease Playback Rate: \(rate.rounded(toPlaces: 2))",
-                audioMessage: "decreased rate to \(rate.rounded(toPlaces: 2))",
+                audioMessage: "decreased playback rate to \(rate.rounded(toPlaces: 2))",
                 discardPrior: true,
                 withHaptics: true
             )
@@ -634,14 +635,14 @@ class StateManager: NSObject {
         if rate > self._echoRate {
             self.notifications.executeFeedback(
                 visualMessage: "Increase Echo Rate: \(rate.rounded(toPlaces: 2))",
-                audioMessage: "increased echo to \(rate.rounded(toPlaces: 2))",
+                audioMessage: "increased echo rate to \(rate.rounded(toPlaces: 2))",
                 discardPrior: true,
                 withHaptics: true
             )
         } else if rate < self._echoRate {
             self.notifications.executeFeedback(
                 visualMessage: "Decrease Echo Rate: \(rate.rounded(toPlaces: 2))",
-                audioMessage: "decreased echo to \(rate.rounded(toPlaces: 2))",
+                audioMessage: "decreased echo rate to \(rate.rounded(toPlaces: 2))",
                 discardPrior: true,
                 withHaptics: true
             )
@@ -1004,5 +1005,23 @@ class StateManager: NSObject {
         
         self.save()
         checkRep()
+    }
+    
+    static func generateEmptySpeaker() -> Speaker {
+        print("===== State Manager: Generate Empty Speaker =====")
+
+        let speaker = Speaker(device: UIDevice.current.name)
+        
+        CKContainer(identifier: Utils.CLOUD_KIT_CONTAINER_IDENTIFIER).fetchUserRecordID(completionHandler: { (recordId, error) in
+            if let id = recordId?.recordName {
+                print("\tiCloud ID: " + id)
+                speaker.setUID(to: id)
+            } else if let error = error {
+                print("\t[Error] There was a problem fetching User Record ID.")
+                print("\tMessage: ", error.localizedDescription)
+            }
+        })
+
+        return speaker
     }
 }

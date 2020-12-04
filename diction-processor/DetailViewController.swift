@@ -256,6 +256,8 @@ class DetailViewController: UIViewController, SegueProtocol {
             // Remove textView and cursor from selectionCursor
             self.selectionCursor.setTextView()
             self.selectionCursor.setCursorView()
+            // Unselect current entry
+            self.entryManager.setCurrentEntry()
         case .moveFromSleepToEntryTable:
             print (">>>>> [Invalid Segue within DetailViewController] from ViewControlller to EntryTableViewController >>>>>")
         case .moveFromSleepToDetail:
@@ -782,7 +784,7 @@ class DetailViewController: UIViewController, SegueProtocol {
     
     @objc func onSpeechStartPlaying(notification: Notification) {
         print("===== Detail View Controller: On Speech Start Playing =====")
-        print("\tFirst segment: ", (notification.userInfo!["previous"] as? EntrySegment)?.getText() ?? "nil")
+        print("\tFirst Segment: ", (notification.userInfo!["next"] as? EntrySegment)?.getText() ?? "nil")
 //        DispatchQueue.main.async { [weak self] in
         DispatchQueue.main.async { [weak self] in
             Utils.onSpeechStartPlaying(notification: notification) {
@@ -790,10 +792,6 @@ class DetailViewController: UIViewController, SegueProtocol {
                     self?.updateUIText(text: entry.getText(), highlightRange: range, transformations: entry.transformations)
                 }
             }
-        }
-        
-        if !self.speechRecognition.isListeningForSpeech {
-            self.onRequestToUpdateView(notification: notification)
         }
     }
     
@@ -806,7 +804,12 @@ class DetailViewController: UIViewController, SegueProtocol {
                 speechPlayer: self!.speechPlayer,
                 pitchLabel: self!.pitchLabel
             ) {
-                if let entry = self?.entryManager.currentEntry, let segment = notification.userInfo!["previous"] as? EntrySegment, segment.getText().count > 0 && segment.isActive(), let range = entry.getSegmentTextRange(of: segment) {
+                if let entry = self?.entryManager.currentEntry,
+                   let segment = notification.userInfo!["previous"] as? EntrySegment,
+                   segment.getText().count > 0 &&
+                    segment.isActive(),
+                   let range = entry.getSegmentTextRange(of: segment)
+                {
                     self?.updateUIText(text: entry.getText(), highlightRange: range, transformations: entry.transformations)
                 }
             }
@@ -919,7 +922,7 @@ class DetailViewController: UIViewController, SegueProtocol {
             self?.refreshView()
             self?.setCursorVisibility(as: false)
             self?.notifications.executeFeedback(
-                visualMessage: "Navigate to Entry List",
+                visualMessage: "Entry List",
                 audioMessage: "Navigated to entry list.",
                 discardPrior: true,
                 withHaptics: true
@@ -1421,7 +1424,9 @@ class DetailViewController: UIViewController, SegueProtocol {
         // Set font
         self.textView?.font = self.state.font
         
-        if let cachedTextViewSelectedRange = self.cachedTextViewSelectedRange {
+        if let cachedTextViewSelectedRange = self.cachedTextViewSelectedRange,
+           self.speechRecognition.isListeningForSpeech
+        {
             self.selectionCursor.manualSelection(range: cachedTextViewSelectedRange)
             self.cachedTextViewSelectedRange = nil
         }
@@ -2345,21 +2350,6 @@ class DetailViewController: UIViewController, SegueProtocol {
         if voiceCommand {
             // Play Sound
             soundEngine.voiceCommandAccept()
-        }
-        
-        // Present Feedback
-        if self.sliderType == .playback {
-            self.notifications.executeFeedback(
-                visualMessage: "Playback Rate: \(self.speechPlayer.playbackRate)x",
-                audioMessage: "Set playback rate to \(self.speechPlayer.playbackRate)x.",
-                withHaptics: true
-            )
-        } else {
-            self.notifications.executeFeedback(
-                visualMessage: "Echo rate: \(self.speechSynthesis.echoRate)x",
-                audioMessage: "Set echo rate to \(self.speechSynthesis.echoRate)x.",
-                withHaptics: true
-            )
         }
         
         print("\tAdjusting flag to: false")

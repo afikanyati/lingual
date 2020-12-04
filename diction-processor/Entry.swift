@@ -3047,21 +3047,25 @@ class Entry: AVMutableComposition, NSCoding {
         
         self.entryManager.setIsRunningEntry(to: true)
         
-        // Start walk
-        self.walk(segments: segments, runOverride: true, onStartHandler: onStartHandler)
-        
-        let avgSegmentDuration: TimeInterval = 0.5
-        let runInterval: TimeInterval = max(avgSegmentDuration + (avgSegmentDuration - Utils.WALKING_ECHO_DELAY_DURATION + Utils.WALKING_LOOP_BUFFER), Utils.WALKING_ECHO_DELAY_DURATION + avgSegmentDuration + Utils.WALKING_LOOP_BUFFER)
-        // start automated walking
-        let runningTimer = Timer.scheduledTimer(withTimeInterval: runInterval + Utils.WALKING_START_DELAY_DURATION, repeats: true) { [weak self] timer in
-            if self!.entryManager.walkingIndex + 1 < Array(self!.entrySegments[self!.entryManager.walkingRange!]).count {
-                self?.walkToNextSegment(runOverride: true)
-            } else {
-                self?.pauseRun()
+        let runHandler = {
+            onStartHandler?()
+            
+            let avgSegmentDuration: TimeInterval = 0.5
+            let runInterval: TimeInterval = max(avgSegmentDuration + (avgSegmentDuration - Utils.WALKING_ECHO_DELAY_DURATION + Utils.WALKING_LOOP_BUFFER), Utils.WALKING_ECHO_DELAY_DURATION + avgSegmentDuration + Utils.WALKING_LOOP_BUFFER)
+            // start automated walking
+            let runningTimer = Timer.scheduledTimer(withTimeInterval: runInterval * TimeInterval( 1 / self.speechPlayer.playbackRate), repeats: true) { [weak self] timer in
+                if self!.entryManager.walkingIndex + 1 < Array(self!.entrySegments[self!.entryManager.walkingRange!]).count {
+                    self?.walkToNextSegment(runOverride: true)
+                } else {
+                    self?.pauseRun()
+                }
             }
+            
+            self.entryManager.setRunningTimer(timer: runningTimer)
         }
         
-        self.entryManager.setRunningTimer(timer: runningTimer)
+        // Start walk
+        self.walk(segments: segments, runOverride: true, onStartHandler: runHandler)
     }
     
     func pauseRun(handler: (() -> Void)? = nil) {

@@ -1105,7 +1105,7 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
             let entry = Entry(
                 uid: uid,
                 filename: "entry-\(uid)",
-                creatorUID: entry.state.speaker.uid,
+                creatorUID: entry.state.speaker.uid!, // This might not always hold true
                 segments: duplicateSegments
             )
             

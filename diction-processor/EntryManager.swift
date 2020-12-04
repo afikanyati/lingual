@@ -247,7 +247,9 @@ class EntryManager: NSObject {
         case .STOP_PLAYBACK:
             self.stopPlayingEntry(voiceCommand: true, handler: handler)
         case .DELETE_ENTRY:
-            self.deleteEntry(voiceCommand: true, handler: handler)
+            if !self.uiManager.dialogIsVisible {
+                self.deleteEntry(voiceCommand: true, handler: handler)
+            }
         case .PASTE_CLIPBOARD:
             self.pasteClipboard(voiceCommand: true, handler: handler)
         case .RESUME_PLAYBACK:
@@ -590,7 +592,7 @@ class EntryManager: NSObject {
         let entry = Entry(
             uid: uid,
             filename: "entry-\(uid)",
-            creatorUID: self.state.speaker.uid
+            creatorUID: self.state.speaker.uid! // This might not always hold true
         )
         
         print("\tNew Entry UID: ", uid)
@@ -670,13 +672,11 @@ class EntryManager: NSObject {
                 self?.setCurrentEntry()
             }
             
-            if let _ = Utils.getNavigationController()?.visibleViewController as? DetailViewController {
-                NotificationCenter.default.post(
-                    name: EntryManager.onEntryDeleted,
-                    object: nil,
-                    userInfo: [:]
-                )
-            }
+            NotificationCenter.default.post(
+                name: EntryManager.onEntryDeleted,
+                object: nil,
+                userInfo: [:]
+            )
             
             self?.notifications.executeFeedback(
                 visualMessage: "Delete Entry",
@@ -1199,7 +1199,10 @@ class EntryManager: NSObject {
                 
                 // increment play count
                 // Only increment if we're playing from the start
-                if startTime == CMTime.zero {
+                if startTime == CMTime.zero &&
+                    !self.entryListManager.isWalkingEntryList &&
+                    !self.entryListManager.isRunningEntryList
+                {
                     self.currentEntry?.incrementPlayCount()
                 }
             }
@@ -1436,15 +1439,6 @@ class EntryManager: NSObject {
             return
         }
         
-        guard self.speechRecognition.isListeningForSpeech else {
-            self.notifications.executeError(
-                text: "Must be editing entry to walk it.",
-                voiceCommand: true,
-                handler: handler
-            )
-            return
-        }
-        
         if voiceCommand {
             // Play Sound
             soundEngine.voiceCommandAccept()
@@ -1642,15 +1636,6 @@ class EntryManager: NSObject {
             return
         }
         
-        guard self.speechRecognition.isListeningForSpeech else {
-            self.notifications.executeError(
-                text: "Must be editing entry to run it.",
-                voiceCommand: true,
-                handler: handler
-            )
-            return
-        }
-        
         if voiceCommand {
             // Play Sound
             soundEngine.voiceCommandAccept()
@@ -1688,15 +1673,6 @@ class EntryManager: NSObject {
             print("\tTriggered by voice command.")
         }
         
-        guard self.speechRecognition.isListeningForSpeech else {
-            self.notifications.executeError(
-                text: "Must be editing entry to pause it.",
-                voiceCommand: true,
-                handler: handler
-            )
-            return
-        }
-        
         if voiceCommand {
             // Play Sound
             soundEngine.voiceCommandAccept()
@@ -1716,6 +1692,15 @@ class EntryManager: NSObject {
             }
         } else if self.speechRecognition.isListeningForSpeech {
             print("\tPausing Listening Entry....")
+            guard self.speechRecognition.isListeningForSpeech else {
+                self.notifications.executeError(
+                    text: "Must be editing entry to pause it.",
+                    voiceCommand: true,
+                    handler: handler
+                )
+                return
+            }
+            
             self.speechRecognition.pauseListeningForSpeech(userInitiated: true) {
                 if withFeedback {
                     self.notifications.executeFeedback(
@@ -1891,6 +1876,15 @@ class EntryManager: NSObject {
             print("\tTriggered by voice command.")
         }
         
+        guard self.speechPlayer.isPlayingEntry else {
+            self.notifications.executeError(
+                text: "No entry currently playing.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
         if voiceCommand {
             // Play Sound
             soundEngine.voiceCommandAccept()
@@ -1937,6 +1931,15 @@ class EntryManager: NSObject {
             print("\tTriggered by screen button.")
         } else {
             print("\tTriggered by voice command.")
+        }
+        
+        guard self.speechPlayer.isPlayingEntry else {
+            self.notifications.executeError(
+                text: "No entry currently playing.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
         }
         
         if voiceCommand {
@@ -3683,7 +3686,9 @@ class EntryManager: NSObject {
             self.currentIndex = index
             self.setEntryModules(index: index)
             // Increment Entry Views
-            if !self.entryListManager.isWalkingEntryList && !self.entryListManager.isRunningEntryList {
+            if !self.entryListManager.isWalkingEntryList &&
+                !self.entryListManager.isRunningEntryList
+            {
                 self.currentEntry!.incrementViewCount()
             }
             
