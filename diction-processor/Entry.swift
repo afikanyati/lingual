@@ -107,6 +107,24 @@ class Entry: AVMutableComposition, NSCoding {
         
         return nil
     }
+    /// Stores avg background noise over the course of entry
+    public var avgBackgroundNoise: Double {
+        guard self.entrySegments.count > 0 else { return 0 }
+        let avgBackgroundNoise: Double = self.entrySegments.reduce(Double.zero, { result, segment in
+            let backgroundNoise: Double = segment.getBackgroundNoise()
+            if segment.isValidWord() &&
+                backgroundNoise.isNormal &&
+                backgroundNoise.isFinite &&
+                !backgroundNoise.isNaN
+            {
+                return result + backgroundNoise
+            }
+            
+            return result
+        }) / Double(self.entrySegments.count)
+        
+        return avgBackgroundNoise
+    }
     /// The average number of words spoken per minute.
     public var avgSpeakingRate: Double {
         // Can be used to vary speed relative to WPM

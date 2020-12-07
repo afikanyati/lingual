@@ -9,14 +9,16 @@
 import UIKit
 import AVFoundation
 
-let AVATAR_URL = "https://firebasestorage.googleapis.com/v0/b/afika-nyati-website.appspot.com/o/resume%2Fafika.jpg?alt=media&token=f1d32c1d-07b4-48b0-abf9-2200290645c5"
-
-class EntryTableViewController: UITableViewController, SegueProtocol {
+class EntryTableViewController: UIViewController, UITableViewDelegate, UITableViewDataSource, SegueProtocol {
     // MARK: - Notifications
     static let onDidLoad = Notification.Name(Notifications.onEntryTableViewControllerDidLoad.rawValue)
     static let onWillDisappear = Notification.Name(Notifications.onEntryTableViewControllerWillDisappear.rawValue)
     
     // MARK: - Outlets and Views
+    
+    // TableView
+    @IBOutlet weak var tableView: UITableView?
+    @IBOutlet weak var createEntryButton: UIView?
     
     // Indicators
     @IBOutlet weak var soundIntensityIndicator: UIView?
@@ -36,13 +38,15 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
     var entryListManager: EntryListManager!
     var uiManager: UIManager!
     var voiceCommandEngine: VoiceCommandEngine!
-    override var undoManager: UndoManager {
-        return self.entryManager.undoManager
-    }
     
     // MARK: - ViewController References
     weak var viewController: ViewController?
     weak var detailViewController: DetailViewController?
+    weak var dictionaryViewController: DictionaryViewController?
+    
+    // MARK: - General Properties
+    
+    var navigationBarVisible = false
     
     // MARK: - Lifecycle Methods
     
@@ -55,17 +59,24 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
             print("\tApp is in the background. Segue to Sleep.")
             self.performSegue(withIdentifier: Segues.moveFromEntryTableToSleep.rawValue, sender: nil)
         }
-        
-        // reload table
-        self.reloadTable()
-        
-        DispatchQueue.main.async { [weak self] in
-            if let indexPath = self?.tableView.indexPathForSelectedRow {
-                self!.tableView.deselectRow(at: indexPath, animated: true)
-            }
-        }
 
         self.configureNotificationObservers()
+        
+        DispatchQueue.main.async { [weak self] in
+            if let indexPath = self?.tableView?.indexPathForSelectedRow {
+                self?.tableView?.deselectRow(at: indexPath, animated: true)
+            }
+        }
+        
+        if AVAudioSession.isHeadphonesConnected {
+            // Begin Nature Sounds
+            soundEngine.startNatureAmbience()
+        }
+        
+        let navigationController = Utils.getNavigationController()
+        navigationController?.navigationBar.prefersLargeTitles = true
+        navigationController?.navigationItem.largeTitleDisplayMode = .always
+        navigationController?.navigationBar.sizeToFit()
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -82,13 +93,18 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
     override func viewDidLoad() {
         print("===== Entry Table View Controller: View Did Load =====")
         super.viewDidLoad()
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "Entry")
         
+        self.prepareTableView()
+        self.prepareCreateEntryButton()
+        
+        let navigationController = Utils.getNavigationController()
         DispatchQueue.main.async {
             // add table view buttons
-            let navigationController = Utils.getNavigationController()
-            navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self.getNewEntryButton()]
+            navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self.getDictionaryButton()]
         }
+        
+        self.navigationItem.title = "Entries"
+        
         
         // Notify observers of loading
         NotificationCenter.default.post(
@@ -96,11 +112,6 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
             object: nil,
             userInfo: [:]
         )
-        
-        if AVAudioSession.isHeadphonesConnected {
-            // Begin Nature Sounds
-            soundEngine.startNatureAmbience()
-        }
     }
     
     override func viewWillDisappear(_ animated: Bool) {
@@ -115,6 +126,13 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
             name: EntryTableViewController.onWillDisappear,
             object: nil,
             userInfo: [:]
+        )
+        
+        // remove observer from table view
+        self.tableView?.removeObserver(
+            self,
+            forKeyPath: "contentOffset",
+            context: nil
         )
         
         // End Nature Sounds
@@ -158,6 +176,14 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
             object: nil
         )
         
+        // Table View
+        self.tableView?.addObserver(
+            self,
+            forKeyPath: "contentOffset",
+            options: [.old, .new],
+            context: nil
+        )
+        
         // Observe ViewController
         notificationCenter.addObserver(
             self,
@@ -165,7 +191,6 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
             name: ViewController.onDidLoad,
             object: nil
         )
-        
         notificationCenter.addObserver(
             self,
             selector: #selector(onViewWillDisappear(notification:)),
@@ -184,6 +209,20 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
             self,
             selector: #selector(onDetailViewWillDisappear(notification:)),
             name: DetailViewController.onWillDisappear,
+            object: nil
+        )
+        
+        // Observe DictionaryView
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onDictionaryViewDidLoad(notification:)),
+            name: DictionaryViewController.onDidLoad,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onDictionaryViewWillDisappear(notification:)),
+            name: DictionaryViewController.onWillDisappear,
             object: nil
         )
         
@@ -356,6 +395,11 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
         self.viewController = storyboard?.instantiateViewController(withIdentifier: "ViewController") as? ViewController
     }
     
+    @objc func onDictionaryViewDidLoad(notification: Notification) {
+        print("===== Entry Table View Controller: On Dictionary View Did Load =====")
+        self.dictionaryViewController = storyboard?.instantiateViewController(withIdentifier: "DictionaryViewController") as? DictionaryViewController
+    }
+    
     @objc func onViewWillDisappear(notification: Notification) {
         print("===== Entry Table View Controller: On View Will Disappear =====")
         self.viewController = nil
@@ -364,6 +408,11 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
     @objc func onDetailViewWillDisappear(notification: Notification) {
         print("===== Entry Table View Controller: On Detail View Will Disappear =====")
         self.detailViewController = nil
+    }
+    
+    @objc func onDictionaryViewWillDisappear(notification: Notification) {
+        print("===== Entry Table View Controller: On Dictionary View Will Disappear =====")
+        self.dictionaryViewController = nil
     }
     
     @objc func onEntryCreated(notification: Notification) {
@@ -460,9 +509,19 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
         DispatchQueue.main.async { [weak self] in
             let pitchDatum = notification.userInfo!["pitch"] as? PitchDatum
             
-            if let pitch = pitchDatum?.pitch, self?.pitchLabel == nil && !self!.speechPlayer.isPlayingEntry {
+            if let pitch = pitchDatum?.pitch,
+               self?.pitchLabel == nil &&
+                !self!.speechPlayer.isPlayingEntry &&
+                !self!.notifications.isPresentingVisualNotification
+            {
                 let navigationController = Utils.getNavigationController()
-                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getNewEntryButton(), self!.getPitchLabel(pitchText: pitch.note.string)]
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
+                    self!.getDictionaryButton(),
+                    Utils.getPitchLabel(
+                        pitchText: pitch.note.string,
+                        font: UIFont.systemFont(ofSize: Utils.DEFAULT_FONT_SIZE, weight: .bold)
+                    )
+                ]
             }
             
             if let speechPlayer = self?.speechPlayer, let pitchLabel = self?.pitchLabel {
@@ -546,6 +605,14 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
             notification: notification,
             speechRecognition: self.speechRecognition
         )
+        
+        // Remove pitch label while presenting notification
+        DispatchQueue.main.async { [weak self] in
+            let navigationController = Utils.getNavigationController()
+            navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
+                self!.getDictionaryButton()
+            ]
+        }
     }
     
     @objc func onStopNotification(notification: Notification) {
@@ -565,6 +632,14 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
             state: self.state,
             speechRecognition: self.speechRecognition
         )
+        
+        // Remove pitch label while presenting notification
+        DispatchQueue.main.async { [weak self] in
+            let navigationController = Utils.getNavigationController()
+            navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
+                self!.getDictionaryButton()
+            ]
+        }
     }
     
     @objc func onEntryComplete(notification: Notification) {
@@ -580,7 +655,6 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
     
     @objc func onSpeechStartPlaying(notification: Notification) {
         print("===== Entry Table View Controller: On Speech Start Playing =====")
-//        DispatchQueue.main.async { [weak self] in
         DispatchQueue.main.async {
             Utils.onSpeechStartPlaying(notification: notification)
         }
@@ -718,6 +792,28 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
             print (">>>>> [Invalid Segue within EntryTableViewController] from ViewControlller to DetailViewController >>>>>")
         case .moveFromDetailToEntryTable:
             print (">>>>> [Invalid Segue within EntryTableViewController] from DetailViewControlller to EntryTableViewController >>>>>")
+        case .moveFromEntryTableToDictionary:
+            print(">>>>> Segue from EntryTableViewController to DictionaryViewController >>>>>")
+            if let dictionaryViewController = segue.destination as? DictionaryViewController {
+                dictionaryViewController.state = self.state
+                dictionaryViewController.speechRecognition = self.speechRecognition
+                dictionaryViewController.speechSynthesis = self.speechSynthesis
+                dictionaryViewController.pitchRecognition = self.pitchRecognition
+                dictionaryViewController.notifications = self.notifications
+                dictionaryViewController.speechPlayer = self.speechPlayer
+                dictionaryViewController.selectionCursor = self.selectionCursor
+                dictionaryViewController.entryManager = self.entryManager
+                dictionaryViewController.entryListManager = self.entryListManager
+                dictionaryViewController.uiManager = self.uiManager
+                dictionaryViewController.voiceCommandEngine = self.voiceCommandEngine
+            }
+            self.speechRecognition.activateListeningIndicator(
+                withRecording: self.speechRecognition.isListeningForSpeech,
+                withStopListeningButton: !self.speechRecognition.isListeningForSpeech,
+                withBackToEntriesButton: true
+            )
+        case .moveFromDictionaryToEntryTable:
+            print (">>>>> [Invalid Segue within EntryTableViewController] from DictionaryViewControlller to EntryTableViewController >>>>>")
         case .noIdentifier:
             print (">>>>> [Error] No Segue Identifier in ViewController >>>>>")
         }
@@ -729,9 +825,192 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
         
     }
     
+    // MARK: - Setup
+    
+    func prepareTableView() {
+        guard let tableView = self.tableView else { return }
+        tableView.delegate = self
+        
+        // Makes sure that large title is visible upon data source load
+        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] timer in
+            tableView.dataSource = self
+            tableView.reloadData()
+        }
+    }
+    
+    func prepareCreateEntryButton() {
+        guard let createEntryButton = self.createEntryButton else { return }
+        
+        // Add corner radius
+        createEntryButton.layer.cornerRadius = createEntryButton.frame.height / 2
+        
+        // Add shadow
+        createEntryButton.layer.shadowPath =
+              UIBezierPath(
+                roundedRect: createEntryButton.bounds,
+                cornerRadius: createEntryButton.layer.cornerRadius
+              ).cgPath
+        createEntryButton.layer.shadowColor = UIColor.black.cgColor
+        createEntryButton.layer.shadowOpacity = 0.5
+        createEntryButton.layer.shadowOffset = CGSize(width: 0, height: 5)
+        createEntryButton.layer.shadowRadius = 5
+        createEntryButton.layer.masksToBounds = false
+    }
+    
+    // MARK: - Key-Value Observer
+    
+    public override func observeValue(
+        forKeyPath keyPath: String?,
+        of object: Any?,
+        change: [NSKeyValueChangeKey : Any]?,
+        context: UnsafeMutableRawPointer?)
+    {
+        if keyPath == "contentOffset" {
+            if let newOffset = change?[.newKey] as? CGPoint,
+               newOffset.y >= Utils.NAVIGATION_BAR_THRESHOLD_HEIGHT &&
+                !self.navigationBarVisible
+            {
+                print("===== Entry Table View Controller: Scrolled ahead of navigation bar threshold height =====")
+                print("\tUpdate text color of navigation bar buttons...")
+                self.navigationBarVisible = true
+                let navigationController = Utils.getNavigationController()
+                DispatchQueue.main.async {
+                    // add table view buttons
+                    navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self.getDictionaryButton()]
+                }
+            } else if let newOffset = change?[.newKey] as? CGPoint,
+              newOffset.y < Utils.NAVIGATION_BAR_THRESHOLD_HEIGHT &&
+                self.navigationBarVisible
+            {
+                print("===== Entry Table View Controller: Scrolled behind of navigation bar threshold height =====")
+                print("\tUpdate text color of navigation bar buttons...")
+                self.navigationBarVisible = false
+                let navigationController = Utils.getNavigationController()
+                DispatchQueue.main.async {
+                    // add table view buttons
+                    navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self.getDictionaryButton()]
+                }
+            }
+        }
+    }
+    
+    // MARK: - Helper Methods
+    
+    func makeEntryAttributedString(entry: Entry, index: Int) -> NSAttributedString {
+        let titleAttributes: [NSAttributedString.Key: Any] = [
+            NSAttributedString.Key.font: UIFont.preferredFont(forTextStyle: .headline),
+            NSAttributedString.Key.foregroundColor: self.entryManager.currentIndex != nil && self.speechRecognition.isListeningForSpeech && index == self.entryManager.currentIndex! ? UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red : UIColor(hex: Utils.LINGUAL_DARK_PURPLE) ?? UIColor.black
+        ]
+        var subtitleAttributes: [NSAttributedString.Key: Any] = [
+            NSAttributedString.Key.font: UIFont.preferredFont(forTextStyle: .subheadline)
+        ]
+
+        // Reference: http://www.gwtproject.org/javadoc/latest/com/google/gwt/i18n/client/DateTimeFormat.html
+        
+        let titleString = entry.getTitle(attributes: titleAttributes)
+        let entryText = entry.getText()
+        let preview = entryText.count > Utils.ENTRY_ITEM_PREVIEW_CHAR_COUNT ? "\(entryText.substring(toIndex: Utils.ENTRY_ITEM_PREVIEW_CHAR_COUNT))..." : entryText
+        if preview.count > 0 {
+            subtitleAttributes[NSAttributedString.Key.foregroundColor] = self.entryManager.currentIndex != nil && self.speechRecognition.isListeningForSpeech && index == self.entryManager.currentIndex! ? UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red : UIColor.gray
+            let subtitleString = NSAttributedString(string: "\n\(preview)", attributes: subtitleAttributes)
+            titleString.append(subtitleString)
+        } else {
+            subtitleAttributes[NSAttributedString.Key.foregroundColor] = self.entryManager.currentIndex != nil && self.speechRecognition.isListeningForSpeech && index == self.entryManager.currentIndex! ? UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red : UIColor.systemGray3
+            let subtitleString = NSAttributedString(string: "\nBlank entry.", attributes: subtitleAttributes)
+            titleString.append(subtitleString)
+        }
+
+        return titleString
+    }
+    
+    func getDictionaryButton() -> UIBarButtonItem {
+        let button  = CenteredButton(type: .custom)
+
+        button.frame = CGRect(x: 0.0, y: 0.0, width: Utils.NAVBAR_BUTTON_LENGTH, height: Utils.NAVBAR_BUTTON_LENGTH)
+        button.addTarget(self, action: #selector(self.enterDictionary), for: .touchDown)
+        button.setImage(UIImage(systemName: "book.closed"), for: .normal)
+        button.setTitle("View Dictionary", for: .normal)
+        button.titleLabel?.font = UIFont.systemFont(ofSize: 11)
+        button.tintColor = UIColor.systemGray
+        if let tableView = self.tableView,
+           tableView.contentOffset.y >= Utils.NAVIGATION_BAR_THRESHOLD_HEIGHT
+        {
+            button.setTitleColor(UIColor.systemGray5, for: .normal)
+        } else {
+            button.setTitleColor(UIColor.darkGray, for: .normal)
+        }
+        
+        let barButton = UIBarButtonItem(customView: button)
+        
+        return barButton
+    }
+    
+    func reloadTable() {
+        print("===== Entry Table View Controller: Reload Table =====")
+        DispatchQueue.main.async { [weak self] in
+            if let tableView = self?.tableView {
+                tableView.reloadData()
+            }
+        }
+    }
+    
+    func scrollToTableRow(index: Int) {
+        print("===== Entry Table View Controller: Scroll To Table Row =====")
+        print("\tIndex: ", index)
+        DispatchQueue.main.async { [weak self] in
+            let indexPath = IndexPath(row: index, section: 0)
+            if let tableView = self?.tableView {
+                tableView.scrollToRow(at: indexPath, at: .middle, animated: true)
+            }
+        }
+    }
+    
+    func selectTableRow(index: Int? = nil, scrollIntoView: Bool = false) {
+        print("===== Entry Table View Controller: Select Table Row =====")
+        print("\tIndex: ", index ?? "nil")
+        DispatchQueue.main.async { [weak self] in
+            if let tableView = self?.tableView, let index = index {
+                let indexPath = IndexPath(row: index, section: 0)
+                tableView.selectRow(at: indexPath, animated: true, scrollPosition: .middle)
+                if scrollIntoView {
+                    self?.scrollToTableRow(index: index)
+                }
+            } else if let tableView = self?.tableView,
+                let currentSelectedIndexPath = tableView.indexPathForSelectedRow
+            {
+                tableView.deselectRow(at: currentSelectedIndexPath, animated: true)
+            }
+        }
+    }
+    
+    // MARK: - Methods
+    
+    @IBAction func createEntry(_ sender: Any? = nil) {
+        print("===== Entry Table View Controller: Create Entry =====")
+        let entryUID = self.entryManager.createEntry(voiceCommand: false, withListening: false)
+        let _ = self.entryManager.getEntry(uid: entryUID)
+        
+        self.reloadTable()
+        
+        // Haptic Feedback
+        hapticEngine.success()
+    }
+    
+    @objc func enterDictionary(_ sender: Any? = nil) {
+        print("===== Entry Table View Controller: Enter Dictionary =====")
+        self.notifications.executeFeedback(
+            visualMessage: "Dictionary",
+            audioMessage: "Navigated into Dictionary.",
+            discardPrior: true,
+            withHaptics: true
+        )
+        self.performSegue(withIdentifier: Segues.moveFromEntryTableToDictionary.rawValue, sender: nil)
+    }
+    
     // MARK: - Table View
     
-    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+    // Reference: https://medium.com/@martinlasek/tutorial-adding-a-uitableview-programmatically-433cb17ae07d
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return self.state.activeEntries.count
     }
     
@@ -739,7 +1018,7 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
     // Reference: https://stackoverflow.com/questions/38845948/how-to-change-each-uitableviewcell-background-color
     // Reference: https://stackoverflow.com/questions/6322798/adding-the-little-arrow-to-the-right-side-of-a-cell-in-an-iphone-tableview-cell
     // Reference: https://stackoverflow.com/questions/3484511/altering-the-background-color-of-cell-accessoryview-and-cell-editingaccessoryvie
-    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         // Get reusable cell
         let cell = tableView.dequeueReusableCell(withIdentifier: "Entry", for: indexPath)
         
@@ -747,7 +1026,7 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
         cell.accessoryType = .disclosureIndicator
         
         // Changing background of table view
-        cell.contentView.superview?.backgroundColor = UIColor(hex: Utils.LINGUAL_WHITE) ?? UIColor.white
+        cell.contentView.superview?.backgroundColor = nil
         
         // Create orange selection color
         let selectedBackgroundView = UIView()
@@ -761,7 +1040,7 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
         return cell
     }
     
-    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         // Set entry index
         if let entryIndex = self.entryManager.currentIndex, self.speechRecognition.isListeningForSpeech && entryIndex != indexPath.row {
             self.notifications.executeError(
@@ -783,112 +1062,12 @@ class EntryTableViewController: UITableViewController, SegueProtocol {
     }
     
     // Reference: https://www.hackingwithswift.com/example-code/uikit/how-to-swipe-to-delete-uitableviewcells
-    override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
+    func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
         if editingStyle == .delete {
             self.entryManager.deleteEntry(index: indexPath.row, withConfirmation: false)
             tableView.deleteRows(at: [indexPath], with: .fade)
         } else if editingStyle == .insert {
             // Create a new instance of the appropriate class, insert it into the array, and add a new row to the table view.
         }
-    }
-    
-    func makeEntryAttributedString(entry: Entry, index: Int) -> NSAttributedString {
-        let titleAttributes: [NSAttributedString.Key: Any] = [
-            NSAttributedString.Key.font: UIFont.preferredFont(forTextStyle: .headline),
-            NSAttributedString.Key.foregroundColor: self.entryManager.currentIndex != nil && self.speechRecognition.isListeningForSpeech && index == self.entryManager.currentIndex! ? UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red : UIColor(hex: Utils.LINGUAL_DARK_PURPLE) ?? UIColor.black
-        ]
-        var subtitleAttributes: [NSAttributedString.Key: Any] = [
-            NSAttributedString.Key.font: UIFont.preferredFont(forTextStyle: .subheadline)
-        ]
-
-        // Reference: http://www.gwtproject.org/javadoc/latest/com/google/gwt/i18n/client/DateTimeFormat.html
-        
-        let titleString = entry.getTitle(attributes: titleAttributes)
-        let entryText = entry.getText()
-        let preview = entryText.count > Utils.ENTRY_ITEM_PREVIEW_CHAR_COUNT ? "\(entryText.substring(toIndex: Utils.ENTRY_ITEM_PREVIEW_CHAR_COUNT))..." : entryText
-        if preview.count > 0 {
-            subtitleAttributes[NSAttributedString.Key.foregroundColor] = self.entryManager.currentIndex != nil && self.speechRecognition.isListeningForSpeech && index == self.entryManager.currentIndex! ? UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red : UIColor.darkGray
-            let subtitleString = NSAttributedString(string: "\n\(preview)", attributes: subtitleAttributes)
-            titleString.append(subtitleString)
-        } else {
-            subtitleAttributes[NSAttributedString.Key.foregroundColor] = self.entryManager.currentIndex != nil && self.speechRecognition.isListeningForSpeech && index == self.entryManager.currentIndex! ? UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red : UIColor(hex: Utils.LINGUAL_GRAY) ?? UIColor.systemGray2
-            let subtitleString = NSAttributedString(string: "\nBlank entry.", attributes: subtitleAttributes)
-            titleString.append(subtitleString)
-        }
-
-        return titleString
-    }
-    
-    func getNewEntryButton() -> UIBarButtonItem {
-        let button  = CenteredButton(type: .custom)
-
-        button.frame = CGRect(x: 0.0, y: 0.0, width: Utils.NAVBAR_BUTTON_LENGTH, height: Utils.NAVBAR_BUTTON_LENGTH)
-        button.addTarget(self, action: #selector(self.createEntry), for: .touchDown)
-        button.setImage(UIImage(systemName: "plus"), for: .normal)
-        button.setTitle("Create Entry", for: .normal)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 11)
-        button.setTitleColor(UIColor.systemGray5, for: .normal)
-        button.tintColor = UIColor.systemGray
-        
-        let barButton = UIBarButtonItem(customView: button)
-        
-        return barButton
-    }
-    
-    // Reference: https://www.robnorback.com/blog/setting-title-and-title-color-on-a-uibutton-in-swift-3
-    func getPitchLabel(pitchText: String) -> UIBarButtonItem {
-        let button  = UIButton(type: .custom)
-        button.frame = CGRect(x: 0.0, y: 0.0, width: Utils.NAVBAR_BUTTON_LENGTH, height: Utils.NAVBAR_BUTTON_LENGTH)
-        button.setTitle(pitchText, for: .normal)
-        button.titleLabel?.font = self.state.font
-        button.setTitleColor(UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red, for: .normal)
-        
-        let barButton = UIBarButtonItem(customView: button)
-        barButton.isEnabled = false
-        
-        return barButton
-    }
-    
-    func reloadTable() {
-        print("===== Entry Table View Controller: Reload Table =====")
-        DispatchQueue.main.async { [weak self] in
-            self?.tableView.reloadData()
-        }
-    }
-    
-    func scrollToTableRow(index: Int) {
-        print("===== Entry Table View Controller: Scroll To Table Row =====")
-        print("\tIndex: ", index)
-        DispatchQueue.main.async { [weak self] in
-            let indexPath = IndexPath(row: index, section: 0)
-            self?.tableView.scrollToRow(at: indexPath, at: .middle, animated: true)
-        }
-    }
-    
-    func selectTableRow(index: Int? = nil, scrollIntoView: Bool = false) {
-        print("===== Entry Table View Controller: Select Table Row =====")
-        print("\tIndex: ", index ?? "nil")
-        DispatchQueue.main.async { [weak self] in
-            if let index = index {
-                let indexPath = IndexPath(row: index, section: 0)
-                self?.tableView.selectRow(at: indexPath, animated: true, scrollPosition: .middle)
-                if scrollIntoView {
-                    self?.scrollToTableRow(index: index)
-                }
-            } else if let currentSelectedIndexPath = self?.tableView.indexPathForSelectedRow {
-                self?.tableView.deselectRow(at: currentSelectedIndexPath, animated: true)
-            }
-        }
-    }
-    
-    // MARK: - Methods
-    
-    @objc func createEntry(_ sender: Any? = nil) {
-        print("===== Entry Table View Controller: Create Entry =====")
-        let entryUID = self.entryManager.createEntry(voiceCommand: false, withListening: false)
-        let _ = self.entryManager.getEntry(uid: entryUID)
-        
-        // Haptic Feedback
-        hapticEngine.success()
     }
 }

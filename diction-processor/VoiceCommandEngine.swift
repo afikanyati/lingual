@@ -53,12 +53,12 @@ public class VoiceCommandEngine: NSObject {
 
     func isCommand(query: String) -> (VoiceCommand, [Int])? {
         var actionTokens = [Token]()
-        var entityTokens = [Token]()
-        var actionEntityTokens = [Token]()
+        var objectTokens = [Token]()
+        var actionObjectTokens = [Token]()
         var spatialRelationTokens = [Token]()
 
-        // Infer entity based on mode of operation
-        // Inferred entities can be overrided by another entity when explicitly provided
+        // Infer object based on mode of operation
+        // Inferred entities can be overrided by another object when explicitly provided
         //
         // Keep in mind heirarchy of methods
         if self.speechPlayer.isPlayingEntry &&
@@ -68,7 +68,7 @@ public class VoiceCommandEngine: NSObject {
             !self.entryListManager.isWalkingEntryList &&
             !self.entryListManager.isRunningEntryList
         {
-            entityTokens.append(.PLAYBACK)
+            objectTokens.append(.PLAYBACK)
         }
         
         if self.speechSynthesis.isPlayingEcho &&
@@ -78,39 +78,39 @@ public class VoiceCommandEngine: NSObject {
             !self.entryListManager.isWalkingEntryList &&
             !self.entryListManager.isRunningEntryList
         {
-            actionEntityTokens.append(.ECHO)
+            actionObjectTokens.append(.ECHO)
         }
         
         if self.selectionCursor.isPromptingForUpdateAcceptance {
-            entityTokens.append(.SELECTION_UPDATE)
+            objectTokens.append(.SELECTION_UPDATE)
         }
         
         if self.entryManager.isRunningEntry || self.entryListManager.isRunningEntryList {
-            actionEntityTokens.append(.RUN)
+            actionObjectTokens.append(.RUN)
         }
         
         if self.entryManager.isWalkingEntry || self.entryListManager.isWalkingEntryList {
-            actionEntityTokens.append(.WALK)
+            actionObjectTokens.append(.WALK)
         }
         
         if self.selectionCursor.hasSelection {
-            entityTokens.append(.SELECTION)
-            entityTokens.append(.SELECTION_RATE)
+            objectTokens.append(.SELECTION)
+            objectTokens.append(.SELECTION_RATE)
         }
         
         if self.uiManager.dialogIsVisible {
-            // Get other entity tokens from UI Manager
+            // Get other object tokens from UI Manager
             if let voiceCommandSets = self.uiManager.getActionVoiceCommandSets() {
                 // Loop through voice commands
                 for set in voiceCommandSets {
                     // Loop through tokens
                     for token in set {
-                        if EntityToken.contains(token) && !entityTokens.contains(token) {
-                            // Add token to entity list if its an entity
-                            entityTokens.append(token)
-                        } else if ActionEntityToken.contains(token) && !actionEntityTokens.contains(token) {
-                            // Add token to entity list if its an entity
-                            actionEntityTokens.append(token)
+                        if ObjectToken.contains(token) && !objectTokens.contains(token) {
+                            // Add token to object list if its an object
+                            objectTokens.append(token)
+                        } else if ActionObjectToken.contains(token) && !actionObjectTokens.contains(token) {
+                            // Add token to object list if its an object
+                            actionObjectTokens.append(token)
                         }
                     }
                 }
@@ -125,12 +125,12 @@ public class VoiceCommandEngine: NSObject {
 //            !self.speechPlayer.isPlayingEntry &&
 //            !self.speechRecognition.isListeningForSpeech
 //        {
-//            entityTokens.append(.ENTRY)
+//            objectTokens.append(.ENTRY)
 //        }
         // isUpdatingSelection -> .SELECTION_UPDATE
         
-        print("\tEntity Tokens: ", entityTokens)
-        print("\tAction Entity Tokens: ", actionEntityTokens)
+        print("\tObject Tokens: ", objectTokens)
+        print("\tAction Object Tokens: ", actionObjectTokens)
         print("\tAction Tokens: ", actionTokens)
         print("\tSpatial Tokens: ", spatialRelationTokens)
 
@@ -171,16 +171,16 @@ public class VoiceCommandEngine: NSObject {
                 actionTokens.append(validToken)
                 tokenMappings[validToken] = possibleToken
             } else if let validToken = TokenMap[possibleToken],
-                EntityToken.contains(validToken) &&
-                !entityTokens.contains(validToken)
+                ObjectToken.contains(validToken) &&
+                !objectTokens.contains(validToken)
             {
-                entityTokens.append(validToken)
+                objectTokens.append(validToken)
                 tokenMappings[validToken] = possibleToken
             } else if let validToken = TokenMap[possibleToken],
-                ActionEntityToken.contains(validToken) &&
-                !actionEntityTokens.contains(validToken)
+                ActionObjectToken.contains(validToken) &&
+                !actionObjectTokens.contains(validToken)
             {
-                actionEntityTokens.append(validToken)
+                actionObjectTokens.append(validToken)
                 tokenMappings[validToken] = possibleToken
             } else if let validToken = TokenMap[possibleToken],
                 SpatialRelationToken.contains(validToken) &&
@@ -194,26 +194,26 @@ public class VoiceCommandEngine: NSObject {
         print("\tToken Mappings: ", tokenMappings)
 
         // Determine if action can be inferred
-        // - entity only has one action
+        // - object only has one action
         if  actionTokens.count == 0 &&
-            entityTokens.count > 0
+            objectTokens.count > 0
         {
-            for token in entityTokens {
-                if let permissibleEntityActions: Set<Token> = PossibleEntityActions[token],
-                   let loneAction = permissibleEntityActions.first,
-                    permissibleEntityActions.count == 1 && (
-                        PossibleEntitySpatialRelations[loneAction] == nil ||
-                        PossibleEntitySpatialRelations[loneAction]!.count == 1
+            for token in objectTokens {
+                if let permissibleObjectActions: Set<Token> = PossibleObjectActions[token],
+                   let loneAction = permissibleObjectActions.first,
+                    permissibleObjectActions.count == 1 && (
+                        PossibleObjectSpatialRelations[loneAction] == nil ||
+                        PossibleObjectSpatialRelations[loneAction]!.count == 1
                     ) && !actionTokens.contains(loneAction)
                 {
-                    // If entity only has one action (and one or no spatial relation), we can infer action
+                    // If object only has one action (and one or no spatial relation), we can infer action
                     actionTokens.append(loneAction)
-                } else if let permissibleEntityActions: Set<Token> = PossibleEntityActions[token],
+                } else if let permissibleObjectActions: Set<Token> = PossibleObjectActions[token],
                     spatialRelationTokens.count == 1 {
-                    // If entity and spatial relation are specified and they are valid, we can infer action
-                    for action in permissibleEntityActions {
-                        if let possibleEntitySpatialRelations = PossibleEntitySpatialRelations[action],
-                           possibleEntitySpatialRelations.contains(spatialRelationTokens[0]) &&
+                    // If object and spatial relation are specified and they are valid, we can infer action
+                    for action in permissibleObjectActions {
+                        if let possibleObjectSpatialRelations = PossibleObjectSpatialRelations[action],
+                           possibleObjectSpatialRelations.contains(spatialRelationTokens[0]) &&
                             !actionTokens.contains(action)
                         {
                             actionTokens.append(action)
@@ -222,24 +222,24 @@ public class VoiceCommandEngine: NSObject {
                 }
             }
         } else if actionTokens.count == 0 &&
-            actionEntityTokens.count > 0
+            actionObjectTokens.count > 0
         {
-            for token in actionEntityTokens {
-                if let permissibleEntityActions: Set<Token> = PossibleEntityActions[token],
-                   let loneAction = permissibleEntityActions.first,
-                    permissibleEntityActions.count == 1 && (
-                        PossibleEntitySpatialRelations[loneAction] == nil ||
-                        PossibleEntitySpatialRelations[loneAction]!.count == 1
+            for token in actionObjectTokens {
+                if let permissibleObjectActions: Set<Token> = PossibleObjectActions[token],
+                   let loneAction = permissibleObjectActions.first,
+                    permissibleObjectActions.count == 1 && (
+                        PossibleObjectSpatialRelations[loneAction] == nil ||
+                        PossibleObjectSpatialRelations[loneAction]!.count == 1
                     ) && !actionTokens.contains(loneAction)
                 {
-                    // If entity only has one action (and one or no spatial relation), we can infer action
+                    // If object only has one action (and one or no spatial relation), we can infer action
                     actionTokens.append(loneAction)
-                } else if let permissibleEntityActions: Set<Token> = PossibleEntityActions[token],
+                } else if let permissibleObjectActions: Set<Token> = PossibleObjectActions[token],
                       spatialRelationTokens.count == 1 {
-                    // If entity and spatial relation are specified and they are valid, we can infer action
-                      for action in permissibleEntityActions {
-                          if let possibleEntitySpatialRelations = PossibleEntitySpatialRelations[action],
-                             possibleEntitySpatialRelations.contains(spatialRelationTokens[0]) &&
+                    // If object and spatial relation are specified and they are valid, we can infer action
+                      for action in permissibleObjectActions {
+                          if let possibleObjectSpatialRelations = PossibleObjectSpatialRelations[action],
+                             possibleObjectSpatialRelations.contains(spatialRelationTokens[0]) &&
                             !actionTokens.contains(action)
                           {
                               actionTokens.append(action)
@@ -249,9 +249,9 @@ public class VoiceCommandEngine: NSObject {
             }
         }
         
-        // Determine if entity can be inferred
+        // Determine if object can be inferred
         if actionTokens.contains(.UNDO) || actionTokens.contains(.REDO) {
-            entityTokens.append(.CHANGE)
+            objectTokens.append(.CHANGE)
         }
         
         // We can add entry token if we're walking entry list
@@ -263,40 +263,40 @@ public class VoiceCommandEngine: NSObject {
             let _ = self.entryManager.currentEntry,
             possibleTokens.count > 0
         {
-            entityTokens.append(.ENTRY)
+            objectTokens.append(.ENTRY)
         }
 
         // Verify we have suitable number of types of tokens to continue
         //
-        // If we have an action-entity and no entity, we must have an action and the action-entity functions as an entity
-        // If we have an entity and action,
-        guard (entityTokens.count == 0 && actionEntityTokens.count > 0 && actionTokens.count > 0) ||
-            (entityTokens.count > 0 && actionEntityTokens.count > 0 && actionTokens.count == 0) ||
-            (entityTokens.count > 0 && actionTokens.count > 0)
+        // If we have an action-object and no object, we must have an action and the action-object functions as an object
+        // If we have an object and action,
+        guard (objectTokens.count == 0 && actionObjectTokens.count > 0 && actionTokens.count > 0) ||
+            (objectTokens.count > 0 && actionObjectTokens.count > 0 && actionTokens.count == 0) ||
+            (objectTokens.count > 0 && actionTokens.count > 0)
         else {
             return nil
         }
         
-        print("\tEntity Tokens: ", entityTokens)
-        print("\tAction Entity Tokens: ", actionEntityTokens)
+        print("\tObject Tokens: ", objectTokens)
+        print("\tAction Object Tokens: ", actionObjectTokens)
         print("\tAction Tokens: ", actionTokens)
         print("\tSpatial Tokens: ", spatialRelationTokens)
 
         var viableVoiceCommandSets = [Set<Token>]()
 
-        // Confirm entity action alignment exists
+        // Confirm object action alignment exists
         //
         // Determine if viable action needs a spatial relation and that it exists
-        for entity in entityTokens {
+        for object in objectTokens {
             // Check for permissible actions
-            if let possibleEntityActions = PossibleEntityActions[entity] {
+            if let possibleObjectActions = PossibleObjectActions[object] {
                 let actionTokenSet = Set(actionTokens)
-                // Find out if we have provided enough information to match an action with an entity
-                let viableEntityActions = possibleEntityActions.intersection(actionTokenSet)
-                for action in viableEntityActions {
-                    if PossibleEntitySpatialRelations[action] == nil {
+                // Find out if we have provided enough information to match an action with an object
+                let viableObjectActions = possibleObjectActions.intersection(actionTokenSet)
+                for action in viableObjectActions {
+                    if PossibleObjectSpatialRelations[action] == nil {
                         // No need for spatial relation
-                        let voiceCommandSet = Set([entity, action])
+                        let voiceCommandSet = Set([object, action])
                         if let _ = VoiceCommandMap[voiceCommandSet],
                            !viableVoiceCommandSets.contains(voiceCommandSet)
                         {
@@ -304,11 +304,11 @@ public class VoiceCommandEngine: NSObject {
                             // Add to list of viable voice commands
                             viableVoiceCommandSets.append(voiceCommandSet)
                         }
-                    } else if let spatialRelations = PossibleEntitySpatialRelations[action] {
-                        // Find out if we have provided enough information to match an spatial relation with an entity and action
+                    } else if let spatialRelations = PossibleObjectSpatialRelations[action] {
+                        // Find out if we have provided enough information to match an spatial relation with an object and action
                         let viableSpatialRelations = spatialRelations.intersection(spatialRelationTokens)
                         for spatialRelation in viableSpatialRelations {
-                            let voiceCommandSet = Set([entity, action, spatialRelation])
+                            let voiceCommandSet = Set([object, action, spatialRelation])
                             if let _ = VoiceCommandMap[voiceCommandSet],
                                !viableVoiceCommandSets.contains(voiceCommandSet)
                             {
@@ -320,13 +320,13 @@ public class VoiceCommandEngine: NSObject {
                     }
                 }
                 
-                let actionEntityTokenSet = Set(actionEntityTokens)
-                // Find out if we have provided enough information to match an action-entity with an entity
-                let viableEntityActionEntities = possibleEntityActions.intersection(actionEntityTokenSet)
-                for action in viableEntityActionEntities {
-                    if PossibleEntitySpatialRelations[action] == nil {
+                let actionObjectTokenSet = Set(actionObjectTokens)
+                // Find out if we have provided enough information to match an action-object with an object
+                let viableObjectActionEntities = possibleObjectActions.intersection(actionObjectTokenSet)
+                for action in viableObjectActionEntities {
+                    if PossibleObjectSpatialRelations[action] == nil {
                         // No need for spatial relation
-                        let voiceCommandSet = Set([entity, action])
+                        let voiceCommandSet = Set([object, action])
                         if let _ = VoiceCommandMap[voiceCommandSet],
                            !viableVoiceCommandSets.contains(voiceCommandSet)
                         {
@@ -334,11 +334,11 @@ public class VoiceCommandEngine: NSObject {
                             // Add to list of viable voice commands
                             viableVoiceCommandSets.append(voiceCommandSet)
                         }
-                    } else if let spatialRelations = PossibleEntitySpatialRelations[action] {
-                        // Find out if we have provided enough information to match an spatial relation with an entity and action
+                    } else if let spatialRelations = PossibleObjectSpatialRelations[action] {
+                        // Find out if we have provided enough information to match an spatial relation with an object and action
                         let viableSpatialRelations = spatialRelations.intersection(spatialRelationTokens)
                         for spatialRelation in viableSpatialRelations {
-                            let voiceCommandSet = Set([entity, action, spatialRelation])
+                            let voiceCommandSet = Set([object, action, spatialRelation])
                             if let _ = VoiceCommandMap[voiceCommandSet],
                                !viableVoiceCommandSets.contains(voiceCommandSet)
                             {
@@ -352,16 +352,16 @@ public class VoiceCommandEngine: NSObject {
             }
         }
 
-        for entity in actionEntityTokens {
+        for object in actionObjectTokens {
             // Check for permissible actions
-            if let possibleEntityActions = PossibleEntityActions[entity] {
+            if let possibleObjectActions = PossibleObjectActions[object] {
                 let actionTokenSet = Set(actionTokens)
-                // Find out if we have provided enough information to match an action with an entity
-                let viableEntityActions = possibleEntityActions.intersection(actionTokenSet)
-                for action in viableEntityActions {
-                    if PossibleEntitySpatialRelations[action] == nil {
+                // Find out if we have provided enough information to match an action with an object
+                let viableObjectActions = possibleObjectActions.intersection(actionTokenSet)
+                for action in viableObjectActions {
+                    if PossibleObjectSpatialRelations[action] == nil {
                         // No need for spatial relation
-                        let voiceCommandSet = Set([entity, action])
+                        let voiceCommandSet = Set([object, action])
                         if let _ = VoiceCommandMap[voiceCommandSet],
                            !viableVoiceCommandSets.contains(voiceCommandSet)
                         {
@@ -369,11 +369,11 @@ public class VoiceCommandEngine: NSObject {
                             // Add to list of viable voice commands
                             viableVoiceCommandSets.append(voiceCommandSet)
                         }
-                    } else if let spatialRelations = PossibleEntitySpatialRelations[action] {
-                        // Find out if we have provided enough information to match an spatial relation with an entity and action
+                    } else if let spatialRelations = PossibleObjectSpatialRelations[action] {
+                        // Find out if we have provided enough information to match an spatial relation with an object and action
                         let viableSpatialRelations = spatialRelations.intersection(spatialRelationTokens)
                         for spatialRelation in viableSpatialRelations {
-                            let voiceCommandSet = Set([entity, action, spatialRelation])
+                            let voiceCommandSet = Set([object, action, spatialRelation])
                             if let _ = VoiceCommandMap[voiceCommandSet],
                                !viableVoiceCommandSets.contains(voiceCommandSet)
                             {
@@ -444,21 +444,48 @@ public class VoiceCommandEngine: NSObject {
         } else if self.entryManager.isRunningEntry {
             // Run Mode
             print("\tRun Mode...")
+            
             for commandSet in viableVoiceCommandSets {
-                if commandSet.contains(.RUN) {
+                if !commandSet.contains(.RUN) {
+                    print("\tPrioritizing non-walk selection voice command...")
+                    // We want to prioritize other commands before settling for run entry
                     voiceCommand = VoiceCommandMap[commandSet]
                     voiceCommandSet = commandSet
                     break
+                }
+            }
+            
+            if voiceCommand == nil &&
+                voiceCommandSet == nil {
+                for commandSet in viableVoiceCommandSets {
+                    if !commandSet.contains(.SELECTION) {
+                        voiceCommand = VoiceCommandMap[commandSet]
+                        voiceCommandSet = commandSet
+                        break
+                    }
                 }
             }
         } else if self.entryManager.isWalkingEntry {
             // Walk Mode
             print("\tWalk Mode...")
             for commandSet in viableVoiceCommandSets {
-                if commandSet.contains(.WALK) {
+                if !commandSet.contains(.WALK) {
+                    print("\tPrioritizing non-walk selection voice command...")
+                    // We want to prioritize other commands before settling for run entry
                     voiceCommand = VoiceCommandMap[commandSet]
                     voiceCommandSet = commandSet
                     break
+                }
+            }
+            
+            if voiceCommand == nil &&
+                voiceCommandSet == nil {
+                for commandSet in viableVoiceCommandSets {
+                    if !commandSet.contains(.SELECTION) {
+                        voiceCommand = VoiceCommandMap[commandSet]
+                        voiceCommandSet = commandSet
+                        break
+                    }
                 }
             }
         } else if self.entryListManager.isRunningEntryList {
@@ -1000,7 +1027,7 @@ public class VoiceCommandEngine: NSObject {
         case PASTE = "paste"
         case ENTER = "enter"
         
-        // ENTITIES
+        // OBJECTS
         case ENTRY = "entry"
         case SENTENCE = "sentence"
         case PUNCTUATION = "punctuation"
@@ -1031,7 +1058,7 @@ public class VoiceCommandEngine: NSObject {
         case RATE = "rate"
     //        case HELP = "help"
             
-        // ACTION ENTITIES
+        // ACTION OBJECTS
         case ECHO = "echo"
         case RUN = "run"
         case WALK = "walk"
@@ -1369,7 +1396,7 @@ public class VoiceCommandEngine: NSObject {
         Token.CONTINUE.value() : .CONTINUE,
         Token.PASTE.value() : .PASTE,
         
-        // ENTITY
+        // OBJECT
         Token.ENTRY.value() : .ENTRY,
         "entering" : .ENTRY,
         Token.SENTENCE.value() : .SENTENCE,
@@ -1390,6 +1417,7 @@ public class VoiceCommandEngine: NSObject {
         Token.SELECTION_RATE.value() : .SELECTION_RATE,
         Token.COMMIT.value() : .COMMIT,
         "comment" : .COMMIT,
+        "come out": .COMMIT,
         Token.CLIPBOARD.value() : .CLIPBOARD,
         Token.SELECTION_UPDATE.value() : .SELECTION_UPDATE,
         Token.ANCHOR.value() : .ANCHOR,
@@ -1406,7 +1434,7 @@ public class VoiceCommandEngine: NSObject {
         Token.LIST.value() : .LIST,
     //        Token.HELP.value() : .HELP,
 
-        // ACTION-ENTITY
+        // ACTION-OBJECT
         Token.ECHO.value() : .ECHO,
         "ecko": .ECHO,
         Token.RUN.value() : .RUN,
@@ -1525,16 +1553,26 @@ public class VoiceCommandEngine: NSObject {
     //        Set([.ADJUST, .VOLUME]) : .ADJUST_VOLUME,
         // Echo Rate
         Set([.INCREASE, .ECHO_RATE]) : .INCREASE_ECHO_RATE,
+        Set([.ADJUST, .UP, .ECHO_RATE]) : .INCREASE_ECHO_RATE,
         Set([.INCREASE, .ECHO]) : .INCREASE_ECHO_RATE,
+        Set([.ADJUST, .UP, .ECHO]) : .INCREASE_ECHO_RATE,
         Set([.INCREASE, .ECHO, .RIGHT]) : .INCREASE_ECHO_RATE,
+        Set([.ADJUST, .UP, .ECHO, .RIGHT]) : .INCREASE_ECHO_RATE,
         Set([.DECREASE, .ECHO_RATE]) : .DECREASE_ECHO_RATE,
+        Set([.ADJUST, .DOWN, .ECHO_RATE]) : .DECREASE_ECHO_RATE,
         Set([.DECREASE, .ECHO]) : .DECREASE_ECHO_RATE,
+        Set([.ADJUST, .DOWN, .ECHO]) : .DECREASE_ECHO_RATE,
         Set([.DECREASE, .ECHO, .RIGHT]) : .DECREASE_ECHO_RATE,
+        Set([.ADJUST, .DOWN, .ECHO, .RIGHT]) : .DECREASE_ECHO_RATE,
         // Playback Rate
         Set([.INCREASE, .PLAYBACK_RATE]) : .INCREASE_PLAYBACK_RATE,
+        Set([.ADJUST, .UP, .PLAYBACK_RATE]) : .INCREASE_PLAYBACK_RATE,
         Set([.INCREASE, .PLAYBACK]) : .INCREASE_PLAYBACK_RATE,
+        Set([.ADJUST, .UP, .PLAYBACK]) : .INCREASE_PLAYBACK_RATE,
         Set([.DECREASE, .PLAYBACK_RATE]) : .DECREASE_PLAYBACK_RATE,
+        Set([.ADJUST, .DOWN, .PLAYBACK_RATE]) : .DECREASE_PLAYBACK_RATE,
         Set([.DECREASE, .PLAYBACK]) : .DECREASE_PLAYBACK_RATE,
+        Set([.ADJUST, .DOWN, .PLAYBACK]) : .DECREASE_PLAYBACK_RATE,
         // Selection
         Set([.DELETE, .SELECTION]) : .DELETE_SELECTION,
         Set([.UPDATE, .SELECTION]) : .UPDATE_SELECTION,
@@ -1614,7 +1652,13 @@ public class VoiceCommandEngine: NSObject {
         Set([.CANCEL, .SELECTION_UPDATE]) : .CANCEL_SELECTION_UPDATE,
         // Selection Rate
         Set([.INCREASE, .SELECTION_RATE]) : .INCREASE_SELECTION_RATE,
+        Set([.INCREASE, .SELECTION]) : .INCREASE_SELECTION_RATE,
+        Set([.ADJUST, .UP, .SELECTION_RATE]) : .INCREASE_PLAYBACK_RATE,
+        Set([.ADJUST, .UP, .SELECTION]) : .INCREASE_PLAYBACK_RATE,
         Set([.DECREASE, .SELECTION_RATE]) : .DECREASE_SELECTION_RATE,
+        Set([.DECREASE, .SELECTION]) : .DECREASE_SELECTION_RATE,
+        Set([.ADJUST, .DOWN, .SELECTION_RATE]) : .DECREASE_SELECTION_RATE,
+        Set([.ADJUST, .DOWN, .SELECTION]) : .DECREASE_SELECTION_RATE,
         // Cursor
     //        Set([.SHIFT, .HERE]) : .SHIFT_HERE,
         // Commit
@@ -1677,7 +1721,7 @@ public class VoiceCommandEngine: NSObject {
         .PASTE,
     ]
     
-    let ActionEntityToken: Set<Token> = [
+    let ActionObjectToken: Set<Token> = [
         .ECHO,
         .RUN,
         .WALK,
@@ -1686,7 +1730,7 @@ public class VoiceCommandEngine: NSObject {
         .FINISH
     ]
     
-    let EntityToken: Set<Token> = [
+    let ObjectToken: Set<Token> = [
         .ENTRY,
         .SENTENCE,
         .PUNCTUATION,
@@ -1731,7 +1775,7 @@ public class VoiceCommandEngine: NSObject {
         .OFF
     ]
     
-    let PossibleEntityActions: [Token : Set<Token>] = [
+    let PossibleObjectActions: [Token : Set<Token>] = [
         .ENTRY: Set([
             .PLAY,
             .PAUSE,
@@ -1766,7 +1810,8 @@ public class VoiceCommandEngine: NSObject {
             .RESUME,
             .CONTINUE,
             .INCREASE,
-            .DECREASE
+            .DECREASE,
+            .ADJUST
         ]),
         .PLAYBACK: Set([
             .PAUSE,
@@ -1777,7 +1822,8 @@ public class VoiceCommandEngine: NSObject {
             .SKIP,
             .CONTINUE,
             .INCREASE,
-            .DECREASE
+            .DECREASE,
+            .ADJUST
         ]),
         .SENTENCE: Set([
             .PLAY,
@@ -1818,11 +1864,13 @@ public class VoiceCommandEngine: NSObject {
         ]),
         .ECHO_RATE: Set([
             .INCREASE,
-            .DECREASE
+            .DECREASE,
+            .ADJUST
         ]),
         .PLAYBACK_RATE: Set([
             .INCREASE,
-            .DECREASE
+            .DECREASE,
+            .ADJUST
         ]),
         .SELECTION: Set([
             .DELETE,
@@ -1843,7 +1891,10 @@ public class VoiceCommandEngine: NSObject {
             .PLAY,
             .ECHO,
             .SHIFT,
-            .PASTE
+            .PASTE,
+            .INCREASE,
+            .DECREASE,
+            .ADJUST
         ]),
         .SELECTION_UPDATE: Set([
             .ACCEPT,
@@ -1878,7 +1929,8 @@ public class VoiceCommandEngine: NSObject {
         ]),
         .SELECTION_RATE: Set([
             .INCREASE,
-            .DECREASE
+            .DECREASE,
+            .ADJUST
         ]),
         .COMMIT: Set([
             .PLAY,
@@ -1887,8 +1939,7 @@ public class VoiceCommandEngine: NSObject {
             .ROLLBACK,
             .DELETE,
             .WALK,
-            .RUN,
-            .PASTE
+            .RUN
         ]),
         .CLIPBOARD: Set([
             .INSPECT,
@@ -1919,7 +1970,7 @@ public class VoiceCommandEngine: NSObject {
         ]),
     ]
     
-    let PossibleEntitySpatialRelations: [Token: Set<Token>] = [
+    let PossibleObjectSpatialRelations: [Token: Set<Token>] = [
         .SKIP: Set([.NEXT, .PREVIOUS]),
         .SENTENCE: Set([.PREVIOUS]),
         .SHIFT: Set([.NEXT, .PREVIOUS, .RIGHT, .LEFT, .OUTWARD, .INWARD, .UP, .DOWN]),

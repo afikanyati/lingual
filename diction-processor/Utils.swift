@@ -146,6 +146,7 @@ class Utils {
     static let DEFAULT_RESET_LISTENING_FLAG_DELAY: TimeInterval = 5 // Final Transcript should show up in five seconds without any sound
     static let PREVIEW_ENTRY_DURATION: Double = 10
     static let CLOUD_KIT_CONTAINER_IDENTIFIER: String = "iCloud.com.afikanyati.lingual"
+    static let NAVIGATION_BAR_THRESHOLD_HEIGHT: CGFloat = -20
     
     static let pitchToFrequencyMap: [String : Double] = [
         "C0": 16,
@@ -1220,15 +1221,13 @@ class Utils {
             if !speechRecognition.isListeningForSpeech {
                 DispatchQueue.main.async {
                     let navigationController = Utils.getNavigationController()
-                    navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.white]
-                    navigationController?.navigationBar.topItem?.title = ""
-                }
-            }
-            
-            if recording {
-                DispatchQueue.main.async {
-                    let navigationController = Utils.getNavigationController()
-                    navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red]
+                    let titleView = Utils.getTitleView(
+                        text: "",
+                        withRecording: recording,
+                        asNotification: false,
+                        asVoiceCommand: false
+                    )
+                    navigationController?.navigationBar.topItem?.titleView = titleView
                 }
             }
             
@@ -1241,7 +1240,13 @@ class Utils {
                 // visually present the time range of selection
                 DispatchQueue.main.async {
                     let navigationController = Utils.getNavigationController()
-                    navigationController?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: speechRecognition.getDurationListening()))\(" [\(Utils.formattedTime(time: Float(anchor.timeMapping.target.start.seconds))) - \(Utils.formattedTime(time: Float(focus.timeMapping.target.end.seconds)))]")"
+                    let titleView = Utils.getTitleView(
+                        text: "\(Utils.formattedTime(time: speechRecognition.getDurationListening()))\(" [\(Utils.formattedTime(time: Float(anchor.timeMapping.target.start.seconds))) - \(Utils.formattedTime(time: Float(focus.timeMapping.target.end.seconds)))]")",
+                        withRecording: recording,
+                        asNotification: false,
+                        asVoiceCommand: false
+                    )
+                    navigationController?.navigationBar.topItem?.titleView = titleView
                 }
             } else if let anchor = selectionCursor.anchor,
                 let focus = selectionCursor.focus,
@@ -1252,7 +1257,13 @@ class Utils {
                 // visually present the time range of selection
                 DispatchQueue.main.async {
                     let navigationController = Utils.getNavigationController()
-                    navigationController?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: speechRecognition.getDurationListening()))\(" [\(Utils.formattedTime(time: Float(focus.timeMapping.target.start.seconds))) - \(Utils.formattedTime(time: Float(anchor.timeMapping.target.end.seconds)))]")"
+                    let titleView = Utils.getTitleView(
+                        text: "\(Utils.formattedTime(time: speechRecognition.getDurationListening()))\(" [\(Utils.formattedTime(time: Float(focus.timeMapping.target.start.seconds))) - \(Utils.formattedTime(time: Float(anchor.timeMapping.target.end.seconds)))]")",
+                        withRecording: recording,
+                        asNotification: false,
+                        asVoiceCommand: false
+                    )
+                    navigationController?.navigationBar.topItem?.titleView = titleView
                 }
             } else {
                 // we don't have a selection
@@ -1260,7 +1271,13 @@ class Utils {
                 // present time of cursor
                 DispatchQueue.main.async {
                     let navigationController = Utils.getNavigationController()
-                    navigationController?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: speechRecognition.getDurationListening()))\(selectionCursor.cachedAnchor != nil && entry != nil && selectionCursor.cachedAnchor! != Utils.getEntryNthLastSegment(segments: entry!.entrySegments, selectionCursor: selectionCursor, n: 0) ? " [\(Utils.formattedTime(time: Float(selectionCursor.cachedAnchor!.timeMapping.target.end.seconds)))]" : "")"
+                    let titleView = Utils.getTitleView(
+                        text: "\(Utils.formattedTime(time: speechRecognition.getDurationListening()))\(selectionCursor.cachedAnchor != nil && entry != nil && selectionCursor.cachedAnchor! != Utils.getEntryNthLastSegment(segments: entry!.entrySegments, selectionCursor: selectionCursor, n: 0) ? " [\(Utils.formattedTime(time: Float(selectionCursor.cachedAnchor!.timeMapping.target.end.seconds)))]" : "")",
+                        withRecording: recording,
+                        asNotification: false,
+                        asVoiceCommand: false
+                    )
+                    navigationController?.navigationBar.topItem?.titleView = titleView
                 }
             }
         }
@@ -1279,8 +1296,13 @@ class Utils {
         
         DispatchQueue.main.async {
             let navigationController = Utils.getNavigationController()
-            navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.white]
-            navigationController?.navigationBar.topItem?.title = ""
+            let titleView = Utils.getTitleView(
+                text: "",
+                withRecording: false,
+                asNotification: false,
+                asVoiceCommand: false
+            )
+            navigationController?.navigationBar.topItem?.titleView = titleView
         }
         
         return nil
@@ -1429,8 +1451,13 @@ class Utils {
         DispatchQueue.main.async {
             if let navigationController = Utils.getNavigationController() {
                 print("\tSuccessfully retrieved navigationController")
-                navigationController.navigationBar.topItem?.title = item.text
-                navigationController.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red]
+                let titleView = Utils.getTitleView(
+                    text: item.text,
+                    withRecording: speechRecognition.isListeningForSpeech,
+                    asNotification: true,
+                    asVoiceCommand: item.isVoiceCommand
+                )
+                navigationController.navigationBar.topItem?.titleView = titleView
             } else {
                 print("\t[Error] There was a problem retrieving the navigationController")
             }
@@ -1447,8 +1474,13 @@ class Utils {
         if speechRecognition.isListeningForSpeech {
             DispatchQueue.main.async {
                 let navigationController = Utils.getNavigationController()
-                navigationController?.navigationBar.topItem?.title = ""
-                navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.white]
+                let titleView = Utils.getTitleView(
+                    text: "",
+                    withRecording: speechRecognition.isListeningForSpeech,
+                    asNotification: false,
+                    asVoiceCommand: false
+                )
+                navigationController?.navigationBar.topItem?.titleView = titleView
             }
             let timer = Utils.startRecordingUITimer(
                 timer: speechRecognition.listeningTimer,
@@ -1461,8 +1493,13 @@ class Utils {
         } else {
             DispatchQueue.main.async {
                 let navigationController = Utils.getNavigationController()
-                navigationController?.navigationBar.topItem?.title = ""
-                navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.white]
+                let titleView = Utils.getTitleView(
+                    text: "",
+                    withRecording: speechRecognition.isListeningForSpeech,
+                    asNotification: false,
+                    asVoiceCommand: false
+                )
+                navigationController?.navigationBar.topItem?.titleView = titleView
             }
         }
     }
@@ -1483,12 +1520,13 @@ class Utils {
         
         DispatchQueue.main.async {
             let navigationController = Utils.getNavigationController()
-            navigationController?.navigationBar.topItem?.title = item.text
-            if speechRecognition.isListeningForSpeech || !state.appActivated {
-                navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red]
-            } else {
-                navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.white]
-            }
+            let titleView = Utils.getTitleView(
+                text: item.text,
+                withRecording: speechRecognition.isListeningForSpeech || !state.appActivated,
+                asNotification: false,
+                asVoiceCommand: false
+            )
+            navigationController?.navigationBar.topItem?.titleView = titleView
         }
     }
     
@@ -1553,7 +1591,13 @@ class Utils {
         print("Seconds: ", notification.userInfo!["seconds"] as! Double)
         if !speechRecognition.isListeningForSpeech && !entryManager.isWalkingEntry && !entryManager.isRunningEntry && Float(speechPlayer.player.currentTime().seconds).isNormal && !Float(speechPlayer.player.currentTime().seconds).isNaN {
             let navigationController = Utils.getNavigationController()
-            navigationController?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: Float(speechPlayer.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(speechPlayer.player.currentItem!.duration.seconds)))"
+            let titleView = Utils.getTitleView(
+                text: "\(Utils.formattedTime(time: Float(speechPlayer.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(speechPlayer.player.currentItem!.duration.seconds)))",
+                withRecording: speechRecognition.isListeningForSpeech,
+                asNotification: false,
+                asVoiceCommand: false
+            )
+            navigationController?.navigationBar.topItem?.titleView = titleView
         }
     }
     
@@ -1567,7 +1611,13 @@ class Utils {
         let stopHandler = notification.userInfo!["handler"] as? () -> Void
         if !speechRecognition.isListeningForSpeech {
             let navigationController = Utils.getNavigationController()
-            navigationController?.navigationBar.topItem?.title = ""
+            let titleView = Utils.getTitleView(
+                text: "",
+                withRecording: speechRecognition.isListeningForSpeech,
+                asNotification: false,
+                asVoiceCommand: false
+            )
+            navigationController?.navigationBar.topItem?.titleView = titleView
         }
         
         if let entry = entryManager.currentEntry, entryManager.pausedWalkingEntry {
@@ -1960,6 +2010,64 @@ class Utils {
         }
         
         return segments
+    }
+    
+    // Reference: https://www.robnorback.com/blog/setting-title-and-title-color-on-a-uibutton-in-swift-3
+    public static func getPitchLabel(pitchText: String, font: UIFont) -> UIBarButtonItem {
+        let button  = UIButton(type: .custom)
+        button.frame = CGRect(x: 0.0, y: 0.0, width: Utils.NAVBAR_BUTTON_LENGTH, height: Utils.NAVBAR_BUTTON_LENGTH)
+        button.setTitle(pitchText, for: .normal)
+        button.titleLabel?.font = font
+        button.setTitleColor(UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red, for: .normal)
+        
+        let barButton = UIBarButtonItem(customView: button)
+        barButton.isEnabled = false
+        
+        return barButton
+    }
+    
+    public static func getTitleView(
+        text: String,
+        withRecording: Bool = false,
+        asNotification: Bool = false,
+        asVoiceCommand: Bool = false
+    ) -> UIStackView {
+        let titleLabel = UILabel()
+        titleLabel.text = text
+        titleLabel.font = UIFont.systemFont(ofSize: Utils.DEFAULT_FONT_SIZE, weight: .semibold)
+        if asNotification || asVoiceCommand || withRecording {
+            titleLabel.textColor = UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red
+        } else {
+            titleLabel.textColor = UIColor.white
+        }
+        
+        var stackSubviews = [UIView]()
+        var imageView: UIImageView?
+        if asVoiceCommand {
+            imageView = UIImageView(image: UIImage(systemName: "mouth"))
+            NSLayoutConstraint.activate([
+                imageView!.heightAnchor.constraint(equalToConstant: 20),
+                imageView!.widthAnchor.constraint(equalToConstant: 20)
+            ])
+            imageView!.tintColor = UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red
+            stackSubviews.append(imageView!)
+        } else if asNotification {
+            imageView = UIImageView(image: UIImage(systemName: "bell"))
+            NSLayoutConstraint.activate([
+                imageView!.heightAnchor.constraint(equalToConstant: 20),
+                imageView!.widthAnchor.constraint(equalToConstant: 20)
+            ])
+            imageView!.tintColor = UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red
+            stackSubviews.append(imageView!)
+        }
+        
+        stackSubviews.append(titleLabel)
+        
+        let horizontalStack = UIStackView(arrangedSubviews: stackSubviews)
+        horizontalStack.spacing = 5
+        horizontalStack.alignment = .center
+        
+        return horizontalStack
     }
     
     // MARK: - Helper Functions

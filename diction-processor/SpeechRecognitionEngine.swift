@@ -153,7 +153,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             context: nil
         )
         
-        self.speechRecognizer?.removeObserver(
+        self.speechRecognizer!.removeObserver(
             self,
             forKeyPath: "supportsOnDeviceRecognition",
             context: nil
@@ -623,6 +623,9 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                         if let _ = Utils.getNavigationController()?.visibleViewController as? DetailViewController  {
                             let backToEntriesButton = self!.getBackToEntriesButton()
                             buttons.append(backToEntriesButton)
+                        } else if let _ = Utils.getNavigationController()?.visibleViewController as? DictionaryViewController  {
+                            let backToEntriesButton = self!.getBackToEntriesButton()
+                            buttons.append(backToEntriesButton)
                         }
                         let stopListeningButton = self!.getStopListeningButton(withStopIndicator: true)
                         buttons.append(stopListeningButton)
@@ -643,13 +646,16 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                         if let _ = Utils.getNavigationController()?.visibleViewController as? DetailViewController  {
                             let backToEntriesButton = self!.getBackToEntriesButton()
                             buttons.append(backToEntriesButton)
+                        } else if let _ = Utils.getNavigationController()?.visibleViewController as? DictionaryViewController  {
+                            let backToEntriesButton = self!.getBackToEntriesButton()
+                            buttons.append(backToEntriesButton)
                         }
                         let stopListeningButton = self!.getStopListeningButton(withStopIndicator: true)
                         buttons.append(stopListeningButton)
                         Utils.getNavigationController()?.visibleViewController?.navigationItem.leftBarButtonItems = buttons
                         self?.notifications.executeFeedback(
-                            visualMessage: "Start Listening",
-                            audioMessage: "Started listening for speech.",
+                            visualMessage: "Stop Listening",
+                            audioMessage: "Stopped listening for wake  phrase.",
                             discardPrior: true,
                             withHaptics: true
                         )
@@ -665,8 +671,20 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
                     soundEngine.startListening()
                 }
+                self.notifications.executeFeedback(
+                    visualMessage: "Start Listening",
+                    audioMessage: "Started listening for speech.",
+                    discardPrior: true,
+                    withHaptics: true
+                )
             } else {
                 self.startListeningForWakePhrase()
+                self.notifications.executeFeedback(
+                    visualMessage: "Start Listening",
+                    audioMessage: "Started listening for wake phrase.",
+                    discardPrior: true,
+                    withHaptics: true
+                )
             }
         }
         
@@ -682,7 +700,11 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 discardPrior: true,
                 withHaptics: true
             )
-            Utils.getNavigationController()?.visibleViewController?.performSegue(withIdentifier: Segues.moveFromDetailToEntryTable.rawValue, sender: nil)
+            if let _ = Utils.getNavigationController()?.visibleViewController as? DetailViewController {
+                Utils.getNavigationController()?.visibleViewController?.performSegue(withIdentifier: Segues.moveFromDetailToEntryTable.rawValue, sender: nil)
+            } else if let _ = Utils.getNavigationController()?.visibleViewController as? DictionaryViewController {
+                Utils.getNavigationController()?.visibleViewController?.performSegue(withIdentifier: Segues.moveFromDictionaryToEntryTable.rawValue, sender: nil)
+            }
         }
     }
     
@@ -737,7 +759,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         button.frame = CGRect(x: 0.0, y: 0.0, width: Utils.NAVBAR_BUTTON_LENGTH, height: Utils.NAVBAR_BUTTON_LENGTH)
         button.addTarget(self, action: #selector(self.handleToggleListening), for: .touchDown)
         
-        if withStopIndicator {
+        if withStopIndicator || !self.isActive {
             button.backgroundColor = UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red
             button.layer.cornerRadius = 0.5 * button.bounds.size.width
             button.setImage(UIImage(systemName: "mic.slash"), for: .normal)
@@ -1363,7 +1385,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 print("\tspeechRecognizer.supportsOnDeviceRecognition: ", supportsOnDeviceRecognition)
                 print("\tlisteningPermissionsGranted: ", listeningPermissionsGranted)
             }
-        } else if let speechRecognizer = self.speechRecognizer, keyPath == "supportsOnDeviceRecognition" && speechRecognizer.supportsOnDeviceRecognition {
+        } else if keyPath == "supportsOnDeviceRecognition" {
             print("\tKeyPath: supportsOnDeviceRecognition")
             let withOnDeviceRecognition = self.state.withOnDeviceRecognition
             let supportsOnDeviceRecognition = self.speechRecognizer!.supportsOnDeviceRecognition
@@ -1573,7 +1595,8 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             let withOnDeviceRecognition = self.state.withOnDeviceRecognition
             let supportsOnDeviceRecognition = self.speechRecognizer!.supportsOnDeviceRecognition
             let listeningPermissionsGranted = self.listeningPermissionsGranted
-            if let _ = self.speechRecognizer, withOnDeviceRecognition && supportsOnDeviceRecognition && listeningPermissionsGranted {
+            let audioEngineIsRunning = self.audioEngine.isRunning
+            if let _ = self.speechRecognizer, withOnDeviceRecognition && supportsOnDeviceRecognition && listeningPermissionsGranted && audioEngineIsRunning {
                 print("\tAll systems were ready to initiate listening...")
                 return handleRecognizer()
             } else {
@@ -1582,6 +1605,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 print("\twithOnDeviceRecognition: ", withOnDeviceRecognition)
                 print("\tspeechRecognizer.supportsOnDeviceRecognition: ", supportsOnDeviceRecognition)
                 print("\tlisteningPermissionsGranted: ", listeningPermissionsGranted)
+                print("\taudioEngineIsRunning: ", audioEngineIsRunning)
                 return false
             }
             
@@ -1607,8 +1631,8 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             DispatchQueue.main.async {
                 // When this is not in the main thread, the recognition task doesn't end correctly
                 // which prevents us from receiving the final transcription.
-                recognitionTask.finish() // don't wrap in if statement because it is sometimes not .running
                 self.request!.endAudio() // don't add a request = nil because it results in request not being there sometimes.
+                recognitionTask.finish() // don't wrap in if statement because it is sometimes not .running
                 
                 let isListening = executeListening()
                 
@@ -1643,8 +1667,8 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             self.audioEngine.stop() // Things get message when we use self.audioEngine.pause(). Affects ability to listen again afterwards
             // When this is not in the main thread, the recognition task doesn't end correctly
             // which prevents us from receiving the final transcription.
-            self.recognitionTask?.finish() // don't wrap in if statement because it is sometimes not .running
             self.request?.endAudio() // don't add a request = nil because it results in request not being there sometimes.
+            self.recognitionTask?.finish() // don't wrap in if statement because it is sometimes not .running
             
             // We instantiate new audio engine in case headphones have been added or removed
             // Removing an audio node will create a broken graph: https://developer.apple.com/documentation/avfoundation/avaudioengine
@@ -1782,8 +1806,8 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         // When this is not in the main thread, the recognition task doesn't end correctly
         // which prevents us from receiving the final transcription.
         self.audioEngine.stop()
-        self.recognitionTask?.finish()
         self.request?.endAudio() // don't add a request = nil because it results in request not being there sometimes.
+        self.recognitionTask?.finish()
         
         // We instantiate new audio engine in case headphones have been added or removed
         // Removing an audio node will create a broken graph: https://developer.apple.com/documentation/avfoundation/avaudioengine
@@ -2112,6 +2136,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             self.notifications.executeFeedback(
                 visualMessage: "\"\(transcription.segments.count > 3 ? "\(transcription.segments.first!.substring.lowercased())...\(transcription.segments.last!.substring.lowercased())" : text.lowercased())\"",
                 audioMessage: transcription.formattedString,
+                isVoiceCommand: true,
                 discardPrior: true,
                 withHaptics: true
             )

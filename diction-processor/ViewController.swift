@@ -42,13 +42,11 @@ class ViewController: UIViewController, SegueProtocol {
     var entryListManager: EntryListManager!
     var uiManager: UIManager!
     var voiceCommandEngine: VoiceCommandEngine!
-    override var undoManager: UndoManager {
-        return self.entryManager.undoManager
-    }
     
     // MARK: - ViewController References
     weak var entryTableViewController: EntryTableViewController?
     weak var detailViewController: DetailViewController?
+    weak var dictionaryViewController: DictionaryViewController?
     
     // MARK: - Lifecycle Methods
     
@@ -78,6 +76,11 @@ class ViewController: UIViewController, SegueProtocol {
         self.wakePhraseLabel?.text = "\"\(self.speechRecognition.wakePhrases[0].capitalizeFirstLetter())\""
         
         self.prepareGeneralView()
+        
+        // Prevent large title
+        let navigationController = Utils.getNavigationController()
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationController?.navigationItem.largeTitleDisplayMode = .never
         
         // Notify observers of loading
         NotificationCenter.default.post(
@@ -164,6 +167,10 @@ class ViewController: UIViewController, SegueProtocol {
             print (">>>>> [Invalid Segue within ViewController] from EntryTableViewControlller to ViewController >>>>>")
         case .moveFromDetailToEntryTable:
             print (">>>>> [Invalid Segue within ViewController] from DetailViewControlller to EntryTableViewController >>>>>")
+        case .moveFromEntryTableToDictionary:
+            print (">>>>> [Invalid Segue within ViewController] from EntryTableViewControlller to DictionaryViewController >>>>>")
+        case .moveFromDictionaryToEntryTable:
+            print (">>>>> [Invalid Segue within ViewController] from DictionaryViewControlller to EntryTableViewController >>>>>")
         case .noIdentifier:
             print (">>>>> [Error] No Segue Identifier in ViewController >>>>>")
         }
@@ -212,6 +219,20 @@ class ViewController: UIViewController, SegueProtocol {
             self,
             selector: #selector(onDetailViewWillDisappear(notification:)),
             name: DetailViewController.onWillDisappear,
+            object: nil
+        )
+        
+        // Observe DictionaryView
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onDictionaryViewDidLoad(notification:)),
+            name: DictionaryViewController.onDidLoad,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onDictionaryViewWillDisappear(notification:)),
+            name: DictionaryViewController.onWillDisappear,
             object: nil
         )
         
@@ -362,6 +383,11 @@ class ViewController: UIViewController, SegueProtocol {
         self.detailViewController = storyboard?.instantiateViewController(withIdentifier: "DetailViewController") as? DetailViewController
     }
     
+    @objc func onDictionaryViewDidLoad(notification: Notification) {
+        print("===== View Controller: On Dictionary View Did Load =====")
+        self.dictionaryViewController = storyboard?.instantiateViewController(withIdentifier: "DictionaryViewController") as? DictionaryViewController
+    }
+    
     @objc func onEntryTableViewWillDisappear(notification: Notification) {
         print("===== View Controller: On View Will Disappear =====")
         self.entryTableViewController = nil
@@ -370,6 +396,11 @@ class ViewController: UIViewController, SegueProtocol {
     @objc func onDetailViewWillDisappear(notification: Notification) {
         print("===== View Controller: On Detail View Will Disappear =====")
         self.detailViewController = nil
+    }
+    
+    @objc func onDictionaryViewWillDisappear(notification: Notification) {
+        print("===== View Controller: On Dictionary View Will Disappear =====")
+        self.dictionaryViewController = nil
     }
     
     @objc func onNavigateToDetailPage(notification: Notification) {

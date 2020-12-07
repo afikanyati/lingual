@@ -144,6 +144,13 @@
 		8BEC137724906FF60056E767 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 8BEC137524906FF60056E767 /* LaunchScreen.storyboard */; };
 		8BEC138224906FF60056E767 /* diction_processorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEC138124906FF60056E767 /* diction_processorTests.swift */; };
 		8BEC138D24906FF60056E767 /* diction_processorUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEC138C24906FF60056E767 /* diction_processorUITests.swift */; };
+		8BED4B71257B604F008F7A57 /* DictionaryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BED4B70257B604F008F7A57 /* DictionaryViewController.swift */; };
+		8BED4B7B257D71A6008F7A57 /* DictionaryAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BED4B7A257D71A6008F7A57 /* DictionaryAction.swift */; };
+		8BED4B80257D71B9008F7A57 /* DictionarySection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BED4B7F257D71B9008F7A57 /* DictionarySection.swift */; };
+		8BED4B8D257D9118008F7A57 /* DictionaryLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BED4B8C257D9118008F7A57 /* DictionaryLine.swift */; };
+		8BED4B9B257DBF85008F7A57 /* DictionaryViewTableCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BED4B9A257DBF85008F7A57 /* DictionaryViewTableCell.swift */; };
+		8BED4BAA257DF622008F7A57 /* DictionaryViewTableHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BED4BA9257DF622008F7A57 /* DictionaryViewTableHeader.swift */; };
+		8BED4BAF257E129D008F7A57 /* UIView+Border.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BED4BAE257E129D008F7A57 /* UIView+Border.swift */; };
 		EFCD311834F5FA424F68B4E4 /* libPods-diction-processor.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D1458E52ABFDE185D82A961F /* libPods-diction-processor.a */; };
 /* End PBXBuildFile section */
 
@@ -310,6 +317,13 @@
 		8BEC138824906FF60056E767 /* diction-processorUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "diction-processorUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BEC138C24906FF60056E767 /* diction_processorUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = diction_processorUITests.swift; sourceTree = "<group>"; };
 		8BEC138E24906FF60056E767 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		8BED4B70257B604F008F7A57 /* DictionaryViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionaryViewController.swift; sourceTree = "<group>"; };
+		8BED4B7A257D71A6008F7A57 /* DictionaryAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionaryAction.swift; sourceTree = "<group>"; };
+		8BED4B7F257D71B9008F7A57 /* DictionarySection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionarySection.swift; sourceTree = "<group>"; };
+		8BED4B8C257D9118008F7A57 /* DictionaryLine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionaryLine.swift; sourceTree = "<group>"; };
+		8BED4B9A257DBF85008F7A57 /* DictionaryViewTableCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionaryViewTableCell.swift; sourceTree = "<group>"; };
+		8BED4BA9257DF622008F7A57 /* DictionaryViewTableHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionaryViewTableHeader.swift; sourceTree = "<group>"; };
+		8BED4BAE257E129D008F7A57 /* UIView+Border.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIView+Border.swift"; sourceTree = "<group>"; };
 		D1458E52ABFDE185D82A961F /* libPods-diction-processor.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-diction-processor.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DB540E91EDCF2D33D7D8D9EA /* Pods-diction-processor.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-diction-processor.debug.xcconfig"; path = "Target Support Files/Pods-diction-processor/Pods-diction-processor.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -394,6 +408,11 @@
 			isa = PBXGroup;
 			children = (
 				8BCA1B0024A43D530068BABB /* Speaker.swift */,
+				8BED4B9A257DBF85008F7A57 /* DictionaryViewTableCell.swift */,
+				8BED4BA9257DF622008F7A57 /* DictionaryViewTableHeader.swift */,
+				8BED4B7F257D71B9008F7A57 /* DictionarySection.swift */,
+				8BED4B7A257D71A6008F7A57 /* DictionaryAction.swift */,
+				8BED4B8C257D9118008F7A57 /* DictionaryLine.swift */,
 				8B39B35D256F62FA00A9904F /* Caret.swift */,
 				8B39B355256E18BF00A9904F /* EntrySnapshot.swift */,
 				8B8D55EF2530E02C004AD436 /* DialogItem.swift */,
@@ -493,6 +512,7 @@
 			isa = PBXGroup;
 			children = (
 				8B669B6624B013F200D5996B /* TimeConstant+Minute+Hour.swift */,
+				8BED4BAE257E129D008F7A57 /* UIView+Border.swift */,
 				8BB685A324E8E04400F3285B /* NSRange+toTextRange.swift */,
 				8B40A28625699B57002C6B46 /* CenteredButton.swift */,
 				8B5C3A1C252B93A000A4DCA7 /* UITextView+NoActions.swift */,
@@ -551,6 +571,7 @@
 				8BEC136724906FF30056E767 /* AppDelegate.swift */,
 				8BEC136924906FF30056E767 /* SceneDelegate.swift */,
 				8BEC136B24906FF30056E767 /* ViewController.swift */,
+				8BED4B70257B604F008F7A57 /* DictionaryViewController.swift */,
 				8B7421EF254E3F9D002B43EF /* NotificationEngine.swift */,
 				8B7421EA254E3CDC002B43EF /* StorageManager.swift */,
 				8BD595C6249AE45D000B3127 /* Entry.swift */,
@@ -786,6 +807,7 @@
 			files = (
 				8B8D55F52530E043004AD436 /* DialogAction.swift in Sources */,
 				8B86B50724EF56C600568CDD /* EntryTrackType.swift in Sources */,
+				8BED4BAF257E129D008F7A57 /* UIView+Border.swift in Sources */,
 				8B27A3DE24B6A8E9001E5F06 /* Float+Rounded.swift in Sources */,
 				8B39B35E256F62FA00A9904F /* Caret.swift in Sources */,
 				8B57A05B25552440005A5D17 /* EntryManager.swift in Sources */,
@@ -823,6 +845,7 @@
 				8BCA1AFB24A3D0750068BABB /* ScaleUnitType.swift in Sources */,
 				8B766F5D24AC2AB200D41A13 /* SimpleTransformer.swift in Sources */,
 				8B766F4524AC2AB200D41A13 /* HPSEstimator.swift in Sources */,
+				8BED4B71257B604F008F7A57 /* DictionaryViewController.swift in Sources */,
 				8B766F2724AC2AA300D41A13 /* FrequencyValidator.swift in Sources */,
 				8B766F5924AC2AB200D41A13 /* EstimationFactory.swift in Sources */,
 				8B39B356256E18BF00A9904F /* EntrySnapshot.swift in Sources */,
@@ -848,6 +871,7 @@
 				8B24440724DCE50D0050C959 /* TimeNormalizerType.swift in Sources */,
 				8BEC137224906FF30056E767 /* diction_processor.xcdatamodeld in Sources */,
 				8BCA1B0324A43DB70068BABB /* VocalRegister.swift in Sources */,
+				8BED4B9B257DBF85008F7A57 /* DictionaryViewTableCell.swift in Sources */,
 				8B766F2324AC2AA300D41A13 /* AcousticWave.swift in Sources */,
 				8B7421EB254E3CDC002B43EF /* StorageManager.swift in Sources */,
 				8B766F5A24AC2AB200D41A13 /* LocationEstimator.swift in Sources */,
@@ -865,6 +889,8 @@
 				8B74881E24DCE7C9004C94A0 /* CMTimeMapping+subscript.swift in Sources */,
 				8B766F4E24AC2AB200D41A13 /* QuinnsFirstEstimator.swift in Sources */,
 				8BA3C35425293A80000B704B /* UIColor+hex.swift in Sources */,
+				8BED4B7B257D71A6008F7A57 /* DictionaryAction.swift in Sources */,
+				8BED4BAA257DF622008F7A57 /* DictionaryViewTableHeader.swift in Sources */,
 				8BA3055B24C920DA0056E4DF /* SynthesizerItem.swift in Sources */,
 				8BD595C7249AE45D000B3127 /* Entry.swift in Sources */,
 				8B5C59E52545214600420080 /* DetailViewController.swift in Sources */,
@@ -887,11 +913,13 @@
 				8B766F5724AC2AB200D41A13 /* SimulatorSignalTracker.swift in Sources */,
 				8B40A28725699B57002C6B46 /* CenteredButton.swift in Sources */,
 				8B766F2924AC2AA300D41A13 /* PitchCalculator.swift in Sources */,
+				8BED4B80257D71B9008F7A57 /* DictionarySection.swift in Sources */,
 				8BB685A024E6139D00F3285B /* SelectionShiftDirection.swift in Sources */,
 				8BA3055D24CB99AC0056E4DF /* VoiceCommandEngine.swift in Sources */,
 				8BA3056124CBD43D0056E4DF /* RecognitionTask.swift in Sources */,
 				8B7421DE254E2872002B43EF /* PitchRecognitionEngine.swift in Sources */,
 				8B766F2624AC2AA300D41A13 /* Error.swift in Sources */,
+				8BED4B8D257D9118008F7A57 /* DictionaryLine.swift in Sources */,
 				8BB685A224E618C300F3285B /* SelectionDirection.swift in Sources */,
 				8BA3056724D0FB7C0056E4DF /* StringProtocol+distance.swift in Sources */,
 			);

@@ -114,13 +114,11 @@ class DetailViewController: UIViewController, SegueProtocol {
     var entryListManager: EntryListManager!
     var uiManager: UIManager!
     var voiceCommandEngine: VoiceCommandEngine!
-    override var undoManager: UndoManager {
-        return self.entryManager.undoManager
-    }
     
     // MARK: - ViewController References
     weak var viewController: ViewController?
     weak var entryTableViewController: EntryTableViewController?
+    weak var dictionaryViewController: DictionaryViewController?
     
     // MARK: - General Properties
     var sliderIsVisible = false
@@ -138,6 +136,11 @@ class DetailViewController: UIViewController, SegueProtocol {
         
         self.prepareNavbar()
         self.configureNotificationObservers()
+        
+        // Prevent large title
+        let navigationController = Utils.getNavigationController()
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationController?.navigationItem.largeTitleDisplayMode = .never
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -266,6 +269,10 @@ class DetailViewController: UIViewController, SegueProtocol {
             print (">>>>> [Invalid Segue within DetailViewController] from EntryTableViewControlller to DetailViewController >>>>>")
         case .moveFromEntryTableToSleep:
             print (">>>>> [Invalid Segue within DetailViewController] from EntryTableViewControlller to ViewController >>>>>")
+        case .moveFromEntryTableToDictionary:
+            print (">>>>> [Invalid Segue within DetailViewController] from EntryTableViewControlller to DictionaryViewController >>>>>")
+        case .moveFromDictionaryToEntryTable:
+            print (">>>>> [Invalid Segue within DetailViewController] from DictionaryViewControlller to EntryTableViewController >>>>>")
         case .noIdentifier:
             print (">>>>> [Error] No Segue Identifier in ViewController >>>>>")
         }
@@ -309,6 +316,20 @@ class DetailViewController: UIViewController, SegueProtocol {
             self,
             selector: #selector(onEntryTableViewWillDisappear(notification:)),
             name: EntryTableViewController.onWillDisappear,
+            object: nil
+        )
+        
+        // Observe DictionaryView
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onDictionaryViewDidLoad(notification:)),
+            name: DictionaryViewController.onDidLoad,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onDictionaryViewWillDisappear(notification:)),
+            name: DictionaryViewController.onWillDisappear,
             object: nil
         )
         
@@ -400,27 +421,6 @@ class DetailViewController: UIViewController, SegueProtocol {
             object: nil
         )
         
-        // Observe Entry
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onEntryListenUpdate(notification:)),
-            name: Entry.onEntryListenUpdate,
-            object: nil
-        )
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onEntryListenStop(notification:)),
-            name: Entry.onEntryListenStop,
-            object: nil
-        )
-        
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onEntryComplete(notification:)),
-            name: Entry.onEntryComplete,
-            object: nil
-        )
-        
         // Speech Player
         notificationCenter.addObserver(
             self,
@@ -464,6 +464,26 @@ class DetailViewController: UIViewController, SegueProtocol {
             self,
             selector: #selector(onEchoFinish(notification:)),
             name: SpeechSynthesisEngine.onEchoFinish,
+            object: nil
+        )
+        
+        // Entry
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onEntryListenUpdate(notification:)),
+            name: Entry.onEntryListenUpdate,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onEntryComplete(notification:)),
+            name: Entry.onEntryComplete,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onEntryListenStop(notification:)),
+            name: Entry.onEntryListenStop,
             object: nil
         )
         
@@ -514,6 +534,11 @@ class DetailViewController: UIViewController, SegueProtocol {
         self.entryTableViewController = storyboard?.instantiateViewController(withIdentifier: "EntryTableViewController") as? EntryTableViewController
     }
     
+    @objc func onDictionaryViewDidLoad(notification: Notification) {
+        print("===== Detail View Controller: On Dictionary View Did Load =====")
+        self.dictionaryViewController = storyboard?.instantiateViewController(withIdentifier: "DictionaryViewController") as? DictionaryViewController
+    }
+    
     @objc func onViewWillDisappear(notification: Notification) {
         print("===== Detail View Controller: On View Will Disappear =====")
         self.viewController = nil
@@ -522,6 +547,11 @@ class DetailViewController: UIViewController, SegueProtocol {
     @objc func onEntryTableViewWillDisappear(notification: Notification) {
         print("===== Detail View Controller: On Entry Table View Will Disappear =====")
         self.entryTableViewController = nil
+    }
+    
+    @objc func onDictionaryViewWillDisappear(notification: Notification) {
+        print("===== Detail View Controller: On Dictionary View Will Disappear =====")
+        self.dictionaryViewController = nil
     }
     
     @objc func appMovedToBackground() {

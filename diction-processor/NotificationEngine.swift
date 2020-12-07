@@ -95,6 +95,7 @@ class NotificationEngine {
             self.executeFeedback(
                 visualMessage: "\"\(transcription.segments.count > 3 ? "\(transcription.segments.first!.substring.lowercased())...\(transcription.segments.last!.substring.lowercased())" : utterance.lowercased())\"",
                 audioMessage: utterance,
+                isVoiceCommand: true,
                 discardPrior: true,
                 withHaptics: true
             )
@@ -102,11 +103,17 @@ class NotificationEngine {
     }
     
     // MARK: - Methods
-    func scheduleNotification(text: String, type: NotificationType? = nil, duration: TimeInterval? = 5) {
+    func scheduleNotification(
+        text: String,
+        type: NotificationType? = nil,
+        isVoiceCommand: Bool = false,
+        duration: TimeInterval? = 5
+    ) {
         print("===== Notification Engine: Schedule Notification =====")
         let notificationItem = NotificationItem(
             text: text,
             type: type,
+            isVoiceCommand: isVoiceCommand,
             duration: duration
         )
         self.notificationQueue.enqueue(notificationItem)
@@ -244,6 +251,7 @@ class NotificationEngine {
     func executeFeedback(
         visualMessage: String? = nil,
         audioMessage: String? = nil,
+        isVoiceCommand: Bool = false,
         discardPrior: Bool = false,
         withHaptics: Bool = false,
         delay: TimeInterval = Utils.DEFAULT_NOTIFICATION_DELAY
@@ -263,6 +271,7 @@ class NotificationEngine {
                     
                     self?.scheduleNotification(
                         text: visualMessage,
+                        isVoiceCommand: isVoiceCommand,
                         duration: 3
                     )
                     if !self!.isExhaustingNotificationQueue {
@@ -328,6 +337,7 @@ class NotificationEngine {
             // Give visual feedback
             self.scheduleNotification(
                 text: text,
+                isVoiceCommand: false,
                 duration: 3
             )
             self.exhaustNotificationQueue()

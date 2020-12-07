@@ -194,7 +194,7 @@ class EntryManager: NSObject {
             }
             self.startEntry(voiceCommand: true, handler: handler)
         case .CREATE_ENTRY:
-            self.startEntry(voiceCommand: true, new: true, handler: handler)
+            let _ = self.createEntry(voiceCommand: true, handler: handler)
         case .STOP_ENTRY:
             if self.speechPlayer.isPlayingEntry {
                 self.stopPlayingEntry(voiceCommand: true, handler: handler)
@@ -2651,6 +2651,15 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
+                voiceCommand: true,
+                handler: handler
+            )
+            return
+        }
+        
+        guard let _ = self.selectionCursor.clipboard else {
+            self.notifications.executeError(
+                text: "Clipboard is empty.",
                 voiceCommand: true,
                 handler: handler
             )

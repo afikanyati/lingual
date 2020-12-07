@@ -23,6 +23,10 @@ enum Notifications: String {
     case onChangedPlayerRate
     case onChangedEchoRate
     
+    // DictionaryViewController
+    case onDictionaryViewControllerDidLoad
+    case onDictionaryViewControllerWillDisappear
+    
     // SpeechRecognitionEngine
     case onStartedListeningForWakePhrase
     case onStoppedListeningForWakePhrase

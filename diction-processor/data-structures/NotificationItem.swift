@@ -11,5 +11,6 @@ import Foundation
 struct NotificationItem {
     var text: String
     var type: NotificationType? = nil
+    var isVoiceCommand: Bool
     var duration: TimeInterval? = 5
 }

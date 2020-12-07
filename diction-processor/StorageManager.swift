@@ -47,6 +47,7 @@ class StorageManager: NSObject {
         DispatchQueue.global(qos: .utility).async {
             self.saveToCloud(
                 speaker: state.speaker,
+                entries: state.entries,
                 playbackRate: state._playbackRate,
                 echoRate: state._echoRate,
                 appOpens: state.appOpens,
@@ -699,6 +700,7 @@ class StorageManager: NSObject {
     // Reference: https://stackoverflow.com/questions/54332381/cloudkit-public-and-private-database-messaging-platform
     func saveToCloud(
         speaker: Speaker,
+        entries: [Entry],
         playbackRate: Float,
         echoRate: Float,
         appOpens: [TimeInterval],
@@ -804,6 +806,7 @@ class StorageManager: NSObject {
                     }
                     if activeEntryWordCounts.count > 0 {
                         record["activeEntryWordCounts"] = activeEntryWordCounts as CKRecordValue
+                        record["activeEntryBackgroundNoise"] = entries.map { $0.avgBackgroundNoise } as CKRecordValue
                     }
                     if deletedEntryWordCounts.count > 0 {
                         record["deletedEntryWordCounts"] = deletedEntryWordCounts as CKRecordValue
@@ -914,6 +917,7 @@ class StorageManager: NSObject {
                 }
                 if activeEntryWordCounts.count > 0 {
                     userRecord["activeEntryWordCounts"] = activeEntryWordCounts as CKRecordValue
+                    userRecord["activeEntryBackgroundNoise"] = entries.map { $0.avgBackgroundNoise } as CKRecordValue
                 }
                 if deletedEntryWordCounts.count > 0 {
                     userRecord["deletedEntryWordCounts"] = deletedEntryWordCounts as CKRecordValue
