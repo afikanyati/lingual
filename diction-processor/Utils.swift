@@ -147,6 +147,8 @@ class Utils {
     static let PREVIEW_ENTRY_DURATION: Double = 10
     static let CLOUD_KIT_CONTAINER_IDENTIFIER: String = "iCloud.com.afikanyati.lingual"
     static let NAVIGATION_BAR_THRESHOLD_HEIGHT: CGFloat = -20
+    static let PREFERRED_INPUT_SAMPLE_RATE: Double = 48000.0
+    static let PREFERRED_CONVERTED_SAMPLE_RATE: Double = 16000.0
     
     static let pitchToFrequencyMap: [String : Double] = [
         "C0": 16,
@@ -1808,11 +1810,12 @@ class Utils {
         var segmentIndex: Int?
         let lowerWords = beforeCaretText.split(separator: " ")
         for i in 0..<segments.count {
+            
             let seg = segments[i]
             if seg.isActive() {
                 numProcessedWords += 1
             }
-            
+
             if seg.isActive() && seg.getText().lowercased().trimTrailingPunctuation() == lowerWords.last!.lowercased().trimTrailingPunctuation() && numProcessedWords == numLowerWords {
                 segmentIndex = i
                 break

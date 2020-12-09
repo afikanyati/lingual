@@ -98,6 +98,10 @@ public class VoiceCommandEngine: NSObject {
             objectTokens.append(.SELECTION_RATE)
         }
         
+        if let _ = Utils.getNavigationController()?.visibleViewController as? DictionaryViewController {
+            objectTokens.append(.DICTIONARY)
+        }
+        
         if self.uiManager.dialogIsVisible {
             // Get other object tokens from UI Manager
             if let voiceCommandSets = self.uiManager.getActionVoiceCommandSets() {
@@ -445,13 +449,26 @@ public class VoiceCommandEngine: NSObject {
             // Run Mode
             print("\tRun Mode...")
             
+            // Prioritize pausing run
             for commandSet in viableVoiceCommandSets {
-                if !commandSet.contains(.RUN) {
-                    print("\tPrioritizing non-walk selection voice command...")
-                    // We want to prioritize other commands before settling for run entry
+                if commandSet.contains(.PAUSE) && commandSet.contains(.RUN) {
+                    print("\tPrioritizing pausing run...")
                     voiceCommand = VoiceCommandMap[commandSet]
                     voiceCommandSet = commandSet
                     break
+                }
+            }
+            
+            if voiceCommand == nil &&
+                voiceCommandSet == nil {
+                for commandSet in viableVoiceCommandSets {
+                    if !commandSet.contains(.RUN) {
+                        print("\tPrioritizing non-walk selection voice command...")
+                        // We want to prioritize other commands before settling for run entry
+                        voiceCommand = VoiceCommandMap[commandSet]
+                        voiceCommandSet = commandSet
+                        break
+                    }
                 }
             }
             
@@ -468,13 +485,26 @@ public class VoiceCommandEngine: NSObject {
         } else if self.entryManager.isWalkingEntry {
             // Walk Mode
             print("\tWalk Mode...")
+            // Prioritize shifting walk
             for commandSet in viableVoiceCommandSets {
-                if !commandSet.contains(.WALK) {
-                    print("\tPrioritizing non-walk selection voice command...")
-                    // We want to prioritize other commands before settling for run entry
+                if commandSet.contains(.SHIFT) && commandSet.contains(.WALK) {
+                    print("\tPrioritizing shifting walk...")
                     voiceCommand = VoiceCommandMap[commandSet]
                     voiceCommandSet = commandSet
                     break
+                }
+            }
+            
+            if voiceCommand == nil &&
+                voiceCommandSet == nil {
+                for commandSet in viableVoiceCommandSets {
+                    if !commandSet.contains(.WALK) {
+                        print("\tPrioritizing non-walk selection voice command...")
+                        // We want to prioritize other commands before settling for run entry
+                        voiceCommand = VoiceCommandMap[commandSet]
+                        voiceCommandSet = commandSet
+                        break
+                    }
                 }
             }
             
@@ -789,7 +819,9 @@ public class VoiceCommandEngine: NSObject {
             command == .SHIFT_NEXT_WALK_ELEMENT ||
             command == .SHIFT_PREVIOUS_WALK_ELEMENT ||
             command == .PAUSE_RUN ||
-            command == .EXIT_WALK
+            command == .EXIT_WALK ||
+            command == .ENTER_DICTIONARY ||
+            command == .EXIT_DICTIONARY
         ) {
             return true
         }
@@ -872,7 +904,9 @@ public class VoiceCommandEngine: NSObject {
             command == .SHIFT_NEXT_WALK_ELEMENT ||
             command == .SHIFT_PREVIOUS_WALK_ELEMENT ||
             command == .PAUSE_RUN ||
-            command == .EXIT_WALK
+            command == .EXIT_WALK ||
+            command == .ENTER_DICTIONARY ||
+            command == .EXIT_DICTIONARY
         ) {
             return true
         }
@@ -1056,6 +1090,7 @@ public class VoiceCommandEngine: NSObject {
         case ENTRY_LIST = "entry list"
         case LIST = "list"
         case RATE = "rate"
+        case DICTIONARY = "dictionary"
     //        case HELP = "help"
             
         // ACTION OBJECTS
@@ -1189,6 +1224,9 @@ public class VoiceCommandEngine: NSObject {
         // Clipboard
         case INSPECT_CLIPBOARD = "inspect clipboard"
         case PASTE_CLIPBOARD = "paste clipboard"
+        // Dictionary
+        case ENTER_DICTIONARY = "enter dictionary"
+        case EXIT_DICTIONARY = "exit dictionary"
         // Output
         case EXPORT_AUDIO = "export audio"
         case EXPORT_TEXT = "export text"
@@ -1312,16 +1350,19 @@ public class VoiceCommandEngine: NSObject {
             // Clipboard
             case 82: self = .INSPECT_CLIPBOARD
             case 83: self = .PASTE_CLIPBOARD
+            // Dictionary
+            case 84: self = .ENTER_DICTIONARY
+            case 85: self = .EXIT_DICTIONARY
             // Output
-            case 84: self = .EXPORT_AUDIO
-            case 85: self = .EXPORT_TEXT
+            case 86: self = .EXPORT_AUDIO
+            case 87: self = .EXPORT_TEXT
             // General
-            case 86: self = .UNDO_CHANGE
-            case 87: self = .REDO_CHANGE
+            case 88: self = .UNDO_CHANGE
+            case 89: self = .REDO_CHANGE
     //        case VIEW_HELP = "show help"
-            case 88: self = .GRANT_PERMISSION
-            case 89: self = .CANCEL_DIALOG
-            case 90: self = .CONTINUE_DIALOG
+            case 90: self = .GRANT_PERMISSION
+            case 91: self = .CANCEL_DIALOG
+            case 92: self = .CONTINUE_DIALOG
             default: return nil
             }
         }
@@ -1432,6 +1473,7 @@ public class VoiceCommandEngine: NSObject {
         Token.RATE.value() : .RATE,
         "rates": .RATE,
         Token.LIST.value() : .LIST,
+        Token.DICTIONARY.value() : .DICTIONARY,
     //        Token.HELP.value() : .HELP,
 
         // ACTION-OBJECT
@@ -1673,6 +1715,9 @@ public class VoiceCommandEngine: NSObject {
         Set([.INSPECT, .CLIPBOARD]) : .INSPECT_CLIPBOARD,
         Set([.PASTE, .CLIPBOARD]) : .PASTE_CLIPBOARD,
         Set([.PASTE, .SELECTION]) : .PASTE_CLIPBOARD,
+        // Dictionary
+        Set([.ENTER, .DICTIONARY]) : .ENTER_DICTIONARY,
+        Set([.EXIT, .DICTIONARY]) : .EXIT_DICTIONARY,
         // Output
         Set([.EXPORT, .AUDIO]) : .EXPORT_AUDIO,
         Set([.EXPORT, .TEXT]) : .EXPORT_TEXT,
@@ -1757,7 +1802,8 @@ public class VoiceCommandEngine: NSObject {
         .DIALOG,
         .ENTRY_LIST,
         .RATE,
-        .LIST
+        .LIST,
+        .DICTIONARY
     //        .HELP
     ]
     
@@ -1968,6 +2014,10 @@ public class VoiceCommandEngine: NSObject {
             .WALK,
             .ENTER
         ]),
+        .DICTIONARY: Set([
+            .ENTER,
+            .EXIT
+        ])
     ]
     
     let PossibleObjectSpatialRelations: [Token: Set<Token>] = [

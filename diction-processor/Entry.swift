@@ -1266,11 +1266,7 @@ class Entry: AVMutableComposition, NSCoding {
         print("===== Entry: Commit Buffer =====")
 
         // duplicate entry tracks
-        print("\tDuplicating buffer segments...")
-        var segments = [EntrySegment]()
-        for segment in self.entryBuffer {
-            segments.append(segment.duplicate())
-        }
+        let segments = self.entryBuffer
         
         print("\tBuffer Segments: ", Utils.stringifySegments(segments: segments))
         
@@ -1348,42 +1344,36 @@ class Entry: AVMutableComposition, NSCoding {
         if let lastBufferWordIndex = lastBufferWordIndex, updateCachedAnchor && cachedAnchorIndex != Int(Utils.UNKNOWN) {
             let lastNormalizedWord = self.entrySegments[cachedAnchorIndex + lastBufferWordIndex + 1] // We add one because we want the last buffer word to be the new index
             print("\tUpdating cached anchor...")
-            
-            for segment in self.entrySegments {
-                if segment.getUID() == lastNormalizedWord.getUID() {
-                    // update cached anchor
-                    print("\tUpdating cached anchor in selection: ", segment.getText())
-                    self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: segment.getIndex(), trackType: .committed))
-                }
-            }
+            print("\tUpdating cached anchor in selection: ", lastNormalizedWord.getText())
+            self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: lastNormalizedWord.getIndex(), trackType: .committed))
         }
 
-        if let oldAnchor = oldAnchor, oldAnchor.getIndex() == Int(Utils.UNKNOWN) {
+        if let oldAnchor = oldAnchor,
+           let newAnchor = self.entrySegments.first(where: { $0.getUID() == oldAnchor.getUID() }),
+           oldAnchor.getIndex() == Int(Utils.UNKNOWN)
+        {
             print("\tUpdating anchor...")
-            for segment in self.entrySegments {
-                if segment.getUID() == oldAnchor.getUID() {
-                    // update anchor
-                    print("\tUpdated anchor segment in selection cursor: ", segment.getText())
-                    self.selectionCursor.setAnchorCaret(caret: Caret(index: segment.getIndex(), trackType: .committed))
-                }
-            }
+            print("\tUpdated anchor segment in selection cursor: ", newAnchor.getText())
+            self.selectionCursor.setAnchorCaret(caret: Caret(index: newAnchor.getIndex(), trackType: .committed))
         }
         
-        if let oldFocus = oldFocus, oldFocus.getIndex() == Int(Utils.UNKNOWN) {
+        if let oldFocus = oldFocus,
+           let newFocus = self.entrySegments.first(where: { $0.getUID() == oldFocus.getUID() }),
+           oldFocus.getIndex() == Int(Utils.UNKNOWN)
+        {
             print("\tUpdating focus...")
-            for segment in self.entrySegments {
-                if segment.getUID() == oldFocus.getUID() {
-                    // update focus
-                    print("\tUpdated focus segment in selection cursor: ", segment.getText())
-                    self.selectionCursor.setFocusCaret(caret: Caret(index: segment.getIndex(), trackType: .committed))
-                }
-            }
+            print("\tUpdated focus segment in selection cursor: ", newFocus.getText())
+            self.selectionCursor.setFocusCaret(caret: Caret(index: newFocus.getIndex(), trackType: .committed))
         }
         
         // Set range of last buffer
         print("\tSet last buffer range in entry properties...")
         let numNormalizedBufferSegments = self.entrySegments.count - (numSegmentsBehindCursorBeforeInsertion + numSegmentsAheadCursorBeforeInsertion)
-        print("\tLast Buffer Range: ", numSegmentsBehindCursorBeforeInsertion..<(numSegmentsBehindCursorBeforeInsertion + numNormalizedBufferSegments))
+        print(
+            "\tLast Buffer Range: ",
+            numSegmentsBehindCursorBeforeInsertion..<(numSegmentsBehindCursorBeforeInsertion + numNormalizedBufferSegments),
+            "\(self.entrySegments[numSegmentsBehindCursorBeforeInsertion].getText())..<\(self.entrySegments[numSegmentsBehindCursorBeforeInsertion + numNormalizedBufferSegments - 1].getText())"
+        )
         self.committedBufferRanges.append(numSegmentsBehindCursorBeforeInsertion..<(numSegmentsBehindCursorBeforeInsertion + numNormalizedBufferSegments))
     }
     
@@ -1657,48 +1647,20 @@ class Entry: AVMutableComposition, NSCoding {
             }
         }
         
-        if let entrySegments = entrySegments {
-            // We have been given a specific set of segments to compute on vs. multi segment tracks
-            var fromTimeSegmentIndex: Int?
-            var isSingleSegment = false
-    //        print("segments: ", entrySegments!)
-            for (index, segment) in entrySegments.enumerated()  {
-                if let untilTime = untilTime, fromTimeSegmentIndex != nil && segment.timeMapping.target.end > untilTime {
-                    // We've seen all the segments we need to compute text
-                    break
-                } else if let _ = self.state, let untilTime = untilTime, fromTimeSegmentIndex != nil && segment.timeMapping.target.end <= untilTime && !segment.isVoiceCommandWord() && !segment.isDeleted() {
-                    let word = segment.getText(
-                        withTemporalSuggestions: self.state.withTemporalSuggestions,
-                        withPunctuationSuggestions: self.state.withPunctuationSuggestions,
-                        withFormattingSuggestions: self.state.withFormattingSuggestions,
-                        strictlyAsWord: self.state.withTextStrictlyAsWords,
-                        withCapitalization: self.state.withCapitalization,
-                        withSpacePrefix: true,
-                        forEcho: forEcho
-                    )
-                    
-                    text += word
-                } else if (segment.timeMapping.target.start >= fromTime || fromTimeSegmentIndex != nil) && !isSingleSegment && !segment.isVoiceCommandWord() && !segment.isDeleted() {
-                    if fromTimeSegmentIndex == nil && segment.timeMapping.target.start >= fromTime  {
-                        fromTimeSegmentIndex = index
-                        isSingleSegment = segment.timeMapping.target.start == fromTime && segment.timeMapping.target.end == untilTime
-                    }
-
-                    if let _ = self.state, fromTimeSegmentIndex != nil {
-                        let word = segment.getText(
-                            withTemporalSuggestions: self.state.withTemporalSuggestions,
-                            withPunctuationSuggestions: self.state.withPunctuationSuggestions,
-                            withFormattingSuggestions: self.state.withFormattingSuggestions,
-                            strictlyAsWord: self.state.withTextStrictlyAsWords,
-                            withCapitalization: self.state.withCapitalization,
-                            withSpacePrefix: true,
-                            forEcho: forEcho
-                        )
-                        
-                        text += word
-                    }
-                }
-            }
+        if let entrySegments = entrySegments, let _ = self.state, entrySegments.count > 0 {
+            text = entrySegments.last!.getTextHistory(
+                withTemporalSuggestions: self.state.withTemporalSuggestions,
+                withPunctuationSuggestions: self.state.withPunctuationSuggestions,
+                withFormattingSuggestions: self.state.withFormattingSuggestions,
+                strictlyAsWord: self.state.withTextStrictlyAsWords,
+                withCapitalization: self.state.withCapitalization,
+                withSpacePrefix: true,
+                forEcho: forEcho,
+                index: entrySegments.count - 1,
+                segments: entrySegments,
+                from: fromTime,
+                until: untilTime
+            )
         }
         
         // Remove whitespaces on edges
@@ -1964,34 +1926,41 @@ class Entry: AVMutableComposition, NSCoding {
 //        }
         print("\tMerging argument segments into committed segments...")
         var updatedSegments = [EntrySegment]()
-        var insertedSegments = false
-        
         // Add to state clips
+        print("\tClearing cached text history for segments and addng clips to clip dictionary...")
         for segment in segments {
             // Handle segment clips
             self.state.setClip(clipUID: segment.getClipUID(), entryUID: self.uid)
+            segment.clearCachedTextHistory()
         }
         
         print("\tPassage: ", Utils.stringifySegments(segments: segments))
         
         if self.entrySegments.count > 0 {
             print("\tPlace within existing \(self.entrySegments.count) segments...")
-            // if we have segments
-            // find out where to insert passage
-            for segment in self.entrySegments {
-                if segment.timeMapping.target.end < time {
-                    // add to array if before insert time
-                    updatedSegments.append(segment)
-                } else if segment.timeMapping.target.end >= time && !insertedSegments {
-                    // encountered first segment that occurs after insert time
-                    // add segment array here
-                    insertedSegments = true
-                    updatedSegments.append(segment)
-                    updatedSegments = updatedSegments + segments
-                } else if segment.timeMapping.target.end >= time {
-                    // place remaining segments after inserted segments
-                    updatedSegments.append(segment)
+            print("\tSearch for insert segment...")
+            let insertSegment = Utils.binarySearch(
+                in: self.entrySegments,
+                isLower: { segment in
+                    return segment.timeMapping.target.end < time
+                },
+                isHigher: { segment in
+                    return segment.timeMapping.target.start > time
                 }
+            )
+            
+            if let insertSegment = insertSegment {
+                let insertIndex = insertSegment.getIndex() + 1
+                print("\tLocated insert segment at index: ", insertIndex)
+                for segment in self.entrySegments[insertIndex..<self.entrySegments.count] {
+                    // clear cached text history value
+                    print("\tClearing cached text history for segments between indices \(insertIndex) and \(self.entrySegments.count)...")
+                    segment.clearCachedTextHistory()
+                }
+                print("\tStitching new segments together...")
+                updatedSegments = Array(self.entrySegments[0..<insertIndex]) + segments + self.entrySegments[insertIndex..<self.entrySegments.count]
+            } else {
+                print("\t[Error] There was a problem locating insert segment.")
             }
         } else {
             print("\tInserted segments are the first in entry.")
@@ -1999,9 +1968,7 @@ class Entry: AVMutableComposition, NSCoding {
             // set passage as new segments
             updatedSegments = segments
         }
-        
-        //
-        
+
         print("\tCleansing segments...")
         let cleansedSegments = Utils.cleanseSegments(
             segments: updatedSegments
@@ -2041,17 +2008,46 @@ class Entry: AVMutableComposition, NSCoding {
         var updateAnchor = false
         var updateFocus = false
         var updateCachedAnchor = false
-        for segment in self.entrySegments {
-            if segment.timeMapping.target.start < beforeTime {
-                // add to array if before passage to be removed
-                updatedSegments.append(segment)
-            } else if segment.timeMapping.target.end > afterTime {
-                // add to array if after passage to be removed
-                updatedSegments.append(segment)
-            } else {
+        
+        print("\tSearching for index of left segment of removal segments...")
+        let removeRangeLeftSegment = Utils.binarySearch(
+            in: self.entrySegments,
+            isLower: { segment in
+                return segment.timeMapping.target.end < beforeTime
+            },
+            isHigher: { segment in
+                return segment.timeMapping.target.start > beforeTime
+            }
+        )
+        
+        print("\tSearching for index of right segment of removal segments...")
+        let removeRangeRightSegment = Utils.binarySearch(
+            in: self.entrySegments,
+            isLower: { segment in
+                return segment.timeMapping.target.end < afterTime
+            },
+            isHigher: { segment in
+                return segment.timeMapping.target.start > afterTime
+            }
+        )
+        
+        if let removeRangeLeftSegment = removeRangeLeftSegment,
+           let removeRangeRightSegment = removeRangeRightSegment
+        {
+            let leftIndex = removeRangeLeftSegment.getIndex()
+            let rightIndex = removeRangeRightSegment.getIndex()
+            print("\tLocated left segment at index: ", leftIndex)
+            print("\tLocated right segment at index: ", rightIndex)
+            let entryLeftRange = leftIndex + 1
+            let entryRightRange = rightIndex + 1
+            
+            // Before Segments
+            updatedSegments.append(contentsOf: self.entrySegments[0..<entryLeftRange])
+            
+            // Removal Segments
+            print("\tFlipping delete flag for all segments within removal range...")
+            for segment in self.entrySegments[entryLeftRange..<rightIndex + 1] {
                 segment.setIsDeleted(isDeleted: true)
-                // add as deleted
-                updatedSegments.append(segment)
                 
                 // Check if we need to update selection anchor
                 if let _ = self.selectionCursor.anchor, segment.getUID() == self.selectionCursor.anchor!.getUID() {
@@ -2079,6 +2075,15 @@ class Entry: AVMutableComposition, NSCoding {
                     self.selectionCursor.setCachedAnchorCaret()
                 }
             }
+            updatedSegments.append(contentsOf: self.entrySegments[entryLeftRange..<entryRightRange])
+            
+            // After Segments
+            print("\tClearing cached text history for segments between indices \(rightIndex + 1) and \(self.entrySegments.count)...")
+            for segment in self.entrySegments[rightIndex + 1..<self.entrySegments.count] {
+                // clear cached text history value
+                segment.clearCachedTextHistory()
+            }
+            updatedSegments.append(contentsOf: self.entrySegments[entryRightRange..<self.entrySegments.count])
         }
         
         print("\tCleansing segments...")
@@ -4365,6 +4370,7 @@ class Entry: AVMutableComposition, NSCoding {
         self.cachedBackgroundNoise = nil
     }
     
+    // Reference: http://www.gwtproject.org/javadoc/latest/com/google/gwt/i18n/client/DateTimeFormat.html
     func getTitle(attributes: [NSAttributedString.Key: Any] = [:], withDashes: Bool = false) -> NSMutableAttributedString {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "EEE MMM dd, yyyy"

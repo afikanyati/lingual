@@ -68,7 +68,7 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
             }
         }
         
-        if AVAudioSession.isHeadphonesConnected {
+        if AVAudioSession.isHeadphonesConnected && !self.speechRecognition.isListeningForSpeech {
             // Begin Nature Sounds
             soundEngine.startNatureAmbience()
         }
@@ -77,6 +77,8 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationController?.navigationItem.largeTitleDisplayMode = .always
         navigationController?.navigationBar.sizeToFit()
+        
+        self.reloadTable()
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -442,7 +444,7 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
         // Switch over the route change reason.
         switch reason {
         case .newDeviceAvailable: // New device found.
-            if AVAudioSession.isHeadphonesConnected {
+            if AVAudioSession.isHeadphonesConnected && !self.speechRecognition.isListeningForSpeech {
                 // Begin Nature Sounds
                 soundEngine.startNatureAmbience()
             }
@@ -697,12 +699,6 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
     @objc func onNavigateToDetailPage(notification: Notification) {
         print("===== Entry Table View Controller: On Navigate To Detail Page =====")
         DispatchQueue.main.async { [weak self] in
-            self?.notifications.executeFeedback(
-                visualMessage: "Entry",
-                audioMessage: "Navigated into entry.",
-                discardPrior: true,
-                withHaptics: true
-            )
             Utils.onEntrySet(
                 notification: notification,
                 vc: self!,
@@ -767,6 +763,12 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
             if self.entryListManager.isRunningEntryList || self.entryListManager.isWalkingEntryList {
                 self.entryListManager.exitWalkRun(clearCurrentEntry: false)
             }
+            self.notifications.executeFeedback(
+                visualMessage: "Entry",
+                audioMessage: "Navigated into entry.",
+                discardPrior: true,
+                withHaptics: true
+            )
         case .moveFromEntryTableToSleep:
             print(">>>>> Segue from EntryTableViewController to ViewController >>>>>")
             if let viewController = segue.destination as? ViewController {
@@ -811,6 +813,12 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
                 withRecording: self.speechRecognition.isListeningForSpeech,
                 withStopListeningButton: !self.speechRecognition.isListeningForSpeech,
                 withBackToEntriesButton: true
+            )
+            self.notifications.executeFeedback(
+                visualMessage: "Dictionary",
+                audioMessage: "Navigated to Dictionary.",
+                discardPrior: true,
+                withHaptics: true
             )
         case .moveFromDictionaryToEntryTable:
             print (">>>>> [Invalid Segue within EntryTableViewController] from DictionaryViewControlller to EntryTableViewController >>>>>")
@@ -905,8 +913,6 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
             NSAttributedString.Key.font: UIFont.preferredFont(forTextStyle: .subheadline)
         ]
 
-        // Reference: http://www.gwtproject.org/javadoc/latest/com/google/gwt/i18n/client/DateTimeFormat.html
-        
         let titleString = entry.getTitle(attributes: titleAttributes)
         let entryText = entry.getText()
         let preview = entryText.count > Utils.ENTRY_ITEM_PREVIEW_CHAR_COUNT ? "\(entryText.substring(toIndex: Utils.ENTRY_ITEM_PREVIEW_CHAR_COUNT))..." : entryText
@@ -998,13 +1004,9 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
     
     @objc func enterDictionary(_ sender: Any? = nil) {
         print("===== Entry Table View Controller: Enter Dictionary =====")
-        self.notifications.executeFeedback(
-            visualMessage: "Dictionary",
-            audioMessage: "Navigated into Dictionary.",
-            discardPrior: true,
-            withHaptics: true
-        )
-        self.performSegue(withIdentifier: Segues.moveFromEntryTableToDictionary.rawValue, sender: nil)
+        DispatchQueue.main.async { [weak self] in
+            self?.performSegue(withIdentifier: Segues.moveFromEntryTableToDictionary.rawValue, sender: nil)
+        }
     }
     
     // MARK: - Table View
@@ -1048,12 +1050,6 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
             )
         } else {
             self.entryManager.setCurrentEntry(index: indexPath.row)
-            self.notifications.executeFeedback(
-                visualMessage: "Entry",
-                audioMessage: "Navigated into entry.",
-                discardPrior: true,
-                withHaptics: true
-            )
             self.performSegue(withIdentifier: Segues.moveFromEntryTableToDetail.rawValue, sender: nil)
         }
         

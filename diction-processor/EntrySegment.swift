@@ -116,6 +116,10 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
     private(set) var cachedText: String?
     /// Stores arguments of last getText() call
     private(set) var cachedGetTextArguments: Set<String>?
+    /// Stores cached version of the text behind and including it
+    private(set) var cachedTextHistory: String?
+    /// Stores arguments of last getTextHistory() call
+    private(set) var cachedGetTextHistoryArguments: Set<String>?
     /// Stores a cached version of isValidLastSentenceWord() method
     private(set) var cachedIsValidSentenceLastWord: Bool?
     /// Stores a cached version of isValidCommaWord() method
@@ -367,6 +371,7 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
     static func ==(_ firstSegment: EntrySegment, _ secondSegment: EntrySegment) -> Bool {
         // We omit:
         // cachedText => not relevant
+        // cachedTextHistory => not relevant
         // cachedGetTextArguments => not relevant
         // cachedIsValidLastSentenceWord => not relevant
         // cachedIsSentenceTerminator => not relevant
@@ -474,7 +479,10 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
         let argumentSet: Set = Set(argumentArr)
         
         // Use cached version if it exists
-        if let cachedText = self.cachedText, let cachedGetTextArguments = self.cachedGetTextArguments, argumentSet == cachedGetTextArguments {
+        if let cachedText = self.cachedText,
+           let cachedGetTextArguments = self.cachedGetTextArguments,
+           argumentSet == cachedGetTextArguments
+        {
             return cachedText
         }
         
@@ -614,6 +622,159 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
         self.cachedText = text
         self.cachedGetTextArguments = argumentSet
         return text
+    }
+    
+    func getTextHistory(
+        withTemporalSuggestions: Bool = false,
+        withPunctuationSuggestions: Bool = false,
+        withFormattingSuggestions: Bool = false,
+        strictlyAsWord: Bool = false,
+        withCapitalization: Bool = true,
+        withSpacePrefix: Bool = false,
+        forEcho: Bool = false,
+        index: Int,
+        segments: [EntrySegment],
+        from fromTime: CMTime = CMTime.zero,
+        until untilTime: CMTime? = nil
+    ) -> String {
+        var argumentArr: [String] = []
+        if withTemporalSuggestions {
+            argumentArr.append("withTemporalSuggestions")
+        }
+        if withPunctuationSuggestions {
+            argumentArr.append("withPunctuationSuggestions")
+        }
+        if withFormattingSuggestions {
+            argumentArr.append("withFormattingSuggestions")
+        }
+        if strictlyAsWord {
+            argumentArr.append("strictlyAsWord")
+        }
+        if withCapitalization {
+            argumentArr.append("withCapitalization")
+        }
+        if withSpacePrefix {
+            argumentArr.append("withSpacePrefix")
+        }
+        if forEcho {
+            argumentArr.append("forEcho")
+        }
+        argumentArr.append("index=\(index)")
+        argumentArr.append("segments=\(Utils.stringifySegments(segments: segments))")
+        argumentArr.append("fromTime=\(fromTime.seconds)")
+        if let untilTime = untilTime {
+            argumentArr.append("untilTime=\(untilTime.seconds)")
+        }
+        
+        let argumentSet: Set = Set(argumentArr)
+        
+        // Use cached version if it exists
+        if let cachedTextHistory = self.cachedTextHistory, let cachedGetTextHistoryArguments = self.cachedGetTextHistoryArguments, argumentSet == cachedGetTextHistoryArguments {
+            return cachedTextHistory
+        }
+        
+        var text = ""
+        
+        if let untilTime = untilTime,
+           let entry = self.entry,
+           self.timeMapping.target.end <= untilTime &&
+            (
+                self.timeMapping.target.start >= fromTime ||
+                (
+                    entry.selectionCursor.cachedAnchor != nil &&
+                    entry.entryBuffer.count > 0 &&
+                    self.index != Int(Utils.UNKNOWN) &&
+                    self.index > entry.selectionCursor.cachedAnchor!.getIndex()
+                )
+            ) &&
+            !self.isVoiceCommandWord() &&
+            !self.isDeleted()
+        {
+            text = self.getText(
+                withTemporalSuggestions: withTemporalSuggestions,
+                withPunctuationSuggestions: withPunctuationSuggestions,
+                withFormattingSuggestions: withFormattingSuggestions,
+                strictlyAsWord: strictlyAsWord,
+                withCapitalization: withCapitalization,
+                withSpacePrefix: withSpacePrefix,
+                forEcho: forEcho
+            ) + text
+        } else if let entry = self.entry,
+            untilTime == nil &&
+            (
+                self.timeMapping.target.start >= fromTime ||
+                (
+                    entry.selectionCursor.cachedAnchor != nil &&
+                    entry.entryBuffer.count > 0 &&
+                    self.index != Int(Utils.UNKNOWN) &&
+                    self.index > entry.selectionCursor.cachedAnchor!.getIndex()
+                )
+            ) &&
+            !self.isVoiceCommandWord() &&
+            !self.isDeleted()
+        {
+            text += self.getText(
+                withTemporalSuggestions: withTemporalSuggestions,
+                withPunctuationSuggestions: withPunctuationSuggestions,
+                withFormattingSuggestions: withFormattingSuggestions,
+                strictlyAsWord: strictlyAsWord,
+                withCapitalization: withCapitalization,
+                withSpacePrefix: withSpacePrefix,
+                forEcho: forEcho
+            ) + text
+        }
+        
+        if self.timeMapping.target.start == fromTime &&
+            self.timeMapping.target.end == untilTime {
+            // We dealing with a single segment
+            //
+            // cache values
+            self.cachedTextHistory = text
+            self.cachedGetTextHistoryArguments = argumentSet
+            return text
+        }
+        
+        if index > 0 {
+            let lowerIndex = index - 1
+            let lowerSegment = segments[lowerIndex]
+            if let entry = self.entry,
+               (
+                self.timeMapping.target.start >= fromTime ||
+                (
+                    entry.selectionCursor.cachedAnchor != nil &&
+                    entry.entryBuffer.count > 0 &&
+                    self.index != Int(Utils.UNKNOWN) &&
+                    self.index > entry.selectionCursor.cachedAnchor!.getIndex()
+                )
+            ) {
+                // We let even voice commands and deleted segments here
+                // We would have skipped their contribution
+                text = lowerSegment.getTextHistory(
+                    withTemporalSuggestions: withTemporalSuggestions,
+                    withPunctuationSuggestions: withPunctuationSuggestions,
+                    withFormattingSuggestions: withFormattingSuggestions,
+                    strictlyAsWord: strictlyAsWord,
+                    withCapitalization: withCapitalization,
+                    withSpacePrefix: withSpacePrefix,
+                    forEcho: forEcho,
+                    index: lowerIndex,
+                    segments: segments,
+                    from: fromTime,
+                    until: untilTime
+                ) + text
+            }
+        }
+        
+        // cached values
+        self.cachedTextHistory = text
+        self.cachedGetTextHistoryArguments = argumentSet
+        
+        return text
+    }
+    
+    func clearCachedTextHistory() {
+        self.cachedTextHistory = nil
+        self.cachedGetTextHistoryArguments = nil
     }
     
     func getPhoneticallySimilarWords() -> [String] {
@@ -1197,6 +1358,7 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
         
         // Clear out cached properties so they are computed again
         self.cachedText = nil
+        self.cachedTextHistory = nil
         self.cachedGetTextArguments = nil
         self.cachedIsValidSentenceLastWord = nil
         self.cachedIsSentenceTerminator = nil

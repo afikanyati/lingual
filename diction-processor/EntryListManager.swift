@@ -141,6 +141,10 @@ class EntryListManager: NSObject {
             if self.isWalkingEntryList {
                 self.exitWalkRun(handler: handler)
             }
+        case .ENTER_DICTIONARY:
+            self.enterDictionary(handler: handler)
+        case .EXIT_DICTIONARY:
+            self.exitDictionary(handler: handler)
         default:
             // Do Nothing
             break
@@ -176,24 +180,12 @@ class EntryListManager: NSObject {
         soundEngine.voiceCommandAccept()
         
         // Segue to note list
-        DispatchQueue.main.async { [weak self] in
-            self?.notifications.executeFeedback(
-                visualMessage: "Entry List",
-                audioMessage: "Navigated to entry list.",
-                discardPrior: true,
-                withHaptics: true
-            )
+        DispatchQueue.main.async {
             Utils.getNavigationController()?.visibleViewController?.performSegue(withIdentifier: Segues.moveFromDetailToEntryTable.rawValue, sender: nil)
         }
         
         // Remove entry
         self.entryManager.setCurrentEntry()
-        
-        self.notifications.executeFeedback(
-            visualMessage: "Entry List",
-            audioMessage: "Navigated to entry list.",
-            withHaptics: true
-        )
         
         checkRep()
     }
@@ -828,6 +820,37 @@ class EntryListManager: NSObject {
             handleExitWalk()
         }
         
+        checkRep()
+    }
+    
+    func enterDictionary(handler: (() -> Void)? = nil) {
+        print("===== Entry List Manager: Enter Dictionary =====")
+        print("\tTriggered by voice command.")
+        
+        // Play Sound
+        soundEngine.voiceCommandAccept()
+        
+        // Segue to note list
+        DispatchQueue.main.async {
+            Utils.getNavigationController()?.visibleViewController?.performSegue(withIdentifier: Segues.moveFromEntryTableToDictionary.rawValue, sender: nil)
+        }
+
+        checkRep()
+    }
+    
+    // Reference: https://stackoverflow.com/questions/28760541/programmatically-go-back-to-previous-viewcontroller-in-swift
+    func exitDictionary(handler: (() -> Void)? = nil) {
+        print("===== Entry List Manager: Exit Dictionary =====")
+        print("\tTriggered by voice command.")
+        
+        // Play Sound
+        soundEngine.voiceCommandAccept()
+        
+        // Segue back
+        DispatchQueue.main.async {
+            Utils.getNavigationController()?.visibleViewController?.performSegue(withIdentifier: Segues.moveFromDictionaryToEntryTable.rawValue, sender: nil)
+        }
+
         checkRep()
     }
 }

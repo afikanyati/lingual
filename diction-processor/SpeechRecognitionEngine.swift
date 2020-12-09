@@ -184,12 +184,14 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     }
     
     func configureAudioSession() {
-        session = AVAudioSession.sharedInstance()
+        print("===== Speech Recognition Engine: Configure Audio Session =====")
+        self.session = AVAudioSession.sharedInstance()
 
         do {
             // .voiceChat mode does not default to speakers
             try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth, .duckOthers])
-            try session.setPreferredSampleRate(44_100)
+            let sampleRate: Double = Utils.PREFERRED_INPUT_SAMPLE_RATE
+            try session.setPreferredSampleRate(sampleRate)
             try session.setActive(true)
         } catch let error as NSError {
             print("===== There was an error requesting permissions to record audio or setting session category: \(error.localizedDescription) =====")
@@ -693,13 +695,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     
     @objc func handleBackToEntries(_ sender: Any) {
         print("===== Speech Recognition Engine: Handle Back To Entries =====")
-        DispatchQueue.main.async { [weak self] in
-            self?.notifications.executeFeedback(
-                visualMessage: "Entry List",
-                audioMessage: "Navigated to entry list.",
-                discardPrior: true,
-                withHaptics: true
-            )
+        DispatchQueue.main.async {
             if let _ = Utils.getNavigationController()?.visibleViewController as? DetailViewController {
                 Utils.getNavigationController()?.visibleViewController?.performSegue(withIdentifier: Segues.moveFromDetailToEntryTable.rawValue, sender: nil)
             } else if let _ = Utils.getNavigationController()?.visibleViewController as? DictionaryViewController {
@@ -1350,7 +1346,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 print("\tSelection removed.")
                 // start listening for speech again
                 if self.pausedListeningForSpeech && !self.selectionCursor.isUpdatingSelection {
-                    print("\tResume listening for commands.")
+                    print("\tResume listening for speech...")
                     self.startListeningForSpeech()
                 }
                 
@@ -1482,8 +1478,8 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             }
             
             let node = self.audioEngine.inputNode
-            let recordingFormat = node.outputFormat(forBus: self.recordBus)
-            print("===== Recording Info ===== \n\tSoftware Format: \(recordingFormat.sampleRate)\n\tHardware Format: \(AVAudioSession.sharedInstance().sampleRate) \n\tInput Latency: \(self.session.inputLatency.rounded(toPlaces: 5)) \n\tOutput Latency: \(self.session.outputLatency.rounded(toPlaces: 5)) \n\tIOBufferDuration: \(self.session.ioBufferDuration.rounded(toPlaces: 5))")
+            let inputFormat = node.outputFormat(forBus: self.recordBus)
+            print("===== Recording Info ===== \n\tSoftware Format: \(inputFormat.sampleRate)\n\tHardware Format: \(AVAudioSession.sharedInstance().sampleRate) \n\tInput Latency: \(self.session.inputLatency.rounded(toPlaces: 5)) \n\tOutput Latency: \(self.session.outputLatency.rounded(toPlaces: 5)) \n\tIOBufferDuration: \(self.session.ioBufferDuration.rounded(toPlaces: 5))")
             
     //        let recordSettings: [String : AnyObject] = [
     //            AVSampleRateKey : NSNumber(value: Float(16000)),
@@ -1499,10 +1495,64 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             self.request!.shouldReportPartialResults = true
             self.request!.requiresOnDeviceRecognition = false // Set to false by default, but conditionally changed below
             
+            guard let outputFormat = AVAudioFormat(
+                        commonFormat: .pcmFormatFloat32,
+                        sampleRate: Utils.PREFERRED_CONVERTED_SAMPLE_RATE,
+                        channels: 1,
+                        interleaved: true
+                    ),
+                  let converter = AVAudioConverter(from: inputFormat, to: outputFormat) else {
+                print("\t[Error] There was a problem preparing sample rate converter.")
+                return false
+            }
+            
             // Tap into microphone bus to receive and process audio input buffers
-            node.installTap(onBus: self.recordBus, bufferSize: 1024, format: recordingFormat) { [unowned self] (buffer, _) in
-                // Capture buffer
-                self.request!.append(buffer)
+            node.installTap(onBus: self.recordBus, bufferSize: 1024, format: inputFormat) { [unowned self] (buffer, _) in
+                var newBufferAvailable = true
+                let inputCallback: AVAudioConverterInputBlock = { inNumPackets, outStatus in
+                    if newBufferAvailable {
+                        outStatus.pointee = .haveData
+                        newBufferAvailable = false
+                        return buffer
+                    } else {
+                        outStatus.pointee = .noDataNow
+                        return nil
+                    }
+                }
+
+                // Downsample buffer: https://stackoverflow.com/questions/39595444/avaudioengine-downsample-issue#
+                // Rationale: https://www.andyibanez.com/posts/speech-recognition-sfspeechrecognizer/
+                if let convertedBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: AVAudioFrameCount(outputFormat.sampleRate) * buffer.frameLength / AVAudioFrameCount(buffer.format.sampleRate)) {
+                    var error: NSError?
+                    let status = converter.convert(to: convertedBuffer, error: &error, withInputFrom: inputCallback)
+                    assert(status != .error)
+
+//                    print("Input Buffer: ", buffer.format)
+//                    print("Converted Buffer: ", convertedBuffer.format)
+                    
+                    // Capture buffer
+                    self.request!.append(convertedBuffer)
+                    
+                    // Handle sound intensity and pitch information
+                    // Sound Intensity
+                    let power = Utils.computeSoundIntensity(buffer: buffer)
+                    if let power = power {
+                        let soundIntensityDatum = SoundIntensityDatum(date: Date(), power: power)
+                        self.soundIntensityStream.append(soundIntensityDatum)
+                        NotificationCenter.default.post(
+                            name: SpeechRecognitionEngine.onPowerUpdate,
+                            object: nil,
+                            userInfo: [ "power" : soundIntensityDatum]
+                        )
+                    }
+                    
+                    // Broadcast buffer item
+                    NotificationCenter.default.post(
+                        name: SpeechRecognitionEngine.onBufferItem,
+                        object: nil,
+                        userInfo: [ "buffer" : buffer ]
+                    )
+                }
 
                 if !self.executedListeningStartHandler {
                     print("\tExecute start listening handler and notification...")
@@ -1536,26 +1586,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
 
                     onStartHandler?()
                 }
-                
-                // Handle sound intensity and pitch information
-                // Sound Intensity
-                let power = Utils.computeSoundIntensity(buffer: buffer)
-                if let power = power {
-                    let soundIntensityDatum = SoundIntensityDatum(date: Date(), power: power)
-                    self.soundIntensityStream.append(soundIntensityDatum)
-                    NotificationCenter.default.post(
-                        name: SpeechRecognitionEngine.onPowerUpdate,
-                        object: nil,
-                        userInfo: [ "power" : soundIntensityDatum]
-                    )
-                }
-                
-                // Broadcast buffer item
-                NotificationCenter.default.post(
-                    name: SpeechRecognitionEngine.onBufferItem,
-                    object: nil,
-                    userInfo: [ "buffer" : buffer ]
-                )
             }
             
             // Prepare and start audio engine
@@ -2499,7 +2529,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             if let lastSpeechRecognizerHypothesizeDate = self.lastSpeechRecognizerHypothesizeDate,
                let lastStartListeningDate = self.lastStartListeningDate,
                 let lastStartedListeningTimestamp = self.lastStartedListeningTimestamp,
-                AVAudioSession.isHeadphonesConnected &&
                self.isListeningForSpeech &&
                 self.state.withPunctuationSuggestions &&
                 !self.selectionCursor.hasSelection &&

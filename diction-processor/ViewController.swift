@@ -141,6 +141,12 @@ class ViewController: UIViewController, SegueProtocol {
                 withRecording: self.speechRecognition.isListeningForSpeech,
                 withStopListeningButton: !self.speechRecognition.isListeningForSpeech
             )
+            self.notifications.executeFeedback(
+                visualMessage: "Entry List",
+                audioMessage: "Navigated to entry list.",
+                discardPrior: true,
+                withHaptics: true
+            )
         case .moveFromSleepToDetail:
             print (">>>>> Segue from ViewControlller to DetailViewController >>>>>")
             if let detailViewController = segue.destination as? DetailViewController {
@@ -160,6 +166,12 @@ class ViewController: UIViewController, SegueProtocol {
                 withRecording: self.speechRecognition.isListeningForSpeech,
                 withStopListeningButton: !self.speechRecognition.isListeningForSpeech,
                 withBackToEntriesButton: true
+            )
+            self.notifications.executeFeedback(
+                visualMessage: "Entry",
+                audioMessage: "Navigated into entry.",
+                discardPrior: true,
+                withHaptics: true
             )
         case .moveFromEntryTableToDetail:
             print (">>>>> [Invalid Segue within ViewController] from EntryTableViewControlller to DetailViewController >>>>>")
@@ -406,13 +418,6 @@ class ViewController: UIViewController, SegueProtocol {
     @objc func onNavigateToDetailPage(notification: Notification) {
         print("===== View Controller: On Entry Set =====")
         DispatchQueue.main.async { [weak self] in
-            self?.notifications.executeFeedback(
-                visualMessage: "Entry",
-                audioMessage: "Navigated into entry.",
-                discardPrior: true,
-                withHaptics: true
-            )
-            
             Utils.onEntrySet(
                 notification: notification,
                 vc: self!,
@@ -496,12 +501,6 @@ class ViewController: UIViewController, SegueProtocol {
     @objc func onWakePhraseDetected(notification: Notification) {
         print("===== View Controller: On Wake Phrase Detected =====")
         DispatchQueue.main.async { [weak self] in
-            self?.notifications.executeFeedback(
-                visualMessage: "Entry List",
-                audioMessage: "Navigated to entry list.",
-                discardPrior: true,
-                withHaptics: true
-            )
             self?.performSegue(withIdentifier: Segues.moveFromSleepToEntryTable.rawValue, sender: nil)
         }
     }

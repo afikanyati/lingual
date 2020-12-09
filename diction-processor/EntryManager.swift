@@ -2177,10 +2177,10 @@ class EntryManager: NSObject {
             return
         }
         
-        print("\tRegistering a entry change to the Undo Manager...")
+        print("\tRegistering an entry change to the Undo Manager...")
         self.registerEntryChange(entry: entry, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
             self?.selectionCursor.adjustRateSelection(direction: .up) { [weak self] rate in
-                print("\tRegistering a entry change to the Undo Manager...")
+                print("\tRegistering an entry change to the Undo Manager...")
                 self?.registerEntryChange(
                     entry: self!.currentEntry!,
                     undo: "increasing selection rate",
@@ -2190,6 +2190,7 @@ class EntryManager: NSObject {
                 self?.notifications.executeFeedback(
                     visualMessage: "Increase Selection Rate: \(rate.rounded(toPlaces: 2))",
                     audioMessage: "increased selection rate to \(rate.rounded(toPlaces: 2))",
+                    discardPrior: true,
                     withHaptics: true
                 )
             }
@@ -2235,10 +2236,10 @@ class EntryManager: NSObject {
             return
         }
         
-        print("\tRegistering a entry change to the Undo Manager...")
+        print("\tRegistering an entry change to the Undo Manager...")
         self.registerEntryChange(entry: entry, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
             self?.selectionCursor.adjustRateSelection(direction: .down) { [weak self] rate in
-                print("\tRegistering a entry change to the Undo Manager...")
+                print("\tRegistering an entry change to the Undo Manager...")
                 self?.registerEntryChange(
                     entry: self!.currentEntry!,
                     undo: "decreasing selection rate",
@@ -2248,6 +2249,7 @@ class EntryManager: NSObject {
                 self?.notifications.executeFeedback(
                     visualMessage: "Decrease Selection Rate: \(rate.rounded(toPlaces: 2))",
                     audioMessage: "decreased selection rate to \(rate.rounded(toPlaces: 2))",
+                    discardPrior: true,
                     withHaptics: true
                 )
             }
@@ -2295,10 +2297,10 @@ class EntryManager: NSObject {
         
         let undoMessage = "deleting '\(self.selectionCursor.selectionText ?? "selection")'"
         
-        print("\tRegistering a entry change to the Undo Manager...")
+        print("\tRegistering an entry change to the Undo Manager...")
         self.registerEntryChange(entry: entry, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
             self?.selectionCursor.deleteSelection(isCommit: isCommit) { [weak self] in
-                print("\tRegistering a entry change to the Undo Manager...")
+                print("\tRegistering an entry change to the Undo Manager...")
                 self?.registerEntryChange(
                     entry: self!.currentEntry!,
                     undo: undoMessage,
@@ -2388,10 +2390,10 @@ class EntryManager: NSObject {
             print("\tClearing entry buffer...")
             entry.clearBuffer()
             
-            print("\tRegistering a entry change to the Undo Manager...")
+            print("\tRegistering an entry change to the Undo Manager...")
             self.registerEntryChange(entry: entry, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
                 self?.selectionCursor.acceptUpdateSelection(handler: { [weak self] in
-                    print("\tRegistering a entry change to the Undo Manager...")
+                    print("\tRegistering an entry change to the Undo Manager...")
                     self?.registerEntryChange(
                         entry: self!.currentEntry!,
                         undo: "replacing '\(self?.selectionCursor.selectionText ?? "selection")'",
@@ -2619,10 +2621,10 @@ class EntryManager: NSObject {
         
         let undoMessage = "cutting '\(self.selectionCursor.selectionText ?? "selection")'"
         
-        print("\tRegistering a entry change to the Undo Manager...")
+        print("\tRegistering an entry change to the Undo Manager...")
         self.registerEntryChange(entry: entry, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
             self?.selectionCursor.cutSelection() { [weak self] in
-                print("\tRegistering a entry change to the Undo Manager...")
+                print("\tRegistering an entry change to the Undo Manager...")
                 self?.registerEntryChange(
                     entry: self!.currentEntry!,
                     undo: undoMessage,
@@ -2673,10 +2675,10 @@ class EntryManager: NSObject {
         
         let undoMessage = "pasting '\(self.selectionCursor.clipboard != nil ? Entry.getText(segments: self.selectionCursor.clipboard!) : "clipboard")'"
         
-        print("\tRegistering a entry change to the Undo Manager...")
+        print("\tRegistering an entry change to the Undo Manager...")
         self.registerEntryChange(entry: entry, undo: "moving cursor") { [weak self] in
             self?.selectionCursor.pasteClipboard() { [weak self] in
-                print("\tRegistering a entry change to the Undo Manager...")
+                print("\tRegistering an entry change to the Undo Manager...")
                 self?.registerEntryChange(
                     entry: self!.currentEntry!,
                     undo: undoMessage,
@@ -2825,14 +2827,14 @@ class EntryManager: NSObject {
         soundEngine.voiceCommandAccept()
         
         let executeRollback = {
-            print("\tRegistering a entry change to the Undo Manager...")
+            print("\tRegistering an entry change to the Undo Manager...")
             self.registerEntryChange(entry: entry, undo: "moving cursor") { [weak self] in
                 // Select Previous Commit
                 self?.selectCommit()
                 
                 // Delete current selection
                 self?.selectionCursor.deleteSelection(isCommit: true) { [weak self] in
-                    print("\tRegistering a entry change to the Undo Manager...")
+                    print("\tRegistering an entry change to the Undo Manager...")
                     self?.registerEntryChange(
                         entry: self!.currentEntry!,
                         undo: "rolling back last commit",

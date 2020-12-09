@@ -72,7 +72,7 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
             lines: [
                 DictionaryLine(
                     title: "Selection Mode",
-                    body: "Entered upon speech selection while composing an entry. Sonically this is represented by a looping audio section."
+                    body: "Entered upon speech selection while editing an entry. Sonically this is represented by a looping audio section."
                 ),
                 DictionaryLine(
                     title: "Playback Mode",
@@ -88,11 +88,11 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
                 ),
                 DictionaryLine(
                     title: "Walk Mode",
-                    body: "Entered upon the completion of the walk voice command. Selects a single word and loops its natural spoken form followed by the computer-synthesized form, allowing for cross-comparison of meaning. Shifting between words is administered manually."
+                    body: "Entered upon the completion of the walk voice command. Selects a single word and loops its natural spoken form followed by the computer-synthesized form, allowing for cross-comparison. Shifting between words is user-controlled."
                 ),
                 DictionaryLine(
                     title: "Run Mode",
-                    body: "Entered upon the completion of the run voice command. Advances automatically through a passage playing its natural spoken form followed by the computer-synthesized form, allowing for cross-comparison of meaning."
+                    body: "Entered upon the completion of the run voice command. Advances automatically through a passage playing its natural spoken form followed by the computer-synthesized form, allowing for cross-comparison."
                 )
             ]
         ),
@@ -193,7 +193,7 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
                 DictionaryAction(
                     tokens: [VoiceCommandEngine.Token.WALK.value().uppercased()],
                     description: "Initiate walking the entry list.",
-                    example: "Ealk list"
+                    example: "Walk list"
                 ),
                 DictionaryAction(
                     tokens: [VoiceCommandEngine.Token.ENTER.value().uppercased()],
@@ -554,7 +554,7 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
         ),
         DictionarySection(
             title: [VoiceCommandEngine.Token.RUN.value().uppercased()],
-            details: "A mode that advances automatically through a passage playing it’s natural spoken form followed by the computer-synthesized form, allowing for cross-comparison of meaning.",
+            details: "A mode that advances automatically through a passage playing it’s natural spoken form followed by the computer-synthesized form, allowing for cross-comparison.",
             isAccordion: false,
             isExpanded: false,
             actions: [
@@ -572,7 +572,7 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
         ),
         DictionarySection(
             title: [VoiceCommandEngine.Token.WALK.value().uppercased()],
-            details: "A mode that selects a single word and loops it’s natural spoken form followed by the computer-synthesized form, allowing for cross-comparison of meaning. Shifting between words is administered manually.",
+            details: "A mode that selects a single word and loops it’s natural spoken form followed by the computer-synthesized form, allowing for cross-comparison. Shifting between words is user-controlled.",
             isAccordion: false,
             isExpanded: false,
             actions: [
@@ -659,6 +659,24 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
             ]
         ),
         DictionarySection(
+            title: [VoiceCommandEngine.Token.DICTIONARY.value().uppercased()],
+            details: "A reference for Lingual voice commands.",
+            isAccordion: false,
+            isExpanded: false,
+            actions: [
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.ENTER.value().uppercased(), "OPEN", "VIEW"],
+                    description: "Navigate to the dictionary",
+                    example: "Export text"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.EXIT.value().uppercased(), "LEAVE", "CLOSE"],
+                    description: "Navigate out of the dictionary back to entry list.",
+                    example: "Export text"
+                )
+            ]
+        ),
+        DictionarySection(
             title: [VoiceCommandEngine.Token.CHANGE.value().uppercased()],
             details: "The last modification made while listening for new entry speech.",
             isAccordion: false,
@@ -691,7 +709,7 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
         ),
         DictionarySection(
             title: ["Special Cases"],
-            details: "Notable features of in Lingual's voice command grammar.",
+            details: "Notable features of Lingual's voice command grammar.",
             isAccordion: false,
             lines: [
                 DictionaryLine(
@@ -747,7 +765,7 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
         
         self.configureNotificationObservers()
         
-        if AVAudioSession.isHeadphonesConnected {
+        if AVAudioSession.isHeadphonesConnected && !self.speechRecognition.isListeningForSpeech {
             // Begin Nature Sounds
             soundEngine.startNatureAmbience()
         }
@@ -1071,7 +1089,7 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
         // Switch over the route change reason.
         switch reason {
         case .newDeviceAvailable: // New device found.
-            if AVAudioSession.isHeadphonesConnected {
+            if AVAudioSession.isHeadphonesConnected && !self.speechRecognition.isListeningForSpeech {
                 // Begin Nature Sounds
                 soundEngine.startNatureAmbience()
             }
@@ -1358,6 +1376,12 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
                 withRecording: self.speechRecognition.isListeningForSpeech,
                 withStopListeningButton: !self.speechRecognition.isListeningForSpeech
             )
+            self.notifications.executeFeedback(
+                visualMessage: "Entry List",
+                audioMessage: "Navigated to entry list.",
+                discardPrior: true,
+                withHaptics: true
+            )
         case .moveFromSleepToEntryTable:
             print (">>>>> [Invalid Segue within DictionaryViewController] from ViewControlller to EntryTableViewController >>>>>")
         case .moveFromSleepToDetail:
@@ -1396,7 +1420,6 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
             
             if self.sections[section].actions == nil && self.sections[section].lines == nil {
                 view.contentView.backgroundColor = UIColor.white
-                view.title.font = UIFont.systemFont(ofSize: 22, weight: .bold)
             } else {
                 view.contentView.backgroundColor = UIColor.systemGray6
 //                view.contentView.addBorder(vBorder: .bottom, color: UIColor.systemGray3, width: 1)

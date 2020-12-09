@@ -11,7 +11,7 @@ import Speech
 import AVFoundation
 import NaturalLanguage
 
-class DetailViewController: UIViewController, SegueProtocol {
+class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizerDelegate{
     // MARK: - Notifications
     static let onDidLoad = Notification.Name(Notifications.onDetailViewControllerDidLoad.rawValue)
     static let onWillDisappear = Notification.Name(Notifications.onDetailViewControllerWillDisappear.rawValue)
@@ -191,6 +191,15 @@ class DetailViewController: UIViewController, SegueProtocol {
         singleTap.numberOfTapsRequired = 1
         self.textView?.addGestureRecognizer(singleTap)
         
+        let gesture = UIPanGestureRecognizer(target: self, action: #selector(self.handleTouchUp))
+        gesture.cancelsTouchesInView = false
+        gesture.delegate = self
+        self.textView?.addGestureRecognizer(gesture)
+        
+        // Set text view
+        // Selection Cursor will be relevant even when not recording
+        self.selectionCursor.setTextView(textView: self.textView!)
+        
         // Notify observers of loading
         NotificationCenter.default.post(
             name: DetailViewController.onDidLoad,
@@ -255,12 +264,23 @@ class DetailViewController: UIViewController, SegueProtocol {
                 withRecording: self.speechRecognition.isListeningForSpeech,
                 withStopListeningButton: !self.speechRecognition.isListeningForSpeech
             )
-            
+            self.notifications.executeFeedback(
+                visualMessage: "Entry List",
+                audioMessage: "Navigated to entry list.",
+                discardPrior: true,
+                withHaptics: true
+            )
             // Remove textView and cursor from selectionCursor
             self.selectionCursor.setTextView()
             self.selectionCursor.setCursorView()
             // Unselect current entry
-            self.entryManager.setCurrentEntry()
+            if !self.speechRecognition.isListeningForSpeech {
+                // We don't unset this when we are editing a note
+                // 1) So that we're denied entry into other notes
+                // 2) So that the timer increments accordingly in the entry list page
+                // 3) So that we are denied entry into other entries while other is being recorded
+                self.entryManager.setCurrentEntry()
+            }
         case .moveFromSleepToEntryTable:
             print (">>>>> [Invalid Segue within DetailViewController] from ViewControlller to EntryTableViewController >>>>>")
         case .moveFromSleepToDetail:
@@ -818,10 +838,20 @@ class DetailViewController: UIViewController, SegueProtocol {
 //        DispatchQueue.main.async { [weak self] in
         DispatchQueue.main.async { [weak self] in
             Utils.onSpeechStartPlaying(notification: notification) {
-                if let entry = self?.entryManager.currentEntry, let segment = notification.userInfo!["next"] as? EntrySegment, segment.getText().count > 0 && segment.isActive(), let range = entry.getSegmentTextRange(of: segment) {
+                if let entry = self?.entryManager.currentEntry,
+                   let segment = notification.userInfo!["next"] as? EntrySegment,
+                   let range = entry.getSegmentTextRange(of: segment),
+                   segment.getText().count > 0 &&
+                    segment.isActive() &&
+                    !self!.selectionCursor.hasSelection &&
+                    !self!.entryManager.isRunningEntry &&
+                    !self!.entryManager.isWalkingEntry
+                {
                     self?.updateUIText(text: entry.getText(), highlightRange: range, transformations: entry.transformations)
                 }
             }
+            
+            self?.refreshView()
         }
     }
     
@@ -836,13 +866,18 @@ class DetailViewController: UIViewController, SegueProtocol {
             ) {
                 if let entry = self?.entryManager.currentEntry,
                    let segment = notification.userInfo!["previous"] as? EntrySegment,
+                   let range = entry.getSegmentTextRange(of: segment),
                    segment.getText().count > 0 &&
-                    segment.isActive(),
-                   let range = entry.getSegmentTextRange(of: segment)
+                    segment.isActive() &&
+                    !self!.selectionCursor.hasSelection &&
+                    !self!.entryManager.isWalkingEntry &&
+                    !self!.entryManager.isRunningEntry
                 {
                     self?.updateUIText(text: entry.getText(), highlightRange: range, transformations: entry.transformations)
                 }
             }
+            
+            self?.refreshView()
         }
     }
     
@@ -871,7 +906,11 @@ class DetailViewController: UIViewController, SegueProtocol {
                 speechRecognition: self!.speechRecognition,
                 entryManager: self!.entryManager
             ) { [weak self] in
-                if let entry = self?.entryManager.currentEntry, !self!.selectionCursor.hasSelection {
+                if let entry = self?.entryManager.currentEntry,
+                   !self!.selectionCursor.hasSelection &&
+                    !self!.entryManager.isRunningEntry &&
+                    !self!.entryManager.isWalkingEntry
+                {
                     self?.updateUIText(text: entry.getText(), transformations: entry.transformations)
                 }
             }
@@ -951,12 +990,6 @@ class DetailViewController: UIViewController, SegueProtocol {
             navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = nil
             self?.refreshView()
             self?.setCursorVisibility(as: false)
-            self?.notifications.executeFeedback(
-                visualMessage: "Entry List",
-                audioMessage: "Navigated to entry list.",
-                discardPrior: true,
-                withHaptics: true
-            )
             self?.performSegue(withIdentifier: Segues.moveFromDetailToEntryTable.rawValue, sender: nil)
         }
     }
@@ -1454,8 +1487,7 @@ class DetailViewController: UIViewController, SegueProtocol {
         // Set font
         self.textView?.font = self.state.font
         
-        if let cachedTextViewSelectedRange = self.cachedTextViewSelectedRange,
-           self.speechRecognition.isListeningForSpeech
+        if let cachedTextViewSelectedRange = self.cachedTextViewSelectedRange
         {
             self.selectionCursor.manualSelection(range: cachedTextViewSelectedRange)
             self.cachedTextViewSelectedRange = nil
@@ -1901,7 +1933,10 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
         
         // Delete Button
-        if self.selectionCursor.hasSelection && !self.selectionCursor.isUpdatingSelection {
+        if self.selectionCursor.hasSelection &&
+            !self.selectionCursor.isUpdatingSelection &&
+            self.speechRecognition.isListeningForSpeech
+        {
             numActiveButtons += 1
             self.showButton(self.deleteSelectionButton)
         } else {
@@ -1909,7 +1944,10 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
         
         // Update Button
-        if self.selectionCursor.hasSelection && !self.selectionCursor.isUpdatingSelection {
+        if self.selectionCursor.hasSelection &&
+            !self.selectionCursor.isUpdatingSelection &&
+            self.speechRecognition.isListeningForSpeech
+        {
             numActiveButtons += 1
             self.showButton(self.updateSelectionButton)
         } else {
@@ -1917,7 +1955,10 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
         
         // Cancel Update Button
-        if self.selectionCursor.hasSelection && self.selectionCursor.isUpdatingSelection {
+        if self.selectionCursor.hasSelection &&
+            self.selectionCursor.isUpdatingSelection &&
+            self.speechRecognition.isListeningForSpeech
+        {
             numActiveButtons += 1
             self.showButton(self.cancelUpdateSelectionButton)
         } else {
@@ -1925,7 +1966,9 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
         
         // Copy Button
-        if self.selectionCursor.hasSelection && !self.selectionCursor.isUpdatingSelection {
+        if self.selectionCursor.hasSelection &&
+            !self.selectionCursor.isUpdatingSelection
+        {
             numActiveButtons += 1
             self.showButton(self.copySelectionButton)
         } else {
@@ -1933,7 +1976,10 @@ class DetailViewController: UIViewController, SegueProtocol {
         }
         
         // Cut Button
-        if self.selectionCursor.hasSelection && !self.selectionCursor.isUpdatingSelection {
+        if self.selectionCursor.hasSelection &&
+            !self.selectionCursor.isUpdatingSelection &&
+            self.speechRecognition.isListeningForSpeech
+        {
             numActiveButtons += 1
             self.showButton(self.cutSelectionButton)
         } else {
@@ -2066,7 +2112,12 @@ class DetailViewController: UIViewController, SegueProtocol {
                         self?.updateUIText(text: entry.getText(), transformations: entry.transformations)
                     }
                 }
-            } else if let _ = self.entryManager.currentEntry, let hasSelection = change?[.newKey] as? Bool, hasSelection && !self.speechRecognition.isListeningForSpeech && self.speechRecognition.isListeningForCommands {
+            } else if let _ = self.entryManager.currentEntry,
+                let hasSelection = change?[.newKey] as? Bool,
+                hasSelection &&
+                !self.speechRecognition.isListeningForSpeech &&
+                self.speechRecognition.isListeningForCommands
+            {
                 print("====== Detail View Controller: Go from no selection to selection while not recording ======")
                 // ====== Go from no selection to selection while not recording ======
                 //
@@ -2086,27 +2137,54 @@ class DetailViewController: UIViewController, SegueProtocol {
     
     // MARK: - Touch Events
     
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return true
+    }
+    
+    @objc func handleTouchUp(touch: UIPanGestureRecognizer) {
+        print("===== Touch Interaction: Touch Up =====")
+        if let _ = self.entryManager.currentEntry,
+           touch.state == .began &&
+           self.state.appActivated
+        
+        {
+            print("\tSet finger down to true...")
+            self.selectionCursor.setOverrideSelectionUpdates(to: true)
+        } else if let _ = self.entryManager.currentEntry,
+            let textRange = self.textView!.selectedTextRange,
+            touch.state == .ended &&
+            self.state.appActivated
+       {
+            print("\tSet finger down to false...")
+            self.selectionCursor.setOverrideSelectionUpdates(to: false)
+            self.selectionCursor.setSelection(textRange: textRange)
+       }
+    }
+    
     @objc func handleSingleTap(touch: UITapGestureRecognizer) {
         print("===== Touch Interaction: Single Tap =====")
-        if let entry = self.entryManager.currentEntry, self.state.appActivated && self.speechRecognition.isListeningForSpeech {
+        
+        if let entry = self.entryManager.currentEntry,
+           self.state.appActivated
+        {
             print("\tComposing Entry => Move Cursor to Touch Location")
-            print("\tDetermine text position near touch point...")
-            let touchPoint = touch.location(in: self.textView)
-            let textPosition = self.textView?.closestPosition(to: touchPoint)
             
-            if self.textView?.selectedTextRange != nil && self.selectionCursor.hasSelection && (self.entryManager.isWalkingEntry || self.entryManager.isRunningEntry) {
+            if self.textView?.selectedTextRange != nil &&
+                self.selectionCursor.hasSelection &&
+                (
+                    self.entryManager.isWalkingEntry ||
+                    self.entryManager.isRunningEntry
+                )
+            {
                 // Remove Selection in view and model
                 print("\tPrior selection detected. Remove Selection in view and model...")
                 entry.exitWalk(clearSelection: true, withFeedback: false)
-            } else if self.textView?.selectedTextRange != nil && self.selectionCursor.hasSelection {
+            } else if self.textView?.selectedTextRange != nil &&
+                self.selectionCursor.hasSelection
+            {
                 // Remove Selection in view and model
                 print("\tPrior selection detected. Remove Selection in view and model...")
                 self.selectionCursor.clearSelection()
-            }
-            
-            if let textPosition = textPosition {
-                print("\tMove cursor to new position...")
-                self.selectionCursor.moveCursor(textPosition: textPosition, cache: true)
             }
             
             // Uncommenting this causes issues with late reveal of command buttons
@@ -2114,7 +2192,11 @@ class DetailViewController: UIViewController, SegueProtocol {
 //            DispatchQueue.main.async { [weak self] in
 //                self?.refreshView()
 //            }
-        } else if let entry = self.entryManager.currentEntry, self.state.appActivated && !self.speechRecognition.isListeningForSpeech {
+        } else if
+            let entry = self.entryManager.currentEntry,
+            self.state.appActivated &&
+            !self.speechRecognition.isListeningForSpeech
+        {
             print("\tConsuming Entry => Playback to Entry")
             print("\tDetermine text position near touch point...")
             let touchPoint = touch.location(in: self.textView)
@@ -2166,7 +2248,7 @@ class DetailViewController: UIViewController, SegueProtocol {
             }
             
         } else {
-            print("\tAborted because app is not active or not listening for speech.")
+            print("\tAborted because app is not active or not listening for speech or no selection.")
         }
     }
     

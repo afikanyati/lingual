@@ -100,7 +100,8 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             }
         } else if let entry = self.entryManager.currentEntry,
                   let anchor = self.anchor,
-                  !anchor.isVoiceCommandWord() && !anchor.isDeleted(),
+                  !anchor.isVoiceCommandWord() &&
+                    !anchor.isDeleted(),
                   let anchorRange = entry.getSegmentTextRange(of: anchor) {
             return anchorRange
         }
@@ -227,25 +228,19 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             selectionCursor: self,
             n: 0
         )
-        if let _ = self.anchor,
-           let focus = self.focus,
-           let lastSegment = lastSegment {
-            // print("isAtEndOfTextView 1: ", focus == lastSegment, focus, lastSegment, entry!.entrySegments, entry!.entryBuffer)
-            // we have a selection
-            return focus == lastSegment
-        } else if let anchor = self.anchor,
-                  let lastSegment = lastSegment {
+        if let anchor = self.anchor,
+        let lastSegment = lastSegment {
             // we don't have a selection
             // we have a cursor though
-            // print("isAtEndOfTextView 2: ", anchor == lastSegment, anchor, lastSegment, entry!.entrySegments, entry!.entryBuffer)
+//             print("isAtEndOfTextView 1: ")
             return anchor == lastSegment
         } else if (entry.entrySegments.count == 0 && entry.entryBuffer.count == 0) || entry.getText().count == 0 {
             // we have not captured and speech yet
-            // print("isAtEndOfTextView 3: ", true, entry.entrySegments, entry.entryBuffer)
+//             print("isAtEndOfTextView 2: ")
             return true
         }
 
-        // print("isAtEndOfTextView 4: ", false, entry!.entrySegments, entry!.entryBuffer)
+//         print("isAtEndOfTextView 3: ")
         return false
     }
     var isVisible: Bool {
@@ -256,6 +251,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
     var updateSegments: [EntrySegment]? = nil
     var isLoopingSelection = false
     private var manualSelection = false
+    private var overrideSelectionUpdates = false
     
     // MARK: - Initialization
 
@@ -943,7 +939,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             }
             
             // remove passage
-            print("\tRemove selection with time range: start =\(selectionTimeRange.start.seconds), duration =\(selectionTimeRange.duration.seconds)")
+            print("\tRemove selection with time range: start =\(selectionTimeRange.start.seconds), end =\(selectionTimeRange.start.seconds + selectionTimeRange.duration.seconds)")
             entry.removePassage(range: selectionTimeRange)
             
             // move cursor
@@ -2121,6 +2117,11 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             textView.selectedRange = range
         }
     }
+    
+    func setOverrideSelectionUpdates(to value: Bool) {
+        print("===== Selection Cursor: Set Override Selection Updates =====")
+        self.overrideSelectionUpdates = value
+    }
 
     // MARK: - Key-Value Observer
         
@@ -2147,8 +2148,12 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             }
         } else if keyPath == "selectedTextRange" {
             print("\tKeyPath: selectionTextRange")
-            if let newSelectionRange = change?[.newKey] as? UITextRange, !self.manualSelection {
+            if let newSelectionRange = change?[.newKey] as? UITextRange,
+               !self.manualSelection &&
+                !self.overrideSelectionUpdates // prevents selection updates from happening when user is adjusting selection
+            {
                 print("\tNew Observation Value (selectionTextRange): ", newSelectionRange)
+                self.setOverrideSelectionUpdates(to: true)
                 self.executeSelectionUpdates(type: .view)
             } else if self.manualSelection {
                 print("Turn off manual selection flag...")
@@ -2162,14 +2167,10 @@ class SelectionCursor: NSObject, UITextViewDelegate {
                let oldAnchorCaret = change?[.oldKey] as? Caret
             {
                 print("\tNew Observation Value (Anchor Caret):\n\t\tnew: '\(self.getSegment(caret: newAnchorCaret)?.getText() ?? "nil")'\n\t\told: '\(self.getSegment(caret: oldAnchorCaret)?.getText() ?? "nil")'")
-                if self.speechRecognition.isListeningForSpeech {
-                    self.executeSelectionUpdates(type: .model)
-                }
+                self.executeSelectionUpdates(type: .model)
             } else if let newAnchorCaret = change?[.newKey] as? Caret {
                 print("\tNew Observation Value (Anchor Caret):\n\t\tnew: '\(self.getSegment(caret: newAnchorCaret)?.getText() ?? "nil")'\n\t\told: nil")
-                if self.speechRecognition.isListeningForSpeech {
-                    self.executeSelectionUpdates(type: .model)
-                }
+                self.executeSelectionUpdates(type: .model)
             } else {
                 print("\tUnhandled Anchor Caret: ", self.anchorCaret != nil ? self.getSegment(caret: self.anchorCaret!)?.getText() ?? "nil" : "nil")
             }
@@ -2179,14 +2180,10 @@ class SelectionCursor: NSObject, UITextViewDelegate {
                let oldFocusCaret = change?[.oldKey] as? Caret
             {
                 print("New Observation Value (Focus Caret):\n\t\tnew: '\(self.getSegment(caret: newFocusCaret)?.getText() ?? "nil")'\n\t\told: '\(self.getSegment(caret: oldFocusCaret)?.getText() ?? "nil")'")
-                if self.speechRecognition.isListeningForSpeech {
-                    self.executeSelectionUpdates(type: .model)
-                }
+                self.executeSelectionUpdates(type: .model)
             } else if let newFocusCaret = change?[.newKey] as? Caret {
                 print("\tNew Observation Value (Focus Caret):\n\t\tnew: '\(self.getSegment(caret: newFocusCaret)?.getText() ?? "nil")'\n\t\told: nil")
-                if self.speechRecognition.isListeningForSpeech {
-                    self.executeSelectionUpdates(type: .model)
-                }
+                self.executeSelectionUpdates(type: .model)
             } else {
                 print("\tUnhandled Focus Caret: ", self.focusCaret != nil ? self.getSegment(caret: self.focusCaret!)?.getText() ?? "nil" : "nil")
             }
@@ -2230,6 +2227,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             selectionCursor: self,
             n: 0
         )
+
         if let cachedAnchorCaret = self.cachedAnchorCaret,
            let cachedAnchor = self.getSegment(caret: cachedAnchorCaret),
            let caretIndex = lastBufferSegmentIndex,
