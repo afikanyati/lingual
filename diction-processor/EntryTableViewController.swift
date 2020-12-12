@@ -914,7 +914,7 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
         ]
 
         let titleString = entry.getTitle(attributes: titleAttributes)
-        let entryText = entry.getText()
+        let entryText = Entry.getText(segments: entry.entrySegments) // We use this instead of the instance method to avoid stack overflow
         let preview = entryText.count > Utils.ENTRY_ITEM_PREVIEW_CHAR_COUNT ? "\(entryText.substring(toIndex: Utils.ENTRY_ITEM_PREVIEW_CHAR_COUNT))..." : entryText
         if preview.count > 0 {
             subtitleAttributes[NSAttributedString.Key.foregroundColor] = self.entryManager.currentIndex != nil && self.speechRecognition.isListeningForSpeech && index == self.entryManager.currentIndex! ? UIColor(hex: Utils.LINGUAL_RED) ?? UIColor.red : UIColor.gray

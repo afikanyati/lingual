@@ -361,7 +361,11 @@ class SpeechPlayerEngine: NSObject {
             )
             
             // Handle Feedback
-            if !self.entryManager.isWalkingEntry && !self.entryManager.isRunningEntry {
+            if !self.entryManager.isWalkingEntry &&
+                !self.entryManager.isRunningEntry &&
+                !self.entryListManager.isRunningEntryList &&
+                !self.entryListManager.isWalkingEntryList
+            {
                 self.notifications.executeFeedback(
                     visualMessage: "Play",
                     withHaptics: true
@@ -422,7 +426,13 @@ class SpeechPlayerEngine: NSObject {
         }
         
         // Handle Feedback
-        if !self.entryManager.isWalkingEntry && !self.entryManager.isRunningEntry && !self.selectionCursor.hasSelection && withFeedback {
+        if !self.entryManager.isWalkingEntry &&
+            !self.entryManager.isRunningEntry &&
+            !self.entryListManager.isWalkingEntryList &&
+            !self.entryListManager.isRunningEntryList &&
+            !self.selectionCursor.hasSelection &&
+            withFeedback
+        {
             self.notifications.executeFeedback(
                 visualMessage: "Stop Playback",
                 withHaptics: true
@@ -773,17 +783,17 @@ class SpeechPlayerEngine: NSObject {
         }
         
         var firstPlayableSegment: EntrySegment?
-        if self.isPlayingExternalSegments {
+        if let firstSegment = self.playbackSegments?.first, self.isPlayingExternalSegments {
             firstPlayableSegment = Utils.getSegment(
-                forTrackTime: self.playbackSegments!.first!.timeMapping.target.start,
+                forTrackTime: firstSegment.timeMapping.target.start,
                 segments: self.playbackSegments,
                 entry: self.entryManager.currentEntry,
                 isPlayingEntry: true, // Must be true because we anticipate it being true but not true yet
                 isWord: true
             )
-        } else {
+        } else if let startPlaybackAt = self.startPlaybackAt {
             firstPlayableSegment = Utils.getSegment(
-                forTrackTime: self.startPlaybackAt!,
+                forTrackTime: startPlaybackAt,
                 segments: self.playbackSegments,
                 entry: self.entryManager.currentEntry,
                 isPlayingEntry: true, // Must be true because we anticipate it being true but not true yet
@@ -791,8 +801,11 @@ class SpeechPlayerEngine: NSObject {
             )
         }
         
-        print("\tPlaying from: \(self.startPlaybackAt!.seconds)")
-        self.player.seek(to: self.startPlaybackAt!)
+        if let startPlaybackAt = self.startPlaybackAt {
+            print("\tPlaying from: \(startPlaybackAt.seconds)")
+            self.player.seek(to: self.startPlaybackAt!)
+        }
+        
         self.player.play()
         if let firstPlayableSegment = firstPlayableSegment,
            let playbackSegments = self.playbackSegments,
@@ -801,7 +814,9 @@ class SpeechPlayerEngine: NSObject {
             self.handleBoundaryTimeObserver(start: true)
         }
         
-        print("\tPlaying asset with duration: \(self.player.currentItem!.duration.seconds)s and \(self.player.currentItem!.asset.tracks[0].segments.count) segments.")
+        if let currentItem = self.player.currentItem {
+            print("\tPlaying asset with duration: \(currentItem.duration.seconds)s and \(currentItem.asset.tracks[0].segments.count) segments.")
+        }
         
         let rate = (firstPlayableSegment?.getRate() ?? self.playbackRate) * self.playbackRate
         
@@ -1010,7 +1025,13 @@ class SpeechPlayerEngine: NSObject {
     func handleCompletionObserver() {
         print("===== Speech Player Engine: Handle Completion Observer =====")
 
-        if let stopPlaybackAt = self.stopPlaybackAt, let startPlaybackAt = self.startPlaybackAt, self.selectionCursor.hasSelection && self.selectionCursor.isLoopingSelection && !self.entryManager.isWalkingEntry && !self.entryManager.isRunningEntry {
+        if let stopPlaybackAt = self.stopPlaybackAt,
+           let startPlaybackAt = self.startPlaybackAt,
+           self.selectionCursor.hasSelection &&
+            self.selectionCursor.isLoopingSelection &&
+            !self.entryManager.isWalkingEntry &&
+            !self.entryManager.isRunningEntry
+        {
             // Stop Playing
             self.stop(withFeedback: false)
             
@@ -1038,7 +1059,13 @@ class SpeechPlayerEngine: NSObject {
                         userInfo: [:]
                     )
                 }
-            } else if let entry = self.entryManager.currentEntry, self.state.appActivated && self.speechRecognition.pausedListeningForSpeech && !AVAudioSession.isHeadphonesConnected && !self.entryManager.isRunningEntry && !self.entryManager.isWalkingEntry {
+            } else if let entry = self.entryManager.currentEntry,
+                self.state.appActivated &&
+                self.speechRecognition.pausedListeningForSpeech &&
+                !AVAudioSession.isHeadphonesConnected &&
+                !self.entryManager.isRunningEntry &&
+                !self.entryManager.isWalkingEntry
+            {
                 print("\tStart listening for speech again.")
                 // when headphones are off we don't listen for speech while echoing
                 // but on completion we turn it back on

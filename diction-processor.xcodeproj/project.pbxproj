@@ -17,6 +17,7 @@
 		8B27A3DE24B6A8E9001E5F06 /* Float+Rounded.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B27A3DD24B6A8E9001E5F06 /* Float+Rounded.swift */; };
 		8B2935BB25801B9200BDFB0D /* nature-ambience.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8B2935BA25801B9200BDFB0D /* nature-ambience.wav */; };
 		8B2935C82580942000BDFB0D /* DebugOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B2935C72580942000BDFB0D /* DebugOptions.swift */; };
+		8B2935E42581880900BDFB0D /* Paragraph.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B2935E32581880900BDFB0D /* Paragraph.swift */; };
 		8B39B356256E18BF00A9904F /* EntrySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B39B355256E18BF00A9904F /* EntrySnapshot.swift */; };
 		8B39B35E256F62FA00A9904F /* Caret.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B39B35D256F62FA00A9904F /* Caret.swift */; };
 		8B3B52952537AF1400B2BEDB /* lingual-logomark.png in Resources */ = {isa = PBXBuildFile; fileRef = 8B3B52942537AF1400B2BEDB /* lingual-logomark.png */; };
@@ -119,7 +120,6 @@
 		8BA3C35425293A80000B704B /* UIColor+hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA3C35325293A80000B704B /* UIColor+hex.swift */; };
 		8BB6859A24E3858000F3285B /* save.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8BB6859924E3858000F3285B /* save.wav */; };
 		8BB6859E24E60F0000F3285B /* SelectionCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BB6859D24E60F0000F3285B /* SelectionCursor.swift */; };
-		8BB685A024E6139D00F3285B /* SelectionShiftDirection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BB6859F24E6139D00F3285B /* SelectionShiftDirection.swift */; };
 		8BB685A224E618C300F3285B /* SelectionDirection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BB685A124E618C300F3285B /* SelectionDirection.swift */; };
 		8BB685A424E8E04500F3285B /* NSRange+toTextRange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BB685A324E8E04400F3285B /* NSRange+toTextRange.swift */; };
 		8BB685A624EA0FC400F3285B /* NotificationItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BB685A524EA0FC400F3285B /* NotificationItem.swift */; };
@@ -184,6 +184,7 @@
 		8B27A3DD24B6A8E9001E5F06 /* Float+Rounded.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Float+Rounded.swift"; sourceTree = "<group>"; };
 		8B2935BA25801B9200BDFB0D /* nature-ambience.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "nature-ambience.wav"; sourceTree = "<group>"; };
 		8B2935C72580942000BDFB0D /* DebugOptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugOptions.swift; sourceTree = "<group>"; };
+		8B2935E32581880900BDFB0D /* Paragraph.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Paragraph.swift; sourceTree = "<group>"; };
 		8B39B355256E18BF00A9904F /* EntrySnapshot.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EntrySnapshot.swift; sourceTree = "<group>"; };
 		8B39B35D256F62FA00A9904F /* Caret.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Caret.swift; sourceTree = "<group>"; };
 		8B3B52942537AF1400B2BEDB /* lingual-logomark.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "lingual-logomark.png"; sourceTree = "<group>"; };
@@ -286,7 +287,6 @@
 		8BA3C35325293A80000B704B /* UIColor+hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIColor+hex.swift"; sourceTree = "<group>"; };
 		8BB6859924E3858000F3285B /* save.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = save.wav; sourceTree = "<group>"; };
 		8BB6859D24E60F0000F3285B /* SelectionCursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionCursor.swift; sourceTree = "<group>"; };
-		8BB6859F24E6139D00F3285B /* SelectionShiftDirection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionShiftDirection.swift; sourceTree = "<group>"; };
 		8BB685A124E618C300F3285B /* SelectionDirection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionDirection.swift; sourceTree = "<group>"; };
 		8BB685A324E8E04400F3285B /* NSRange+toTextRange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSRange+toTextRange.swift"; sourceTree = "<group>"; };
 		8BB685A524EA0FC400F3285B /* NotificationItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationItem.swift; sourceTree = "<group>"; };
@@ -380,7 +380,6 @@
 				8BCA1AFC24A3DA3B0068BABB /* SegmentPosition.swift */,
 				8B24440624DCE50D0050C959 /* TimeNormalizerType.swift */,
 				8BCA1B0224A43DB70068BABB /* VocalRegister.swift */,
-				8BB6859F24E6139D00F3285B /* SelectionShiftDirection.swift */,
 				8BB685A124E618C300F3285B /* SelectionDirection.swift */,
 				8BC6E10325107E61003DD26A /* DirectionType.swift */,
 				8B3BC5BE24F882F9004FCD7B /* SelectionChangeType.swift */,
@@ -424,6 +423,7 @@
 				8B4293B6256C943400A513A3 /* AudioDeviceDatum.swift */,
 				8B66BFDF253BD17F0085A94F /* VoiceCommandDatum.swift */,
 				8B766E8824A7D7D200D41A13 /* Sentence.swift */,
+				8B2935E32581880900BDFB0D /* Paragraph.swift */,
 				8BE2EB1824BA44BC00E2D519 /* Determiners.swift */,
 				8BA3055A24C920DA0056E4DF /* SynthesizerItem.swift */,
 				8BC6E10725130E34003DD26A /* EntryTransformation.swift */,
@@ -882,6 +882,7 @@
 				8B766F4824AC2AB200D41A13 /* Buffer.swift in Sources */,
 				8BA3052E24C286550056E4DF /* SoundEffectEngine.swift in Sources */,
 				8B766F5424AC2AB200D41A13 /* QuinnsSecondEstimator.swift in Sources */,
+				8B2935E42581880900BDFB0D /* Paragraph.swift in Sources */,
 				8BC6E10425107E61003DD26A /* DirectionType.swift in Sources */,
 				8B766F4724AC2AB200D41A13 /* YINTransformer.swift in Sources */,
 				8B24440424DB75170050C959 /* NotificationType.swift in Sources */,
@@ -918,7 +919,6 @@
 				8B40A28725699B57002C6B46 /* CenteredButton.swift in Sources */,
 				8B766F2924AC2AA300D41A13 /* PitchCalculator.swift in Sources */,
 				8BED4B80257D71B9008F7A57 /* DictionarySection.swift in Sources */,
-				8BB685A024E6139D00F3285B /* SelectionShiftDirection.swift in Sources */,
 				8BA3055D24CB99AC0056E4DF /* VoiceCommandEngine.swift in Sources */,
 				8BA3056124CBD43D0056E4DF /* RecognitionTask.swift in Sources */,
 				8B7421DE254E2872002B43EF /* PitchRecognitionEngine.swift in Sources */,

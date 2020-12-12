@@ -408,7 +408,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
         self.echoSegments = entry.entrySegments
         
         // Get echo text
-        let text = entry.getText(segments: Array(entry.entrySegments[echoRange]))
+        let text = Entry.getText(segments: Array(entry.entrySegments[echoRange]))
         let echoText = text.trimTrailingPunctuation()
         print("\techoing: \"\(echoText)\"")
         

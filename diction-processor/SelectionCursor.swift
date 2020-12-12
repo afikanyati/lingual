@@ -252,6 +252,8 @@ class SelectionCursor: NSObject, UITextViewDelegate {
     var isLoopingSelection = false
     private var manualSelection = false
     private var overrideSelectionUpdates = false
+    private(set) var selectionScale: ScaleUnitType?
+    private(set) var scaleSelectionRange: Range<Int>?
     
     // MARK: - Initialization
 
@@ -320,7 +322,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
     }
     
     public override var description: String {
-        return "SelectionCursor {\n\tfocusCaret: \(String(describing: self.focusCaret)) \n\tanchorCaret: \(String(describing: self.anchorCaret)) \n\tcachedAnchorCaret: \(String(describing: self.cachedAnchorCaret)) \t\nselectionTimeRange: \(String(describing: self.selectionTimeRange)) \n\tselectionTextRange: \(String(describing: self.selectionTextRange)) \n\tselectionRange: \(String(describing: self.selectionRange)) \n\tselectionText: \(String(describing: self.selectionText)) \n\tselectionSegments: \(String(describing: self.selectionSegments)) \n\tdirection: \(self.direction) \n\tclipboard: \(String(describing: self.clipboard)) \n\tisCollapsed: \(self.isCollapsed) \n\tisAtEndOfView: \(self.isAtEndOfTextView) \n\tisUpdatingSelection: \(self.isUpdatingSelection) \n\tisPromptingForUpdateAcceptance: \(self.isPromptingForUpdateAcceptance) \n\tupdateSegments: \(String(describing: self.updateSegments)) \n\tisLoopingSelection: \(self.isLoopingSelection) \n\tmanualSelection: \(self.manualSelection)\n}"
+        return "SelectionCursor {\n\tfocusCaret: \(String(describing: self.focusCaret)) \n\tanchorCaret: \(String(describing: self.anchorCaret)) \n\tcachedAnchorCaret: \(String(describing: self.cachedAnchorCaret)) \t\nselectionTimeRange: \(String(describing: self.selectionTimeRange)) \n\tselectionTextRange: \(String(describing: self.selectionTextRange)) \n\tselectionRange: \(String(describing: self.selectionRange)) \n\tselectionText: \(String(describing: self.selectionText)) \n\tselectionSegments: \(String(describing: self.selectionSegments)) \n\tdirection: \(self.direction) \n\tclipboard: \(String(describing: self.clipboard)) \n\tisCollapsed: \(self.isCollapsed) \n\tisAtEndOfView: \(self.isAtEndOfTextView) \n\tisUpdatingSelection: \(self.isUpdatingSelection) \n\tisPromptingForUpdateAcceptance: \(self.isPromptingForUpdateAcceptance) \n\tupdateSegments: \(String(describing: self.updateSegments)) \n\tisLoopingSelection: \(self.isLoopingSelection) \n\tmanualSelection: \(self.manualSelection) \n\toverrideSelectionUpdates: \(self.overrideSelectionUpdates) \n\tselectionScale: \(String(describing: self.selectionScale))\n}"
     }
     
     // MARK: - Notifications
@@ -377,11 +379,12 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             self.willChangeValue(forKey: "focusCaret")
             self.focusCaret = anchorCaret?.duplicate()
             self.didChangeValue(forKey: "focusCaret")
-            
+            self.setSelectionScale()
         } else {
             self.willChangeValue(forKey: "anchorCaret")
             self.anchorCaret = focusCaret?.duplicate()
             self.didChangeValue(forKey: "anchorCaret")
+            self.setSelectionScale()
         }
         
         checkRep()
@@ -419,6 +422,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         print("\tSetting carets...")
         self.setAnchorCaret(caret: caret.duplicate())
         self.setFocusCaret()
+        self.setSelectionScale()
         
         // Used when we want to insert a buffer into the committed segments
         // allows us to determine segment of interest
@@ -506,6 +510,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
                 // we know this is an active word because Utils.getIndexAtTextPosition only returns active words
                 self.setAnchorCaret(caret: Caret(index: newAnchorIndex, trackType: trackType))
                 self.setFocusCaret()
+                self.setSelectionScale()
             }
             
             // Used when we want to insert a buffer into the committed segments
@@ -659,113 +664,440 @@ class SelectionCursor: NSObject, UITextViewDelegate {
     
     // micro-movement
     // requires there to be a selection
-    func shift(shiftDirection: SelectionShiftDirection, by count: Int = 1) {
-        print("===== Selection Cursor: Shift \(shiftDirection) =====")
-        self.shiftAnchorSegment(shiftDirection: shiftDirection, by: count)
-        self.shiftFocusSegment(shiftDirection: shiftDirection, by: count)
+    func shift(direction: SelectionDirection, by count: Int = 1) -> (Bool, Bool) {
+        print("===== Selection Cursor: Shift \(direction) =====")
+        guard let entry = self.entryManager.currentEntry,
+              let anchor = self.anchor,
+              let _ = self.focus
+        else {
+            return (false, false)
+        }
+        
+        var shiftedAnchor = false
+        var shiftedFocus = false
+        if let scale = self.selectionScale {
+            switch (scale) {
+                case .paragraph:
+                    print("\tShift happing at paragraph scale...")
+                    let currentParagraphIndex = anchor.getParagraph().number
+                    print("\tCurrent Paragraph: ", anchor.getParagraph())
+                    if direction == .forwards {
+                        print("\tSelection is moving forwards...")
+                        // We want focus to move first
+                        let nextParagraph = entry.getParagraphDetails(number: currentParagraphIndex + 1)
+                        if let nextParagraph = nextParagraph {
+                            print("\tNext Paragraph: ", nextParagraph)
+                            var nextAnchorIndex = nextParagraph.entryRange.startIndex
+                            print("Next Anchor Index: ", nextAnchorIndex)
+                            if !entry.entrySegments[nextAnchorIndex].isActive(),
+                            let index = Utils.getSegmentIndex(
+                                segment: entry.entrySegments[nextAnchorIndex],
+                                segments: entry.entrySegments,
+                                type: .next,
+                                by: 1,
+                                isWord: true
+                            ) {
+                                nextAnchorIndex = index
+                                print("Updated Next Anchor Index: ", nextAnchorIndex)
+                                shiftedAnchor = true
+                            } else if !entry.entrySegments[nextAnchorIndex].isActive() {
+                                print("\t[Error] There was a problem sourcing next paragraph anchor.")
+                            } else if entry.entrySegments[nextAnchorIndex].isActive() {
+                                shiftedAnchor = true
+                            }
+                            
+                            var nextFocusIndex = nextParagraph.entryRange.endIndex - 1
+                            print("Next Focus Index: ", nextFocusIndex)
+                            if !entry.entrySegments[nextFocusIndex].isActive(),
+                            let index = Utils.getSegmentIndex(
+                               segment: entry.entrySegments[nextFocusIndex],
+                               segments: entry.entrySegments,
+                               type: .previous,
+                               by: 1,
+                               isWord: true
+                            ) {
+                                nextFocusIndex = index
+                                print("Updated Next Focus Index: ", nextFocusIndex)
+                                shiftedFocus = true
+                            } else if !entry.entrySegments[nextFocusIndex].isActive() {
+                                print("\t[Error] There was a problem sourcing next paragraph focus.")
+                            } else if entry.entrySegments[nextFocusIndex].isActive() {
+                                shiftedFocus = true
+                            }
+                            
+                            self.setFocusCaret(caret: Caret(index: nextFocusIndex, trackType: .committed))
+                            self.setAnchorCaret(caret: Caret(index: nextAnchorIndex, trackType: .committed))
+                            self.setScaleSelectionRange(range: nextParagraph.entryRange)
+                        } else {
+                            print("\t[Error] There was a problem sourcing next paragraph.")
+                        }
+                    } else {
+                        print("\tSelection is moving backwards...")
+                        // We want anchor to move first
+                        let previousParagraph = entry.getParagraphDetails(number: currentParagraphIndex - 1)
+                        if let previousParagraph = previousParagraph {
+                            print("\tPrevious Paragraph: ", previousParagraph)
+                            var nextAnchorIndex = previousParagraph.entryRange.startIndex
+                            print("Next Anchor Index: ", nextAnchorIndex)
+                            if !entry.entrySegments[nextAnchorIndex].isActive(),
+                            let index = Utils.getSegmentIndex(
+                                segment: entry.entrySegments[nextAnchorIndex],
+                                segments: entry.entrySegments,
+                                type: .next,
+                                by: 1,
+                                isWord: true
+                            ) {
+                                nextAnchorIndex = index
+                                print("Updated Next Anchor Index: ", nextAnchorIndex)
+                                shiftedAnchor = true
+                            } else if !entry.entrySegments[nextAnchorIndex].isActive() {
+                                print("\t[Error] There was a problem sourcing previous paragraph anchor.")
+                            } else if entry.entrySegments[nextAnchorIndex].isActive() {
+                                shiftedAnchor = true
+                            }
+                            
+                            var nextFocusIndex = previousParagraph.entryRange.endIndex - 1
+                            print("Next Focus Index: ", nextFocusIndex)
+                            if !entry.entrySegments[nextFocusIndex].isActive(),
+                            let index = Utils.getSegmentIndex(
+                               segment: entry.entrySegments[nextFocusIndex],
+                               segments: entry.entrySegments,
+                               type: .previous,
+                               by: 1,
+                               isWord: true
+                            ) {
+                                nextFocusIndex = index
+                                print("Updated Next Focus Index: ", nextFocusIndex)
+                                shiftedFocus = true
+                            } else if !entry.entrySegments[nextFocusIndex].isActive() {
+                                print("\t[Error] There was a problem sourcing previous paragraph focus.")
+                            } else if entry.entrySegments[nextFocusIndex].isActive() {
+                                shiftedFocus = true
+                            }
+                            
+                            self.setAnchorCaret(caret: Caret(index: nextAnchorIndex, trackType: .committed))
+                            self.setFocusCaret(caret: Caret(index: nextFocusIndex, trackType: .committed))
+                            self.setScaleSelectionRange(range: previousParagraph.entryRange)
+                        } else {
+                            print("\t[Error] There was a problem sourcing previous paragraph.")
+                        }
+                    }
+                case .sentence:
+                    print("\tShift happing at sentence scale...")
+                    let currentSentenceIndex = anchor.getSentence().number
+                    print("\tCurrent Sentence: ", anchor.getSentence())
+                    if direction == .forwards {
+                        print("\tSelection is moving forwards...")
+                        // We want focus to move first
+                        let nextSentence = entry.getSentenceDetails(number: currentSentenceIndex + 1)
+                        if let nextSentence = nextSentence {
+                            print("\tNext Sentence: ", nextSentence)
+                            var nextAnchorIndex = nextSentence.entryRange.startIndex
+                            print("Next Anchor Index: ", nextAnchorIndex)
+                            if !entry.entrySegments[nextAnchorIndex].isActive(),
+                            let index = Utils.getSegmentIndex(
+                                segment: entry.entrySegments[nextAnchorIndex],
+                                segments: entry.entrySegments,
+                                type: .next,
+                                by: 1,
+                                isWord: true
+                            ) {
+                                nextAnchorIndex = index
+                                print("Updated Next Anchor Index: ", nextAnchorIndex)
+                                shiftedAnchor = true
+                            } else if !entry.entrySegments[nextAnchorIndex].isActive() {
+                                print("\t[Error] There was a problem sourcing previous sentence anchor.")
+                            } else if entry.entrySegments[nextAnchorIndex].isActive() {
+                                shiftedAnchor = true
+                            }
+                            
+                            var nextFocusIndex = nextSentence.entryRange.endIndex - 1
+                            print("Next Focus Index: ", nextFocusIndex)
+                            if !entry.entrySegments[nextFocusIndex].isActive(),
+                            let index = Utils.getSegmentIndex(
+                               segment: entry.entrySegments[nextFocusIndex],
+                               segments: entry.entrySegments,
+                               type: .previous,
+                               by: 1,
+                               isWord: true
+                            ) {
+                                nextFocusIndex = index
+                                print("Updated Next Focus Index: ", nextFocusIndex)
+                                shiftedFocus = true
+                            } else if !entry.entrySegments[nextFocusIndex].isActive() {
+                                print("\t[Error] There was a problem sourcing previous sentence focus.")
+                            } else if entry.entrySegments[nextFocusIndex].isActive() {
+                                shiftedFocus = true
+                            }
+                            self.setFocusCaret(caret: Caret(index: nextFocusIndex, trackType: .committed))
+                            self.setAnchorCaret(caret: Caret(index: nextAnchorIndex, trackType: .committed))
+                            self.setScaleSelectionRange(range: nextSentence.entryRange)
+                        } else {
+                            print("\t[Error] There was a problem sourcing next sentence.")
+                        }
+                    } else {
+                        print("\tSelection is moving backwards...")
+                        // We want anchor to move first
+                        let previousSentence = entry.getSentenceDetails(number: currentSentenceIndex - 1)
+                        if let previousSentence = previousSentence {
+                            print("\tPrevious Sentence: ", previousSentence)
+                            var nextAnchorIndex = previousSentence.entryRange.startIndex
+                            print("Next Anchor Index: ", nextAnchorIndex)
+                            if !entry.entrySegments[nextAnchorIndex].isActive(),
+                            let index = Utils.getSegmentIndex(
+                                segment: entry.entrySegments[nextAnchorIndex],
+                                segments: entry.entrySegments,
+                                type: .next,
+                                by: 1,
+                                isWord: true
+                            ) {
+                                nextAnchorIndex = index
+                                print("Updated Next Anchor Index: ", nextAnchorIndex)
+                                shiftedAnchor = true
+                            } else if !entry.entrySegments[nextAnchorIndex].isActive() {
+                                print("\t[Error] There was a problem sourcing previous sentence anchor.")
+                            } else if entry.entrySegments[nextAnchorIndex].isActive() {
+                                shiftedAnchor = true
+                            }
+                            
+                            var nextFocusIndex = previousSentence.entryRange.endIndex - 1
+                            print("Next Focus Index: ", nextFocusIndex)
+                            if !entry.entrySegments[nextFocusIndex].isActive(),
+                            let index = Utils.getSegmentIndex(
+                               segment: entry.entrySegments[nextFocusIndex],
+                               segments: entry.entrySegments,
+                               type: .previous,
+                               by: 1,
+                               isWord: true
+                            ) {
+                                nextFocusIndex = index
+                                print("Updated Next Focus Index: ", nextFocusIndex)
+                                shiftedFocus = true
+                            } else if !entry.entrySegments[nextFocusIndex].isActive() {
+                                print("\t[Error] There was a problem sourcing previous sentence focus.")
+                            } else if entry.entrySegments[nextFocusIndex].isActive() {
+                                shiftedFocus = true
+                            }
+                            self.setAnchorCaret(caret: Caret(index: nextAnchorIndex, trackType: .committed))
+                            self.setFocusCaret(caret: Caret(index: nextFocusIndex, trackType: .committed))
+                            self.setScaleSelectionRange(range: previousSentence.entryRange)
+                        } else {
+                            print("\t[Error] There was a problem sourcing previous sentence.")
+                        }
+                    }
+                default:
+                    print("\tShift happing at word scale...")
+                    if direction == .forwards {
+                        print("\tSelection is moving forwards...")
+                        // We want focus to move first
+                        shiftedFocus = self.shiftFocusSegment(direction: direction, by: count)
+                        shiftedAnchor = self.shiftAnchorSegment(direction: direction, by: count)
+                    } else {
+                        print("\tSelection is moving backwards...")
+                        // We want anchor to move first
+                        shiftedAnchor = self.shiftAnchorSegment(direction: direction, by: count)
+                        shiftedFocus = self.shiftFocusSegment(direction: direction, by: count)
+                    }
+            }
+        } else {
+            print("\t[Error] There was a problem shifting selection. Selection scale not set")
+        }
+        
         checkRep()
+        
+        return (shiftedAnchor, shiftedFocus)
     }
     
-    func shiftFocusSegment(shiftDirection: SelectionShiftDirection, by count: Int = 1) {
-        print("===== Selection Cursor: Shift Focus Segment \(shiftDirection) =====")
+    func shiftFocusSegment(
+        direction: SelectionDirection,
+        by count: Int = 1
+    ) -> Bool {
+        print("===== Selection Cursor: Shift Focus Segment \(direction) =====")
+        print("\tBy Count: ", count)
         // prevent illegal moves
         guard let entry = self.entryManager.currentEntry,
               let focus = self.focus,
               let anchor = self.anchor,
-              entry.entryBuffer.count == 0 else { return }
+              entry.entryBuffer.count == 0 else { return false }
         
-        let numSegments = entry.entrySegments.count
         var nextFocusIndex: Int?
-        if shiftDirection == .next && self.direction == .forwards {
-            // next
-            // forwards
-            let shiftLength = focus.getIndex() + count >= numSegments ? (numSegments - 1) - focus.getIndex() : count
-            nextFocusIndex = focus.getIndex() + shiftLength
-        } else if shiftDirection == .next && self.direction == .backwards {
-            // next
-            // backwards
-            let shiftLength = anchor.getIndex() + count >= numSegments ? (numSegments - 1) - anchor.getIndex() : count
-            nextFocusIndex = focus.getIndex() + shiftLength
-        } else if shiftDirection == .previous && self.direction == .forwards {
-            // previous
-            // forwards
-            let shiftLength = anchor.getIndex() - count < 0 ? anchor.getIndex() : count
-            nextFocusIndex = focus.getIndex() - shiftLength
-        } else if shiftDirection == .previous && self.direction == .backwards {
-            // previous
-            // backwards
-            let shiftLength = focus.getIndex() - count < 0 ? focus.getIndex() : count
-            nextFocusIndex = focus.getIndex() - shiftLength
+        if direction == .backwards &&
+            anchor.getUID() != focus.getUID() &&
+            self.direction == .forwards
+        {
+            // direction = backwards
+            // selection = forwards
+            print("\tDirection = Backwards, Selection = Forwards")
+            nextFocusIndex = Utils.getSegmentIndex(
+                segment: focus,
+                segments: entry.entrySegments,
+                type: .previous,
+                by: count,
+                isWord: true
+            )
+        } else if direction == .forwards &&
+            self.direction == .forwards
+        {
+            // direction = forwards
+            // selection = forwards
+            print("\tDirection = Forwards, Selection = Forwards")
+            nextFocusIndex = Utils.getSegmentIndex(
+                segment: focus,
+                segments: entry.entrySegments,
+                type: .next,
+                by: count,
+                isWord: true
+            )
+        } else if direction == .backwards &&
+            anchor.getUID() != focus.getUID() &&
+            self.direction == .backwards
+        {
+            // direction = backwards
+            // selection = backwards
+            print("\tDirection = Backwards, Selection = Backwards")
+            nextFocusIndex = Utils.getSegmentIndex(
+                segment: focus,
+                segments: entry.entrySegments,
+                type: .next,
+                by: count,
+                isWord: true
+            )
+        } else if direction == .forwards &&
+            self.direction == .backwards
+        {
+            // direction = forwards
+            // selection = backwards
+            print("\tDirection = Forwards, Selection = Backwards")
+            nextFocusIndex = Utils.getSegmentIndex(
+                segment: focus,
+                segments: entry.entrySegments,
+                type: .previous,
+                by: count,
+                isWord: true
+            )
         }
         
         if let nextFocusIndex = nextFocusIndex {
+            print("\tPrevious Focus Index: ", self.focusCaret?.index ?? "nil")
+            print("\tNext Focus Index: ", nextFocusIndex)
             self.setFocusCaret(caret: Caret(index: nextFocusIndex, trackType: .committed))
+            checkRep()
+            
+            return true
         } else {
             print("===== [Error] There was a problem computing new focus segment index =====")
         }
         
         checkRep()
+        
+        return false
     }
     
-    func shiftAnchorSegment(shiftDirection: SelectionShiftDirection, by count: Int = 1) {
-        print("===== Selection Cursor: Shift Anchor Segment \(shiftDirection) =====")
+    func shiftAnchorSegment(direction: SelectionDirection, by count: Int = 1) -> Bool {
+        print("===== Selection Cursor: Shift Anchor Segment \(direction) =====")
+        print("\tBy Count: ", count)
         // prevent illegal moves
         guard let entry = self.entryManager.currentEntry,
               let focus = self.focus,
               let anchor = self.anchor,
-              entry.entryBuffer.count == 0 else { return }
+              entry.entryBuffer.count == 0 else { return false }
 
-        let numSegments = entry.entrySegments.count
         var nextAnchorIndex: Int?
-        if shiftDirection == .next && self.direction == .forwards {
-            // next
-            // forwards
-            let shiftLength = focus.getIndex() + count >= numSegments ? (numSegments - 1) - focus.getIndex() : count
-            nextAnchorIndex = anchor.getIndex() + shiftLength
-        } else if shiftDirection == .next && self.direction == .backwards {
-            // next
-            // backwards
-            let shiftLength = anchor.getIndex() + count >= numSegments ? (numSegments - 1) - anchor.getIndex() : count
-            nextAnchorIndex = anchor.getIndex() + shiftLength
-        } else if shiftDirection == .previous && self.direction == .forwards {
-            // previous
-            // forwards
-            let shiftLength = anchor.getIndex() - count < 0 ? anchor.getIndex() : count
-            nextAnchorIndex = anchor.getIndex() - shiftLength
-        } else if shiftDirection == .previous && self.direction == .backwards {
-            // previous
-            // backwards
-            let shiftLength = focus.getIndex() - count < 0 ? focus.getIndex() : count
-            nextAnchorIndex = anchor.getIndex() - shiftLength
+        if direction == .backwards &&
+            self.direction == .forwards
+        {
+            // direction = backwards
+            // selection = forwards
+            print("\tDirection = Backwards, Selection = Forwards")
+            nextAnchorIndex = Utils.getSegmentIndex(
+                segment: anchor,
+                segments: entry.entrySegments,
+                type: .previous,
+                by: count,
+                isWord: true
+            )
+        } else if direction == .forwards &&
+            anchor.getUID() != focus.getUID() &&
+            self.direction == .forwards
+        {
+            // direction = forwards
+            // selection = forwards
+            print("\tDirection = Forwards, Selection = Forwards")
+            nextAnchorIndex = Utils.getSegmentIndex(
+                segment: anchor,
+                segments: entry.entrySegments,
+                type: .next,
+                by: count,
+                isWord: true
+            )
+        } else if direction == .backwards &&
+            anchor.getUID() != focus.getUID() &&
+            self.direction == .backwards
+        {
+            // direction = backwards
+            // selection = backwards
+            print("\tDirection = Backwards, Selection = Backwards")
+            nextAnchorIndex = Utils.getSegmentIndex(
+                segment: anchor,
+                segments: entry.entrySegments,
+                type: .next,
+                by: count,
+                isWord: true
+            )
+        } else if direction == .forwards &&
+            self.direction == .backwards
+        {
+            // direction = forwards
+            // selection = backwards
+            print("\tDirection = Forwards, Selection = Backwards")
+            nextAnchorIndex = Utils.getSegmentIndex(
+                segment: anchor,
+                segments: entry.entrySegments,
+                type: .previous,
+                by: count,
+                isWord: true
+            )
         }
         
         if let nextAnchorIndex = nextAnchorIndex {
+            print("\tPrevious Anchor Index: ", self.anchorCaret?.index ?? "nil")
+            print("\tNext Anchor Index: ", nextAnchorIndex)
             self.setAnchorCaret(caret: Caret(index: nextAnchorIndex, trackType: .committed))
+            checkRep()
+            
+            return true
         } else {
             print("===== [Error] There was a problem computing new anchor segment index =====")
         }
         
         checkRep()
+        
+        return false
     }
     
-    func expand(by count: Int = 1) {
+    func expand(by count: Int = 1) -> (Bool, Bool) {
         print("===== Selection Cursor: Expand =====")
-        let anchorShiftDirection: SelectionShiftDirection = self.direction == .forwards ? .previous : .next
-        let focusShiftDirection: SelectionShiftDirection = self.direction == .forwards ? .next : .previous
-        self.shiftAnchorSegment(shiftDirection: anchorShiftDirection, by: count)
-        self.shiftFocusSegment(shiftDirection: focusShiftDirection, by: count)
+        let anchorShiftDirection: SelectionDirection = self.direction == .forwards ? .backwards : .forwards
+        let focusShiftDirection: SelectionDirection = self.direction == .forwards ? .forwards : .backwards
+        
+        let shiftedAnchor = self.shiftAnchorSegment(direction: anchorShiftDirection, by: count)
+        let shiftedFocus = self.shiftFocusSegment(direction: focusShiftDirection, by: count)
         
         checkRep()
+        
+        return (shiftedAnchor, shiftedFocus)
     }
     
-    func reduce(by count: Int = 1) {
+    func reduce(by count: Int = 1) -> (Bool, Bool) {
         print("===== Selection Cursor: Reduce =====")
-        let anchorShiftDirection: SelectionShiftDirection = self.direction == .forwards ? .next : .previous
-        let focusShiftDirection: SelectionShiftDirection = self.direction == .forwards ? .previous : .next
-        self.shiftAnchorSegment(shiftDirection: anchorShiftDirection, by: count)
-        self.shiftFocusSegment(shiftDirection: focusShiftDirection, by: count)
+        let anchorShiftDirection: SelectionDirection = self.direction == .forwards ? .forwards : .backwards
+        let focusShiftDirection: SelectionDirection = self.direction == .forwards ? .backwards : .forwards
+        let shiftedAnchor = self.shiftAnchorSegment(direction: anchorShiftDirection, by: count)
+        let shiftedFocus = self.shiftFocusSegment(direction: focusShiftDirection, by: count)
 
         checkRep()
+        
+        return (shiftedAnchor, shiftedFocus)
     }
 
     func adjustRateSelection(direction: DirectionType, handler: ((_ rate: Float) -> Void)? = nil) {
@@ -846,10 +1178,10 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             print("\tStore transformation with range: \(range) and rate: \(newRate)")
             
             // Compute text
-            let text = entry.getText(
+            let text = Entry.getText(
+                segments: entry.entrySegments,
                 from: lowerSegment.timeMapping.target.start,
-                until: upperSegment.timeMapping.target.end,
-                segments: entry.entrySegments
+                until: upperSegment.timeMapping.target.end
             )
             print("\tCompute transformation text: ", text)
             
@@ -912,6 +1244,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             {
                 print("\tCursor not at end of text view; update cached anchor...")
                 
+                print("Segments: ", Utils.stringifySegments(segments: entry.entrySegments))
                 let newAnchorIndex = Utils.getSegmentIndex(
                     segment: anchor,
                     segments: entry.entrySegments,
@@ -919,6 +1252,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
                     isWord: true,
                     isCommitted: true
                 )
+                print("New Anchor Index: ", newAnchorIndex ?? "nil")
 
                 if let newAnchorIndex = newAnchorIndex {
                     print("\tSetting new anchor with index: ", newAnchorIndex)
@@ -937,6 +1271,10 @@ class SelectionCursor: NSObject, UITextViewDelegate {
                 self.setAnchorCaret()
                 self.setCachedAnchorCaret()
             }
+            
+            // Remove scale selection
+            self.setSelectionScale()
+            self.setScaleSelectionRange()
             
             // remove passage
             print("\tRemove selection with time range: start =\(selectionTimeRange.start.seconds), end =\(selectionTimeRange.start.seconds + selectionTimeRange.duration.seconds)")
@@ -1088,8 +1426,14 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         // Svae presumed update segments
         self.updateSegments = normalizedUpdateSegments
         
+        guard let newSegments = self.updateSegments else {
+            self.notifications.executeError(
+                text: "There was a problem retreiving updated speech."
+            )
+            return
+        }
         // Compute update selectiont text
-        let updateText = entry.getText(segments: self.updateSegments)
+        let updateText = Entry.getText(segments: newSegments)
         
         // Present Update Dialog
         let dialogActions = [
@@ -1217,11 +1561,13 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         )
         
         if let anchorIndex = anchorIndex,
-           let focusIndex = focusIndex {
+           let focusIndex = focusIndex,
+           let selectionScale = self.selectionScale {
             print("\tSetting new selection: \(anchorIndex)...\(focusIndex)")
             self.setSelection(
                 anchorCaret: Caret(index: anchorIndex, trackType: .committed),
-                focusCaret: Caret(index: focusIndex, trackType: .committed)
+                focusCaret: Caret(index: focusIndex, trackType: .committed),
+                scale: selectionScale
             )
         } else if let index = anchorIndex {
             print("\tSetting new anchor: ", index)
@@ -1642,10 +1988,24 @@ class SelectionCursor: NSObject, UITextViewDelegate {
                 }
             }
             
-            if let focusTrackType = focusTrackType, let newFocusIndex = newFocusIndex {
+            if let focusTrackType = focusTrackType,
+               let newFocusIndex = newFocusIndex
+            {
                 // we know this is an active word because Utils.getIndicesInTextRange only returns active words
                 self.setFocusCaret(caret: Caret(index: newFocusIndex, trackType: focusTrackType))
             }
+            
+            if let _ = self.cachedAnchorCaret,
+               let focusTrackType = focusTrackType,
+               let newFocusIndex = newFocusIndex
+            {
+                // Set cached anchor
+                self.setCachedAnchorCaret(caret: Caret(index: newFocusIndex, trackType: focusTrackType))
+            }
+            
+            
+            // Set Selection Scale
+            self.setSelectionScale(scale: .all)
         } else {
             print("===== [Error] There was a problem finding selection entry segments =====")
         }
@@ -1661,11 +2021,21 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         checkRep()
     }
     
-    func setSelection(anchorCaret: Caret, focusCaret: Caret) {
+    func setSelection(
+        anchorCaret: Caret,
+        focusCaret: Caret,
+        scale: ScaleUnitType = .all,
+        scaleRange: Range<Int>? = nil
+    ) {
         print("===== Selection Cursor: Set Selection (using Anchor and Focus) =====")
         // Set anchor and focus
         self.setAnchorCaret(caret: anchorCaret)
         self.setFocusCaret(caret: focusCaret)
+        self.setSelectionScale(scale: scale)
+        
+        if let scaleRange = scaleRange, scale == .paragraph || scale == .sentence {
+            self.setScaleSelectionRange(range: scaleRange)
+        }
         
         if let selectionTextRange = self.selectionTextRange,
            let textView = self.textView,
@@ -1684,6 +2054,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
     }
     
     func clearSelection(withFeedback: Bool = false, handler: (() -> Void)? = nil) {
+        guard let entry = self.entryManager.currentEntry else { return }
         print("===== Selection Cursor: Clear Selection =====")
         if let textView = self.textView {
             if self.isLoopingSelection {
@@ -1691,7 +2062,24 @@ class SelectionCursor: NSObject, UITextViewDelegate {
                 self.stopPlayingSelection()
             }
             
-            if !self.isAtEndOfTextView {
+            
+            if let scaleSelectionRange = self.scaleSelectionRange, !self.isAtEndOfTextView {
+                print("\tFirst word index in scale selection range if not at end of text view and have selection range")
+                // We cache the anchor if we're mid-entry so that new content is added from given location
+                var index = scaleSelectionRange.startIndex
+                if let newIndex = Utils.getSegmentIndex(
+                    segment: entry.entrySegments[scaleSelectionRange.startIndex],
+                    segments: entry.entrySegments,
+                    type: .next,
+                    by: 1,
+                    isWord: true
+                 ), !entry.entrySegments[index].isActive() {
+                    print("\tFirst segment was not active, so found first word index: \(newIndex).")
+                    index = newIndex
+                }
+                self.setAnchorCaret(caret: Caret(index: index - 1, trackType: .committed)) // We minus one so the cursor is before the word not after
+                self.setCachedAnchorCaret(caret: Caret(index: index - 1, trackType: .committed)) // We minus one so the cursor is before the word not after
+            } else if !self.isAtEndOfTextView {
                 print("\tCache anchor if not at end of text view")
                 // We cache the anchor if we're mid-entry so that new content is added from given location
                 self.setCachedAnchorCaret(caret: self.anchorCaret)
@@ -1705,6 +2093,10 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             }
             self.setFocusCaret()
             handler?()
+            
+            print("\tClear selection scale.")
+            self.setSelectionScale()
+            self.setScaleSelectionRange()
             
             if withFeedback {
                 self.notifications.executeFeedback(
@@ -1880,6 +2272,28 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         checkRep()
     }
     
+    func setSelectionScale(scale: ScaleUnitType? = nil) {
+        print("===== Selection Cursor: Set Selection Scale =====")
+        if let scale = scale {
+            print("\tSet selection scale: \(scale)")
+            self.selectionScale = scale
+        } else {
+            print("\tClear selection scale.")
+            self.selectionScale = nil
+        }
+    }
+    
+    func setScaleSelectionRange(range: Range<Int>? = nil) {
+        print("===== Selection Cursor: Set Scale Selection Range =====")
+        if let range = range {
+            print("\tSet scale selection range: \(range)")
+            self.scaleSelectionRange = range
+        } else {
+            print("\tClear scale selection range.")
+            self.scaleSelectionRange = nil
+        }
+    }
+    
     func setIsPromptingForUpdateAcceptance(to value: Bool) {
         print("===== Selection Cursor: Set Is Prompting For Update Acceptance =====")
         self.isPromptingForUpdateAcceptance = value
@@ -1890,6 +2304,8 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         self.setAnchorCaret()
         self.setFocusCaret()
         self.setCachedAnchorCaret()
+        self.setSelectionScale()
+        self.setScaleSelectionRange()
         self.setTextView()
         self.setCursorView()
         self.clipboard = nil
@@ -2207,7 +2623,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
     // Will not be called by programmatic changes: https://stackoverflow.com/questions/16115344/textviewdidchange-is-not-call-when-change-uitextview-inputview
     public func textViewDidChange(_ textView: UITextView) {
         print("===== SelectionCursor: textViewDidChange =====")
-        guard let entry = self.entryManager.currentEntry else { return }
+        guard let entry = self.entryManager.currentEntry, entry.entrySegments.count > 0 || entry.entryBuffer.count > 0 else { return }
         let (secondLastSegmentTrackType, secondLastSegmentIndex) = Utils.getEntryNthLastSegmentIndex(
             segments: entry.entrySegments,
             bufferSegments: entry.entryBuffer,

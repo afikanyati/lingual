@@ -301,41 +301,41 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
                 ),
                 DictionaryAction(
                     tokens: [VoiceCommandEngine.Token.UPDATE.value().uppercased()],
-                    description: "Initiates update sequence to replace selected speech.",
+                    description: "Initiates update sequence to replace arbitrarily selected speech.",
                     example: "Update selection"
                 ),
                 DictionaryAction(
                     tokens: [VoiceCommandEngine.Token.COPY.value().uppercased()],
-                    description: "Copies selected speech to clipboard.",
+                    description: "Copies arbitrarily selected speech to clipboard.",
                     example: "Copy selection"
                 ),
                 DictionaryAction(
                     tokens: [VoiceCommandEngine.Token.CUT.value().uppercased()],
-                    description: "Copies selected speech to clipboard and removes it from entry.",
+                    description: "Copies arbitrarily selected speech to clipboard and removes it from entry.",
                     example: "Cut selection"
                 ),
                 DictionaryAction(
                     tokens: [VoiceCommandEngine.Token.EXPORT.value().uppercased()],
-                    description: "Initiate audio or text export for selection.",
+                    description: "Initiate audio or text export for arbitrary selection.",
                     example: "Export selection"
                 ),
                 DictionaryAction(
                     tokens: [VoiceCommandEngine.Token.RUN.value().uppercased()],
-                    description: "Initiate running selection.",
+                    description: "Initiate running arbitrary selection.",
                     example: "Run selection"
                 ),
                 DictionaryAction(
                     tokens: [VoiceCommandEngine.Token.WALK.value().uppercased()],
-                    description: "Initiate walking selection.",
+                    description: "Initiate walking arbitrary selection.",
                     example: "Walk selection"
                 ),
                 DictionaryAction(
                     tokens: [VoiceCommandEngine.Token.ENTER.value().uppercased(), VoiceCommandEngine.Token.START.value().uppercased(), "MAKE", "BEGIN"],
-                    description: "Enter selection mode by selecting speech nearest to speech cursor.",
+                    description: "Enter selection mode by selecting word nearest to speech cursor.",
                     example: "Make selection"
                 ),
                 DictionaryAction(
-                    tokens: [VoiceCommandEngine.Token.REMOVE.value().uppercased(), "CLEAR", VoiceCommandEngine.Token.END.value().uppercased(), VoiceCommandEngine.Token.STOP.value().uppercased(), VoiceCommandEngine.Token.FINISH.value().uppercased()],
+                    tokens: [VoiceCommandEngine.Token.REMOVE.value().uppercased(), "CLEAR", VoiceCommandEngine.Token.END.value().uppercased(), VoiceCommandEngine.Token.STOP.value().uppercased(), VoiceCommandEngine.Token.FINISH.value().uppercased(), VoiceCommandEngine.Token.EXIT.value().uppercased()],
                     description: "Exits selection mode.",
                     example: "Remove selection"
                 ),
@@ -351,17 +351,17 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
                 ),
                 DictionaryAction(
                     tokens: [VoiceCommandEngine.Token.PLAY.value().uppercased()],
-                    description: "Initiate playback selection.",
+                    description: "Initiate playback of arbitrary selection.",
                     example: "Play selection"
                 ),
                 DictionaryAction(
                     tokens: [VoiceCommandEngine.Token.ECHO.value().uppercased()],
-                    description: "Initiate echo of selection.",
+                    description: "Initiate echo of arbitrary selection.",
                     example: "Echo selection"
                 ),
                 DictionaryAction(
                     tokens: [VoiceCommandEngine.Token.SHIFT.value().uppercased(), "MOVE"],
-                    description: "Adjusts selection behind or ahead of current selection. Requires a Direction: <LEFT | BACKWARD | DOWN | PREVIOUS>, <RIGHT | FORWARD | UP | NEXT>",
+                    description: "Advances arbitrary selection behind or ahead of current selection. Requires a Direction: <LEFT | BACKWARD | DOWN | PREVIOUS>, <RIGHT | FORWARD | UP | NEXT>",
                     example: "Shift left"
                 ),
                 DictionaryAction(
@@ -371,18 +371,242 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
                 ),
                 DictionaryAction(
                     tokens: [VoiceCommandEngine.Token.INCREASE.value().uppercased()],
-                    description: "Accelerates the rate of selection playback (in addition to the playback rate)",
+                    description: "Accelerates the rate of arbitrary selection playback (in addition to the playback rate)",
                     example: "Increase selection"
                 ),
                 DictionaryAction(
                     tokens: [VoiceCommandEngine.Token.DECREASE.value().uppercased()],
-                    description: "Decelerates the rate of selection playback (in addition to the playback rate)",
+                    description: "Decelerates the rate of arbitrary selection playback (in addition to the playback rate)",
                     example: "Decrease selection"
                 ),
                 DictionaryAction(
                     tokens: [VoiceCommandEngine.Token.ADJUST.value().uppercased()],
-                    description: "Modifies (up or down) the rate of selection playback. Requires a Direction: <UP>, <DOWN>",
+                    description: "Modifies (up or down) the rate of arbitrary selection playback. Requires a Direction: <UP>, <DOWN>",
                     example: "Adust selection down"
+                )
+            ]
+        ),
+        DictionarySection(
+            title: [VoiceCommandEngine.Token.WORD.value().uppercased()],
+            details: "An isolation of a word while listening for entry speech.",
+            isAccordion: false,
+            isExpanded: false,
+            actions: [
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.SELECT.value().uppercased(), VoiceCommandEngine.Token.ENTER.value().uppercased()],
+                    description: "Enter selection mode by selecting word nearest to speech cursor.",
+                    example: "Select word"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.DELETE.value().uppercased()],
+                    description: "Removes word.",
+                    example: "Delete word"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.UPDATE.value().uppercased()],
+                    description: "Initiates update sequence to replace word.",
+                    example: "Update word"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.COPY.value().uppercased()],
+                    description: "Copies word to clipboard.",
+                    example: "Copy word"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.CUT.value().uppercased()],
+                    description: "Copies word to clipboard and removes it from entry.",
+                    example: "Cut word"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.EXPORT.value().uppercased()],
+                    description: "Initiate audio or text export for word.",
+                    example: "Export word"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.PLAY.value().uppercased()],
+                    description: "Initiate playback of word.",
+                    example: "Play word"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.ECHO.value().uppercased()],
+                    description: "Initiate echo of word.",
+                    example: "Echo word"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.SHIFT.value().uppercased(), "MOVE"],
+                    description: "Advances to word behind or ahead of current word. Requires a Direction: <LEFT | BACKWARD | DOWN | PREVIOUS>, <RIGHT | FORWARD | UP | NEXT>",
+                    example: "Next word"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.INCREASE.value().uppercased()],
+                    description: "Accelerates the rate of word playback (in addition to the playback rate)",
+                    example: "Increase word"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.DECREASE.value().uppercased()],
+                    description: "Decelerates the rate of word playback (in addition to the playback rate)",
+                    example: "Decrease word"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.ADJUST.value().uppercased()],
+                    description: "Modifies (up or down) the rate of word playback. Requires a Direction: <UP>, <DOWN>",
+                    example: "Adjust word down"
+                )
+            ]
+        ),
+        DictionarySection(
+            title: [VoiceCommandEngine.Token.SENTENCE.value().uppercased()],
+            details: "An isolation of a sentence while listening for entry speech.",
+            isAccordion: false,
+            isExpanded: false,
+            actions: [
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.SELECT.value().uppercased(), VoiceCommandEngine.Token.ENTER.value().uppercased()],
+                    description: "Enter selection mode by selecting sentence nearest to speech cursor.",
+                    example: "Select sentence"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.DELETE.value().uppercased()],
+                    description: "Removes sentence.",
+                    example: "Delete sentence"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.UPDATE.value().uppercased()],
+                    description: "Initiates update sequence to replace sentence.",
+                    example: "Update sentence"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.COPY.value().uppercased()],
+                    description: "Copies sentence to clipboard.",
+                    example: "Copy sentence"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.CUT.value().uppercased()],
+                    description: "Copies sentence to clipboard and removes it from entry.",
+                    example: "Cut sentence"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.EXPORT.value().uppercased()],
+                    description: "Initiate audio or text export for sentence.",
+                    example: "Export sentence"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.RUN.value().uppercased()],
+                    description: "Initiate running sentence.",
+                    example: "Run sentence"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.WALK.value().uppercased()],
+                    description: "Initiate walking sentence.",
+                    example: "Walk sentence"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.PLAY.value().uppercased()],
+                    description: "Initiate playback of sentence.",
+                    example: "Play sentence"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.ECHO.value().uppercased()],
+                    description: "Initiate echo of sentence.",
+                    example: "Echo sentence"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.SHIFT.value().uppercased(), "MOVE"],
+                    description: "Advances to sentence behind or ahead of current word. Requires a Direction: <LEFT | BACKWARD | DOWN | PREVIOUS>, <RIGHT | FORWARD | UP | NEXT>",
+                    example: "Next sentence"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.INCREASE.value().uppercased()],
+                    description: "Accelerates the rate of sentence playback (in addition to the playback rate)",
+                    example: "Increase sentence"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.DECREASE.value().uppercased()],
+                    description: "Decelerates the rate of sentence playback (in addition to the playback rate)",
+                    example: "Decrease sentence"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.ADJUST.value().uppercased()],
+                    description: "Modifies (up or down) the rate of sentence playback. Requires a Direction: <UP>, <DOWN>",
+                    example: "Adjust sentence down"
+                )
+            ]
+        ),
+        DictionarySection(
+            title: [VoiceCommandEngine.Token.PARAGRAPH.value().uppercased(), "PASSAGE", "SECTION"],
+            details: "An isolation of a paragraph while listening for entry speech.",
+            isAccordion: false,
+            isExpanded: false,
+            actions: [
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.SELECT.value().uppercased(), VoiceCommandEngine.Token.ENTER.value().uppercased()],
+                    description: "Enter selection mode by selecting paragraph nearest to speech cursor.",
+                    example: "Select paragraph"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.DELETE.value().uppercased()],
+                    description: "Removes paragraph.",
+                    example: "Delete paragraph"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.UPDATE.value().uppercased()],
+                    description: "Initiates update sequence to replace paragraph.",
+                    example: "Update paragraph"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.COPY.value().uppercased()],
+                    description: "Copies paragraph to clipboard.",
+                    example: "Copy paragraph"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.CUT.value().uppercased()],
+                    description: "Copies paragraph to clipboard and removes it from entry.",
+                    example: "Cut paragraph"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.EXPORT.value().uppercased()],
+                    description: "Initiate audio or text export for paragraph.",
+                    example: "Export paragraph"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.RUN.value().uppercased()],
+                    description: "Initiate running paragraph.",
+                    example: "Run paragraph"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.WALK.value().uppercased()],
+                    description: "Initiate walking paragraph.",
+                    example: "Walk paragraph"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.PLAY.value().uppercased()],
+                    description: "Initiate playback of paragraph.",
+                    example: "Play paragraph"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.ECHO.value().uppercased()],
+                    description: "Initiate echo of paragraph.",
+                    example: "Echo paragraph"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.SHIFT.value().uppercased(), "MOVE"],
+                    description: "Advances to paragraph behind or ahead of current word. Requires a Direction: <LEFT | BACKWARD | DOWN | PREVIOUS>, <RIGHT | FORWARD | UP | NEXT>",
+                    example: "Next paragraph"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.INCREASE.value().uppercased()],
+                    description: "Accelerates the rate of paragraph playback (in addition to the playback rate)",
+                    example: "Increase paragraph"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.DECREASE.value().uppercased()],
+                    description: "Decelerates the rate of paragraph playback (in addition to the playback rate)",
+                    example: "Decrease paragraph"
+                ),
+                DictionaryAction(
+                    tokens: [VoiceCommandEngine.Token.ADJUST.value().uppercased()],
+                    description: "Modifies (up or down) the rate of paragraph playback. Requires a Direction: <UP>, <DOWN>",
+                    example: "Adjust paragraph down"
                 )
             ]
         ),
@@ -439,24 +663,6 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
                     tokens: [VoiceCommandEngine.Token.RUN.value().uppercased()],
                     description: "Initiate running last commit.",
                     example: "Run commit"
-                )
-            ]
-        ),
-        DictionarySection(
-            title: [VoiceCommandEngine.Token.SENTENCE.value().uppercased()],
-            details: "A passage of speech in an entry that has been recognized as a sentence.",
-            isAccordion: false,
-            isExpanded: false,
-            actions: [
-                DictionaryAction(
-                    tokens: [VoiceCommandEngine.Token.PLAY.value().uppercased()],
-                    description: "Initiate playback of the (directed) sentence. Requires a Direction: <LAST>",
-                    example: "Play last sentence"
-                ),
-                DictionaryAction(
-                    tokens: [VoiceCommandEngine.Token.ECHO.value().uppercased()],
-                    description: "Initiate echo of the (directed) sentence. Requires a Direction: <LAST>",
-                    example: "Echo last sentence"
                 )
             ]
         ),

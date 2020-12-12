@@ -702,15 +702,6 @@ class ViewController: UIViewController, SegueProtocol {
 // Instructions: Start the app without earphones connected. While on the Wake Phrase Screen, connect earphones. Utter wake phrase.
 // Expected Result: The wake phrase should be registered without error
 //
-// 21) Test Play Sentence
-//
-// ===== Code Needed =====
-// entry.playSentence(number: 1)
-// =======================
-//
-// Instructions: Place code in an area where it maybe be executable. Utter the following: "This is the first sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the second sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the third sentence".
-// Expected Result: System should play back: "This is the second sentence".
-//
 // 22) Test Trim Entry: Permanent
 //
 // ===== Code Needed =====
@@ -807,21 +798,6 @@ class ViewController: UIViewController, SegueProtocol {
 //            }
 //        }
 //    )
-//}
-// =======================
-//
-// Instructions: Place code in an area where it maybe be executable. Utter the following: "This is the first sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the second sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the third sentence".
-// Expected Result: System should play back: "This is the second sentence".
-//
-// 24) Test Extract Sentence
-//
-// ===== Code Needed =====
-//entry.extractSentence(number: 1) { sentence in
-//    self.tempEntry = sentence
-//    print(sentence?.getText() ?? "NIL")
-//    sentence?.play(onFinishHandler: {
-//        print("Finished sentence!")
-//    })
 //}
 // =======================
 //

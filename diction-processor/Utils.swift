@@ -123,7 +123,7 @@ class Utils {
     static var LISTENING_LAUNCH_DELAY: TimeInterval = 2
     static var SOUND_INTENSITY_LATENCY: Int = 10
     static var PLAYER_END_PLAYBACK_BUFFER: Double = 0.05 // We want to put it just before end. makes sure we don't seek to the exact end which causes the completion observer not to run
-    static var MINIMUM_REST_BETWEEN_VOICE_COMMANDS: TimeInterval = 0.7 // Determined experimentally
+    static var MINIMUM_REST_BETWEEN_VOICE_COMMANDS: TimeInterval = 1 // Determined experimentally
     static var TEXT_VIEW_PADDING_TOP: CGFloat = 15
     static var TEXT_VIEW_PADDING_BOTTOM: CGFloat = 80
     static var TEXT_VIEW_PADDING_LEFT: CGFloat = 10
@@ -1122,10 +1122,10 @@ class Utils {
                 let upperSegment = segments[range.upperBound]
 
                 // Compute text
-                let text = lowerSegment.entry!.getText(
+                let text = Entry.getText(
+                    segments: segments,
                     from: lowerSegment.timeMapping.target.start,
-                    until: upperSegment.timeMapping.target.end,
-                    segments: segments
+                    until: upperSegment.timeMapping.target.end
                 )
                 print("\tCompute cleansed transformation text: ", text)
 
@@ -1830,59 +1830,121 @@ class Utils {
         segment: EntrySegment,
         segments: [EntrySegment],
         type: SegmentPosition,
+        by count: Int = 1,
         isWord: Bool = false,
         isCommitted: Bool = false
     ) -> Int? {
         var result: Int?
         switch type {
         case .current:
-            result = segment.getIndex() - segments[0].getIndex()
+            result = Utils.binarySearchIndex(
+                in: segments,
+                isLower: { seg in
+                    return seg.timeMapping.target.start < segment.timeMapping.target.start
+                },
+                isHigher: { seg in
+                    return seg.timeMapping.target.start > segment.timeMapping.target.start
+                }
+            )
+            
         case .previous:
-            var currentSegmentIndex = segment.getIndex() - segments[0].getIndex()
-            if currentSegmentIndex - 1 >= 0 {
-                result = currentSegmentIndex - 1
-            } else {
-                // Input segment is the first element in the array
-                // We return it because there are no more previous segments
-                result = currentSegmentIndex
+            var currentSegmentIndex = max(0, (segment.getIndex() - segments[0].getIndex()) - 1)
+            if let index = Utils.binarySearchIndex(
+                in: segments,
+                isLower: { seg in
+                    return seg.timeMapping.target.start < segment.timeMapping.target.start
+                },
+                isHigher: { seg in
+                    return seg.timeMapping.target.start > segment.timeMapping.target.start
+                }
+            ) {
+                currentSegmentIndex = max(0, index - 1)
             }
             
-            if isWord || isCommitted {
-                while let res = result, (
-                    (isWord && (
-                        segments[res].isPunctuation() ||
-                        segments[res].isSilence() ||
-                        segments[res].isVoiceCommandWord() ||
-                        segments[res].isDeleted()
-                    )) ||
-                    (isCommitted && !segments[res].isCommitted())
-                ) && currentSegmentIndex - 1 >= 0 {
-                    currentSegmentIndex -= 1
-                    result = currentSegmentIndex
+            var numProcessedWords = 0
+            result = currentSegmentIndex
+            if (
+                !segments[currentSegmentIndex].isPunctuation() &&
+                !segments[currentSegmentIndex].isSilence() &&
+                !segments[currentSegmentIndex].isVoiceCommandWord() &&
+                !segments[currentSegmentIndex].isDeleted()
+            ) {
+                numProcessedWords += 1
+            }
+            
+            while (
+                (
+                    isWord &&
+                    (
+                        segments[currentSegmentIndex].isPunctuation() ||
+                        segments[currentSegmentIndex].isSilence() ||
+                        segments[currentSegmentIndex].isVoiceCommandWord() ||
+                        segments[currentSegmentIndex].isDeleted()
+                    )
+                ) ||
+                (isCommitted && !segments[currentSegmentIndex].isCommitted())
+                ||
+                numProcessedWords < count
+            ) && currentSegmentIndex - 1 >= 0 {
+                currentSegmentIndex -= 1
+                result = currentSegmentIndex
+                if (
+                    !segments[currentSegmentIndex].isPunctuation() &&
+                    !segments[currentSegmentIndex].isSilence() &&
+                    !segments[currentSegmentIndex].isVoiceCommandWord() &&
+                    !segments[currentSegmentIndex].isDeleted()
+                ) {
+                    numProcessedWords += 1
                 }
             }
         case .next:
-            var currentSegmentIndex = segment.getIndex() - segments[0].getIndex()
-            if currentSegmentIndex + 1 < segments.count {
-                result = currentSegmentIndex + 1
-            } else {
-                // Input segment is the last element in the array
-                // We return it because there are no more next segments
-                result = currentSegmentIndex
+            var currentSegmentIndex = min((segment.getIndex() - segments[0].getIndex()) + 1, segments.count - 1)
+            if let index = Utils.binarySearchIndex(
+                in: segments,
+                isLower: { seg in
+                    return seg.timeMapping.target.end < segment.timeMapping.target.end // switching these to start might break sentence selection
+                },
+                isHigher: { seg in
+                    return seg.timeMapping.target.end > segment.timeMapping.target.end
+                }
+            ) {
+                currentSegmentIndex = min(index + 1, segments.count - 1)
             }
             
-            if isWord || isCommitted {
-                while let res = result, (
-                    (isWord && (
-                        segments[res].isPunctuation() ||
-                        segments[res].isSilence() ||
-                        segments[res].isVoiceCommandWord() ||
-                        segments[res].isDeleted()
-                    )) ||
-                    (isCommitted && !segments[res].isCommitted())
-                ) && currentSegmentIndex + 1 < segments.count {
-                    currentSegmentIndex += 1
-                    result = currentSegmentIndex
+            var numProcessedWords = 0
+            result = currentSegmentIndex
+            if (
+                !segments[currentSegmentIndex].isPunctuation() &&
+                !segments[currentSegmentIndex].isSilence() &&
+                !segments[currentSegmentIndex].isVoiceCommandWord() &&
+                !segments[currentSegmentIndex].isDeleted()
+            ) {
+                numProcessedWords += 1
+            }
+
+            while (
+                (
+                    isWord &&
+                    (
+                        segments[currentSegmentIndex].isPunctuation() ||
+                        segments[currentSegmentIndex].isSilence() ||
+                        segments[currentSegmentIndex].isVoiceCommandWord() ||
+                        segments[currentSegmentIndex].isDeleted()
+                    )
+                ) ||
+                (isCommitted && !segments[currentSegmentIndex].isCommitted())
+                ||
+                numProcessedWords < count
+            ) && currentSegmentIndex + 1 < segments.count {
+                currentSegmentIndex += 1
+                result = currentSegmentIndex
+                if (
+                    !segments[currentSegmentIndex].isPunctuation() &&
+                    !segments[currentSegmentIndex].isSilence() &&
+                    !segments[currentSegmentIndex].isVoiceCommandWord() &&
+                    !segments[currentSegmentIndex].isDeleted()
+                ) {
+                    numProcessedWords += 1
                 }
             }
         }

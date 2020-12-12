@@ -11,5 +11,6 @@ import Foundation
 enum ScaleUnitType {
     case word
     case sentence
+    case paragraph
     case all
 }

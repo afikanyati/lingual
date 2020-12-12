@@ -995,41 +995,42 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
     }
     
     @objc func onUndoManagerChange(notification: Notification) {
-        print("===== Detail View Controller: On Undo Manager Change =====")
-        let canUndo = notification.userInfo!["canUndo"] as! Bool
-        let canRedo = notification.userInfo!["canRedo"] as! Bool
-        print("\tCan Undo: ", canUndo)
-        print("\tCan Redo: ", canRedo)
-        
-        // Handle Undo Button
-        if let undoButton = self.undoButton, canUndo && undoButton.alpha == 0 {
-            // Show
-            print("\tShow Undo Button...")
-            self.showButton(self.undoButton)
-        } else if let undoButton = self.undoButton, !canUndo && undoButton.alpha == 1 {
-            // Hide
-            print("\tHide Undo Button...")
-            self.hideButton(self.undoButton)
-        } else {
-            // !canUndo && undoButton.alpha == 0 || canRedo && undoButton.alpha == 1
-            // Do Nothing
-        }
-        
-        // Handle Redo Button
-        if let redoButton = self.redoButton, canRedo && redoButton.alpha == 0 {
-            // Show
-            print("\tShow Redo Button...")
-            self.showButton(self.redoButton)
-        } else if let redoButton = self.redoButton, !canRedo && redoButton.alpha == 1 {
-            // Hide
-            print("\tHide Redo Button...")
-            self.hideButton(self.redoButton)
-        } else {
-            // !canUndo && redoButton.alpha == 0 || canRedo && redoButton.alpha == 1
-            // Do Nothing
-        }
-        
         DispatchQueue.main.async { [weak self] in
+            print("===== Detail View Controller: On Undo Manager Change =====")
+            let canUndo = notification.userInfo!["canUndo"] as! Bool
+            let canRedo = notification.userInfo!["canRedo"] as! Bool
+            
+            print("\tCan Undo: ", canUndo)
+            print("\tCan Redo: ", canRedo)
+            
+            // Handle Undo Button
+            if let undoButton = self?.undoButton, canUndo && undoButton.alpha == 0 {
+                // Show
+                print("\tShow Undo Button...")
+                self?.showButton(self!.undoButton)
+            } else if let undoButton = self?.undoButton, !canUndo && undoButton.alpha == 1 {
+                // Hide
+                print("\tHide Undo Button...")
+                self?.hideButton(self!.undoButton)
+            } else {
+                // !canUndo && undoButton.alpha == 0 || canRedo && undoButton.alpha == 1
+                // Do Nothing
+            }
+            
+            // Handle Redo Button
+            if let redoButton = self?.redoButton, canRedo && redoButton.alpha == 0 {
+                // Show
+                print("\tShow Redo Button...")
+                self?.showButton(self!.redoButton)
+            } else if let redoButton = self?.redoButton, !canRedo && redoButton.alpha == 1 {
+                // Hide
+                print("\tHide Redo Button...")
+                self?.hideButton(self!.redoButton)
+            } else {
+                // !canUndo && redoButton.alpha == 0 || canRedo && redoButton.alpha == 1
+                // Do Nothing
+            }
+            
             // Add text to text view if exists
             if let entryManager = self?.entryManager, let entry = entryManager.currentEntry {
                 print("\tUpdate Text View: ", entry.getText())
@@ -1265,6 +1266,11 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
         if let cursorView = self.cursorView {
             cursorView.removeFromSuperview()
             self.cursorView = nil
+        }
+        
+        // remove from selection cursor
+        if let _ = self.selectionCursor.cursorView {
+            self.selectionCursor.setCursorView()
         }
     }
     
@@ -2179,12 +2185,24 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
                 // Remove Selection in view and model
                 print("\tPrior selection detected. Remove Selection in view and model...")
                 entry.exitWalk(clearSelection: true, withFeedback: false)
+                
+                return // We don't want to move the cursor
             } else if self.textView?.selectedTextRange != nil &&
                 self.selectionCursor.hasSelection
             {
                 // Remove Selection in view and model
                 print("\tPrior selection detected. Remove Selection in view and model...")
                 self.selectionCursor.clearSelection()
+                
+                return // We don't want to move the cursor
+            }
+            
+            print("\tDetermine text position near touch point...")
+            let touchPoint = touch.location(in: self.textView)
+            let textPosition = self.textView?.closestPosition(to: touchPoint)
+            if let textPosition = textPosition {
+                print("\tMove cursor to new position...")
+                self.selectionCursor.moveCursor(textPosition: textPosition, cache: true)
             }
             
             // Uncommenting this causes issues with late reveal of command buttons

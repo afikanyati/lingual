@@ -13,6 +13,7 @@ import NaturalLanguage
 
 // https://remotepossibilities.wordpress.com/2013/03/10/when-you-speak-how-often-and-how-long-should-you-pause-the-answer-try-1-2-3/
 let MAX_SEMANTICALLY_SIMILAR_WORDS = 5
+let NEWLINE_CHAR = "\n\n"
 
 class EntrySegment: AVCompositionTrackSegment, NSCoding {
     // ===== IMPORTANT =====
@@ -93,6 +94,8 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
     }
     /// Specifies information related to the sentence of the entry segment is a member of.
     private var sentence = Sentence(number: Int(Utils.UNKNOWN), text: "", timeRange: CMTimeRange.zero, entryRange: 0..<1)
+    /// Specifies information related to the paragraph of the entry segment is a member of.
+    private var paragraph = Paragraph(number: Int(Utils.UNKNOWN), text: "", timeRange: CMTimeRange.zero, entryRange: 0..<1)
     /// Scores text as positive, negative, or neutral based on its sentiment polarity.
     private var sentimentScore: [ScaleUnitType:Float] = [
         .word: Float.infinity,
@@ -120,6 +123,8 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
     private(set) var cachedTextHistory: String?
     /// Stores arguments of last getTextHistory() call
     private(set) var cachedGetTextHistoryArguments: Set<String>?
+    /// Stores segments of last getTextHistory() call
+    private(set) var cachedGetTextHistorySegments: Set<String>?
     /// Stores a cached version of isValidLastSentenceWord() method
     private(set) var cachedIsValidSentenceLastWord: Bool?
     /// Stores a cached version of isValidCommaWord() method
@@ -247,6 +252,7 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
         coder.encode(self.backgroundNoise, forKey: "backgroundNoise")
         coder.encode(self.power, forKey: "power")
         coder.encode(self.sentence, forKey: "sentence")
+        coder.encode(self.paragraph, forKey: "paragraph")
         let sentimentScore: [String: Float] = [
             "word": self.sentimentScore[.word]!,
             "sentence": self.sentimentScore[.sentence]!,
@@ -308,6 +314,7 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
         self.backgroundNoise = coder.decodeDouble(forKey: "backgroundNoise")
         self.power = coder.decodeDouble(forKey: "power")
         self.sentence = coder.decodeObject(forKey: "sentence") as! Sentence
+        self.paragraph = coder.decodeObject(forKey: "paragraph") as! Paragraph
         let sentimentScore = coder.decodeObject(forKey: "sentimentScore") as! [String:Float]
         self.sentimentScore = [
             .word: sentimentScore["word"]!,
@@ -364,7 +371,7 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
     
     // update for new properties
     override var description: String {
-        return "EntrySegment {\n\tuid: \(self.uid) \n\tclipUID: \(self.clipUID) \n\tspeakerUID: \(self.speakerUID) \n\tdateCreated: \(Utils.getDateString(date: self.dateCreated) ?? "nil") \n\tdateModified: \(Utils.getDateString(date: self.dateModified) ?? "nil") \n\tisDeleted: \(self.deleted) \n\trawWord: '\(self.word)' \n\tdisplayedWord: '\(self.getText(withTemporalSuggestions: self.entry!.state?.withTemporalSuggestions ?? Utils.DEFAULT_WITH_TEMPORAL_SUGGESTIONS, withPunctuationSuggestions: self.entry!.state?.withPunctuationSuggestions ?? Utils.DEFAULT_WITH_PUNCTUATION_SUGGESTIONS, withFormattingSuggestions: self.entry!.state?.withFormattingSuggestions ?? Utils.DEFAULT_WITH_FORMATTING_SUGGESTIONS, strictlyAsWord: self.entry!.state?.withTextStrictlyAsWords ?? Utils.DEFAULT_WITH_TEXT_STRICTLY_AS_WORDS, withSpacePrefix: true))' \n\tsourceURL: \(self.sourceURL!.lastPathComponent) \n\trate: \(self.rate) \n\teffectiveDuration: \(self.effectiveDuration.seconds) \n\tpitch: \(self.pitch?.note.string ?? "nil") \n\tsourceTimeRange: (\n\t\tstart: \(self.timeMapping.source.start.seconds),\n\t\tend: \(self.timeMapping.source.end.seconds),\n\t\tduration: \(self.timeMapping.source.duration.seconds)\n\t) \n\ttargetTimeRange: (\n\t\tstart: \(self.timeMapping.target.start.seconds),\n\t\tend: \(self.timeMapping.target.end.seconds),\n\t\tduration: \(self.timeMapping.target.duration.seconds)\n\t) \n\tindex: \(self.index) \n\tphoneticallySimilarWords: \(String(describing: self.phoneticallySimilarWords)) \n\ttokenType: \(self.tokenType ?? NLTag(rawValue: "nil")) \n\tlexicalClass: \(self.lexicalClass ?? NLTag(rawValue: "nil")) \n\tnameType: \(self.nameType ?? NLTag(rawValue: "nil")) \n\tlemma: \(self.lemma ?? NLTag(rawValue: "nil")) \n\tbackgroundNoise: \(self.backgroundNoise) \n\tpower: \(self.power) \n\tavgEntryPower: \(self.avgEntryPower) \n\tsentence: \(String(describing: self.sentence)) \n\tsentimentScore: \(String(describing: self.sentimentScore)) \n\tisSilence: \(self.isSilence()) \n\tisPunctuation: \(self.isPunctuation()) \n\tisEmphasized: \(self.isEmphasized()) \n\tisNumber: \(self.isNumber()) \n\tisHomophone: \(self.isHomophone()) \n\tisSentenceTerminator: \(self.isSentenceTerminator()) \n\tisVoiceCommandWord: \(self.voiceCommandWord) \n\tavgPauseDuration: \(self.avgPauseDuration) \n\tspeakingRate: \(self.speakingRate)\n}"
+        return "EntrySegment {\n\tuid: \(self.uid) \n\tclipUID: \(self.clipUID) \n\tspeakerUID: \(self.speakerUID) \n\tdateCreated: \(Utils.getDateString(date: self.dateCreated) ?? "nil") \n\tdateModified: \(Utils.getDateString(date: self.dateModified) ?? "nil") \n\tisDeleted: \(self.deleted) \n\trawWord: '\(self.word)' \n\tdisplayedWord: '\(self.getText(withTemporalSuggestions: self.entry!.state?.withTemporalSuggestions ?? Utils.DEFAULT_WITH_TEMPORAL_SUGGESTIONS, withPunctuationSuggestions: self.entry!.state?.withPunctuationSuggestions ?? Utils.DEFAULT_WITH_PUNCTUATION_SUGGESTIONS, withFormattingSuggestions: self.entry!.state?.withFormattingSuggestions ?? Utils.DEFAULT_WITH_FORMATTING_SUGGESTIONS, strictlyAsWord: self.entry!.state?.withTextStrictlyAsWords ?? Utils.DEFAULT_WITH_TEXT_STRICTLY_AS_WORDS, withSpacePrefix: true))' \n\tsourceURL: \(self.sourceURL!.lastPathComponent) \n\trate: \(self.rate) \n\teffectiveDuration: \(self.effectiveDuration.seconds) \n\tpitch: \(self.pitch?.note.string ?? "nil") \n\tsourceTimeRange: (\n\t\tstart: \(self.timeMapping.source.start.seconds),\n\t\tend: \(self.timeMapping.source.end.seconds),\n\t\tduration: \(self.timeMapping.source.duration.seconds)\n\t) \n\ttargetTimeRange: (\n\t\tstart: \(self.timeMapping.target.start.seconds),\n\t\tend: \(self.timeMapping.target.end.seconds),\n\t\tduration: \(self.timeMapping.target.duration.seconds)\n\t) \n\tindex: \(self.index) \n\tphoneticallySimilarWords: \(String(describing: self.phoneticallySimilarWords)) \n\ttokenType: \(self.tokenType ?? NLTag(rawValue: "nil")) \n\tlexicalClass: \(self.lexicalClass ?? NLTag(rawValue: "nil")) \n\tnameType: \(self.nameType ?? NLTag(rawValue: "nil")) \n\tlemma: \(self.lemma ?? NLTag(rawValue: "nil")) \n\tbackgroundNoise: \(self.backgroundNoise) \n\tpower: \(self.power) \n\tavgEntryPower: \(self.avgEntryPower) \n\tsentence: \(String(describing: self.sentence)) \n\tparagraph: \(String(describing: self.paragraph)) \n\tsentimentScore: \(String(describing: self.sentimentScore)) \n\tisSilence: \(self.isSilence()) \n\tisPunctuation: \(self.isPunctuation()) \n\tisEmphasized: \(self.isEmphasized()) \n\tisNumber: \(self.isNumber()) \n\tisHomophone: \(self.isHomophone()) \n\tisSentenceTerminator: \(self.isSentenceTerminator()) \n\tisVoiceCommandWord: \(self.voiceCommandWord) \n\tavgPauseDuration: \(self.avgPauseDuration) \n\tspeakingRate: \(self.speakingRate)\n}"
     }
     
     // strong object equavalence
@@ -408,6 +415,7 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
             firstSegment.getBackgroundNoise() == secondSegment.getBackgroundNoise() &&
             firstSegment.getPower() == secondSegment.getPower() &&
             firstSegment.getSentence() == secondSegment.getSentence() &&
+            firstSegment.getParagraph() == secondSegment.getParagraph() &&
             firstSegment.getSpeakingRate() == secondSegment.getSpeakingRate() &&
             firstSegment.getAvgPauseDuration() == secondSegment.getAvgPauseDuration() &&
             firstSegment.getIndex() == secondSegment.getIndex() &&
@@ -549,13 +557,14 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
         }
 
         // Handle Punctuation Suggestions
-        if self.isSilence() && withPunctuationSuggestions && avgPauseDuration != Utils.UNKNOWN {
+//        if self.isSilence() && withPunctuationSuggestions && avgPauseDuration != Utils.UNKNOWN {
+        if self.isSilence() && withPunctuationSuggestions {
             // no need for self.word to be injected in string because
             // its the empty string for silence
-            if previousWordIsSentenceTerminator && suggestsNewParagraph() {
+            if previousWordIsSentenceTerminator && self.suggestsNewParagraph() {
                 // New line
-                text += "\n\n"
-            } else if (!previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord) && !nextSegmentIsPunctuation && ((!nextSegmentIsVoiceCommand && !nextSegmentIsDeleted) || !existsWordsAfterVoiceCommandAndDeleted) && suggestsNewParagraph() {
+                text += NEWLINE_CHAR
+            } else if (!previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord) && !nextSegmentIsPunctuation && ((!nextSegmentIsVoiceCommand && !nextSegmentIsDeleted) || !existsWordsAfterVoiceCommandAndDeleted) && self.suggestsNewParagraph() {
                 // New Paragraph
                 // Sentence Terminators: Exclamation Mark, Question Mark, Period
                 let terminator = self.sentence.text.count > 0 && Utils.isQuestion(sentence: self.sentence.text) ? "?" : "."
@@ -574,7 +583,8 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
         }
 
         // Handle Space Suggestions
-        if self.isSilence() && withTemporalSuggestions && avgPauseDuration != Utils.UNKNOWN {
+//        if self.isSilence() && withTemporalSuggestions && avgPauseDuration != Utils.UNKNOWN {
+        if self.isSilence() && withTemporalSuggestions {
             let duration = self.timeMapping.target.duration.seconds
             if suggestsNewParagraph(includingFirstSegment: true) {
                 // We're going to a new paragraph if we have withPunctuationSuggestions on
@@ -634,6 +644,7 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
         forEcho: Bool = false,
         index: Int,
         segments: [EntrySegment],
+        segmentsUIDSet: Set<String>,
         from fromTime: CMTime = CMTime.zero,
         until untilTime: CMTime? = nil
     ) -> String {
@@ -660,16 +671,20 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
             argumentArr.append("forEcho")
         }
         argumentArr.append("index=\(index)")
-        argumentArr.append("segments=\(Utils.stringifySegments(segments: segments))")
         argumentArr.append("fromTime=\(fromTime.seconds)")
         if let untilTime = untilTime {
             argumentArr.append("untilTime=\(untilTime.seconds)")
         }
         
         let argumentSet: Set = Set(argumentArr)
+        let segmentsSet: Set = segmentsUIDSet.subtracting(Set([self.getUID()]))
         
         // Use cached version if it exists
-        if let cachedTextHistory = self.cachedTextHistory, let cachedGetTextHistoryArguments = self.cachedGetTextHistoryArguments, argumentSet == cachedGetTextHistoryArguments {
+        if let cachedTextHistory = self.cachedTextHistory,
+           let cachedGetTextHistoryArguments = self.cachedGetTextHistoryArguments,
+           argumentSet == cachedGetTextHistoryArguments &&
+            segmentsSet == cachedGetTextHistorySegments
+        {
             return cachedTextHistory
         }
         
@@ -731,6 +746,7 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
             // cache values
             self.cachedTextHistory = text
             self.cachedGetTextHistoryArguments = argumentSet
+            self.cachedGetTextHistorySegments = segmentsSet
             return text
         }
         
@@ -759,6 +775,7 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
                     forEcho: forEcho,
                     index: lowerIndex,
                     segments: segments,
+                    segmentsUIDSet: segmentsSet,
                     from: fromTime,
                     until: untilTime
                 ) + text
@@ -768,13 +785,8 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
         // cached values
         self.cachedTextHistory = text
         self.cachedGetTextHistoryArguments = argumentSet
-        
+        self.cachedGetTextHistorySegments = segmentsSet
         return text
-    }
-    
-    func clearCachedTextHistory() {
-        self.cachedTextHistory = nil
-        self.cachedGetTextHistoryArguments = nil
     }
     
     func getPhoneticallySimilarWords() -> [String] {
@@ -962,9 +974,9 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
                 j += 1
             }
         }
-        
-        if self.isSilence() && withPunctuationSuggestions && avgPauseDuration != Utils.UNKNOWN {
-            if !previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord && !nextSegmentIsPunctuation && ((!nextSegmentIsVoiceCommand && !nextSegmentIsDeleted) || !existsWordsAfterVoiceCommandAndDeleted) && suggestsNewParagraph() {
+//        if self.isSilence() && withPunctuationSuggestions && avgPauseDuration != Utils.UNKNOWN {
+        if self.isSilence() && withPunctuationSuggestions {
+            if !previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord && !nextSegmentIsPunctuation && ((!nextSegmentIsVoiceCommand && !nextSegmentIsDeleted) || !existsWordsAfterVoiceCommandAndDeleted) && self.suggestsNewParagraph() {
                 // cache value
                 self.cachedIsSentenceTerminator = true
                 return true
@@ -978,6 +990,10 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
         // cache value
         self.cachedIsSentenceTerminator = self.lexicalClass == .sentenceTerminator
         return self.lexicalClass == .sentenceTerminator
+    }
+    
+    func isParagraphTerminator() -> Bool {
+        return self.isSentenceTerminator() && self.suggestsNewParagraph()
     }
     
     func isValidWord() -> Bool {
@@ -1058,6 +1074,17 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
     
     func setSentence(sentence: Sentence) {
         self.sentence = sentence
+        
+        self.handleMutation()
+        checkRep()
+    }
+    
+    func getParagraph() -> Paragraph {
+        return self.paragraph
+    }
+    
+    func setParagraph(paragraph: Paragraph) {
+        self.paragraph = paragraph
         
         self.handleMutation()
         checkRep()
@@ -1245,7 +1272,20 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
         duplicateSegment.setSpeakingRate(rate: self.speakingRate)
         
         // Set Sentence
-        duplicateSegment.setSentence(sentence: self.sentence)
+        duplicateSegment.setSentence(sentence: Sentence(
+            number: self.sentence.number,
+            text: self.sentence.text,
+            timeRange: self.sentence.timeRange,
+            entryRange: self.sentence.entryRange
+        ))
+        
+        // Set Paragraph
+        duplicateSegment.setParagraph(paragraph: Paragraph(
+            number: self.paragraph.number,
+            text: self.paragraph.text,
+            timeRange: self.paragraph.timeRange,
+            entryRange: self.paragraph.entryRange
+        ))
         
         // Set is voice command
         duplicateSegment.setIsVoiceCommandWord(to: self.voiceCommandWord)
@@ -1254,26 +1294,6 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
         duplicateSegment.setRate(rate: self.rate)
         
         return duplicateSegment
-    }
-    
-    // creates new sentence entry object
-    func createSentenceEntry() -> Entry? {
-        if let entry = self.entry {
-            let range = self.sentence.entryRange
-            let segments = Array(entry.entrySegments[range])
-            let duplicateSegments = Utils.duplicateSegments(segments: segments)
-            let uid = UUID().uuidString
-            let entry = Entry(
-                uid: uid,
-                filename: "entry-\(uid)",
-                creatorUID: entry.state.speaker.uid!, // This might not always hold true
-                segments: duplicateSegments
-            )
-            
-            return entry
-        }
-        
-        return nil
     }
     
     func runNotificationSearch() {
@@ -1360,6 +1380,9 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
         self.cachedText = nil
         self.cachedTextHistory = nil
         self.cachedGetTextArguments = nil
+        self.cachedTextHistory = nil
+        self.cachedGetTextHistoryArguments = nil
+        self.cachedGetTextHistorySegments = nil
         self.cachedIsValidSentenceLastWord = nil
         self.cachedIsSentenceTerminator = nil
     }

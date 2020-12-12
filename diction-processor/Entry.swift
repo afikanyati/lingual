@@ -65,10 +65,6 @@ class Entry: AVMutableComposition, NSCoding {
     private(set) var entrySegments: [EntrySegment] = [EntrySegment]()
     /// Stores a list of high-level representation of entry segments in staging (before committed to entrySegments)
     private(set) var entryBuffer: [EntrySegment] = [EntrySegment]()
-    /// Stores a map of segment uid/ segment index key-value pairs to quickly determine segment membership and location
-    private(set) var segmentIndexMap: [String: Int] = [:]
-    /// Stores a map of deleted segment uid/ segment index key-value pairs to quickly determine segment membership and location
-    private(set) var deletedSegmentIndexMap: [String: Int] = [:]
     /// Range of last committed buffer of entry segments
     private(set) var committedBufferRanges = [Range<Int>]()
     /// An array of  transformations applied the entry
@@ -77,6 +73,17 @@ class Entry: AVMutableComposition, NSCoding {
     private(set) var startTime: CMTime = CMTime.zero // When we remove or add we change this
     /// Stores the ending time of the entry
     private(set) var endTime: CMTime = CMTime.zero // When we remove or add we change this
+    /// Stores the number of paragraphs in the entry
+    public var paragraphCount: Int {
+        var paragraphCount = Int(Utils.UNKNOWN)
+        if let lastSegment = self.entryBuffer.last, self.entryBuffer.count > 0 && lastSegment.getParagraph().number != Int(Utils.UNKNOWN) {
+            paragraphCount = lastSegment.getParagraph().number + 1
+        } else if let lastSegment = self.entrySegments.last, self.entrySegments.count > 0 && lastSegment.getParagraph().number != Int(Utils.UNKNOWN) {
+            paragraphCount = lastSegment.getParagraph().number + 1
+        }
+        
+        return paragraphCount
+    }
     /// Stores the number of sentences in the entry
     public var sentenceCount: Int {
         var sentenceCount = Int(Utils.UNKNOWN)
@@ -208,13 +215,48 @@ class Entry: AVMutableComposition, NSCoding {
         filename: String,
         fileType: AVFileType? = nil,
         creatorUID: String,
-        segments: [EntrySegment]? = nil
+        segments: [EntrySegment]? = nil,
+        state: StateManager? = nil,
+        speechSynthesis: SpeechSynthesisEngine? = nil,
+        speechRecognition: SpeechRecognitionEngine? = nil,
+        speechPlayer: SpeechPlayerEngine? = nil,
+        selectionCursor: SelectionCursor? = nil,
+        pitchRecognition: PitchRecognitionEngine? = nil,
+        entryManager: EntryManager? = nil,
+        notifications: NotificationEngine? = nil,
+        processSegments: Bool = true,
+        handler: ((_ entry: Entry) -> Void)? = nil
     ) {
         print("===== Entry: Initialization =====")
         print("\tFilename: ", filename)
         self.uid = uid
         self.filename = filename
         self.creatorUID = creatorUID
+        
+        if let state = state {
+            self.state = state
+        }
+        if let speechSynthesis = speechSynthesis {
+            self.speechSynthesis = speechSynthesis
+        }
+        if let speechRecognition = speechRecognition {
+            self.speechRecognition = speechRecognition
+        }
+        if let speechPlayer = speechPlayer {
+            self.speechPlayer = speechPlayer
+        }
+        if let selectionCursor = selectionCursor {
+            self.selectionCursor = selectionCursor
+        }
+        if let pitchRecognition = pitchRecognition {
+            self.pitchRecognition = pitchRecognition
+        }
+        if let entryManager = entryManager {
+            self.entryManager = entryManager
+        }
+        if let notifications = notifications {
+            self.notifications = notifications
+        }
         
         super.init()
         
@@ -231,18 +273,36 @@ class Entry: AVMutableComposition, NSCoding {
         // Configure Observers
         self.configureNotificationObservers()
         
-        // A user might pass in segments when entry instantiated
-        if let segments = segments, segments.count > 0 {
-            print("\tSetting segments...")
-            self.startTime = segments.first!.timeMapping.target.start
-            self.endTime = segments.last!.timeMapping.target.end
+        if let segments = segments, processSegments && segments.count > 0 {
+            print("\tInstructed to process segments...")
+            print("\tDuplicate and save each segment...")
+            var entrySegments = [EntrySegment]()
+            for segment in segments {
+                let duplicateSegment = segment.duplicate()
+                duplicateSegment.setEntry(entry: self)
+                entrySegments.append(duplicateSegment)
+            }
+            
+            self.startTime = entrySegments.first!.timeMapping.target.start
+            self.endTime = entrySegments.last!.timeMapping.target.end
+            
             self.setSegments(
-                segments: segments,
-                replaceEntryDetails: true,
+                segments: entrySegments,
+                replaceEntryDetails: false,
                 saveToLowLevelRepr: true,
                 saveToState: false
             )
+        } else if let segments = segments, !processSegments && segments.count > 0 {
+            print("\tInstructed not to process segments...")
+            print("\tSet segments...")
+            self.entrySegments = segments
+            self.startTime = segments.first!.timeMapping.target.start
+            self.endTime = segments.last!.timeMapping.target.end
+        } else {
+            print("\tNo segments to insert. Return entry...")
         }
+        
+        handler?(self)
     }
     
     func encode(with coder: NSCoder) {
@@ -253,8 +313,6 @@ class Entry: AVMutableComposition, NSCoding {
         coder.encode(self.dateModified, forKey: "dateModified")
         coder.encode(self.creatorUID, forKey: "creatorUID")
         coder.encode(self.entrySegments, forKey: "entrySegments")
-        coder.encode(self.segmentIndexMap, forKey: "segmentIndexMap")
-        coder.encode(self.deletedSegmentIndexMap, forKey: "deletedSegmentIndexMap")
         var committedBufferRanges = [[String:Int]]()
         for range in self.committedBufferRanges {
             let dictRange: [String:Int] = [
@@ -282,8 +340,6 @@ class Entry: AVMutableComposition, NSCoding {
         self.dateModified = coder.decodeDouble(forKey: "dateModified")
         self.creatorUID = coder.decodeObject(forKey: "creatorUID") as! String
         self.entrySegments = coder.decodeObject(forKey: "entrySegments") as! [EntrySegment]
-        self.segmentIndexMap = coder.decodeObject(forKey: "segmentIndexMap") as! [String: Int]
-        self.deletedSegmentIndexMap = coder.decodeObject(forKey: "deletedSegmentIndexMap") as! [String: Int]
         if let committedBufferDictRanges = coder.decodeObject(forKey: "committedBufferRanges") as? [[String:Int]] {
             var committedBufferRanges = [Range<Int>]()
             for dictRange in committedBufferDictRanges {
@@ -313,16 +369,6 @@ class Entry: AVMutableComposition, NSCoding {
         
         // Configure Observers
         self.configureNotificationObservers()
-        
-        // Make sure segments are set in underlying track
-        if self.entrySegments.count > 0 {
-            self.setSegments(
-                segments: self.entrySegments,
-                replaceEntryDetails: true,
-                saveToLowLevelRepr: true,
-                saveToState: false
-            )
-        }
     }
     
     deinit {
@@ -331,7 +377,7 @@ class Entry: AVMutableComposition, NSCoding {
     }
     
     public override var description: String {
-        return "Entry {\n\tuid: \(self.uid) \n\tfilename: \(self.filename) \n\tfileType: \(self.fileType) \n\tdateCreated: \(Utils.getDateString(date: self.dateCreated) ?? "nil") \n\tdateModified: \(Utils.getDateString(date: self.dateModified) ?? "nil") \n\tcreatorUID: \(self.creatorUID) \n\tentrySegments: \(self.entrySegments) \n\tentryBuffer: \(self.entryBuffer) \n\tsegmentIndexMap: \(self.segmentIndexMap) \n\tdeletedSegmentIndexMap: \(self.deletedSegmentIndexMap) \n\tcommittedBufferRanges: \(String(describing: self.committedBufferRanges)) \n\ttransformations: \(self.transformations) \n\tstartTime: \(self.startTime) \n\tendTime: \(self.endTime) \n\tduration: \(self.getDuration()) \n\tsentenceCount: \(self.sentenceCount) \n\twordCount: \(self.wordCount) \n\tlanguage: \(String(describing: self.language)) \n\tavgSpeakingRate: \(self.avgSpeakingRate) \n\tauthorizedToListenForSpeech: \(self.authorizedToListenForSpeech) \n\tclips: \(self.clips) \n\tcurrentClipUID: \(self.currentClipUID ?? "nil") \n\trecordStartDate: \(String(describing: self.recordStartDate)) \n\taccumulatedDuration: \(self.accumulatedDuration) \n\tisDeleted: \(self.isDeleted) \n\tviews: \(self.views) \n\tplays: \(self.plays) \n\ttextExports: \(self.textExports) \n\taudioExports: \(self.audioExports)\n}"
+        return "Entry {\n\tuid: \(self.uid) \n\tfilename: \(self.filename) \n\tfileType: \(self.fileType) \n\tdateCreated: \(Utils.getDateString(date: self.dateCreated) ?? "nil") \n\tdateModified: \(Utils.getDateString(date: self.dateModified) ?? "nil") \n\tcreatorUID: \(self.creatorUID) \n\tentrySegments: \(self.entrySegments) \n\tentryBuffer: \(self.entryBuffer) \n\tcommittedBufferRanges: \(String(describing: self.committedBufferRanges)) \n\ttransformations: \(self.transformations) \n\tstartTime: \(self.startTime) \n\tendTime: \(self.endTime) \n\tduration: \(self.getDuration()) \n\tsentenceCount: \(self.sentenceCount) \n\twordCount: \(self.wordCount) \n\tlanguage: \(String(describing: self.language)) \n\tavgSpeakingRate: \(self.avgSpeakingRate) \n\tauthorizedToListenForSpeech: \(self.authorizedToListenForSpeech) \n\tclips: \(self.clips) \n\tcurrentClipUID: \(self.currentClipUID ?? "nil") \n\trecordStartDate: \(String(describing: self.recordStartDate)) \n\taccumulatedDuration: \(self.accumulatedDuration) \n\tisDeleted: \(self.isDeleted) \n\tviews: \(self.views) \n\tplays: \(self.plays) \n\ttextExports: \(self.textExports) \n\taudioExports: \(self.audioExports)\n}"
     }
     
     static func ==(_ firstEntry: Entry, _ secondEntry: Entry) -> Bool {
@@ -343,8 +389,6 @@ class Entry: AVMutableComposition, NSCoding {
             firstEntry.creatorUID == secondEntry.creatorUID &&
             firstEntry.entrySegments.elementsEqual(secondEntry.entrySegments) &&
             firstEntry.entryBuffer.elementsEqual(secondEntry.entryBuffer) &&
-            firstEntry.segmentIndexMap == secondEntry.segmentIndexMap &&
-            firstEntry.deletedSegmentIndexMap == secondEntry.deletedSegmentIndexMap &&
             firstEntry.committedBufferRanges.elementsEqual(secondEntry.committedBufferRanges) &&
             firstEntry.transformations.elementsEqual(secondEntry.transformations) &&
             firstEntry.startTime == secondEntry.startTime &&
@@ -467,7 +511,9 @@ class Entry: AVMutableComposition, NSCoding {
         if self.entryManager == nil || self.isDeleted || (self.entryManager != nil && self.entryManager!.currentEntry == nil) || (self.entryManager != nil && self.entryManager!.currentEntry != nil && self.entryManager!.currentEntry!.uid != self.uid) { return }
         // When we create duplicates of entries because of the undo manager, so remain in memory
         // To avoid multiple copies of the same entry writing to one file, we only allow the one that matches memory addresses with currentEntry through
-        guard Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(self.entryManager.currentEntry!).toOpaque() else { return }
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            return
+        }
 
         if let entryManager = self.entryManager, let recordFile = self.recordFile, let entry = entryManager.currentEntry, entry.uid == self.uid && self.speechRecognition.isListeningForSpeech {
 //            print("===== Entry: On Buffer Item =====")
@@ -606,7 +652,7 @@ class Entry: AVMutableComposition, NSCoding {
             isFinalTranscription &&
             !isVoiceCommand
         {
-            self.entryManager.registerEntryChange(entry: self, undo: "committing new speech")
+            self.entryManager.registerEntryChange(entry: self, undo: "committing new speech", ignoreUpdate: true)
         }
     }
     
@@ -620,11 +666,6 @@ class Entry: AVMutableComposition, NSCoding {
     
     func checkRep() {
         var result = true
-        
-        // segmentIndexMap and entrySegments length must be the same
-        result = result && self.segmentIndexMap.count == self.entrySegments.count
-//         print("segmentIndexMap and entrySegments length must be the same: ", self.segmentIndexMap.count, self.entrySegments.count)
-//         print("current result: ", result)
         
         // dateModified must be after dateCreated
         result = result && self.dateModified >= self.dateCreated
@@ -673,8 +714,15 @@ class Entry: AVMutableComposition, NSCoding {
     // MARK: - Speech Listening Methods
     
     func performTranscriptionUpdate(_ transcription: SFTranscription) {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override performTranscriptionUpdate method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         print("===== Entry: Perform Transcription Update =====")
-        print("Transcript Text: ", transcription.formattedString)
+        print("\tTranscript Text: ", transcription.formattedString)
         for (index, segment) in transcription.segments.enumerated() {
             self.processTranscriptSegment(
                 segment: segment,
@@ -685,6 +733,13 @@ class Entry: AVMutableComposition, NSCoding {
     }
     
     func processTranscriptSegment(segment: SFTranscriptionSegment, transcriptionIndex: Int, transcription: SFTranscription) {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override processTranscriptSegment method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         // get existing segments
         var bufferSegments = self.entryBuffer
         
@@ -850,12 +905,16 @@ class Entry: AVMutableComposition, NSCoding {
         saveSegments: Bool = false,
         saveToLowLevelRepr: Bool = false,
         returnSegments: Bool = false,
-        saveToState: Bool = true
+        saveToState: Bool = true,
+        startTime: CMTime = CMTime.zero,
+        startIndex: Int? = nil
     ) -> [EntrySegment]? {
         print("===== Entry: Normalize Segments =====")
-        var lastEnd = CMTime.zero
+        var lastEnd = startTime
         var normalizedSegments = [EntrySegment]()
         var silenceIndices = [Int]()
+        print("\tStart Time: ", startTime.seconds)
+        print("\tStartIndex: ", startIndex ?? "nil")
         
         var segs = self.entryBuffer.count > 0 ? self.entryBuffer : self.entrySegments
         if let segments = segments {
@@ -1159,7 +1218,11 @@ class Entry: AVMutableComposition, NSCoding {
         var fullyNormalizedSegments = [EntrySegment]()
         for (index, segment) in normalizedSegments.enumerated() {
             // Set segment index
-            segment.setIndex(index: index)
+            if let startIndex = startIndex {
+                segment.setIndex(index: startIndex + index)
+            } else {
+                segment.setIndex(index: index)
+            }
             
             // Set background noise
             segment.setBackgroundNoise(noise: self.getBackgroundNoise())
@@ -1262,6 +1325,13 @@ class Entry: AVMutableComposition, NSCoding {
     }
     
     func commitBuffer() {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override commitBuffer method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         guard self.entryBuffer.count > 0 else { return }
         print("===== Entry: Commit Buffer =====")
 
@@ -1317,14 +1387,32 @@ class Entry: AVMutableComposition, NSCoding {
         self.clearBuffer()
         
         // normalize segments
-        print("\tNormalizing buffer segments...")
-        let normalizedSegments = self.normalizeSegments(
+        var startTime = CMTime.zero
+        var startIndex = 0
+        if let lastSegment = self.entrySegments.last {
+            // We want to normalize segments assuming they'll be at the end of the entry
+            // We do this to save on computation
+            startTime = lastSegment.timeMapping.target.end
+            startIndex = lastSegment.getIndex() + 1
+        }
+        let normalizedSourceSegments = self.normalizeSegments(
             segments: segments,
+            normalizeType: .source,
             omitLeadingSilence: updateCachedAnchor, // remove leading space so that we don't erroneously treat it as a long silence in the event that we are inserting new speech
             returnSegments: true,
             saveToState: false
         )
-        
+        print("\tNormalizing buffer segments with start time: \(startTime.seconds) and initial index: \(startIndex)")
+        let normalizedSegments = self.normalizeSegments(
+            segments: normalizedSourceSegments,
+            normalizeType: .target,
+            omitLeadingSilence: updateCachedAnchor, // remove leading space so that we don't erroneously treat it as a long silence in the event that we are inserting new speech
+            returnSegments: true,
+            saveToState: false,
+            startTime: startTime,
+            startIndex: startIndex
+        )
+        print("\tNormalized Segments: ", Utils.stringifySegments(segments: normalizedSegments!))
         let lastBufferWordIndex = Utils.getEntryNthLastSegmentIndex(
             segments: normalizedSegments!,
             selectionCursor: self.selectionCursor,
@@ -1372,17 +1460,31 @@ class Entry: AVMutableComposition, NSCoding {
         print(
             "\tLast Buffer Range: ",
             numSegmentsBehindCursorBeforeInsertion..<(numSegmentsBehindCursorBeforeInsertion + numNormalizedBufferSegments),
-            "\(self.entrySegments[numSegmentsBehindCursorBeforeInsertion].getText())..<\(self.entrySegments[numSegmentsBehindCursorBeforeInsertion + numNormalizedBufferSegments - 1].getText())"
+            "'\(self.entrySegments[numSegmentsBehindCursorBeforeInsertion].getText())'..<'\(self.entrySegments[numSegmentsBehindCursorBeforeInsertion + numNormalizedBufferSegments - 1].getText())'"
         )
         self.committedBufferRanges.append(numSegmentsBehindCursorBeforeInsertion..<(numSegmentsBehindCursorBeforeInsertion + numNormalizedBufferSegments))
     }
     
     func clearBuffer() {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override clearBuffer method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         print("===== Entry: Clear Buffer =====")
         self.entryBuffer = []
     }
     
     func handleSave(handler: (() -> Void)? = nil) {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override handleSave method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         print("===== Entry: Handle Save =====")
         
         if let speechRecognition = self.speechRecognition, speechRecognition.isListeningForSpeech {
@@ -1392,6 +1494,13 @@ class Entry: AVMutableComposition, NSCoding {
     }
     
     func handleFinish(normalize: Bool = false) {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override handleFinish method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         print("===== Entry: Handle Finish =====")
         print("\tHandle final saving...")
         // Completion of speech recognition section
@@ -1420,8 +1529,8 @@ class Entry: AVMutableComposition, NSCoding {
             )
 
             self!.speechRecognition.startListeningForVoiceCommands() { [weak self] in
-                print("Final Entry Segments: ", self!.entrySegments)
-                print("Final Entry Transformations: ", self!.transformations)
+                print("\tFinal Entry Segments: ", self!.entrySegments)
+                print("\tFinal Entry Transformations: ", self!.transformations)
                 NotificationCenter.default.post(
                     name: Entry.onEntryComplete,
                     object: nil,
@@ -1440,7 +1549,7 @@ class Entry: AVMutableComposition, NSCoding {
             print("\tEntry buffer has uncommitted segments. Trash them.")
             print("\tClearing entry buffer...")
             self.clearBuffer()
-            if normalize {
+            if normalize && self.entrySegments.count > 0 {
                 print("\tNormalizing \(self.entrySegments.count) segments before saving entry.")
                 let _ = self.normalizeSegments(
                     normalizeType: .target,
@@ -1452,7 +1561,7 @@ class Entry: AVMutableComposition, NSCoding {
             onFinishHandler()
         } else if self.entrySegments.count > 0 {
             // No need to normalize segments or export entry if we haven't captured anything meaningful
-            if normalize {
+            if normalize && self.entrySegments.count > 0 {
                 print("\tNormalizing \(self.entrySegments.count) segments before saving entry.")
                 let _ = self.normalizeSegments(
                     normalizeType: .target,
@@ -1555,15 +1664,15 @@ class Entry: AVMutableComposition, NSCoding {
         var lowerText: String?
         if let index = index, index >= segments.count && index - segments.count <= 1 {
             // new segment
-            lowerText = self.getText(segments: segments)
+            lowerText = Entry.getText(segments: segments)
         } else if let index = index, index < segments.count && index > 0 {
             // is in in entrySegments
             let lowerBoundarySegment = segments[index - 1]
-            lowerText = self.getText(until: lowerBoundarySegment.timeMapping.target.start, segments: segments) // We assume that this is only called when source == target, so using either is fine
+            lowerText = Entry.getText(segments: segments, until: lowerBoundarySegment.timeMapping.target.start) // We assume that this is only called when source == target, so using either is fine
         } else if index == nil {
             // is in in entrySegments
             let lowerBoundarySegment = segments[segments.count - 1]
-            lowerText = self.getText(until: lowerBoundarySegment.timeMapping.target.start, segments: segments) // We assume that this is only called when source == target, so using either is fine
+            lowerText = Entry.getText(segments: segments, until: lowerBoundarySegment.timeMapping.target.start) // We assume that this is only called when source == target, so using either is fine
         } else if index == 0 && segments.count == 0 {
             // is first segment
             lowerText = ""
@@ -1591,10 +1700,8 @@ class Entry: AVMutableComposition, NSCoding {
     func getText(
         from fromTime: CMTime = CMTime.zero,
         until untilTime: CMTime? = nil,
-        segments: [EntrySegment]? = nil,
         forEcho: Bool = false
     ) -> String {
-        
         guard untilTime == nil || fromTime <= untilTime!  else {
             fatalError("===== [Error] There was a problem computing text. untilTime is greater than fromTime =====")
         }
@@ -1607,21 +1714,22 @@ class Entry: AVMutableComposition, NSCoding {
             argumentArr.append("untilTime=\(untilTime.seconds)")
         }
         let argumentSet: Set = Set(argumentArr)
-        var segmentUIDArr = self.segmentIndexMap.map { $0.0 }
+        var segmentUIDArr = self.entrySegments.map { $0.getUID() }
         self.entryBuffer.forEach { segment in segmentUIDArr.append(segment.getUID()) }
         let segmentUIDSet: Set = Set(segmentUIDArr)
         // Use cached version if it exists
-        if let cachedText = self.cachedText, let cachedSegmentUIDSet = self.cachedSegmentUIDSet, let cachedTextArgsSet = self.cachedTextArgsSet, segments == nil && segmentUIDSet == cachedSegmentUIDSet && argumentSet == cachedTextArgsSet {
+        if let cachedText = self.cachedText,
+           let cachedSegmentUIDSet = self.cachedSegmentUIDSet,
+           let cachedTextArgsSet = self.cachedTextArgsSet,
+           segmentUIDSet == cachedSegmentUIDSet &&
+            argumentSet == cachedTextArgsSet
+        {
             return cachedText
         }
         
         var text = ""
         
         var entrySegments: [EntrySegment]? = nil
-        if let segments = segments {
-            entrySegments = segments
-        }
-        
         if let selectionCursor = self.selectionCursor, let cachedAnchor = selectionCursor.cachedAnchor, entrySegments == nil && cachedAnchor.getIndex() != Int(Utils.UNKNOWN) {
             entrySegments = self.entrySegments
             
@@ -1658,6 +1766,7 @@ class Entry: AVMutableComposition, NSCoding {
                 forEcho: forEcho,
                 index: entrySegments.count - 1,
                 segments: entrySegments,
+                segmentsUIDSet: segmentUIDSet,
                 from: fromTime,
                 until: untilTime
             )
@@ -1673,7 +1782,7 @@ class Entry: AVMutableComposition, NSCoding {
         }
         
         // cache work
-        if segments == nil && fromTime == CMTime.zero && untilTime == nil && text.count > 0 && segmentUIDSet.count > 0 {
+        if fromTime == CMTime.zero && untilTime == nil && text.count > 0 && segmentUIDSet.count > 0 {
             self.cachedText = text
             self.cachedTextArgsSet = argumentSet
             self.cachedSegmentUIDSet = segmentUIDSet
@@ -1684,6 +1793,8 @@ class Entry: AVMutableComposition, NSCoding {
     
     public static func getText(
         segments: [EntrySegment],
+        from fromTime: CMTime = CMTime.zero,
+        until untilTime: CMTime? = nil,
         withTemporalSuggestions: Bool = false,
         withPunctuationSuggestions: Bool = true,
         withFormattingSuggestions: Bool = true,
@@ -1695,7 +1806,14 @@ class Entry: AVMutableComposition, NSCoding {
         var text = ""
 
         for segment in segments {
-            if !segment.isVoiceCommandWord() && !segment.isDeleted() {
+            if segment.timeMapping.target.start >= fromTime &&
+                (
+                    untilTime == nil ||
+                    segment.timeMapping.target.end <= untilTime!
+                ) &&
+                !segment.isVoiceCommandWord() &&
+                !segment.isDeleted()
+            {
                 let word = segment.getText(
                     withTemporalSuggestions: withTemporalSuggestions,
                     withPunctuationSuggestions: withPunctuationSuggestions,
@@ -1720,122 +1838,56 @@ class Entry: AVMutableComposition, NSCoding {
         return text
     }
     
-    // MARK: - Player Methods
-
-    func playSentence(
-        number: Int,
-        onFinishHandler: (() -> Void)? = nil
-    ) {
-        print("===== Entry: Play Sentence: \(number) =====")
-        
-        // Get sentence details
-        let sentenceDetails = self.getSentenceDetails(number: number)
-        
-        self.speechPlayer.play(
-            entry: self,
-            from: sentenceDetails!.timeRange.start,
-            to: sentenceDetails!.timeRange.end,
-            onFinishHandler: onFinishHandler
-        )
-    }
-
-    func playSentence(
-        forTrackTime: CMTime,
-        onFinishHandler: (() -> Void)? = nil
-    ) {
-        print("===== Entry: Play Sentence at: \(forTrackTime.seconds) =====")
-
-        // Get sentence details
-        let sentenceDetails = self.getSentenceDetails(forTrackTime: forTrackTime)
-        
-        self.speechPlayer.play(
-            entry: self,
-            from: sentenceDetails!.timeRange.start,
-            to: sentenceDetails!.timeRange.end,
-            onFinishHandler: onFinishHandler
-        )
-    }
-    
-    func replayCurrentSentence(handler: (() -> Void)? = nil) {
-        
-        // Play Sound
-        soundEngine.repeatSegment()
-
-        // Get current time
-        let currentTime = self.speechPlayer.getCurrentTime()
-        
-        // Get sentence details
-        let sentenceDetails = getSentenceDetails(forTrackTime: currentTime)
-        
-        if let sentenceDetails = sentenceDetails {
-            self.playSentence(
-                number: sentenceDetails.number,
-                onFinishHandler: handler
-            )
-        } else {
-            print("\t[Error] There was a problem replaying current sentence")
-        }
-    }
-    
-    // MARK: - Echo Methods
-    // Computer understanding of the entry
-    
-    
-    func echoSentence(
-        forTrackTime: CMTime,
-        onFinishHandler: (() -> Void)? = nil
-    ) {
-        print("===== Entry: Echo Sentence at: \(forTrackTime.seconds) =====")
-
-        // Get text
-        let sentenceDetails = self.getSentenceDetails(forTrackTime: forTrackTime)
-        
-        if let sentenceDetails = sentenceDetails {
-            self.speechSynthesis.startEcho(
-                segments: Array(self.entrySegments[sentenceDetails.entryRange]),
-                onFinishHandler: onFinishHandler
-            )
-        }
-    }
-    
-    func echoSentence(
-        number: Int,
-        onFinishHandler: (() -> Void)? = nil
-    ) {
-        print("===== Entry: Echo Sentence: \(number) =====")
-        
-        let sentenceDetails = self.getSentenceDetails(number: number)
-        
-        if let sentenceDetails = sentenceDetails {
-            self.speechSynthesis.startEcho(
-                segments: Array(self.entrySegments[sentenceDetails.entryRange]),
-                onFinishHandler: onFinishHandler
-            )
-        }
-    }
-    
     // MARK: - Mutating Methods
     
     // Mutates Segments
-    func updateSegmentSentences(segments: [EntrySegment]) -> [EntrySegment] {
+    func updateSegmentSentencesAndParagraphs(
+        segments: [EntrySegment],
+        processRange: Range<Int>,
+        startTime: CMTime = CMTime.zero,
+        startNumber: Int = 0
+    ) -> [EntrySegment] {
         print("===== Entry: Update Segment Sentences =====")
-        var currentSentenceNumber = 0
+        
+        // Sentence
+        var currentSentenceNumber = startNumber
         var sentenceText = ""
-        var sentenceStartTime = CMTime.zero
-        var sentenceStartSegment = segments.first!
-        var sentenceEndTime: CMTime
-        var sentenceEndSegment: EntrySegment
+        var sentenceStartTime = startTime
+        var sentenceStartSegment = segments[processRange.startIndex]
         // Holds the index of the first segment without a sentence
-        var leftStaleSegmentIndex = 0
+        var leftStaleSentenceSegmentIndex = processRange.startIndex
+        
+        // Paragraph
+        var currentParagraphNumber = 0
+        var paragraphText = ""
+        var paragraphStartTime = startTime
+        var paragraphStartSegment = segments[processRange.startIndex]
+        // Holds the index of the first segment without a paragraph
+        var leftStaleParagraphSegmentIndex = processRange.startIndex
+        if paragraphStartSegment.getParagraph().number != Int(Utils.UNKNOWN) {
+            let priorParagraphSegments = Array(segments[paragraphStartSegment.getParagraph().entryRange.startIndex..<processRange.startIndex])
+            currentParagraphNumber = paragraphStartSegment.getParagraph().number
+            paragraphText = Entry.getText(segments: priorParagraphSegments)
+            paragraphStartTime = paragraphStartSegment.getParagraph().timeRange.start
+            let startIndex = paragraphStartSegment.getParagraph().entryRange.startIndex
+            paragraphStartSegment = segments[startIndex]
+            leftStaleParagraphSegmentIndex = startIndex
+        }
+        
+        // Used by both
+        var endTime: CMTime
+        var endSegment: EntrySegment
+        
         // make sure silences get sentence number of prior.
-        for (index, segment) in segments.enumerated() {
-            if index + 1 == segments.count {
+        print("\tProcess Segments: ", Utils.stringifySegments(segments: Array(segments[processRange])))
+        for (index, segment) in segments[processRange].enumerated() {
+            if index + 1 == segments[processRange].count {
                 // We've reached the end of the entry. Update sentence data
-                sentenceEndSegment = segment
-                sentenceEndTime = segment.timeMapping.target.end
+                endSegment = segment
+                endTime = segment.timeMapping.target.end
                 
                 if !segment.isVoiceCommandWord() && !segment.isDeleted() {
-                    sentenceText += segment.getText(
+                    let segmentText = segment.getText(
                         withTemporalSuggestions: self.state?.withTemporalSuggestions ?? Utils.DEFAULT_WITH_TEMPORAL_SUGGESTIONS,
                         withPunctuationSuggestions: self.state?.withPunctuationSuggestions ?? Utils.DEFAULT_WITH_PUNCTUATION_SUGGESTIONS,
                         withFormattingSuggestions: self.state?.withFormattingSuggestions ?? Utils.DEFAULT_WITH_FORMATTING_SUGGESTIONS,
@@ -1843,24 +1895,49 @@ class Entry: AVMutableComposition, NSCoding {
                         withCapitalization: self.state?.withCapitalization ?? Utils.DEFAULT_WITH_CAPITALIZATION,
                         withSpacePrefix: true
                     )
+                    
+                    sentenceText += segmentText
+                    paragraphText += segmentText
                 }
                 
+                // Create last sentence
                 let sentence = Sentence(
                     number: currentSentenceNumber,
                     text: sentenceText.trimmingCharacters(in: .whitespacesAndNewlines),
                     timeRange: CMTimeRangeFromTimeToTime(
                         start: sentenceStartTime,
-                        end: sentenceEndTime
+                        end: endTime
                     ),
-                    entryRange: sentenceStartSegment.getIndex()..<sentenceEndSegment.getIndex() + 1
+                    entryRange: sentenceStartSegment.getIndex()..<endSegment.getIndex() + 1
                 )
                 
                 // Clear sentence
                 sentenceText = ""
+                print("\tNew sentence: ", sentence)
+                
+                // Create last paragraph
+                let paragraph = Paragraph(
+                    number: currentParagraphNumber,
+                    text: paragraphText.trimmingCharacters(in: .whitespacesAndNewlines),
+                    timeRange: CMTimeRangeFromTimeToTime(
+                        start: paragraphStartTime,
+                        end: endTime
+                    ),
+                    entryRange: paragraphStartSegment.getIndex()..<endSegment.getIndex() + 1
+                )
+                
+                // Clear paragraph
+                paragraphText = ""
+                print("\tNew paragraph: ", paragraph)
                 
                 // Add sentence to every segment ***including*** this one
-                for i in leftStaleSegmentIndex...index {
+                for i in leftStaleSentenceSegmentIndex...(processRange.startIndex + index) {
                     segments[i].setSentence(sentence: sentence)
+                }
+                
+                // Add paragraph to every segment ***including*** this one
+                for i in leftStaleParagraphSegmentIndex...(processRange.startIndex + index) {
+                    segments[i].setParagraph(paragraph: paragraph)
                 }
             } else if segment.isVoiceCommandWord() || segment.isDeleted() {
                 // Don't add word to sentenceText
@@ -1868,9 +1945,9 @@ class Entry: AVMutableComposition, NSCoding {
             } else if segment.isSentenceTerminator() {
                 // We've hit a sentence boundary. Update sentences
                 // Update sentence data
-                sentenceEndSegment = segment
-                sentenceEndTime = segment.timeMapping.target.start
-                sentenceText += segment.getText(
+                endSegment = segment
+                endTime = segment.timeMapping.target.start
+                let segmentText = segment.getText(
                     withTemporalSuggestions: self.state?.withTemporalSuggestions ?? Utils.DEFAULT_WITH_TEMPORAL_SUGGESTIONS,
                     withPunctuationSuggestions: self.state?.withPunctuationSuggestions ?? Utils.DEFAULT_WITH_PUNCTUATION_SUGGESTIONS,
                     withFormattingSuggestions: self.state?.withFormattingSuggestions ?? Utils.DEFAULT_WITH_FORMATTING_SUGGESTIONS,
@@ -1878,29 +1955,66 @@ class Entry: AVMutableComposition, NSCoding {
                     withCapitalization: self.state?.withCapitalization ?? Utils.DEFAULT_WITH_CAPITALIZATION,
                     withSpacePrefix: true
                 )
+                
+                sentenceText += segmentText
+                paragraphText += segmentText
+
                 let sentence = Sentence(
                     number: currentSentenceNumber,
                     text: sentenceText.trimmingCharacters(in: .whitespacesAndNewlines),
                     timeRange: CMTimeRangeFromTimeToTime(
                         start: sentenceStartTime,
-                        end: sentenceEndTime
+                        end: endTime
                     ),
-                    entryRange: sentenceStartSegment.getIndex()..<sentenceEndSegment.getIndex() + 1
+                    entryRange: sentenceStartSegment.getIndex()..<endSegment.getIndex() + 1
                 )
+                
                 currentSentenceNumber += 1
-                sentenceStartSegment = segment
-                sentenceStartTime = segment.timeMapping.target.start
+                if index + 1 < segments[processRange].count {
+                    let nextSegment = segments[index + 1]
+                    sentenceStartSegment = nextSegment
+                    sentenceStartTime = nextSegment.timeMapping.target.start
+                }
+                
                 // Clear sentence
                 sentenceText = ""
+                print("\tNew sentence: ", sentence)
                 
                 // Add sentence to every segment before this one
-                for i in leftStaleSegmentIndex..<index {
+                for i in leftStaleSentenceSegmentIndex..<(processRange.startIndex + index) {
                     segments[i].setSentence(sentence: sentence)
                 }
-                leftStaleSegmentIndex = index
+                leftStaleSentenceSegmentIndex = processRange.startIndex + index
+                
+                if segment.isParagraphTerminator() {
+                    // This is the end of a paragraph too
+                    let paragraph = Paragraph(
+                        number: currentParagraphNumber,
+                        text: paragraphText.trimmingCharacters(in: .whitespacesAndNewlines),
+                        timeRange: CMTimeRangeFromTimeToTime(
+                            start: paragraphStartTime,
+                            end: endTime
+                        ),
+                        entryRange: paragraphStartSegment.getIndex()..<endSegment.getIndex() + 1
+                    )
+                    currentParagraphNumber += 1
+                    if index + 1 < segments[processRange].count {
+                        let nextSegment = segments[index + 1]
+                        paragraphStartSegment = nextSegment
+                        paragraphStartTime = nextSegment.timeMapping.target.start
+                    }
+                    // Clear paragraph
+                    paragraphText = ""
+                    print("\tNew paragraph: ", paragraph)
+                    
+                    // Add sentence to every segment before this one
+                    for i in leftStaleParagraphSegmentIndex..<(processRange.startIndex + index) {
+                        segments[i].setParagraph(paragraph: paragraph)
+                    }
+                    leftStaleParagraphSegmentIndex = processRange.startIndex + index
+                }
             } else if segment.isActive() {
-                // Add word to sentence
-                sentenceText += segment.getText(
+                let segmentText = segment.getText(
                     withTemporalSuggestions: self.state?.withTemporalSuggestions ?? Utils.DEFAULT_WITH_TEMPORAL_SUGGESTIONS,
                     withPunctuationSuggestions: self.state?.withPunctuationSuggestions ?? Utils.DEFAULT_WITH_PUNCTUATION_SUGGESTIONS,
                     withFormattingSuggestions: self.state?.withFormattingSuggestions ?? Utils.DEFAULT_WITH_FORMATTING_SUGGESTIONS,
@@ -1908,6 +2022,9 @@ class Entry: AVMutableComposition, NSCoding {
                     withCapitalization: self.state?.withCapitalization ?? Utils.DEFAULT_WITH_CAPITALIZATION,
                     withSpacePrefix: true
                 )
+                
+                sentenceText += segmentText
+                paragraphText += segmentText
             } else {
                 // Silences that are not long enough to be sentence terminators go here
             }
@@ -1918,7 +2035,20 @@ class Entry: AVMutableComposition, NSCoding {
     
     // time must be at a segment boundary to make everything work correctly
     // assumes buffer is empty
+    //
+    // We make assumption that if we're adding segments at end of entry
+    // the times are correctly calculated (we bypass normalization)
+    //
+    // We make this assumption to overcome O(n) complexity when adding to end of entry
+    // This causes severe lag.
+    // There is no way currently to overcome this if segments are insert into existing segments
     func insertPassage(segments: [EntrySegment], at time: CMTime, saveToState: Bool = true) {
+        guard let _ = self.state else {
+            print("\t[Error] Override insertPassage method call because we attempted to modify entry without state.")
+            return
+        }
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
         print("===== Entry: Insert Passage =====")
 //        guard self.entryBuffer.count == 0 else {
 //            print("\t[Error] There was a problem inserting passage. Buffer was not empty")
@@ -1927,40 +2057,55 @@ class Entry: AVMutableComposition, NSCoding {
         print("\tMerging argument segments into committed segments...")
         var updatedSegments = [EntrySegment]()
         // Add to state clips
-        print("\tClearing cached text history for segments and addng clips to clip dictionary...")
+        print("\tUpdating entry references, and sourcing all unique segment clips...")
+        var segmentClips: [String:Bool] = [:]
         for segment in segments {
             // Handle segment clips
-            self.state.setClip(clipUID: segment.getClipUID(), entryUID: self.uid)
-            segment.clearCachedTextHistory()
+            if segmentClips[segment.getClipUID()] == nil {
+                segmentClips[segment.getClipUID()] = true
+            }
+            // Set entry
+            segment.setEntry(entry: self)
+        }
+        
+        if segmentClips.count > 0 {
+            print("\tAssociating all unique clips with entry in state...")
+            for uid in segmentClips.keys {
+                self.state.setClip(clipUID: uid, entryUID: self.uid)
+            }
         }
         
         print("\tPassage: ", Utils.stringifySegments(segments: segments))
         
+        var insertingAtEndOfEntry = false
+        var lastSentenceDetails: Sentence?
         if self.entrySegments.count > 0 {
             print("\tPlace within existing \(self.entrySegments.count) segments...")
-            print("\tSearch for insert segment...")
-            let insertSegment = Utils.binarySearch(
-                in: self.entrySegments,
-                isLower: { segment in
-                    return segment.timeMapping.target.end < time
-                },
-                isHigher: { segment in
-                    return segment.timeMapping.target.start > time
-                }
-            )
-            
-            if let insertSegment = insertSegment {
-                let insertIndex = insertSegment.getIndex() + 1
-                print("\tLocated insert segment at index: ", insertIndex)
-                for segment in self.entrySegments[insertIndex..<self.entrySegments.count] {
-                    // clear cached text history value
-                    print("\tClearing cached text history for segments between indices \(insertIndex) and \(self.entrySegments.count)...")
-                    segment.clearCachedTextHistory()
-                }
-                print("\tStitching new segments together...")
-                updatedSegments = Array(self.entrySegments[0..<insertIndex]) + segments + self.entrySegments[insertIndex..<self.entrySegments.count]
+            if let lastSegment = self.entrySegments.last, lastSegment.timeMapping.target.end == time {
+                print("\tSegments are being added to end of entry...")
+                insertingAtEndOfEntry = true
+                lastSentenceDetails = lastSegment.getSentence()
+                updatedSegments = self.entrySegments + segments
             } else {
-                print("\t[Error] There was a problem locating insert segment.")
+                print("\tSearch for insert segment...")
+                let insertSegment = Utils.binarySearch(
+                    in: self.entrySegments,
+                    isLower: { segment in
+                        return segment.timeMapping.target.end < time
+                    },
+                    isHigher: { segment in
+                        return segment.timeMapping.target.start > time
+                    }
+                )
+                
+                if let insertSegment = insertSegment {
+                    let insertIndex = insertSegment.getIndex() + 1
+                    print("\tLocated insert segment at index: ", insertIndex)
+                    print("\tStitching new segments together...")
+                    updatedSegments = Array(self.entrySegments[0..<insertIndex]) + segments + self.entrySegments[insertIndex..<self.entrySegments.count]
+                } else {
+                    print("\t[Error] There was a problem locating insert segment.")
+                }
             }
         } else {
             print("\tInserted segments are the first in entry.")
@@ -1968,21 +2113,76 @@ class Entry: AVMutableComposition, NSCoding {
             // set passage as new segments
             updatedSegments = segments
         }
+        
+        if insertingAtEndOfEntry {
+            print("\tWe're inserting segments to the end of entry. We'll assume timing is shifted to assume they occur at the end of the entry to overcome O(n) when adding to note...")
+            print("\tBypass normalization...")
+            print("\tUpdate sentences...")
+            // Compute segment sentences
+            if let lastSentenceDetails = lastSentenceDetails {
+                let insertRange = (updatedSegments.count - segments.count)..<updatedSegments.count
+                let insertedSegments = Array(updatedSegments[insertRange])
+                
+                print("\tSearch for any segments that might trigger punctuation suggestion and reset sentence terminator and text...")
+                for segment in insertedSegments {
+                    segment.handleMutation()
+                    segment.runNotificationSearch()
+                }
+                
+                // We don't know if we ended on a correct sentence
+                // So we include last sentence in here as well
+                // Reset cache values for each inserted segment to determine if sentence terminator
+                //
+                // We perform sentence/paragraph update here so we avoid having to do it over all segments
+                let segmentsWithUpdatedSentencesAndParagraphs = self.updateSegmentSentencesAndParagraphs(
+                    segments: updatedSegments,
+                    processRange: lastSentenceDetails.entryRange.startIndex..<updatedSegments.count,
+                    startTime: lastSentenceDetails.timeRange.start,
+                    startNumber: lastSentenceDetails.number
+                )
 
-        print("\tCleansing segments...")
-        let cleansedSegments = Utils.cleanseSegments(
-            segments: updatedSegments
-        )
+                self.setSegments(
+                    segments: segmentsWithUpdatedSentencesAndParagraphs,
+                    replaceEntryDetails: false,
+                    saveToLowLevelRepr: true,
+                    saveToState: saveToState,
+                    computeSentencesAndParagraphs: false
+                )
+                
+                // Check rep invariant
+                self.handleMutation()
+            } else {
+                print("\t[Error] There was a problem updating inserted segments sentence/paragraph metadata, so we were unable to save segments")
+            }
+        } else if self.entrySegments.count == 0 {
+            print("\tNormalizing segments...")
+            let _ = self.normalizeSegments(
+                segments: updatedSegments,
+                normalizeType: .target,
+                replaceEntryDetails: true,
+                saveSegments: true,
+                saveToLowLevelRepr: true,
+                saveToState: saveToState
+            )
+        } else {
+            print("\tCleansing segments...")
+            let cleansedSegments = Utils.cleanseSegments(
+                segments: updatedSegments
+            )
 
-        print("\tNormalizing segments...")
-        let _ = self.normalizeSegments(
-            segments: cleansedSegments,
-            normalizeType: .target,
-            replaceEntryDetails: true,
-            saveSegments: true,
-            saveToLowLevelRepr: true,
-            saveToState: saveToState
-        )
+            print("\tNormalizing segments...")
+            let _ = self.normalizeSegments(
+                segments: cleansedSegments,
+                normalizeType: .target,
+                replaceEntryDetails: true,
+                saveSegments: true,
+                saveToLowLevelRepr: true,
+                saveToState: saveToState
+            )
+            
+            // Check rep invariant
+            self.handleMutation()
+        }
 
         if !self.selectionCursor.isUpdatingSelection {
             self.handleOnSpeechUpdate(text: self.getText())
@@ -1994,6 +2194,13 @@ class Entry: AVMutableComposition, NSCoding {
     // time must be at a segment boundary to make everything work correctly
     // assumes buffer is empty
     func removePassage(range: CMTimeRange, saveToState: Bool = true) {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override removePassage method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         print("===== Entry: Remove Passage =====")
 //        guard self.entryBuffer.count == 0 else {
 //            print("\t[Error] There was a problem removing passage. Buffer was not empty")
@@ -2009,31 +2216,44 @@ class Entry: AVMutableComposition, NSCoding {
         var updateFocus = false
         var updateCachedAnchor = false
         
-        print("\tSearching for index of left segment of removal segments...")
-        let removeRangeLeftSegment = Utils.binarySearch(
-            in: self.entrySegments,
-            isLower: { segment in
-                return segment.timeMapping.target.end < beforeTime
-            },
-            isHigher: { segment in
-                return segment.timeMapping.target.start > beforeTime
-            }
-        )
+        var removeRangeLeftSegment: EntrySegment?
+        if let firstSegment = self.entrySegments.first, beforeTime == CMTime.zero {
+            print("\tBefore time in zero. We select first segment...")
+            removeRangeLeftSegment = firstSegment
+        } else {
+            print("\tSearching for index of left segment of removal segments...")
+            removeRangeLeftSegment = Utils.binarySearch(
+                in: self.entrySegments,
+                isLower: { segment in
+                    return segment.timeMapping.target.end < beforeTime
+                },
+                isHigher: { segment in
+                    return segment.timeMapping.target.start > beforeTime
+                }
+            )
+        }
         
-        print("\tSearching for index of right segment of removal segments...")
-        let removeRangeRightSegment = Utils.binarySearch(
-            in: self.entrySegments,
-            isLower: { segment in
-                return segment.timeMapping.target.end < afterTime
-            },
-            isHigher: { segment in
-                return segment.timeMapping.target.start > afterTime
-            }
-        )
+        var removeRangeRightSegment: EntrySegment?
+        if let lastSegment = self.entrySegments.last, afterTime == lastSegment.timeMapping.target.end {
+            print("\tAfter time is the same as last entry segment. We select it...")
+            removeRangeRightSegment = lastSegment
+        } else {
+            print("\tSearching for index of right segment of removal segments...")
+            removeRangeRightSegment = Utils.binarySearch(
+                in: self.entrySegments,
+                isLower: { segment in
+                    return segment.timeMapping.target.end < afterTime
+                },
+                isHigher: { segment in
+                    return segment.timeMapping.target.start > afterTime
+                }
+            )
+        }
         
         if let removeRangeLeftSegment = removeRangeLeftSegment,
            let removeRangeRightSegment = removeRangeRightSegment
         {
+            print("\tWe located left and right removal segments. Removal passage is mid-entry...")
             let leftIndex = removeRangeLeftSegment.getIndex()
             let rightIndex = removeRangeRightSegment.getIndex()
             print("\tLocated left segment at index: ", leftIndex)
@@ -2046,7 +2266,7 @@ class Entry: AVMutableComposition, NSCoding {
             
             // Removal Segments
             print("\tFlipping delete flag for all segments within removal range...")
-            for segment in self.entrySegments[entryLeftRange..<rightIndex + 1] {
+            for segment in self.entrySegments[entryLeftRange..<entryRightRange] {
                 segment.setIsDeleted(isDeleted: true)
                 
                 // Check if we need to update selection anchor
@@ -2078,28 +2298,14 @@ class Entry: AVMutableComposition, NSCoding {
             updatedSegments.append(contentsOf: self.entrySegments[entryLeftRange..<entryRightRange])
             
             // After Segments
-            print("\tClearing cached text history for segments between indices \(rightIndex + 1) and \(self.entrySegments.count)...")
-            for segment in self.entrySegments[rightIndex + 1..<self.entrySegments.count] {
-                // clear cached text history value
-                segment.clearCachedTextHistory()
-            }
             updatedSegments.append(contentsOf: self.entrySegments[entryRightRange..<self.entrySegments.count])
+        } else if let _ = removeRangeLeftSegment, removeRangeRightSegment == nil {
+            print("\t[Error] We only located left removal segment even though we predicted to find left and right removal segments for any segment in entry.")
+        } else if let _ = removeRangeRightSegment, removeRangeLeftSegment == nil {
+            print("\t[Error] We only located right removal segment even though we predicted to find left and right removal segments for any segment in entry.")
         }
         
-        print("\tCleansing segments...")
-        let cleansedSegments = Utils.cleanseSegments(
-            segments: updatedSegments
-        )
-
-        print("\tNormalizing segments...")
-        let _ = self.normalizeSegments(
-            segments: cleansedSegments,
-            normalizeType: .target,
-            replaceEntryDetails: true,
-            saveSegments: true,
-            saveToLowLevelRepr: true,
-            saveToState: saveToState
-        )
+        print("\tWe bypass cleansing and normalizing segments because no segments we're removed. We only mutate properties")
         
         var segment: EntrySegment?
         if updateAnchor || updateFocus || updateCachedAnchor {
@@ -2143,11 +2349,21 @@ class Entry: AVMutableComposition, NSCoding {
         if !self.selectionCursor.isUpdatingSelection {
             self.handleOnSpeechUpdate(text: self.getText())
         }
+        
+        // Process mutation
+        self.handleMutation()
 
         print("\tSuccessfully removed passage from entry!")
     }
     
     func updatePassage(segments: [EntrySegment], range: CMTimeRange) {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override updatePassage method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         print("===== Entry: Update Passage =====")
         print("\tRemoving current passsage from entry...")
         self.removePassage(range: range, saveToState: false)
@@ -2167,6 +2383,13 @@ class Entry: AVMutableComposition, NSCoding {
         textRange: NSRange,
         entryRange: ClosedRange<Int>
     ) {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override handleTransformation method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         print("===== Entry: Handle Transformation =====")
         // Create transformation
         print("\tCreate initial transformation...")
@@ -2719,6 +2942,13 @@ class Entry: AVMutableComposition, NSCoding {
     }
     
     func walk(segments: [EntrySegment]? = nil, runOverride: Bool = false, onStartHandler: (() -> Void)? = nil) {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override walk method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         print("===== Entry: \(runOverride ? "Run" : "Walk") =====")
         if (self.entryManager.isWalkingEntry && !self.entryManager.pausedWalkingEntry && !runOverride) || (segments != nil && segments!.count == 0) || (segments == nil && self.entrySegments.count == 0) {
             var text: String
@@ -2805,7 +3035,8 @@ class Entry: AVMutableComposition, NSCoding {
             
             self.selectionCursor.setSelection(
                 anchorCaret: Caret(index: currentSegmentIndex, trackType: .committed),
-                focusCaret: Caret(index: currentSegmentIndex, trackType: .committed)
+                focusCaret: Caret(index: currentSegmentIndex, trackType: .committed),
+                scale: .word
             )
             
             // start looping walk
@@ -2850,6 +3081,13 @@ class Entry: AVMutableComposition, NSCoding {
     }
     
     func walkToPreviousSegment(runOverride: Bool = false, handler: (() -> Void)? = nil) {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override walkToPreviousSegment method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         print("===== Entry: \(runOverride ? "Run" : "Walk") To Previous Segment =====")
         if !self.entryManager.isWalkingEntry && !self.entryManager.isRunningEntry {
             var text: String
@@ -2911,7 +3149,8 @@ class Entry: AVMutableComposition, NSCoding {
             
             self.selectionCursor.setSelection(
                 anchorCaret: Caret(index: currentSegmentIndex, trackType: .committed),
-                focusCaret: Caret(index: currentSegmentIndex, trackType: .committed)
+                focusCaret: Caret(index: currentSegmentIndex, trackType: .committed),
+                scale: .word
             )
             
             // start looping walk
@@ -2955,6 +3194,13 @@ class Entry: AVMutableComposition, NSCoding {
     }
     
     func walkToNextSegment(runOverride: Bool = false, handler: (() -> Void)? = nil) {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override walkToNextSegment method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         print("===== Entry: \(runOverride ? "Run" : "Walk") To Next Segment =====")
         if !self.entryManager.isWalkingEntry && !self.entryManager.isRunningEntry {
             var text: String
@@ -3015,7 +3261,8 @@ class Entry: AVMutableComposition, NSCoding {
             
             self.selectionCursor.setSelection(
                 anchorCaret: Caret(index: currentSegmentIndex, trackType: .committed),
-                focusCaret: Caret(index: currentSegmentIndex, trackType: .committed)
+                focusCaret: Caret(index: currentSegmentIndex, trackType: .committed),
+                scale: .word
             )
             
             // start looping walk
@@ -3061,6 +3308,13 @@ class Entry: AVMutableComposition, NSCoding {
     }
     
     func run(segments: [EntrySegment]? = nil, onStartHandler: (() -> Void)? = nil) {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override run method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         if self.entryManager.isRunningEntry && !self.entryManager.pausedRunningEntry {
             self.notifications.executeError(
                 text: "Already running passage."
@@ -3092,6 +3346,13 @@ class Entry: AVMutableComposition, NSCoding {
     }
     
     func pauseRun(handler: (() -> Void)? = nil) {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override pauseRun method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         print("===== Entry: Pause Run =====")
         if !self.entryManager.isRunningEntry {
             self.notifications.executeError(
@@ -3153,6 +3414,13 @@ class Entry: AVMutableComposition, NSCoding {
     }
     
     func exitWalk(pause: Bool = false, clearSelection: Bool = true, withFeedback: Bool = true, handler: (() -> Void)? = nil) {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override exitWalk method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         if self.entryManager.isRunningEntry {
             print("===== Entry: Exit Run =====")
         } else {
@@ -3276,104 +3544,126 @@ class Entry: AVMutableComposition, NSCoding {
         self.state.setClip(clipUID: self.currentClipUID!, entryUID: self.uid)
     }
     
-    func duplicate() -> Entry {
+    func duplicate(
+        state: StateManager? = nil,
+        speechSynthesis: SpeechSynthesisEngine? = nil,
+        speechRecognition: SpeechRecognitionEngine? = nil,
+        speechPlayer: SpeechPlayerEngine? = nil,
+        selectionCursor: SelectionCursor? = nil,
+        pitchRecognition: PitchRecognitionEngine? = nil,
+        entryManager: EntryManager? = nil,
+        notifications: NotificationEngine? = nil,
+        processSegments: Bool = true,
+        handler: @escaping (_ entry: Entry) -> Void
+    ) {
         print("===== Entry \(self.uid): Duplicate ======")
-        var entrySegments = [EntrySegment]()
-        for segment in self.entrySegments {
-            entrySegments.append(segment.duplicate())
-        }
-        
-        let duplicateEntry = Entry(
+        let _ = Entry(
             uid: self.uid,
             filename: self.filename,
             creatorUID: self.creatorUID,
-            segments: entrySegments
-        )
+            segments: self.entrySegments,
+            state: state,
+            speechSynthesis: speechSynthesis,
+            speechRecognition: speechRecognition,
+            speechPlayer: speechPlayer,
+            selectionCursor: selectionCursor,
+            pitchRecognition: pitchRecognition,
+            entryManager: entryManager,
+            notifications: notifications,
+            processSegments: processSegments
+        ) { [weak self] entry in
+            // Set Date Created
+            entry.dateCreated = self!.dateCreated
             
-        // Set Date Created
-        duplicateEntry.dateCreated = self.dateCreated
-        
-        // Set Date Modified
-        duplicateEntry.dateModified = self.dateModified
+            // Set Date Modified
+            entry.dateModified = self!.dateModified
 
-        // Set Committed Buffer Ranges
-        var committedBufferRanges = [Range<Int>]()
-        self.committedBufferRanges.forEach({ range in
-            let duplicateRange = range.lowerBound..<range.upperBound
-            committedBufferRanges.append(duplicateRange)
-        })
-        duplicateEntry.committedBufferRanges = committedBufferRanges
-        
-        // Set Transformations
-        var transformations = [EntryTransformation]()
-        self.transformations.forEach({ transformation in
-            let duplicateTransformation = EntryTransformation(
-                type: transformation.type,
-                uids: transformation.uids,
-                text: transformation.text,
-                value: transformation.value,
-                textRange: transformation.textRange,
-                entryRange: transformation.entryRange
-            )
-            transformations.append(duplicateTransformation)
-        })
-        duplicateEntry.transformations = transformations
-        
-        // Set Authorized To Listen For Speech
-        duplicateEntry.authorizedToListenForSpeech = self.authorizedToListenForSpeech
+            // Set Committed Buffer Ranges
+            var committedBufferRanges = [Range<Int>]()
+            self?.committedBufferRanges.forEach({ range in
+                let duplicateRange = range.lowerBound..<range.upperBound
+                committedBufferRanges.append(duplicateRange)
+            })
+            entry.committedBufferRanges = committedBufferRanges
+            
+            // Set Transformations
+            var transformations = [EntryTransformation]()
+            self?.transformations.forEach({ transformation in
+                let duplicateTransformation = EntryTransformation(
+                    type: transformation.type,
+                    uids: transformation.uids,
+                    text: transformation.text,
+                    value: transformation.value,
+                    textRange: transformation.textRange,
+                    entryRange: transformation.entryRange
+                )
+                transformations.append(duplicateTransformation)
+            })
+            entry.transformations = transformations
+            
+            // Set Authorized To Listen For Speech
+            entry.authorizedToListenForSpeech = self!.authorizedToListenForSpeech
 
-        // Set Clips
-        duplicateEntry.clips = self.clips
-        
-        // Set Current Clip UID
-        duplicateEntry.setCurrentClipUID(uid: self.currentClipUID)
+            // Set Clips
+            entry.clips = self!.clips
+            
+            // Set Current Clip UID
+            entry.setCurrentClipUID(uid: self!.currentClipUID)
 
-        // Set Record Start Date
-        duplicateEntry.recordStartDate = self.recordStartDate
-        
-        // Set Accumulated Duration
-        duplicateEntry.accumulatedDuration = self.accumulatedDuration
-        
-        // Set Record File
-        duplicateEntry.recordFile = self.recordFile
-        
-        // Set Is Deleted
-        duplicateEntry.isDeleted = self.isDeleted
-        
-        // Set Views
-        var views = [TimeInterval]()
-        self.views.forEach({ timeInterval in
-            views.append(timeInterval)
-        })
-        duplicateEntry.views = views
-        
-        // Set Plays
-        var plays = [TimeInterval]()
-        self.plays.forEach({ timeInterval in
-            plays.append(timeInterval)
-        })
-        duplicateEntry.plays = plays
-        
-        // Set Text Exports
-        var textExports = [TimeInterval]()
-        self.textExports.forEach({ timeInterval in
-            textExports.append(timeInterval)
-        })
-        duplicateEntry.textExports = textExports
-        
-        // Audio Exports
-        var audioExports = [TimeInterval]()
-        self.audioExports.forEach({ timeInterval in
-            audioExports.append(timeInterval)
-        })
-        duplicateEntry.audioExports = audioExports
-        
-        return duplicateEntry
+            // Set Record Start Date
+            entry.recordStartDate = self?.recordStartDate
+            
+            // Set Accumulated Duration
+            entry.accumulatedDuration = self!.accumulatedDuration
+            
+            // Set Record File
+            entry.recordFile = self?.recordFile
+            
+            // Set Is Deleted
+            entry.isDeleted = self!.isDeleted
+            
+            // Set Views
+            var views = [TimeInterval]()
+            self?.views.forEach({ timeInterval in
+                views.append(timeInterval)
+            })
+            entry.views = views
+            
+            // Set Plays
+            var plays = [TimeInterval]()
+            self?.plays.forEach({ timeInterval in
+                plays.append(timeInterval)
+            })
+            entry.plays = plays
+            
+            // Set Text Exports
+            var textExports = [TimeInterval]()
+            self?.textExports.forEach({ timeInterval in
+                textExports.append(timeInterval)
+            })
+            entry.textExports = textExports
+            
+            // Audio Exports
+            var audioExports = [TimeInterval]()
+            self?.audioExports.forEach({ timeInterval in
+                audioExports.append(timeInterval)
+            })
+            entry.audioExports = audioExports
+            
+            handler(entry)
+        }
     }
     
     // MARK: - Telemetry
     
     func incrementViewCount() {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override incrementViewCount method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         print("===== Entry: Increment View Count =====")
         let timeInterval = Date().timeIntervalSince1970
         self.views.append(timeInterval)
@@ -3383,6 +3673,13 @@ class Entry: AVMutableComposition, NSCoding {
     }
     
     func incrementPlayCount() {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override incrementPlayCount method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         print("===== Entry: Increment Play Count =====")
         let timeInterval = Date().timeIntervalSince1970
         self.plays.append(timeInterval)
@@ -3392,6 +3689,13 @@ class Entry: AVMutableComposition, NSCoding {
     }
     
     func incrementTextExportCount() {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override incrementTextExportCount method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         print("===== Entry: Increment Text Export Count =====")
         let timeInterval = Date().timeIntervalSince1970
         self.textExports.append(timeInterval)
@@ -3401,6 +3705,13 @@ class Entry: AVMutableComposition, NSCoding {
     }
     
     func incrementAudioExportCount() {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override incrementAudioExportCount method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         print("===== Entry: Increment Audio Export Count =====")
         let timeInterval = Date().timeIntervalSince1970
         self.audioExports.append(timeInterval)
@@ -3424,13 +3735,21 @@ class Entry: AVMutableComposition, NSCoding {
     // we have to duplicate segments to reset these
     // thus is a costly computation
     // TODO: Confirm that source and target don't affect setting segments to low-level representation
-    func setSegments(
+    private func setSegments(
         segments: [EntrySegment],
         replaceEntryDetails: Bool = false,
         saveToLowLevelRepr: Bool = false,
-        saveToState: Bool = true
+        saveToState: Bool = true,
+        computeSentencesAndParagraphs: Bool = true
     ) {
         print("===== Entry: Set Segments =====")
+        
+        if self.entrySegments.count == 0 {
+            // We set it here because segments will be referencing it to compute
+            // values like isSentenceTerminator
+            self.entrySegments = segments
+        }
+        
         var setSegmentEntry = false
         // set entry reference in segments
         if segments.count > 0 && segments[0].entry == nil {
@@ -3452,7 +3771,12 @@ class Entry: AVMutableComposition, NSCoding {
             }
         }
         
-        if setSegmentEntry && !replaceEntryDetails {
+        if let entryManager = self.entryManager,
+           let entry = entryManager.currentEntry,
+            setSegmentEntry &&
+            !replaceEntryDetails &&
+            Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(entry).toOpaque()
+        {
             // Replace Entry
             for segment in segments {
                 segment.setEntry(entry: self)
@@ -3464,8 +3788,19 @@ class Entry: AVMutableComposition, NSCoding {
         // attempt to replace segments
         do {
             // Compute segment sentences
-            let segmentsWithUpdatedSentences = self.updateSegmentSentences(segments: finalSegments)
-            finalSegments = segmentsWithUpdatedSentences.count == finalSegments.count ? segmentsWithUpdatedSentences : finalSegments
+            var segmentsWithUpdatedSentencesAndParagraphs: [EntrySegment]?
+            if computeSentencesAndParagraphs && finalSegments.count > 0 {
+                segmentsWithUpdatedSentencesAndParagraphs = self.updateSegmentSentencesAndParagraphs(
+                    segments: finalSegments,
+                    processRange: 0..<finalSegments.count
+                )
+            }
+            finalSegments = segmentsWithUpdatedSentencesAndParagraphs != nil &&
+                segmentsWithUpdatedSentencesAndParagraphs!.count == finalSegments.count &&
+                computeSentencesAndParagraphs ?
+                    segmentsWithUpdatedSentencesAndParagraphs!
+                :
+                    finalSegments
             
             self.entrySegments = finalSegments
 
@@ -3477,45 +3812,18 @@ class Entry: AVMutableComposition, NSCoding {
                 self.tracks[0].segments = finalSegments
             }
             
-            self.endTime = self.entrySegments.last!.timeMapping.target.end
-            
-            // 1. make sure to update selection objects
-            // 2. update segmentIndexMap
-            print("\tDeterming in updates need to be made to selection cursor properties...")
-            print("\tUpdate segment-index map...")
-            self.segmentIndexMap = [:]
-            self.deletedSegmentIndexMap = [:]
-            for segment in self.entrySegments {
-                if let selectionCursor = self.selectionCursor, let anchor = selectionCursor.anchor, segment.getUID() == anchor.getUID() {
-                    print("\tUpdating selection cursor anchor...")
-                    self.selectionCursor.setAnchorCaret(caret: Caret(index: segment.getIndex(), trackType: .committed))
-                }
-                
-                if let selectionCursor = self.selectionCursor, let focus = selectionCursor.focus, segment.getUID() == focus.getUID() {
-                     print("\tUpdating selection cursor focus...")
-                    self.selectionCursor.setFocusCaret(caret: Caret(index: segment.getIndex(), trackType: .committed))
-                }
-                if let selectionCursor = self.selectionCursor, let cachedAnchor = selectionCursor.cachedAnchor, segment.getUID() == cachedAnchor.getUID() {
-                     print("\tUpdating selection cursor cached anchor...")
-                    self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: segment.getIndex(), trackType: .committed))
-                }
-                
-                // Add segment uid-index pair into segmentIndexMap
-                self.segmentIndexMap[segment.getUID()] = segment.getIndex()
-                
-                // Add deleted segment uid-index pair into segmentIndexMap
-                if segment.isDeleted() {
-                    // Add segment uid-index pair into segmentIndexMap
-                    self.deletedSegmentIndexMap[segment.getUID()] = segment.getIndex()
-                }
+            if self.entrySegments.count > 0 {
+                self.endTime = self.entrySegments.last!.timeMapping.target.end
             }
-
+            
             // Update transformations
-            if let _ = self.state {
+            if let _ = self.state, self.transformations.count > 0 {
+                var segmentIndexMap: [String : Int] = [:]
+                self.entrySegments.forEach { segmentIndexMap[$0.getUID()] = $0.getIndex() }
                 self.transformations = Utils.cleanseTransformations(
                     transformations: self.transformations,
                     segments: self.entrySegments,
-                    segmentIndexMap: self.segmentIndexMap,
+                    segmentIndexMap: segmentIndexMap,
                     omitSilences: false,
                     omitVoiceCommands: false,
                     omitDeleted: false
@@ -3645,10 +3953,7 @@ class Entry: AVMutableComposition, NSCoding {
     }
     
     func getSentenceDetails(number: Int) -> Sentence? {
-        print("===== Get Sentence Details =====")
-        guard self.entryBuffer.count == 0 else {
-            fatalError("\t[Error] There was a problem inserting passage. Buffer was not empty")
-        }
+        print("===== Entry: Get Sentence Details =====")
 
         for segment in self.entrySegments {
             if segment.getSentence().number == number {
@@ -3660,10 +3965,7 @@ class Entry: AVMutableComposition, NSCoding {
     }
 
     func getSentenceDetails(forTrackTime: CMTime) -> Sentence? {
-        print("===== Get Sentence Details =====")
-        guard self.entryBuffer.count == 0 else {
-            fatalError("\t[Error] There was a problem inserting passage. Buffer was not empty")
-        }
+        print("===== Entry: Get Sentence Details =====")
         
         let sentenceSegment = Utils.binarySearch(
             in: self.entrySegments,
@@ -3682,81 +3984,35 @@ class Entry: AVMutableComposition, NSCoding {
         return nil
     }
     
-    func extractSentence(number: Int) -> Entry? {
-        print("===== Extract Sentence =====")
-        guard self.entryBuffer.count == 0 else {
-            print("\t[Error] There was a problem inserting passage. Buffer was not empty")
-            return nil
-        }
-        
-        let sentenceSegment = Utils.binarySearch(
-            in: self.entrySegments,
-            isLower: { segment in
-                return segment.getSentence().number < number
-            },
-            isHigher: { segment in
-                return segment.getSentence().number > number
+    func getParagraphDetails(number: Int) -> Paragraph? {
+        print("===== Entry: Get Paragraph Details =====")
+
+        for segment in self.entrySegments {
+            if segment.getParagraph().number == number {
+                return segment.getParagraph()
             }
-        )
-        
-        if let sentenceSegment = sentenceSegment {
-            return sentenceSegment.createSentenceEntry()
         }
         
         return nil
     }
-    
-    func extractSentence(forTrackTime: CMTime) -> Entry? {
-        print("===== Extract Sentence =====")
-        guard self.entryBuffer.count == 0 else {
-            print("\t[Error] There was a problem inserting passage. Buffer was not empty")
-            return nil
-        }
-        
-        let sentenceSegment = Utils.binarySearch(
+
+    func getParagraphDetails(forTrackTime: CMTime) -> Paragraph? {
+        print("===== Entry: Get Paragraph Details =====")
+
+        let paragraphSegment = Utils.binarySearch(
             in: self.entrySegments,
             isLower: { segment in
-                return segment.getSentence().timeRange.end < forTrackTime
+                return segment.getParagraph().timeRange.end < forTrackTime
             },
             isHigher: { segment in
-                return segment.getSentence().timeRange.start > forTrackTime
+                return segment.getParagraph().timeRange.start > forTrackTime
             }
         )
         
-        if let sentenceSegment = sentenceSegment {
-            return sentenceSegment.createSentenceEntry()
+        if let paragraphSegment = paragraphSegment {
+            return paragraphSegment.getParagraph()
         }
-        
-        return nil
-    }
-    
-    func extractSentence(type: SentencePosition) -> Entry? {
-        let currentTime = self.speechPlayer.getCurrentTime()
-        if let sentence = self.extractSentence(forTrackTime: currentTime) {
-            switch type {
-            case .current:
-                return sentence
-            case .previous:
-                let timestamp = floor(Utils.DEFAULT_SEGMENT_TIMESCALE * (currentTime.seconds - Utils.TEMPORAL_DELTA))
-                let previousTime = CMTimeMake(
-                    value: Int64(timestamp),
-                    timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
-                )
-                if let previousSentence = self.extractSentence(forTrackTime: previousTime) {
-                    return previousSentence
-                }
-            case .next:
-                let timestamp = floor(Utils.DEFAULT_SEGMENT_TIMESCALE * (currentTime.seconds + Utils.TEMPORAL_DELTA))
-                let nextTime = CMTimeMake(
-                    value: Int64(timestamp),
-                    timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
-                )
-                if let nextSentence = self.extractSentence(forTrackTime: nextTime) {
-                    return nextSentence
-                }
-            }
-        }
-        
+
         return nil
     }
     
@@ -3819,7 +4075,7 @@ class Entry: AVMutableComposition, NSCoding {
         return Double.infinity
     }
     
-    func getPower(type: ScaleUnitType = .all, sentenceNumber: Int? = nil, segmentTrackTime: CMTime? = nil) -> Double {
+    func getPower(type: ScaleUnitType = .all, sentenceNumber: Int? = nil, paragraphNumber: Int? = nil, segmentTrackTime: CMTime? = nil) -> Double {
         // print("===== Get Sound Intensity =====")
         var numSegments: Double = 0
         var powerSum: Double = 0
@@ -3849,6 +4105,37 @@ class Entry: AVMutableComposition, NSCoding {
                 return (powerSum / numSegments).rounded(toPlaces: Utils.SOUND_INTENSITY_SIG_FIG_COUNT)
             }
             
+            return Double.infinity
+        case .paragraph:
+            if let paragraphNumber = paragraphNumber {
+                // add committed
+                for segment in self.entrySegments {
+                    if segment.getParagraph().number == paragraphNumber {
+                        let power = segment.getPower()
+                        if power != Double.infinity {
+                            powerSum += power
+                            numSegments += 1
+                        }
+                    }
+                }
+                
+                // add buffer
+                for segment in self.entryBuffer {
+                    if segment.getParagraph().number == paragraphNumber {
+                        let power = segment.getPower()
+                        if power != Double.infinity {
+                            powerSum += power
+                            numSegments += 1
+                        }
+                    }
+                }
+
+                if numSegments > 0 {
+                    return (powerSum / numSegments).rounded(toPlaces: Utils.SOUND_INTENSITY_SIG_FIG_COUNT)
+                }
+
+                return Double.infinity
+            }
             return Double.infinity
         case .sentence:
             if let sentenceNumber = sentenceNumber {
@@ -4056,6 +4343,13 @@ class Entry: AVMutableComposition, NSCoding {
     }
     
     func processVoiceCommandSegments(command: String, voiceCommandIndices: [Int]) {
+        // When we create duplicates of entries because of the undo manager, so remain in memory
+        // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
+        guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
+            print("\t[Error] Override processVoiceCommandSegments method call because we attempted to modify entry that's not currently set in Entry Manager.")
+            return
+        }
+        
         print("===== Entry: Process Voice Command Segments =====")
         print("\tSeeking lowest voice command index...")
         
@@ -4355,6 +4649,22 @@ class Entry: AVMutableComposition, NSCoding {
                 userInfo: userInfo
             )
         }
+    }
+    
+    // Used when we set a new entry
+    // Not used during listening
+    func refresh() {
+        print("===== Entry: Refresh =====")
+        for segment in self.entrySegments {
+            segment.handleMutation()
+        }
+
+        self.setSegments(
+            segments: self.entrySegments,
+            replaceEntryDetails: true,
+            saveToLowLevelRepr: true,
+            saveToState: false
+        )
     }
     
     func handleMutation() {

@@ -159,8 +159,7 @@ class EntryListManager: NSObject {
         guard self.entriesFetched else {
             self.notifications.executeError(
                 text: "Still loading entries.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             
             return
@@ -169,8 +168,7 @@ class EntryListManager: NSObject {
         guard let _ = Utils.getNavigationController()?.visibleViewController as? DetailViewController else {
             self.notifications.executeError(
                 text: "Already located in entry list.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             
             return
@@ -200,8 +198,7 @@ class EntryListManager: NSObject {
         guard self.entriesFetched else {
             self.notifications.executeError(
                 text: "Still loading entries.",
-                voiceCommand: true,
-                handler: onStartHandler
+                voiceCommand: true
             )
             
             return
@@ -210,8 +207,7 @@ class EntryListManager: NSObject {
         guard !self.speechRecognition.isListeningForSpeech else {
             self.notifications.executeError(
                 text: "Cannot walk entry list while creating an entry.",
-                voiceCommand: true,
-                handler: onStartHandler
+                voiceCommand: true
             )
             return
         }
@@ -219,8 +215,7 @@ class EntryListManager: NSObject {
         guard self.state.activeEntries.count > 0 else {
             self.notifications.executeError(
                 text: "No entries available to walk. Say 'start entry' to create create a new entry.",
-                voiceCommand: true,
-                handler: onStartHandler
+                voiceCommand: true
             )
             return
         }
@@ -233,7 +228,8 @@ class EntryListManager: NSObject {
         if (self.isWalkingEntryList && !self.pausedWalkingEntryList && !runOverride) {
 
             self.notifications.executeError(
-                text: "Already walking passage."
+                text: "Already walking passage.",
+                voiceCommand: true
             )
 
             return
@@ -264,7 +260,7 @@ class EntryListManager: NSObject {
         guard let currentEntry = self.entryManager.currentEntry else {
             self.notifications.executeError(
                 text: "Unable to start \(runOverride ? "running" : "walking").",
-                handler: onStartHandler
+                voiceCommand: true
             )
             return
         }
@@ -332,8 +328,7 @@ class EntryListManager: NSObject {
         guard self.entriesFetched else {
             self.notifications.executeError(
                 text: "Still loading entries.",
-                voiceCommand: true,
-                handler: onStartHandler
+                voiceCommand: true
             )
             
             return
@@ -341,7 +336,8 @@ class EntryListManager: NSObject {
         
         if self.isRunningEntryList && !self.pausedRunningEntryList {
             self.notifications.executeError(
-                text: "Already running entry list."
+                text: "Already running entry list.",
+                voiceCommand: true
             )
             return
         }
@@ -376,8 +372,7 @@ class EntryListManager: NSObject {
         guard self.entriesFetched else {
             self.notifications.executeError(
                 text: "Still loading entries.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             
             return
@@ -386,8 +381,7 @@ class EntryListManager: NSObject {
         guard let _ = self.entryManager.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -395,7 +389,7 @@ class EntryListManager: NSObject {
         if !self.isWalkingEntryList && !self.isRunningEntryList {
             self.notifications.executeError(
                 text: "Not \(runOverride ? "running" : "walking") entry list.",
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -414,7 +408,7 @@ class EntryListManager: NSObject {
             guard let currentEntry = self.entryManager.currentEntry else {
                 self.notifications.executeError(
                     text: "Unable to retrieve current entry.",
-                    handler: handler
+                    voiceCommand: true
                 )
                 return
             }
@@ -492,7 +486,7 @@ class EntryListManager: NSObject {
         } else {
             self.notifications.executeError(
                 text: "At end of entry list.",
-                handler: handler
+                voiceCommand: true
             )
         }
         
@@ -506,8 +500,7 @@ class EntryListManager: NSObject {
         guard self.entriesFetched else {
             self.notifications.executeError(
                 text: "Still loading entries.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             
             return
@@ -516,8 +509,7 @@ class EntryListManager: NSObject {
         guard let _ = self.entryManager.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -525,7 +517,7 @@ class EntryListManager: NSObject {
         if !self.isWalkingEntryList && !self.isRunningEntryList {
             self.notifications.executeError(
                 text: "Not walking entry list.",
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -544,7 +536,7 @@ class EntryListManager: NSObject {
             guard let currentEntry = self.entryManager.currentEntry else {
                 self.notifications.executeError(
                     text: "Unable to retrieve current entry.",
-                    handler: handler
+                    voiceCommand: true
                 )
                 return
             }
@@ -620,7 +612,7 @@ class EntryListManager: NSObject {
         } else {
             self.notifications.executeError(
                 text: "At beginning of entry list.",
-                handler: handler
+                voiceCommand: true
             )
         }
         
@@ -634,8 +626,7 @@ class EntryListManager: NSObject {
         guard self.entriesFetched else {
             self.notifications.executeError(
                 text: "Still loading entries.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             
             return
@@ -644,8 +635,7 @@ class EntryListManager: NSObject {
         guard let _ = self.entryManager.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -653,7 +643,7 @@ class EntryListManager: NSObject {
         if !self.isRunningEntryList {
             self.notifications.executeError(
                 text: "Not running entry list.",
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -663,14 +653,16 @@ class EntryListManager: NSObject {
         
         if !self.isRunningEntryList {
             self.notifications.executeError(
-                text: "Not running entry list."
+                text: "Not running entry list.",
+                voiceCommand: true
             )
             return
         }
 
         if self.runningTimer == nil {
             self.notifications.executeError(
-                text: "Error pausing run."
+                text: "Error pausing run.",
+                voiceCommand: true
             )
             return
         }
@@ -708,7 +700,11 @@ class EntryListManager: NSObject {
         checkRep()
     }
     
-    func exitWalkRun(clearCurrentEntry: Bool = true, handler: (() -> Void)? = nil) {
+    func exitWalkRun(
+        clearCurrentEntry: Bool = true,
+        withFeedback: Bool = true,
+        handler: (() -> Void)? = nil
+    ) {
         if self.isRunningEntryList {
             print("===== Entry List Manager: Exit Run =====")
         } else {
@@ -719,8 +715,7 @@ class EntryListManager: NSObject {
         guard self.entriesFetched else {
             self.notifications.executeError(
                 text: "Still loading entries.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             
             return
@@ -729,8 +724,7 @@ class EntryListManager: NSObject {
         guard let _ = self.entryManager.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -738,7 +732,7 @@ class EntryListManager: NSObject {
         if !self.isWalkingEntryList && !self.isRunningEntryList {
             self.notifications.executeError(
                 text: "Not walking or running entry list.",
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -748,7 +742,8 @@ class EntryListManager: NSObject {
         
         if !self.isWalkingEntryList && !self.isRunningEntryList {
             self.notifications.executeError(
-                text: "Not walking or running entry list."
+                text: "Not walking or running entry list.",
+                voiceCommand: true
             )
             return
         }
@@ -792,7 +787,7 @@ class EntryListManager: NSObject {
             self.pausedRunningEntryList = false
 
             // Present Feedback
-            if let visualMessage = visualMessage, let audioMessage = audioMessage {
+            if let visualMessage = visualMessage, let audioMessage = audioMessage, withFeedback {
                 self.notifications.executeFeedback(
                     visualMessage: visualMessage,
                     audioMessage: audioMessage,

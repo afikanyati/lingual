@@ -289,8 +289,6 @@ class StateManager: NSObject {
         //
         // Any data that should have been set in modules would otherwise be lost
         self.fetchStoredState()
-        self.incrementOpenCount()
-        self.detectAudioDevice()
     }
     
     @objc func onEntryTableViewDidLoad(notification: Notification) {
@@ -507,6 +505,12 @@ class StateManager: NSObject {
         
         // Clips
         self.clips = notification.userInfo!["clips"] as? [String: Set<String>] ?? [String: Set<String>]()
+        
+        // Only execute these once we've fetched state so we don't accidentally overwrite it
+        //
+        // These methods call save.
+        self.incrementOpenCount()
+        self.detectAudioDevice()
         
         NotificationCenter.default.post(
             name: StateManager.onFetchedEntries,

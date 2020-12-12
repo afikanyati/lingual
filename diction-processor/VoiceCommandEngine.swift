@@ -208,7 +208,11 @@ public class VoiceCommandEngine: NSObject {
                     permissibleObjectActions.count == 1 && (
                         PossibleObjectSpatialRelations[loneAction] == nil ||
                         PossibleObjectSpatialRelations[loneAction]!.count == 1
-                    ) && !actionTokens.contains(loneAction)
+                    ) &&
+                    !actionTokens.contains(loneAction) &&
+                    token != .WORD &&
+                    token != .SENTENCE &&
+                    token != .PARAGRAPH
                 {
                     // If object only has one action (and one or no spatial relation), we can infer action
                     actionTokens.append(loneAction)
@@ -750,8 +754,6 @@ public class VoiceCommandEngine: NSObject {
             command == .ECHO_ENTRY ||
             command == .PAUSE_ECHO ||
             command == .STOP_ECHO ||
-            command == .PLAY_PREVIOUS_SENTENCE ||
-            command == .ECHO_PREVIOUS_SENTENCE ||
             command == .DELETE_SELECTION ||
             command == .UPDATE_SELECTION ||
             command == .COPY_SELECTION ||
@@ -798,6 +800,9 @@ public class VoiceCommandEngine: NSObject {
             command == .CANCEL_SELECTION_UPDATE ||
             command == .REDO_CHANGE ||
             command == .UNDO_CHANGE ||
+            command == .SELECT_WORD ||
+            command == .SELECT_SENTENCE ||
+            command == .SELECT_PARAGRAPH ||
             // UI Manager
             command == .ACCEPT_SELECTION_UPDATE ||
             command == .EXPORT_AUDIO ||
@@ -841,8 +846,6 @@ public class VoiceCommandEngine: NSObject {
             command == .ECHO_ENTRY ||
             command == .PAUSE_ECHO ||
             command == .STOP_ECHO ||
-            command == .PLAY_PREVIOUS_SENTENCE ||
-            command == .ECHO_PREVIOUS_SENTENCE ||
             command == .DELETE_SELECTION ||
             command == .UPDATE_SELECTION ||
             command == .COPY_SELECTION ||
@@ -888,7 +891,10 @@ public class VoiceCommandEngine: NSObject {
             command == .EXIT_WALK ||
             command == .CANCEL_SELECTION_UPDATE ||
             command == .REDO_CHANGE ||
-            command == .UNDO_CHANGE
+            command == .UNDO_CHANGE ||
+            command == .SELECT_WORD ||
+            command == .SELECT_SENTENCE ||
+            command == .SELECT_PARAGRAPH
         ) {
             return true
         }
@@ -1063,7 +1069,9 @@ public class VoiceCommandEngine: NSObject {
         
         // OBJECTS
         case ENTRY = "entry"
+        case WORD = "word"
         case SENTENCE = "sentence"
+        case PARAGRAPH = "paragraph"
         case PUNCTUATION = "punctuation"
         case SILENCES = "silences"
         case TEMPORAL_SUGGESTIONS = "temporal suggestions"
@@ -1133,7 +1141,6 @@ public class VoiceCommandEngine: NSObject {
         case EDIT_ENTRY = "edit entry"
         case EXPORT_ENTRY = "export entry"
         case ENTER_ENTRY = "enter entry"
-        
         // Entry List
         case WALK_ENTRY_LIST = "walk entry list"
         case RUN_ENTRY_LIST = "run entry list"
@@ -1150,9 +1157,6 @@ public class VoiceCommandEngine: NSObject {
         case STOP_PLAYBACK = "stop playback"
         case SKIP_PLAYBACK_BACKWARD = "skip playback backward"
         case SKIP_PLAYBACK_FORWARD = "skip playback forward"
-        // Sentence
-        case PLAY_PREVIOUS_SENTENCE = "play previous sentence"
-        case ECHO_PREVIOUS_SENTENCE = "echo previous sentence"
         // Punctuation
         case ACTIVATE_PUNCTUATION = "activate punctuation"
         case DEACTIVATE_PUNCTUATION = "deactivate punctuation"
@@ -1205,6 +1209,12 @@ public class VoiceCommandEngine: NSObject {
         case SHIFT_SELECTION_BACKWARD = "shift selection backward"
         case SHIFT_NEXT_WALK_ELEMENT = "shift next walk element"
         case SHIFT_PREVIOUS_WALK_ELEMENT = "shift previous walk element"
+        // Word
+        case SELECT_WORD = "select word"
+        // Sentence
+        case SELECT_SENTENCE = "delete sentence"
+        // Paragraph
+        case SELECT_PARAGRAPH = "delete paragraph"
         // Selection Update
         case ACCEPT_SELECTION_UPDATE = "accept selection update"
         case REDO_SELECTION_UPDATE = "redo selection update"
@@ -1276,93 +1286,96 @@ public class VoiceCommandEngine: NSObject {
             case 25: self = .STOP_PLAYBACK
             case 26: self = .SKIP_PLAYBACK_BACKWARD
             case 27: self = .SKIP_PLAYBACK_FORWARD
-            // Sentence
-            case 28: self = .PLAY_PREVIOUS_SENTENCE
-            case 29: self = .ECHO_PREVIOUS_SENTENCE
             // Punctuation
-            case 30: self = .ACTIVATE_PUNCTUATION
-            case 31: self = .DEACTIVATE_PUNCTUATION
+            case 28: self = .ACTIVATE_PUNCTUATION
+            case 29: self = .DEACTIVATE_PUNCTUATION
             // Silences
-            case 32: self = .ACTIVATE_SILENCES
-            case 33: self = .DEACTIVATE_SILENCES
+            case 30: self = .ACTIVATE_SILENCES
+            case 31: self = .DEACTIVATE_SILENCES
             // Temporal Suggestions
-            case 34: self = .ACTIVATE_TEMPORAL_SUGGESTIONS
-            case 35: self = .DEACTIVATE_TEMPORAL_SUGGESTIONS
+            case 32: self = .ACTIVATE_TEMPORAL_SUGGESTIONS
+            case 33: self = .DEACTIVATE_TEMPORAL_SUGGESTIONS
             // Punctuation Suggestions
-            case 36: self = .ACTIVATE_PUNCTUATION_SUGGESTIONS
-            case 37: self = .DEACTIVATE_PUNCTUATION_SUGGESTIONS
+            case 34: self = .ACTIVATE_PUNCTUATION_SUGGESTIONS
+            case 35: self = .DEACTIVATE_PUNCTUATION_SUGGESTIONS
             // Formatting Suggestions
-            case 38: self = .ACTIVATE_FORMATTING_SUGGESTIONS
-            case 39: self = .DEACTIVATE_FORMATTING_SUGGESTIONS
+            case 36: self = .ACTIVATE_FORMATTING_SUGGESTIONS
+            case 37: self = .DEACTIVATE_FORMATTING_SUGGESTIONS
             // Passive Echo
-            case 40: self = .ACTIVATE_PASSIVE_ECHO
-            case 41: self = .DEACTIVATE_PASSIVE_ECHO
+            case 38: self = .ACTIVATE_PASSIVE_ECHO
+            case 39: self = .DEACTIVATE_PASSIVE_ECHO
             // Volume
-            case 42: self = .INCREASE_VOLUME
-            case 43: self = .DECREASE_VOLUME
+            case 40: self = .INCREASE_VOLUME
+            case 41: self = .DECREASE_VOLUME
     //        case ADJUST_VOLUME = "adjust volume"
             // Echo Rate
-            case 44: self = .INCREASE_ECHO_RATE
-            case 45: self = .DECREASE_ECHO_RATE
+            case 42: self = .INCREASE_ECHO_RATE
+            case 43: self = .DECREASE_ECHO_RATE
             // Playback Rate
-            case 46: self = .INCREASE_PLAYBACK_RATE
-            case 47: self = .DECREASE_PLAYBACK_RATE
+            case 44: self = .INCREASE_PLAYBACK_RATE
+            case 45: self = .DECREASE_PLAYBACK_RATE
             // Selection
-            case 48: self = .DELETE_SELECTION
-            case 49: self = .UPDATE_SELECTION
-            case 50: self = .COPY_SELECTION
-            case 51: self = .CUT_SELECTION
-            case 52: self = .EXPORT_SELECTION
-            case 53: self = .RUN_SELECTION
-            case 54: self = .WALK_SELECTION
-            case 55: self = .ENTER_SELECTION
-            case 56: self = .REMOVE_SELECTION
-            case 57: self = .EXPAND_SELECTION
-            case 58: self = .REDUCE_SELECTION
-            case 59: self = .PLAY_SELECTION
-            case 60: self = .ECHO_SELECTION
-            case 61: self = .PAUSE_RUN
-            case 62: self = .EXIT_WALK
-            case 63: self = .SHIFT_ANCHOR_RIGHT
-            case 64: self = .SHIFT_ANCHOR_LEFT
-            case 65: self = .SHIFT_FOCUS_RIGHT
-            case 66: self = .SHIFT_FOCUS_LEFT
-            case 67: self = .SHIFT_SELECTION_FORWARD
-            case 68: self = .SHIFT_SELECTION_BACKWARD
-            case 69: self = .SHIFT_NEXT_WALK_ELEMENT
-            case 70: self = .SHIFT_PREVIOUS_WALK_ELEMENT
+            case 46: self = .DELETE_SELECTION
+            case 47: self = .UPDATE_SELECTION
+            case 48: self = .COPY_SELECTION
+            case 49: self = .CUT_SELECTION
+            case 50: self = .EXPORT_SELECTION
+            case 51: self = .RUN_SELECTION
+            case 52: self = .WALK_SELECTION
+            case 53: self = .ENTER_SELECTION
+            case 54: self = .REMOVE_SELECTION
+            case 55: self = .EXPAND_SELECTION
+            case 56: self = .REDUCE_SELECTION
+            case 57: self = .PLAY_SELECTION
+            case 58: self = .ECHO_SELECTION
+            case 59: self = .PAUSE_RUN
+            case 60: self = .EXIT_WALK
+            case 61: self = .SHIFT_ANCHOR_RIGHT
+            case 62: self = .SHIFT_ANCHOR_LEFT
+            case 63: self = .SHIFT_FOCUS_RIGHT
+            case 64: self = .SHIFT_FOCUS_LEFT
+            case 65: self = .SHIFT_SELECTION_FORWARD
+            case 66: self = .SHIFT_SELECTION_BACKWARD
+            case 67: self = .SHIFT_NEXT_WALK_ELEMENT
+            case 68: self = .SHIFT_PREVIOUS_WALK_ELEMENT
+            // Word
+            case 69: self = .SELECT_WORD
+            // Sentence
+            case 70: self = .SELECT_SENTENCE
+            // Paragraph
+            case 71: self = .SELECT_PARAGRAPH
             // Selection Update
-            case 71: self = .ACCEPT_SELECTION_UPDATE
-            case 72: self = .REDO_SELECTION_UPDATE
-            case 73: self = .CANCEL_SELECTION_UPDATE
+            case 72: self = .ACCEPT_SELECTION_UPDATE
+            case 73: self = .REDO_SELECTION_UPDATE
+            case 74: self = .CANCEL_SELECTION_UPDATE
             // Selection Rate
-            case 74: self = .INCREASE_SELECTION_RATE
-            case 75: self = .DECREASE_SELECTION_RATE
+            case 75: self = .INCREASE_SELECTION_RATE
+            case 76: self = .DECREASE_SELECTION_RATE
             // Cursor
     //        case SHIFT_HERE = "shift here"
             // Commmit
-            case 76: self = .PLAY_COMMIT
-            case 77: self = .ECHO_COMMIT
-            case 78: self = .SELECT_COMMIT
-            case 79: self = .ROLLBACK_COMMIT
-            case 80: self = .WALK_COMMIT
-            case 81: self = .RUN_COMMIT
+            case 77: self = .PLAY_COMMIT
+            case 78: self = .ECHO_COMMIT
+            case 79: self = .SELECT_COMMIT
+            case 80: self = .ROLLBACK_COMMIT
+            case 81: self = .WALK_COMMIT
+            case 82: self = .RUN_COMMIT
             // Clipboard
-            case 82: self = .INSPECT_CLIPBOARD
-            case 83: self = .PASTE_CLIPBOARD
+            case 83: self = .INSPECT_CLIPBOARD
+            case 84: self = .PASTE_CLIPBOARD
             // Dictionary
-            case 84: self = .ENTER_DICTIONARY
-            case 85: self = .EXIT_DICTIONARY
+            case 85: self = .ENTER_DICTIONARY
+            case 86: self = .EXIT_DICTIONARY
             // Output
-            case 86: self = .EXPORT_AUDIO
-            case 87: self = .EXPORT_TEXT
+            case 87: self = .EXPORT_AUDIO
+            case 88: self = .EXPORT_TEXT
             // General
-            case 88: self = .UNDO_CHANGE
-            case 89: self = .REDO_CHANGE
+            case 89: self = .UNDO_CHANGE
+            case 90: self = .REDO_CHANGE
     //        case VIEW_HELP = "show help"
-            case 90: self = .GRANT_PERMISSION
-            case 91: self = .CANCEL_DIALOG
-            case 92: self = .CONTINUE_DIALOG
+            case 91: self = .GRANT_PERMISSION
+            case 92: self = .CANCEL_DIALOG
+            case 93: self = .CONTINUE_DIALOG
             default: return nil
             }
         }
@@ -1440,7 +1453,11 @@ public class VoiceCommandEngine: NSObject {
         // OBJECT
         Token.ENTRY.value() : .ENTRY,
         "entering" : .ENTRY,
+        Token.WORD.value() : .WORD,
         Token.SENTENCE.value() : .SENTENCE,
+        Token.PARAGRAPH.value() : .PARAGRAPH,
+        "passage" : .PARAGRAPH,
+        "section" : .PARAGRAPH,
         Token.PUNCTUATION.value() : .PUNCTUATION,
         Token.SILENCES.value() : .SILENCES,
         Token.TEMPORAL_SUGGESTIONS.value() : .TEMPORAL_SUGGESTIONS,
@@ -1554,9 +1571,6 @@ public class VoiceCommandEngine: NSObject {
         Set([.FINISH, .PLAYBACK]) : .STOP_PLAYBACK,
         Set([.SKIP, .PLAYBACK, .NEXT]) : .SKIP_PLAYBACK_BACKWARD,
         Set([.SKIP, .PLAYBACK, .PREVIOUS]) : .SKIP_PLAYBACK_FORWARD,
-        // Sentence
-        Set([.PLAY, .PREVIOUS, .SENTENCE]) : .PLAY_PREVIOUS_SENTENCE,
-        Set([.ECHO, .PREVIOUS, .SENTENCE]) : .ECHO_PREVIOUS_SENTENCE,
         // Punctuation
         Set([.ACTIVATE, .PUNCTUATION]) : .ACTIVATE_PUNCTUATION,
         Set([.ADJUST, .ON, .PUNCTUATION]) : .ACTIVATE_PUNCTUATION,
@@ -1626,6 +1640,7 @@ public class VoiceCommandEngine: NSObject {
         Set([.ENTER, .SELECTION]) : .ENTER_SELECTION,
         Set([.START, .SELECTION]) : .ENTER_SELECTION,
         Set([.REMOVE, .SELECTION]) : .REMOVE_SELECTION,
+        Set([.EXIT, .SELECTION]) : .REMOVE_SELECTION,
         Set([.END, .SELECTION]) : .REMOVE_SELECTION,
         Set([.STOP, .SELECTION]) : .REMOVE_SELECTION,
         Set([.FINISH, .SELECTION]) : .REMOVE_SELECTION,
@@ -1688,6 +1703,15 @@ public class VoiceCommandEngine: NSObject {
         // Shift Previous Entry Walk Element
         Set([.SHIFT, .WALK, .PREVIOUS]) : .SHIFT_PREVIOUS_WALK_ELEMENT,
         Set([.SHIFT, .WALK, .LEFT]) : .SHIFT_PREVIOUS_WALK_ELEMENT,
+        // Word
+        Set([.SELECT, .WORD]) : .SELECT_WORD,
+        Set([.ENTER, .WORD]) : .SELECT_WORD,
+        // Sentence
+        Set([.SELECT, .SENTENCE]) : .SELECT_SENTENCE,
+        Set([.ENTER, .SENTENCE]) : .SELECT_SENTENCE,
+        // Paragraph
+        Set([.SELECT, .PARAGRAPH]) : .SELECT_PARAGRAPH,
+        Set([.ENTER, .PARAGRAPH]) : .SELECT_PARAGRAPH,
         // Selection Update
         Set([.ACCEPT, .SELECTION_UPDATE]) : .ACCEPT_SELECTION_UPDATE,
         Set([.REDO, .SELECTION_UPDATE]) : .REDO_SELECTION_UPDATE,
@@ -1777,7 +1801,9 @@ public class VoiceCommandEngine: NSObject {
     
     let ObjectToken: Set<Token> = [
         .ENTRY,
+        .WORD,
         .SENTENCE,
+        .PARAGRAPH,
         .PUNCTUATION,
         .SILENCES,
         .TEMPORAL_SUGGESTIONS,
@@ -1871,9 +1897,14 @@ public class VoiceCommandEngine: NSObject {
             .DECREASE,
             .ADJUST
         ]),
+        .WORD: Set([
+            .SELECT,
+        ]),
         .SENTENCE: Set([
-            .PLAY,
-            .ECHO
+            .SELECT,
+        ]),
+        .PARAGRAPH: Set([
+            .SELECT,
         ]),
         .PUNCTUATION: Set([
             .ACTIVATE,
@@ -1932,6 +1963,7 @@ public class VoiceCommandEngine: NSObject {
             .END,
             .STOP,
             .FINISH,
+            .EXIT,
             .EXPAND,
             .REDUCE,
             .PLAY,

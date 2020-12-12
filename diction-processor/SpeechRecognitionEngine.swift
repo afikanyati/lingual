@@ -894,6 +894,11 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             return
         } else if self.isListeningForCommands && !self.pausedListeningForCommands {
             print("\tAlready listening for commands.")
+            if let stopListeningHandler = self.stopListeningHandler {
+                print("\tExecute stop listening handler...")
+                self.stopListeningHandler = nil
+                stopListeningHandler()
+            }
             return
         }
         
@@ -1009,6 +1014,11 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 text: "Already listening for speech.",
                 handler: onStartHandler
             )
+            if let stopListeningHandler = self.stopListeningHandler {
+                print("\tExecute stop listening handler...")
+                self.stopListeningHandler = nil
+                stopListeningHandler()
+            }
             return
         }
         
@@ -1107,6 +1117,11 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             }
             
             return
+        }
+        
+        // Remove selection if we have it activated
+        if self.selectionCursor.hasSelection {
+            self.selectionCursor.clearSelection()
         }
         
         self.listeningTimer?.invalidate()

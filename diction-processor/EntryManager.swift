@@ -72,6 +72,8 @@ class EntryManager: NSObject {
     private(set) var runningTimer: Timer?
     /// Stores whether entry is currently being exported
     private(set) var isExportingEntry = false
+    /// Stores flag of whether we should not accept entry snapshot update after commit
+    private(set) var ignoreEntrySnapshotUpdate = false
     
     // MARK: - Initialization and Deinitialization
     
@@ -205,8 +207,7 @@ class EntryManager: NSObject {
             if self.speechRecognition.pausedListeningForSpeech {
                 self.notifications.executeError(
                     text: "Entry not paused.",
-                    voiceCommand: true,
-                    handler: handler
+                    voiceCommand: true
                 )
                 return
             }
@@ -256,8 +257,7 @@ class EntryManager: NSObject {
             if self.speechPlayer.pausedPlayingEntry {
                 self.notifications.executeError(
                     text: "Playback not paused.",
-                    voiceCommand: true,
-                    handler: handler
+                    voiceCommand: true
                 )
                 return
             }
@@ -281,6 +281,22 @@ class EntryManager: NSObject {
             )
         case .ENTER_SELECTION:
             self.enterSelection(
+                scale: .all,
+                handler: handler
+            )
+        case .SELECT_WORD:
+            self.enterSelection(
+                scale: .word,
+                handler: handler
+            )
+        case .SELECT_SENTENCE:
+            self.enterSelection(
+                scale: .sentence,
+                handler: handler
+            )
+        case .SELECT_PARAGRAPH:
+            self.enterSelection(
+                scale: .paragraph,
                 handler: handler
             )
         case .REMOVE_SELECTION:
@@ -303,32 +319,36 @@ class EntryManager: NSObject {
             }
         case .SHIFT_ANCHOR_LEFT:
             self.shiftAnchor(
-                direction: .left,
+                direction: .backwards,
+                by: 1,
                 handler: handler
             )
         case .SHIFT_ANCHOR_RIGHT:
             self.shiftAnchor(
-                direction: .right,
+                direction: .forwards,
+                by: 1,
                 handler: handler
             )
         case .SHIFT_FOCUS_LEFT:
             self.shiftFocus(
-                direction: .left,
+                direction: .backwards,
+                by: 1,
                 handler: handler
             )
         case .SHIFT_FOCUS_RIGHT:
             self.shiftFocus(
-                direction: .right,
+                direction: .forwards,
+                by: 1,
                 handler: handler
             )
         case .SHIFT_SELECTION_FORWARD:
             self.shiftSelection(
-                direction: .right,
+                direction: .forwards,
                 handler: handler
             )
         case .SHIFT_SELECTION_BACKWARD:
             self.shiftSelection(
-                direction: .left,
+                direction: .backwards,
                 handler: handler
             )
         case .EXPAND_SELECTION:
@@ -341,14 +361,6 @@ class EntryManager: NSObject {
             )
         case .ECHO_COMMIT:
             self.echoCommit(
-                handler: handler
-            )
-        case .ECHO_PREVIOUS_SENTENCE:
-            self.echoPreviousSentence(
-                handler: handler
-            )
-        case .PLAY_PREVIOUS_SENTENCE:
-            self.playPreviousSentence(
                 handler: handler
             )
         case .RUN_ENTRY, .RUN_SELECTION:
@@ -396,10 +408,11 @@ class EntryManager: NSObject {
         if keyPath == "currentEntryUndoSnapshot" {
             print("\tKeyPath: currentEntryUndoSnapshot")
             if let newSnapshot = change?[.newKey] as? EntrySnapshot,
-               let _ = change?[.oldKey] as? EntrySnapshot
+               let _ = change?[.oldKey] as? EntrySnapshot,
+               !self.ignoreEntrySnapshotUpdate
             {
                 print("\tNew Entry Snapshot Received! Save to state")
-                let duplicateEntry = newSnapshot.entry.duplicate()
+                let duplicateEntry = newSnapshot.entry
                 
                 // Handle Current Clip UID
                 if let entry = self.currentEntry,
@@ -433,8 +446,12 @@ class EntryManager: NSObject {
                     let recordFile = entry.recordFile
                     duplicateEntry.setRecordFile(file: recordFile)
                 }
+                
+                // Make sure all data is correct
+                duplicateEntry.refresh()
 
                 // Set Entry
+                print("\tSave entry into state...")
                 self.state.saveEntry(entry: duplicateEntry) // we duplicate so there's no memory leaks/pointers to same memory locations
                 
                 print("\tSet Node Modules...")
@@ -487,9 +504,28 @@ class EntryManager: NSObject {
                     entryChangeHandler()
                     self.entryChangeHandler = nil
                 }
+            } else if let entry = self.currentEntry, self.ignoreEntrySnapshotUpdate {
+                print("\tIgnored entry snapshot because it was after a commit...")
+                
+                print("\tUpdate View with text: '\(entry.getText())'")
+                entry.handleOnSpeechUpdate(text: entry.getText())
+                
+                if let entryChangeHandler = self.entryChangeHandler {
+                    print("\tRunning Save Handler...")
+                    entryChangeHandler()
+                    self.entryChangeHandler = nil
+                }
             } else {
                 print("\tNo new snapshot...")
+                
+                if let entryChangeHandler = self.entryChangeHandler {
+                    print("\tRunning Save Handler...")
+                    entryChangeHandler()
+                    self.entryChangeHandler = nil
+                }
             }
+            
+            self.ignoreEntrySnapshotUpdate = false
         }
     }
     
@@ -558,24 +594,34 @@ class EntryManager: NSObject {
         guard let _ = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
         
-        // Navigate to detail page
-        NotificationCenter.default.post(
-            name: EntryManager.onNavigateToDetailPage,
-            object: nil,
-            userInfo: [:]
-        )
+        let executeEntry = {
+            // Navigate to detail page
+            NotificationCenter.default.post(
+                name: EntryManager.onNavigateToDetailPage,
+                object: nil,
+                userInfo: [:]
+            )
+            
+            NotificationCenter.default.post(
+                name: EntryManager.onExecuteEntryAction,
+                object: nil,
+                userInfo: [:]
+            )
+        }
         
-        NotificationCenter.default.post(
-            name: EntryManager.onExecuteEntryAction,
-            object: nil,
-            userInfo: [:]
-        )
+        if self.entryListManager.isRunningEntryList || self.entryListManager.isWalkingEntryList {
+            print("\tCurrently walking entry list. Stop walking before entering entry...")
+            self.entryListManager.exitWalkRun(withFeedback: false) {
+                executeEntry()
+            }
+        } else {
+            executeEntry()
+        }
         
         checkRep()
     }
@@ -639,7 +685,10 @@ class EntryManager: NSObject {
     @objc func deleteEntry(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
         print("===== Entry Manager: Delete Entry (using screen button or voice command) =====")
         guard let index = self.currentIndex else {
-            self.notifications.executeError(text: "No entry selected")
+            self.notifications.executeError(
+                text: "No entry selected",
+                voiceCommand: voiceCommand
+            )
             return
         }
         
@@ -875,14 +924,12 @@ class EntryManager: NSObject {
                 if self.speechRecognition.isListeningForSpeech {
                     self.notifications.executeError(
                         text: "Entry already started.",
-                        voiceCommand: voiceCommand,
-                        handler: handler
+                        voiceCommand: voiceCommand
                     )
                 } else {
                     self.notifications.executeError(
                         text: "Wait until entry export completion.",
-                        voiceCommand: voiceCommand,
-                        handler: handler
+                        voiceCommand: voiceCommand
                     )
                 }
                 print("\t[Error] There was a problem starting entry. System does not have record permissions.")
@@ -915,8 +962,7 @@ class EntryManager: NSObject {
         guard let _ = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -946,7 +992,7 @@ class EntryManager: NSObject {
         } else {
             self.notifications.executeError(
                 text: "No ongoing entry.",
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -971,8 +1017,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -980,8 +1025,7 @@ class EntryManager: NSObject {
         if entry.entrySegments.count == 0 {
             self.notifications.executeError(
                 text: "No existing entry.",
-                voiceCommand: voiceCommand,
-                handler: handler
+                voiceCommand: voiceCommand
             )
         }
         
@@ -1049,8 +1093,7 @@ class EntryManager: NSObject {
             } else {
                 self.notifications.executeError(
                     text: "Unable to start entry.",
-                    voiceCommand: voiceCommand,
-                    handler: handler
+                    voiceCommand: voiceCommand
                 )
                 print("\t[Error] There was a problem starting entry. System does not have record permissions.")
             }
@@ -1076,8 +1119,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -1085,8 +1127,7 @@ class EntryManager: NSObject {
         guard self.speechRecognition.isListeningForSpeech else {
             self.notifications.executeError(
                 text: "Must be editing entry to stop it.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -1119,14 +1160,12 @@ class EntryManager: NSObject {
             if !self.speechRecognition.isListeningForSpeech {
                 self.notifications.executeError(
                     text: "No ongoing entry.",
-                    voiceCommand: voiceCommand,
-                    handler: handler
+                    voiceCommand: voiceCommand
                 )
             } else {
                 self.notifications.executeError(
                     text: "Wait until entry export completion.",
-                    voiceCommand: voiceCommand,
-                    handler: handler
+                    voiceCommand: voiceCommand
                 )
             }
             print("\t[Error] There was a problem stopping entry. We're not listening for speech or are exporting entry.")
@@ -1155,8 +1194,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: onFinishHandler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -1248,8 +1286,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -1294,8 +1331,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -1378,8 +1414,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -1387,7 +1422,7 @@ class EntryManager: NSObject {
         if !self.speechSynthesis.isPlayingEcho && !self.speechSynthesis.isPlayingPassiveEcho {
             self.notifications.executeError(
                 text: "Entry not being echoed.",
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -1433,8 +1468,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -1630,8 +1664,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -1695,8 +1728,7 @@ class EntryManager: NSObject {
             guard self.speechRecognition.isListeningForSpeech else {
                 self.notifications.executeError(
                     text: "Must be editing entry to pause it.",
-                    voiceCommand: true,
-                    handler: handler
+                    voiceCommand: voiceCommand
                 )
                 return
             }
@@ -1706,7 +1738,7 @@ class EntryManager: NSObject {
                     self.notifications.executeFeedback(
                         visualMessage: "Pause Entry",
                         audioMessage: "entry paused",
-                        withHaptics: true
+                        withHaptics: voiceCommand
                     )
                 }
                 
@@ -1736,8 +1768,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: onFinishHandler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -1745,8 +1776,7 @@ class EntryManager: NSObject {
         guard self.speechRecognition.isListeningForSpeech else {
             self.notifications.executeError(
                 text: "Must be editing entry to play last commit.",
-                voiceCommand: true,
-                handler: onStartHandler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -1754,7 +1784,7 @@ class EntryManager: NSObject {
         if entry.committedBufferRanges.count == 0 {
             self.notifications.executeError(
                 text: "No previous commits.",
-                handler: onFinishHandler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -1766,14 +1796,14 @@ class EntryManager: NSObject {
         
         let executePlay = {
             let commit = entry.getLastCommit()
-            print("\tLast Commit: ", entry.getText(segments: commit))
             guard let lastCommit = commit else {
                 self.notifications.executeError(
                     text: "Unable to find last commit.",
-                    handler: onFinishHandler
+                    voiceCommand: voiceCommand
                 )
                 return
             }
+            print("\tLast Commit: ", Entry.getText(segments: lastCommit))
             let fromTime = lastCommit.first!.timeMapping.target.start
             let toTime = lastCommit.last!.timeMapping.target.end
             
@@ -1824,8 +1854,7 @@ class EntryManager: NSObject {
         guard let _ = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -1833,7 +1862,7 @@ class EntryManager: NSObject {
         if !self.speechSynthesis.isPlayingEcho {
             self.notifications.executeError(
                 text: "Entry not being echoed.",
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -1879,8 +1908,7 @@ class EntryManager: NSObject {
         guard self.speechPlayer.isPlayingEntry else {
             self.notifications.executeError(
                 text: "No entry currently playing.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -1909,7 +1937,7 @@ class EntryManager: NSObject {
             // Will skip past end of track
             self.notifications.executeError(
                 text: "Skipping would exceed duration",
-                handler: handler
+                voiceCommand: voiceCommand
             )
             
             return
@@ -1936,8 +1964,7 @@ class EntryManager: NSObject {
         guard self.speechPlayer.isPlayingEntry else {
             self.notifications.executeError(
                 text: "No entry currently playing.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -1965,7 +1992,7 @@ class EntryManager: NSObject {
             // Will skip past end of track
             self.notifications.executeError(
                 text: "Skipping would exceed duration",
-                handler: handler
+                voiceCommand: voiceCommand
             )
             
             return
@@ -1992,8 +2019,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2001,7 +2027,7 @@ class EntryManager: NSObject {
         if !self.isWalkingEntry {
             self.notifications.executeError(
                 text: "Not walking \(self.selectionCursor.hasSelection ? "selection" : "entry").",
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2033,8 +2059,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2042,7 +2067,7 @@ class EntryManager: NSObject {
         if !self.isWalkingEntry {
             self.notifications.executeError(
                 text: "Not walking \(self.selectionCursor.hasSelection ? "selection" : "entry").",
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2074,8 +2099,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2083,7 +2107,7 @@ class EntryManager: NSObject {
         if !self.isRunningEntry {
             self.notifications.executeError(
                 text: "Not running \(self.selectionCursor.hasSelection ? "selection" : "entry").",
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2115,8 +2139,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2124,7 +2147,7 @@ class EntryManager: NSObject {
         if !self.isWalkingEntry && !self.isRunningEntry {
             self.notifications.executeError(
                 text: "Not walking or running \(self.selectionCursor.hasSelection ? "selection" : "entry").",
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2162,8 +2185,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2171,8 +2193,7 @@ class EntryManager: NSObject {
         guard self.selectionCursor.hasSelection else {
             self.notifications.executeError(
                 text: "Select speech to execute action.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2221,8 +2242,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2230,8 +2250,7 @@ class EntryManager: NSObject {
         guard self.selectionCursor.hasSelection else {
             self.notifications.executeError(
                 text: "Select speech to execute action.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2280,8 +2299,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2289,8 +2307,7 @@ class EntryManager: NSObject {
         guard self.selectionCursor.hasSelection else {
             self.notifications.executeError(
                 text: "Select speech to execute action.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2334,8 +2351,7 @@ class EntryManager: NSObject {
         guard self.selectionCursor.hasSelection else {
             self.notifications.executeError(
                 text: "Select speech to execute action.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2367,8 +2383,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -2376,8 +2391,7 @@ class EntryManager: NSObject {
         guard self.selectionCursor.hasSelection else {
             self.notifications.executeError(
                 text: "Select speech to execute action.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -2404,20 +2418,17 @@ class EntryManager: NSObject {
         } else if !self.selectionCursor.hasSelection {
             self.notifications.executeError(
                 text: "No existing selection.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
         } else if !self.selectionCursor.isUpdatingSelection {
             self.notifications.executeError(
                 text: "Say \"update\" to replace selection.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
         } else if !self.selectionCursor.isPromptingForUpdateAcceptance {
             self.notifications.executeError(
                 text: "No update yet.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
         }
     }
@@ -2430,8 +2441,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -2439,8 +2449,7 @@ class EntryManager: NSObject {
         guard self.selectionCursor.hasSelection else {
             self.notifications.executeError(
                 text: "Select speech to execute action.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -2461,20 +2470,17 @@ class EntryManager: NSObject {
         } else if !self.selectionCursor.hasSelection {
             self.notifications.executeError(
                 text: "No existing selection.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
         } else if !self.selectionCursor.isUpdatingSelection {
             self.notifications.executeError(
                 text: "Say \"update\" to replace selection.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
         } else if !self.selectionCursor.isPromptingForUpdateAcceptance {
             self.notifications.executeError(
                 text: "No update yet.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
         }
     }
@@ -2490,8 +2496,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2499,8 +2504,7 @@ class EntryManager: NSObject {
         guard self.selectionCursor.hasSelection else {
             self.notifications.executeError(
                 text: "Select speech to execute action.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2524,14 +2528,12 @@ class EntryManager: NSObject {
         } else if !self.selectionCursor.hasSelection {
             self.notifications.executeError(
                 text: "No existing selection.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
         } else if !self.selectionCursor.isUpdatingSelection {
             self.notifications.executeError(
                 text: "Update mode not active.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
         }
         
@@ -2560,8 +2562,7 @@ class EntryManager: NSObject {
         guard let _ = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2569,8 +2570,7 @@ class EntryManager: NSObject {
         guard self.selectionCursor.hasSelection else {
             self.notifications.executeError(
                 text: "Select speech to execute action.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2599,8 +2599,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2608,8 +2607,7 @@ class EntryManager: NSObject {
         guard self.selectionCursor.hasSelection else {
             self.notifications.executeError(
                 text: "Select speech to execute action.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2653,8 +2651,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2662,8 +2659,7 @@ class EntryManager: NSObject {
         guard let _ = self.selectionCursor.clipboard else {
             self.notifications.executeError(
                 text: "Clipboard is empty.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: voiceCommand
             )
             return
         }
@@ -2704,8 +2700,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -2713,8 +2708,7 @@ class EntryManager: NSObject {
         guard self.speechRecognition.isListeningForSpeech else {
             self.notifications.executeError(
                 text: "Must be editing entry to select last commit.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -2722,8 +2716,7 @@ class EntryManager: NSObject {
         if entry.committedBufferRanges.count == 0 {
             self.notifications.executeError(
                 text: "No previous commits.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -2732,14 +2725,14 @@ class EntryManager: NSObject {
         soundEngine.voiceCommandAccept()
         
         let commit = entry.getLastCommit()
-        print("\tLast Commit: ", entry.getText(segments: commit))
         guard let lastCommit = commit else {
             self.notifications.executeError(
                 text: "Unable to find last commit.",
-                handler: handler
+                voiceCommand: true
             )
             return
         }
+        print("\tLast Commit: ", Entry.getText(segments: lastCommit))
         
         let newAnchor: EntrySegment?  = lastCommit.first
         var newAnchorIndex: Int?
@@ -2776,7 +2769,8 @@ class EntryManager: NSObject {
             print("\tSetting selection...")
             self.selectionCursor.setSelection(
                 anchorCaret: Caret(index: anchorIndex, trackType: .committed),
-                focusCaret: Caret(index: focusIndex, trackType: .committed)
+                focusCaret: Caret(index: focusIndex, trackType: .committed),
+                scale: .all
             )
         }
         
@@ -2799,8 +2793,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -2808,8 +2801,7 @@ class EntryManager: NSObject {
         guard self.speechRecognition.isListeningForSpeech else {
             self.notifications.executeError(
                 text: "Must be editing entry to rollback last commit.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -2817,8 +2809,7 @@ class EntryManager: NSObject {
         if entry.committedBufferRanges.count == 0 {
             self.notifications.executeError(
                 text: "No previous commits.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -2869,8 +2860,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -2878,8 +2868,7 @@ class EntryManager: NSObject {
         guard self.speechRecognition.isListeningForSpeech else {
             self.notifications.executeError(
                 text: "Must be editing entry to walk last commit.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -2887,8 +2876,7 @@ class EntryManager: NSObject {
         if entry.committedBufferRanges.count == 0 {
             self.notifications.executeError(
                 text: "No previous commits.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -2919,8 +2907,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -2928,8 +2915,7 @@ class EntryManager: NSObject {
         guard self.speechRecognition.isListeningForSpeech else {
             self.notifications.executeError(
                 text: "Must be editing entry to run last commit.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -2937,8 +2923,7 @@ class EntryManager: NSObject {
         if entry.committedBufferRanges.count == 0 {
             self.notifications.executeError(
                 text: "No previous commits.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -2962,6 +2947,7 @@ class EntryManager: NSObject {
     }
     
     func enterSelection(
+        scale: ScaleUnitType,
         handler: (() -> Void)? = nil
     ) {
         print("===== Entry Manager: Enter Selection =====")
@@ -2969,8 +2955,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -2978,13 +2963,15 @@ class EntryManager: NSObject {
         guard self.speechRecognition.isListeningForSpeech else {
             self.notifications.executeError(
                 text: "Must be editing entry to make selection.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
         
-        let currentAnchor = self.selectionCursor.anchor
+        // Play Sound
+        soundEngine.voiceCommandAccept()
+        
+        let currentAnchor = self.selectionCursor.cachedAnchor ?? self.selectionCursor.anchor
         var selectionIndex: Int?
         if let segment = currentAnchor, self.selectionCursor.isAtEndOfTextView {
             print("\tAttempt to set last word as selection...")
@@ -3030,28 +3017,142 @@ class EntryManager: NSObject {
         
         print("Selection Index: ", selectionIndex ?? "nil")
         
-        if let selectionIndex = selectionIndex {
-            let selection = entry.entrySegments[selectionIndex]
-            print("\tFound selection: ", selection.getText())
+        if let selectionIndex = selectionIndex, selectionIndex != Int(Utils.UNKNOWN) {
+            let referenceSegment = entry.entrySegments[selectionIndex]
+            print("\tFound reference segment: ", referenceSegment.getText())
             // Play Sound
             soundEngine.voiceCommandAccept()
-
-            self.selectionCursor.setSelection(
-                anchorCaret: Caret(index: selectionIndex, trackType: .committed),
-                focusCaret: Caret(index: selectionIndex, trackType: .committed)
-            )
             
+            print("\tFind selection...")
+            switch (scale) {
+            case .paragraph:
+                print("\tLooking for paragraph...")
+                let paragraphDetails = entry.getParagraphDetails(forTrackTime: referenceSegment.timeMapping.target.start)
+                if let paragraphDetails = paragraphDetails {
+                    print("Found paragraph: ", paragraphDetails)
+                    var selectionStartIndex = paragraphDetails.entryRange.startIndex
+                    print("Selection Start Index: ", selectionStartIndex)
+                    if !entry.entrySegments[selectionStartIndex].isActive(),
+                    let index = Utils.getSegmentIndex(
+                       segment: entry.entrySegments[selectionStartIndex],
+                       segments: entry.entrySegments,
+                       type: .next,
+                       by: 1,
+                       isWord: true
+                    ) {
+                        selectionStartIndex = index
+                        print("Updated Selection Start Index: ", selectionStartIndex)
+                    }
+                    var selectionEndIndex = paragraphDetails.entryRange.endIndex - 1
+                    print("Selection End Index: ", selectionEndIndex)
+                    if !entry.entrySegments[selectionEndIndex].isActive(),
+                    let index = Utils.getSegmentIndex(
+                       segment: entry.entrySegments[selectionEndIndex],
+                       segments: entry.entrySegments,
+                       type: .previous,
+                       by: 1,
+                       isWord: true
+                    ) {
+                        selectionEndIndex = index
+                        print("Updated Selection End Index: ", selectionEndIndex)
+                    }
+                    print("\tSetting selection...")
+                    self.selectionCursor.setSelection(
+                        anchorCaret: Caret(index: selectionStartIndex, trackType: .committed),
+                        focusCaret: Caret(index: selectionEndIndex, trackType: .committed),
+                        scale: scale,
+                        scaleRange: paragraphDetails.entryRange
+                    )
+                }
+            case .sentence:
+                print("\tLooking for sentence...")
+                let sentenceDetails = entry.getSentenceDetails(forTrackTime: referenceSegment.timeMapping.target.start)
+                if let sentenceDetails = sentenceDetails {
+                    print("Found sentence: ", sentenceDetails)
+                    var selectionStartIndex = sentenceDetails.entryRange.startIndex
+                    print("Selection Start Index: ", selectionStartIndex)
+                    if !entry.entrySegments[selectionStartIndex].isActive(),
+                    let index = Utils.getSegmentIndex(
+                       segment: entry.entrySegments[selectionStartIndex],
+                       segments: entry.entrySegments,
+                       type: .next,
+                       by: 1,
+                       isWord: true
+                    ) {
+                        selectionStartIndex = index
+                        print("Updated Selection Start Index: ", selectionStartIndex)
+                    }
+                    var selectionEndIndex = sentenceDetails.entryRange.endIndex - 1
+                    print("Selection End Index: ", selectionEndIndex)
+                    if !entry.entrySegments[selectionEndIndex].isActive(),
+                    let index = Utils.getSegmentIndex(
+                       segment: entry.entrySegments[selectionEndIndex],
+                       segments: entry.entrySegments,
+                       type: .previous,
+                       by: 1,
+                       isWord: true
+                    ) {
+                        selectionEndIndex = index
+                        print("Updated Selection End Index: ", selectionEndIndex)
+                    }
+                    print("\tSetting selection...")
+                    self.selectionCursor.setSelection(
+                        anchorCaret: Caret(index: selectionStartIndex, trackType: .committed),
+                        focusCaret: Caret(index: selectionEndIndex, trackType: .committed),
+                        scale: scale,
+                        scaleRange: sentenceDetails.entryRange
+                    )
+                }
+            default:
+                if scale == .word {
+                    print("\tUsing reference word...")
+                } else {
+                    print("\tUsing word: '\(referenceSegment.getText())'")
+                }
+                
+                print("\tSetting selection...")
+                self.selectionCursor.setSelection(
+                    anchorCaret: Caret(index: selectionIndex, trackType: .committed),
+                    focusCaret: Caret(index: selectionIndex, trackType: .committed),
+                    scale: scale
+                )
+                break
+            }
+            
+            var scaleName: String
+            switch (scale) {
+            case .word:
+                scaleName = "word"
+            case .sentence:
+                scaleName = "sentence"
+            case .paragraph:
+                scaleName = "paragraph"
+            default:
+                scaleName = "passage"
+            }
+
             self.notifications.executeFeedback(
-                visualMessage: "Selection Opened!",
+                visualMessage: "\(scaleName.capitalizeFirstLetter()) selected!",
                 withHaptics: true
             )
             
             handler?()
         } else {
-            print("\t[Error] There was a problem opening selection. Unable to locate suitable segment.")
+            print("\t[Error] There was a problem making selection. Unable to locate suitable segment.")
+            var scaleName: String
+            switch (scale) {
+            case .word:
+                scaleName = "word"
+            case .sentence:
+                scaleName = "sentence"
+            case .paragraph:
+                scaleName = "paragraph"
+            default:
+                scaleName = "passage"
+            }
             self.notifications.executeError(
-                text: "Unable to locate suitable word to select.",
-                handler: handler
+                text: "Unable to locate suitable \(scaleName) to select.",
+                voiceCommand: true
             )
         }
     }
@@ -3064,8 +3165,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -3073,8 +3173,7 @@ class EntryManager: NSObject {
         guard self.speechRecognition.isListeningForSpeech else {
             self.notifications.executeError(
                 text: "Must be editing entry to remove selection.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -3082,8 +3181,7 @@ class EntryManager: NSObject {
         guard self.selectionCursor.hasSelection else {
             self.notifications.executeError(
                 text: "Select speech to execute action.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -3115,17 +3213,17 @@ class EntryManager: NSObject {
     }
     
     func shiftAnchor(
-        direction: DirectionType,
+        direction: SelectionDirection,
+        by count: Int,
         withFeedback: Bool = true,
         handler: (() -> Void)? = nil
     ) {
-        print("===== Entry Manager: Shift Anchor \(direction == .left ? "Left" : "Right") =====")
+        print("===== Entry Manager: Shift Anchor \(direction == .forwards ? "Forwards" : "Backwards") =====")
         print("\tTriggered by voice command.")
-        guard let entry = self.currentEntry else {
+        guard let _ = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -3133,80 +3231,60 @@ class EntryManager: NSObject {
         guard self.selectionCursor.hasSelection else {
             self.notifications.executeError(
                 text: "Select speech to execute action.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
         
-        var newAnchorIndex: Int?
-        if let currentAnchor = self.selectionCursor.anchor, direction == .left {
-            newAnchorIndex = Utils.getSegmentIndex(
-                segment: currentAnchor,
-                segments: entry.entrySegments,
-                type: .previous,
-                isWord: true
-            )
-        } else if let currentAnchor = self.selectionCursor.anchor,
-            let currentFocus = self.selectionCursor.focus,
-            direction == .right &&
-            currentAnchor.getUID() != currentFocus.getUID()
-        {
-            newAnchorIndex = Utils.getSegmentIndex(
-                segment: currentAnchor,
-                segments: entry.entrySegments,
-                type: .next,
-                isWord: true
-            )
+        if withFeedback {
+            // Play Sound
+            soundEngine.voiceCommandAccept()
         }
         
-        if let newAnchorIndex = newAnchorIndex {
-            if withFeedback {
-                // Play Sound
-                soundEngine.voiceCommandAccept()
-            }
-
-            self.selectionCursor.setAnchorCaret(caret: Caret(index: newAnchorIndex, trackType: .committed))
-            
+        let shifted = self.selectionCursor.shiftAnchorSegment(
+            direction: direction,
+            by: count
+        )
+        
+        if shifted {
             if withFeedback {
                 self.notifications.executeFeedback(
                     visualMessage: "Selection Updated!",
                     withHaptics: true
                 )
             }
-            print("\tShifted anchor \(direction == .left ? "left" : "right")")
+            print("\tShifted anchor \(direction == .forwards ? "forwards" : "backwards")")
             handler?()
         } else if let currentAnchor = self.selectionCursor.anchor,
-            let currentFocus = self.selectionCursor.focus,
-            currentAnchor.getUID() == currentFocus.getUID()
-        {
-            print("\tUnable to shift anchor right because we're selecting a single segment")
-            self.notifications.executeError(
-                text: "Unable to shift before first word.",
-                voiceCommand: true,
-                handler: handler
-            )
-        } else {
-            print("\t[Error] There was a problem updating selection anchor. Unable to locate suitable segment.")
-            self.notifications.executeError(
+              let currentFocus = self.selectionCursor.focus,
+              currentAnchor.getUID() == currentFocus.getUID()
+          {
+              print("\tUnable to shift anchor forwards because we're selecting a single segment")
+              self.notifications.executeError(
+                  text: "Unable to shift before first word.",
+                  voiceCommand: true
+              )
+          } else {
+              print("\t[Error] There was a problem updating selection anchor. Unable to locate suitable segment.")
+              self.notifications.executeError(
                 text: "Unable to update selection.",
-                handler: handler
-            )
-        }
+                voiceCommand: true
+              )
+          }
     }
     
     func shiftFocus(
-        direction: DirectionType,
+        direction: SelectionDirection,
+        by count: Int,
         withFeedback: Bool = true,
         handler: (() -> Void)? = nil
     ) {
-        print("===== Entry Manager: Shift Focus \(direction == .left ? "Left" : "Right") =====")
+        print("===== Entry Manager: Shift Focus \(direction == .forwards ? "Forwards" : "Backards") =====")
         print("\tTriggered by voice command.")
-        guard let entry = self.currentEntry else {
+        guard let _ = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -3214,72 +3292,51 @@ class EntryManager: NSObject {
         guard self.selectionCursor.hasSelection else {
             self.notifications.executeError(
                 text: "Select speech to execute action.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
         
-        var newFocusIndex: Int?
-        if let currentFocus = self.selectionCursor.focus,
-           let currentAnchor = self.selectionCursor.anchor,
-           direction == .left &&
-            currentAnchor.getUID() != currentFocus.getUID()
-        {
-            newFocusIndex = Utils.getSegmentIndex(
-                segment: currentFocus,
-                segments: entry.entrySegments,
-                type: .previous,
-                isWord: true
-            )
-        } else if let currentFocus = self.selectionCursor.focus,
-            direction == .right
-        {
-            newFocusIndex = Utils.getSegmentIndex(
-                segment: currentFocus,
-                segments: entry.entrySegments,
-                type: .next,
-                isWord: true
-            )
+        if withFeedback {
+            // Play Sound
+            soundEngine.voiceCommandAccept()
         }
         
-        if let newFocusIndex = newFocusIndex {
-            if withFeedback {
-                // Play Sound
-                soundEngine.voiceCommandAccept()
-            }
-
-            self.selectionCursor.setFocusCaret(caret: Caret(index: newFocusIndex, trackType: .committed))
-            
+        let shifted = self.selectionCursor.shiftFocusSegment(
+            direction: direction,
+            by: count
+        )
+        
+        if shifted {
             if withFeedback {
                 self.notifications.executeFeedback(
                     visualMessage: "Selection Updated!",
                     withHaptics: true
                 )
             }
-            print("\tShifted focus \(direction == .left ? "left" : "right")")
+            print("\tShifted focus \(direction == .forwards ? "forwards" : "backwards")")
             handler?()
         } else if let currentAnchor = self.selectionCursor.anchor,
               let currentFocus = self.selectionCursor.focus,
               currentAnchor.getUID() == currentFocus.getUID()
         {
-            print("\tUnable to shift focus left because we're selecting a single segment")
+            print("\tUnable to shift focus backwards because we're selecting a single segment")
             self.notifications.executeError(
                 text: "Unable to shift past last word.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
         } else {
             print("\t[Error] There was a problem updating selection focus. Unable to locate suitable segment.")
             self.notifications.executeError(
                 text: "Unable to update selection.",
-                handler: handler
+                voiceCommand: true
             )
         }
     }
     
+    // Will shift given scale type in selection cursor
     func shiftSelection(
-        direction: DirectionType,
+        direction: SelectionDirection,
         withFeedback: Bool = true,
         handler: (() -> Void)? = nil
     ) {
@@ -3289,8 +3346,7 @@ class EntryManager: NSObject {
         guard let _ = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -3298,31 +3354,32 @@ class EntryManager: NSObject {
         guard self.selectionCursor.hasSelection else {
             self.notifications.executeError(
                 text: "Select speech to execute action.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
         
-        if direction == .right {
-            // We want focus to move first
-            self.shiftFocus(
-                direction: direction,
-                handler: handler
+        // Play Sound
+        soundEngine.voiceCommandAccept()
+        
+        let (shiftedAnchor, shiftedFocus) = self.selectionCursor.shift(
+            direction: direction,
+            by: 1
+        )
+        
+        if !shiftedAnchor {
+            print("\t[Error] There was a problem updating selection anchor. Unable to locate suitable segment.")
+            self.notifications.executeError(
+                text: "There was a problem shifting the selection start.",
+                voiceCommand: true
             )
-            self.shiftAnchor(
-                direction: direction,
-                withFeedback: false
-            )
-        } else if direction == .left {
-            // We want anchor to move first
-            self.shiftAnchor(
-                direction: direction,
-                withFeedback: false
-            )
-            self.shiftFocus(
-                direction: direction,
-                handler: handler
+        }
+        
+        if !shiftedFocus {
+            print("\t[Error] There was a problem updating selection focus. Unable to locate suitable segment.")
+            self.notifications.executeError(
+                text: "There was a problem shifting the selection end.",
+                voiceCommand: true
             )
         }
     }
@@ -3336,8 +3393,7 @@ class EntryManager: NSObject {
         guard let _ = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -3345,21 +3401,31 @@ class EntryManager: NSObject {
         guard self.selectionCursor.hasSelection else {
             self.notifications.executeError(
                 text: "Select speech to execute action.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
         
-        self.shiftAnchor(
-            direction: .left,
-            withFeedback: false
-        )
+        // Play Sound
+        soundEngine.voiceCommandAccept()
         
-        self.shiftFocus(
-            direction: .right,
-            handler: handler
-        )
+        let (shiftedAnchor, shiftedFocus) = self.selectionCursor.expand(by: 1)
+        
+        if !shiftedAnchor {
+            print("\t[Error] There was a problem updating selection anchor. Unable to locate suitable segment.")
+            self.notifications.executeError(
+                text: "There was a problem shifting the selection start.",
+                voiceCommand: true
+            )
+        }
+        
+        if !shiftedFocus {
+            print("\t[Error] There was a problem updating selection focus. Unable to locate suitable segment.")
+            self.notifications.executeError(
+                text: "There was a problem shifting the selection end.",
+                voiceCommand: true
+            )
+        }
     }
     
     func reduceSelection(
@@ -3371,8 +3437,7 @@ class EntryManager: NSObject {
         guard let _ = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -3380,20 +3445,31 @@ class EntryManager: NSObject {
         guard self.selectionCursor.hasSelection else {
             self.notifications.executeError(
                 text: "Select speech to execute action.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
         
-        self.shiftAnchor(
-            direction: .right,
-            withFeedback: false
-        )
-        self.shiftFocus(
-            direction: .left,
-            handler: handler
-        )
+        // Play Sound
+        soundEngine.voiceCommandAccept()
+        
+        let (shiftedAnchor, shiftedFocus) = self.selectionCursor.reduce(by: 1)
+        
+        if !shiftedAnchor {
+            print("\t[Error] There was a problem updating selection anchor. Unable to locate suitable segment.")
+            self.notifications.executeError(
+                text: "There was a problem shifting the selection start.",
+                voiceCommand: true
+            )
+        }
+        
+        if !shiftedFocus {
+            print("\t[Error] There was a problem updating selection focus. Unable to locate suitable segment.")
+            self.notifications.executeError(
+                text: "There was a problem shifting the selection end.",
+                voiceCommand: true
+            )
+        }
     }
     
     func echoCommit(
@@ -3404,8 +3480,7 @@ class EntryManager: NSObject {
         guard let entry = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -3413,8 +3488,7 @@ class EntryManager: NSObject {
         if entry.committedBufferRanges.count == 0 {
             self.notifications.executeError(
                 text: "No previous commits.",
-                voiceCommand: true,
-                handler: handler
+                voiceCommand: true
             )
             return
         }
@@ -3424,14 +3498,14 @@ class EntryManager: NSObject {
         
         let executeEcho = {
             let commit = entry.getLastCommit()
-            print("\tLast Commit: ", entry.getText(segments: commit))
             guard let lastCommit = commit else {
                 self.notifications.executeError(
                     text: "Unable to find last commit.",
-                    handler: handler
+                    voiceCommand: true
                 )
                 return
             }
+            print("\tLast Commit: ", Entry.getText(segments: lastCommit))
 
             self.speechSynthesis.startEcho(
                 segments: Array(lastCommit),
@@ -3482,147 +3556,43 @@ class EntryManager: NSObject {
         }
     }
     
-    func echoPreviousSentence(
-        handler: (() -> Void)? = nil
-    ) {
-        print("===== Entry Manager: Echo Previous Sentence =====")
-        print("\tTriggered by voice command.")
-        guard let entry = self.currentEntry else {
-            self.notifications.executeError(
-                text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
-            )
-            return
-        }
-        
-        guard self.speechRecognition.isListeningForSpeech else {
-            self.notifications.executeError(
-                text: "Must be editing entry to echo previous sentence.",
-                voiceCommand: true,
-                handler: handler
-            )
-            return
-        }
-
-        if entry.entrySegments.count == 0 {
-            self.notifications.executeError(
-                text: "Entry is empty.",
-                voiceCommand: true,
-                handler: handler
-            )
-            return
-        }
-
-        let previousSentenceIndex = max(entry.sentenceCount - 1, 0)
-        
-        if entry.sentenceCount == 1 {
-            self.notifications.executeError(
-                text: "No previous sentence exists.",
-                voiceCommand: true,
-                handler: handler
-            )
-            return
-        }
-        
-        // Play Sound
-        soundEngine.voiceCommandAccept()
-
-        entry.echoSentence(number: previousSentenceIndex, onFinishHandler: handler)
-    }
-    
-    func playPreviousSentence(
-        handler: (() -> Void)? = nil
-    ) {
-        print("===== Entry Manager: Play Previous Sentence =====")
-        print("\tTriggered by voice command.")
-        guard let entry = self.currentEntry else {
-            self.notifications.executeError(
-                text: "No entry selected.",
-                voiceCommand: true,
-                handler: handler
-            )
-            return
-        }
-        
-        guard self.speechRecognition.isListeningForSpeech else {
-            self.notifications.executeError(
-                text: "Must be editing entry to play previous sentence.",
-                voiceCommand: true,
-                handler: handler
-            )
-            return
-        }
-    
-        if entry.entrySegments.count == 0 {
-            self.notifications.executeError(
-                text: "Entry is empty.",
-                voiceCommand: true,
-                handler: handler
-            )
-            return
-        }
-
-        let executePlay = {
-            let previousSentenceIndex = max(entry.sentenceCount - 1, 0)
-            
-            if entry.sentenceCount == 1 {
-                self.notifications.executeError(
-                    text: "No previous sentence exists.",
-                    voiceCommand: true,
-                    handler: handler
-                )
-                return
-            }
-            
-            // Play Sound
-            soundEngine.voiceCommandAccept()
-
-            entry.playSentence(number: previousSentenceIndex)
-        }
-        
-        if self.isWalkingEntry || self.isRunningEntry {
-            entry.exitWalk(pause: true, clearSelection: false, withFeedback: false) {
-                if self.speechPlayer.isPlayingEntry {
-                    self.speechPlayer.stop(withFeedback: false) {
-                        executePlay()
-                    }
-                } else {
-                    executePlay()
-                }
-            }
-        } else if self.speechPlayer.isPlayingEntry {
-            self.speechPlayer.stop(withFeedback: false) {
-                executePlay()
-            }
-        } else {
-            executePlay()
-        }
-    }
-    
     // MARK: - Undo/Redo Methods
     
     // message should start with a present progressive verb: -ing
     // so utterance will be: undo verb-ing object
-    func registerEntryChange(entry: Entry, undo message: String, handler: (() -> Void)? = nil) {
+    func registerEntryChange(entry: Entry, undo message: String, ignoreUpdate: Bool = false, handler: (() -> Void)? = nil) {
         print("===== Entry Manager: Register Entry Change  =====")
 
         // Update Undo/Redo History
         print("\tCreating and setting new snapshot...")
         
-        let newSnapshot = EntrySnapshot(
-            entry: entry.duplicate(), // we duplicate so there's no memory leaks/pointers to same memory locations
-            selectionAnchorCaret: self.selectionCursor.anchorCaret?.duplicate(),
-            selectionFocusCaret: self.selectionCursor.focusCaret?.duplicate(),
-            selectionCachedAnchorCaret: self.selectionCursor.cachedAnchorCaret?.duplicate(),
-            undo: message
-        )
-        
-        self.entryChangeHandler = handler
-        
-        self.modifyEntry(snapshot: newSnapshot)
-        
-        checkRep()
+        entry.duplicate(
+            state: self.state,
+            speechSynthesis: self.speechSynthesis,
+            speechRecognition: self.speechRecognition,
+            speechPlayer: self.speechPlayer,
+            selectionCursor: self.selectionCursor,
+            pitchRecognition: self.pitchRecognition,
+            entryManager: self,
+            notifications: self.notifications
+        ) { [weak self] entry in
+            print("SWAGGGGG")
+            let newSnapshot = EntrySnapshot(
+                entry: entry, // we duplicate so there's no memory leaks/pointers to same memory locations
+                selectionAnchorCaret: self!.selectionCursor.anchorCaret?.duplicate(),
+                selectionFocusCaret: self!.selectionCursor.focusCaret?.duplicate(),
+                selectionCachedAnchorCaret: self!.selectionCursor.cachedAnchorCaret?.duplicate(),
+                undo: message
+            )
+            
+            self?.entryChangeHandler = handler
+            
+            self?.ignoreEntrySnapshotUpdate = ignoreUpdate
+            
+            self?.modifyEntry(snapshot: newSnapshot)
+            
+            self?.checkRep()
+        }
     }
     
     @objc func undo(handler: (() -> Void)? = nil) {
@@ -3703,15 +3673,29 @@ class EntryManager: NSObject {
                 self.currentEntry!.incrementViewCount()
             }
             
-            self.currentEntryUndoSnapshot = EntrySnapshot(
-                entry: self.currentEntry!.duplicate(), // we duplicate so there's no memory leaks/pointers to same memory locations
-                selectionAnchorCaret: self.selectionCursor.anchorCaret,
-                selectionFocusCaret: self.selectionCursor.focusCaret,
-                selectionCachedAnchorCaret: self.selectionCursor.cachedAnchorCaret,
-                undo: "to start of entry"
-            )
+            // Make sure all data is correct
+            self.currentEntry!.refresh()
             
-            print("Entry Segments: ", Utils.stringifySegments(segments: self.currentEntry!.entrySegments))
+            self.currentEntry!.duplicate(
+                state: self.state,
+                speechSynthesis: self.speechSynthesis,
+                speechRecognition: self.speechRecognition,
+                speechPlayer: self.speechPlayer,
+                selectionCursor: self.selectionCursor,
+                pitchRecognition: self.pitchRecognition,
+                entryManager: self,
+                notifications: self.notifications
+            ) { [weak self] entry in
+                self?.currentEntryUndoSnapshot = EntrySnapshot(
+                    entry: entry, // we duplicate so there's no memory leaks/pointers to same memory locations
+                    selectionAnchorCaret: self!.selectionCursor.anchorCaret,
+                    selectionFocusCaret: self!.selectionCursor.focusCaret,
+                    selectionCachedAnchorCaret: self!.selectionCursor.cachedAnchorCaret,
+                    undo: "to start of entry"
+                )
+                
+                print("Entry Segments: ", Utils.stringifySegments(segments: self!.currentEntry!.entrySegments))
+            }
         } else {
             self.currentIndex = nil
             self.currentEntryUndoSnapshot = nil
@@ -3841,7 +3825,11 @@ extension EntryManager {
 
     private func stateDidChange(diff: EntrySnapshot.Diff) {
 
-        guard diff.hasChanges else { return }
+        guard diff.hasChanges else {
+            print("NO DIFFS SADDDDDD")
+            return
+            
+        }
 
         self.currentEntryUndoSnapshot = diff.to
 
