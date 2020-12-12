@@ -246,12 +246,12 @@ public final class SoundEffectEngine: NSObject {
         }
         
         // Nature
-        let natureAmbiencePath = Bundle.main.path(forResource: "nature-ambience", ofType: "wav")!
+        let natureAmbiencePath = Bundle.main.path(forResource: "nature-ambience", ofType: "mp3")!
         let natureAmbienceURL = URL(fileURLWithPath: natureAmbiencePath)
         let natureAmbienceAsset = AVAsset(url: natureAmbienceURL)
         let natureAmbienceItem = AVPlayerItem(asset: natureAmbienceAsset)
         naturePlayer = AVQueuePlayer(playerItem: natureAmbienceItem)
-        naturePlayer?.volume = 1
+        naturePlayer?.volume = 0.01
         natureLooper = AVPlayerLooper(player: naturePlayer!, templateItem: natureAmbienceItem)
         
         // Speech Registered

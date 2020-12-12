@@ -15,9 +15,9 @@
 		8B24440724DCE50D0050C959 /* TimeNormalizerType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B24440624DCE50D0050C959 /* TimeNormalizerType.swift */; };
 		8B27A3DC24B6A839001E5F06 /* Double+Rounded.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B27A3DB24B6A839001E5F06 /* Double+Rounded.swift */; };
 		8B27A3DE24B6A8E9001E5F06 /* Float+Rounded.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B27A3DD24B6A8E9001E5F06 /* Float+Rounded.swift */; };
-		8B2935BB25801B9200BDFB0D /* nature-ambience.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8B2935BA25801B9200BDFB0D /* nature-ambience.wav */; };
 		8B2935C82580942000BDFB0D /* DebugOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B2935C72580942000BDFB0D /* DebugOptions.swift */; };
 		8B2935E42581880900BDFB0D /* Paragraph.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B2935E32581880900BDFB0D /* Paragraph.swift */; };
+		8B2935F425858CFE00BDFB0D /* nature-ambience.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 8B2935F325858CFE00BDFB0D /* nature-ambience.mp3 */; };
 		8B39B356256E18BF00A9904F /* EntrySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B39B355256E18BF00A9904F /* EntrySnapshot.swift */; };
 		8B39B35E256F62FA00A9904F /* Caret.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B39B35D256F62FA00A9904F /* Caret.swift */; };
 		8B3B52952537AF1400B2BEDB /* lingual-logomark.png in Resources */ = {isa = PBXBuildFile; fileRef = 8B3B52942537AF1400B2BEDB /* lingual-logomark.png */; };
@@ -182,9 +182,9 @@
 		8B24440624DCE50D0050C959 /* TimeNormalizerType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeNormalizerType.swift; sourceTree = "<group>"; };
 		8B27A3DB24B6A839001E5F06 /* Double+Rounded.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Double+Rounded.swift"; sourceTree = "<group>"; };
 		8B27A3DD24B6A8E9001E5F06 /* Float+Rounded.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Float+Rounded.swift"; sourceTree = "<group>"; };
-		8B2935BA25801B9200BDFB0D /* nature-ambience.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "nature-ambience.wav"; sourceTree = "<group>"; };
 		8B2935C72580942000BDFB0D /* DebugOptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugOptions.swift; sourceTree = "<group>"; };
 		8B2935E32581880900BDFB0D /* Paragraph.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Paragraph.swift; sourceTree = "<group>"; };
+		8B2935F325858CFE00BDFB0D /* nature-ambience.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "nature-ambience.mp3"; sourceTree = "<group>"; };
 		8B39B355256E18BF00A9904F /* EntrySnapshot.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EntrySnapshot.swift; sourceTree = "<group>"; };
 		8B39B35D256F62FA00A9904F /* Caret.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Caret.swift; sourceTree = "<group>"; };
 		8B3B52942537AF1400B2BEDB /* lingual-logomark.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "lingual-logomark.png"; sourceTree = "<group>"; };
@@ -486,12 +486,12 @@
 		8BA3052F24C2867D0056E4DF /* sounds */ = {
 			isa = PBXGroup;
 			children = (
+				8B2935F325858CFE00BDFB0D /* nature-ambience.mp3 */,
 				8BA3053E24C28FCC0056E4DF /* commit-buffer.wav */,
 				8B8D55EA2530D60E004AD436 /* dialog.wav */,
 				8BA3054624C28FCC0056E4DF /* correct-wake-phrase.wav */,
 				8BA3054924C28FCC0056E4DF /* error.wav */,
 				8BA3054424C28FCC0056E4DF /* incorrect-wake-phrase.wav */,
-				8B2935BA25801B9200BDFB0D /* nature-ambience.wav */,
 				8B3B529C2539016A00B2BEDB /* modal-ambience.wav */,
 				8BA3054024C28FCC0056E4DF /* play.wav */,
 				8BB6859924E3858000F3285B /* save.wav */,
@@ -745,9 +745,9 @@
 				8BEC137724906FF60056E767 /* LaunchScreen.storyboard in Resources */,
 				8B40A26C25661A64002C6B46 /* paragraph-suggestion.wav in Resources */,
 				8BA3054A24C28FCC0056E4DF /* commit-buffer.wav in Resources */,
+				8B2935F425858CFE00BDFB0D /* nature-ambience.mp3 in Resources */,
 				8BA3054D24C28FCC0056E4DF /* voice-command-accept.wav in Resources */,
 				8B3B529D2539016A00B2BEDB /* modal-ambience.wav in Resources */,
-				8B2935BB25801B9200BDFB0D /* nature-ambience.wav in Resources */,
 				8BA3055224C28FCC0056E4DF /* correct-wake-phrase.wav in Resources */,
 				8B0CF44624F4407200479BF5 /* delete.wav in Resources */,
 				8BA3054B24C28FCC0056E4DF /* stop-listening.wav in Resources */,
