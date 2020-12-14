@@ -443,6 +443,18 @@ class StateManager: NSObject {
         // Entries
         self.entries = notification.userInfo!["entries"] as? [Entry] ?? [Entry]()
         
+//        if !self.entries.contains(where: { $0.filename == "welcome" }) {
+//            if let entry = Utils.decodeLingualEntry(name: "welcome") {
+//                self.entries.append(entry)
+//            }
+//        }
+//
+//        if !self.entries.contains(where: { $0.filename == "voice-commands" }) {
+//            if let entry = Utils.decodeLingualEntry(name: "voice-commands") {
+//                self.entries.append(entry)
+//            }
+//        }
+        
         // User Settings
         let userSettings = notification.userInfo!["userSettings"] as? [String: Any]
         if let userSettings = userSettings {
@@ -549,8 +561,10 @@ class StateManager: NSObject {
     // so utterance will be: undo verb-ing object
     func save() {
         print("===== State Manager: Save  =====")
-        self.storageManager.save(state: self)
-        
+        DispatchQueue.global(qos: .utility).async {
+            self.storageManager.save(state: self)
+        }
+
         checkRep()
     }
     

@@ -1,5 +1,5 @@
 //
-//  SpeechSegment.swift
+//  EntrySegment.swift
 //  diction-processor
 //
 //  Created by Afika Nyati on 6/11/20.
@@ -13,7 +13,6 @@ import NaturalLanguage
 
 // https://remotepossibilities.wordpress.com/2013/03/10/when-you-speak-how-often-and-how-long-should-you-pause-the-answer-try-1-2-3/
 let MAX_SEMANTICALLY_SIMILAR_WORDS = 5
-let NEWLINE_CHAR = "\n\n"
 
 class EntrySegment: AVCompositionTrackSegment, NSCoding {
     // ===== IMPORTANT =====
@@ -563,7 +562,7 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
             // its the empty string for silence
             if previousWordIsSentenceTerminator && self.suggestsNewParagraph() {
                 // New line
-                text += NEWLINE_CHAR
+                text += Utils.NEWLINE_CHAR
             } else if (!previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord) && !nextSegmentIsPunctuation && ((!nextSegmentIsVoiceCommand && !nextSegmentIsDeleted) || !existsWordsAfterVoiceCommandAndDeleted) && self.suggestsNewParagraph() {
                 // New Paragraph
                 // Sentence Terminators: Exclamation Mark, Question Mark, Period
@@ -713,7 +712,7 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
                 withCapitalization: withCapitalization,
                 withSpacePrefix: withSpacePrefix,
                 forEcho: forEcho
-            ) + text
+            )
         } else if let entry = self.entry,
             untilTime == nil &&
             (
@@ -728,7 +727,7 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
             !self.isVoiceCommandWord() &&
             !self.isDeleted()
         {
-            text += self.getText(
+            text = self.getText(
                 withTemporalSuggestions: withTemporalSuggestions,
                 withPunctuationSuggestions: withPunctuationSuggestions,
                 withFormattingSuggestions: withFormattingSuggestions,
@@ -736,7 +735,7 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
                 withCapitalization: withCapitalization,
                 withSpacePrefix: withSpacePrefix,
                 forEcho: forEcho
-            ) + text
+            )
         }
         
         if self.timeMapping.target.start == fromTime &&

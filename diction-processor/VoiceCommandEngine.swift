@@ -212,7 +212,9 @@ public class VoiceCommandEngine: NSObject {
                     !actionTokens.contains(loneAction) &&
                     token != .WORD &&
                     token != .SENTENCE &&
-                    token != .PARAGRAPH
+                    token != .PARAGRAPH &&
+                    token != .AUDIO &&
+                    token != .TEXT
                 {
                     // If object only has one action (and one or no spatial relation), we can infer action
                     actionTokens.append(loneAction)

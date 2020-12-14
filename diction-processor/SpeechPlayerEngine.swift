@@ -178,6 +178,7 @@ class SpeechPlayerEngine: NSObject {
         entry: Entry,
         from: CMTime? = nil,
         to: CMTime? = nil,
+        withFeedback: Bool = true,
         onStartHandler: (() -> Void)? = nil,
         onFinishHandler: (() -> Void)? = nil
     ) {
@@ -191,7 +192,11 @@ class SpeechPlayerEngine: NSObject {
             return
         }
         
-        if self.pausedPlayingEntry {
+        if let firstPlaybackSegment = self.playbackSegments?.first,
+           let firstEntrySegment = entry.entrySegments.first,
+           self.pausedPlayingEntry &&
+            firstPlaybackSegment.getUID() == firstEntrySegment.getUID()
+        {
             print("\tEntry was paused. Resume playback")
             // Play Sound
             if !self.speechRecognition.isListeningForSpeech &&
@@ -203,23 +208,22 @@ class SpeechPlayerEngine: NSObject {
                 soundEngine.play()
             }
             
-            if onStartHandler != nil {
-                self.onStartHandler = onStartHandler
-            }
-            
             self.pausedPlayingEntry = false
             self.isPlayingExternalSegments = false
             
             if self.speechRecognition.isListeningForCommands && !AVAudioSession.isHeadphonesConnected {
                 self.speechRecognition.pauseListeningForVoiceCommands() {
                     self.player.play()
+                    onStartHandler?()
                 }
             } else if self.speechRecognition.isListeningForSpeech && !AVAudioSession.isHeadphonesConnected {
                 self.speechRecognition.pauseListeningForSpeech(preventListeningForCommands: true) {
                     self.player.play()
+                    onStartHandler?()
                 }
             } else {
                 self.player.play()
+                onStartHandler?()
             }
             
             return
@@ -251,7 +255,7 @@ class SpeechPlayerEngine: NSObject {
             // Set Start and End Times
             self.startPlaybackAt = from != nil ? from : entry.startTime
             self.stopPlaybackAt = to != nil ? to : entry.endTime
-            self.playbackSegments = Utils.duplicateSegments(segments: entry.entrySegments)
+            self.playbackSegments = entry.entrySegments
 
             // Run Player
             let player = self.runPlayer(
@@ -261,7 +265,9 @@ class SpeechPlayerEngine: NSObject {
             )
             
             // Handle Feedback
-            if !self.selectionCursor.isLoopingSelection {
+            if !self.selectionCursor.isLoopingSelection &&
+                withFeedback
+            {
                 self.notifications.executeFeedback(
                     visualMessage: "Play",
                     withHaptics: true
@@ -307,6 +313,7 @@ class SpeechPlayerEngine: NSObject {
     
     func play(
         segments: [EntrySegment],
+        withFeedback: Bool = true,
         onStartHandler: (() -> Void)? = nil,
         onFinishHandler: (() -> Void)? = nil
     ) {
@@ -351,7 +358,7 @@ class SpeechPlayerEngine: NSObject {
             // Set Start and End Times
             self.startPlaybackAt = CMTime.zero
             self.stopPlaybackAt = tempComposition.duration
-            self.playbackSegments = Utils.duplicateSegments(segments: segments)
+            self.playbackSegments = segments
 
             // Run Player
             let player = self.runPlayer(
@@ -364,7 +371,8 @@ class SpeechPlayerEngine: NSObject {
             if !self.entryManager.isWalkingEntry &&
                 !self.entryManager.isRunningEntry &&
                 !self.entryListManager.isRunningEntryList &&
-                !self.entryListManager.isWalkingEntryList
+                !self.entryListManager.isWalkingEntryList &&
+                withFeedback
             {
                 self.notifications.executeFeedback(
                     visualMessage: "Play",
@@ -454,20 +462,37 @@ class SpeechPlayerEngine: NSObject {
     
     func skip(to time: CMTime, handler: (() -> Void)? = nil) {
         print("===== Speech Player Engine: Skip =====")
-        print("\tSkiping to: ", time.seconds)
+        
         let currentSegment = self.getCurrentSegment()
         if let _ = currentSegment, self.isPlayingEntry {
-            self.player.seek(
-                to: time,
-                toleranceBefore: CMTime.zero,
-                toleranceAfter: CMTime.zero
+            let segmentAtTime = Utils.getSegment(
+                forTrackTime: time,
+                segments: self.playbackSegments,
+                entry: self.entryManager.currentEntry,
+                isPlayingEntry: true, // Must be true because we anticipate it being true but not true yet
+                isWord: true
             )
             
-            // Handle Feedback
-            self.notifications.executeFeedback(
-                visualMessage: "Skip",
-                withHaptics: true
-            )
+            if let segment = segmentAtTime {
+                print("\tSkipping to: ", time.seconds)
+                self.player.seek(
+                    to: segment.timeMapping.target.start,
+                    toleranceBefore: CMTime.zero,
+                    toleranceAfter: CMTime.zero
+                )
+                
+                // Handle Feedback
+                self.notifications.executeFeedback(
+                    visualMessage: "Skip",
+                    withHaptics: true
+                )
+            } else {
+                print("\t[Error] There was problem locating segment to skip to.")
+                self.notifications.executeError(
+                    text: "Encountered a problem while skipping.",
+                    handler: handler
+                )
+            }
         } else {
             if self.playbackSegments == nil {
                 // havent recorded anything

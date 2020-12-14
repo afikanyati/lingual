@@ -124,6 +124,7 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
     var sliderIsVisible = false
     var sliderType: SliderType?
     var cursorBlinkTimer: Timer?
+    var textScrubTimer: Timer?
 
     // MARK: - Cached Properties
     var cachedTextViewSelectedRange: NSRange?
@@ -271,8 +272,15 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
                 withHaptics: true
             )
             // Remove textView and cursor from selectionCursor
+            self.selectionCursor.setAnchorCaret()
+            self.selectionCursor.setFocusCaret()
+            self.selectionCursor.setCachedAnchorCaret()
             self.selectionCursor.setTextView()
             self.selectionCursor.setCursorView()
+            // Stop any active walking/running
+            if self.entryManager.isRunningEntry || self.entryManager.isWalkingEntry {
+                self.entryManager.exitWalkRun()
+            }
             // Unselect current entry
             if !self.speechRecognition.isListeningForSpeech {
                 // We don't unset this when we are editing a note
@@ -867,12 +875,24 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
                 if let entry = self?.entryManager.currentEntry,
                    let segment = notification.userInfo!["previous"] as? EntrySegment,
                    let range = entry.getSegmentTextRange(of: segment),
+                   let textView = self?.textView,
                    segment.getText().count > 0 &&
                     segment.isActive() &&
                     !self!.selectionCursor.hasSelection &&
                     !self!.entryManager.isWalkingEntry &&
                     !self!.entryManager.isRunningEntry
                 {
+                    // Scroll Text into View
+                    // Reference: https://stackoverflow.com/questions/50190942/scroll-uitextview-to-specific-text
+                    let scrollLocation = min(range.location + Utils.PLAYBACK_SCROLL_BUFFER, textView.attributedText.string.count - 1)
+                    let scrollLocationRange = NSRange(location: scrollLocation, length: 1)
+                    if let visibleRange = textView.visibleRange,
+                       NSIntersectionRange(visibleRange, scrollLocationRange).length == 0
+                    {
+                        print("\tScrolling range into view...")
+                        self!.textView!.scrollRangeToVisible(scrollLocationRange)
+                    }
+                    // Update Text
                     self?.updateUIText(text: entry.getText(), highlightRange: range, transformations: entry.transformations)
                 }
             }
@@ -1115,8 +1135,10 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             )
             
             // Add text to text view if exists
+            // We use the static getText method to prevent stack overflow if entry is really long
+            // This will cache the values in the segments that will make the work to run the proper one less
             if let entryManager = self?.entryManager, let entry = entryManager.currentEntry {
-                self?.updateUIText(text: entry.getText(), transformations: entry.transformations)
+                self?.updateUIText(text: Entry.getText(segments: entry.entrySegments), transformations: entry.transformations)
             }
         }
     }
@@ -1176,7 +1198,7 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
                     self?.selectionCursor.setCursorView(cursorView: self!.cursorView)
                 }
 
-                Utils.initializeCursor(
+                Utils.placeCursorAtBeginningOfEntry(
                     textView: self!.textView!,
                     cursorView: self!.cursorView!,
                     font: self!.state.font
@@ -2093,6 +2115,9 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
                     self?.refreshView()
                     self?.setCursorVisibility(as: false)
                 }
+                
+                // Cancel a text scrubber timer
+                self.textScrubTimer?.invalidate()
             } else if let entry = self.entryManager.currentEntry, let newHasSelection = change?[.newKey] as? Bool, let oldHasSelection = change?[.oldKey] as? Bool, !newHasSelection && oldHasSelection && self.speechRecognition.isListeningForSpeech && self.speechRecognition.pausedListeningForSpeech && self.speechRecognition.isListeningForCommands && !self.speechPlayer.isPlayingEntry && !self.speechSynthesis.isPlayingEcho && !self.speechSynthesis.isPlayingPassiveEcho {
                 print("====== Detail View Controller: Go from selection to no selection while recording ======")
                 // ====== Go from selection to no selection while recording ======
@@ -2156,10 +2181,12 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
         {
             print("\tSet finger down to true...")
             self.selectionCursor.setOverrideSelectionUpdates(to: true)
-        } else if let _ = self.entryManager.currentEntry,
+        } else if let entry = self.entryManager.currentEntry,
             let textRange = self.textView!.selectedTextRange,
+            !textRange.isEmpty &&
             touch.state == .ended &&
-            self.state.appActivated
+            self.state.appActivated &&
+            entry.entrySegments.count > 0
        {
             print("\tSet finger down to false...")
             self.selectionCursor.setOverrideSelectionUpdates(to: false)
@@ -2171,7 +2198,12 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
         print("===== Touch Interaction: Single Tap =====")
         
         if let entry = self.entryManager.currentEntry,
-           self.state.appActivated
+           self.state.appActivated &&
+            entry.entrySegments.count > 0 &&
+            (
+                self.speechRecognition.isListeningForSpeech ||
+                self.selectionCursor.hasSelection
+            )
         {
             print("\tComposing Entry => Move Cursor to Touch Location")
             
@@ -2188,7 +2220,8 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
                 
                 return // We don't want to move the cursor
             } else if self.textView?.selectedTextRange != nil &&
-                self.selectionCursor.hasSelection
+                self.selectionCursor.hasSelection &&
+                entry.entrySegments.count > 0
             {
                 // Remove Selection in view and model
                 print("\tPrior selection detected. Remove Selection in view and model...")
@@ -2233,31 +2266,29 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
                     let segment = entry.entrySegments[index]
                     print("\tFound Segment: ", segment.getText())
                     print("\tPlay entry and Seek to segment...")
-                    let wasPlayingEntry = self.speechPlayer.isPlayingEntry && !self.speechPlayer.pausedPlayingEntry
-                    self.entryManager.stopPlayingEntry(withFeedback: false) {
-                        if wasPlayingEntry {
-                            print("\tDon't pause entry because it was playing before touch tap...")
-                            self.entryManager.playEntry(from: segment.timeMapping.target.start)
-                        } else {
-                            print("\tPause entry because it wasn't playing before touch tap...")
-                            self.entryManager.playEntry(
+                    if self.speechPlayer.isPlayingEntry && !self.speechPlayer.pausedPlayingEntry {
+                        print("\tDon't pause entry because it was playing before touch tap...")
+                        self.speechPlayer.skip(to: segment.timeMapping.target.start)
+                    } else {
+                        print("\tPause entry because it wasn't playing before touch tap...")
+                        self.textScrubTimer = Timer.scheduledTimer(withTimeInterval: Utils.TEXT_SCRUB_START_DELAY, repeats: false) { timer in
+                            self.speechPlayer.play(
+                                entry: entry,
                                 from: segment.timeMapping.target.start,
-                                onStartHandler: {
+                                withFeedback: false,
+                                onStartHandler: { [weak self] in
                                     // Pause Entry
-                                    self.entryManager.pauseEntry(withFeedback: false)
+                                    self?.speechPlayer.pause(withFeedback: false)
                                     
-                                    // Highlight word
-                                    DispatchQueue.main.async { [weak self] in
-                                        Timer.scheduledTimer(withTimeInterval: 0.2, repeats: false) { timer in
+                                    Timer.scheduledTimer(withTimeInterval: Utils.TEXT_SCRUB_PAUSE_DELAY, repeats: false) { timer in
+                                        // Highlight word
+                                        DispatchQueue.main.async { [weak self] in
                                             if segment.getText().count > 0 && segment.isActive(), let range = entry.getSegmentTextRange(of: segment) {
                                                 print("\tHighlight word '\(segment.getText())' on screen...")
                                                 self?.updateUIText(text: entry.getText(), highlightRange: range, transformations: entry.transformations)
                                             }
                                         }
                                     }
-                                    
-                                    // Audio Feedback
-                                    soundEngine.tap()
                                 }
                             )
                         }

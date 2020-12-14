@@ -122,24 +122,11 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         return nil
     }
     var selectionText: String? {
-        if let entry = self.entryManager.currentEntry,
-           let anchor = self.anchor,
-           let focus = self.focus,
-            self.direction == .backwards
+        if let _ = self.anchor,
+           let _ = self.focus,
+           let selectionSegments = self.selectionSegments
         {
-            return entry.getText(
-                from: focus.timeMapping.target.start,
-                until: anchor.timeMapping.target.end
-            )
-        } else if let entry = self.entryManager.currentEntry,
-            let anchor = self.anchor,
-            let focus = self.focus,
-            self.direction == .forwards
-        {
-            return entry.getText(
-                from: anchor.timeMapping.target.start,
-                until: focus.timeMapping.target.end
-            )
+            return Entry.getText(segments: selectionSegments)
         }
         
         return nil
@@ -234,7 +221,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             // we have a cursor though
 //             print("isAtEndOfTextView 1: ")
             return anchor == lastSegment
-        } else if (entry.entrySegments.count == 0 && entry.entryBuffer.count == 0) || entry.getText().count == 0 {
+        } else if entry.entrySegments.count == 0 && entry.entryBuffer.count == 0 {
             // we have not captured and speech yet
 //             print("isAtEndOfTextView 2: ")
             return true
@@ -346,6 +333,14 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             context: nil
         )
         
+        // Speech Recognition
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onStoppedListeningForSpeech(notification:)),
+            name: SpeechRecognitionEngine.onStoppedListeningForSpeech,
+            object: nil
+        )
+        
         // Voice Commands
         notificationCenter.addObserver(
             self,
@@ -353,6 +348,15 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             name: VoiceCommandEngine.onProcessedVoiceCommand,
             object: nil
         )
+    }
+    
+    @objc func onStoppedListeningForSpeech(notification: Notification) {
+        print("===== Selection Cursor: On Stopped Listening For Speech =====")
+        
+        if self.hasSelection {
+            print("\tClear selection.")
+            self.clearSelection()
+        }
     }
     
     @objc func onProcessedVoiceCommand(notification: Notification) {
@@ -1228,6 +1232,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             print("====== [Error] There was a problem deleting selection. TimeRange could not be computed =====")
             return
         }
+        print("\tSelection to delete: '\(self.selectionText ?? "nil")'")
         
         let handleDeleteSelection = {
             // stop playback
@@ -1244,7 +1249,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             {
                 print("\tCursor not at end of text view; update cached anchor...")
                 
-                print("Segments: ", Utils.stringifySegments(segments: entry.entrySegments))
+                print("\tSegments: ", Utils.stringifySegments(segments: entry.entrySegments))
                 let newAnchorIndex = Utils.getSegmentIndex(
                     segment: anchor,
                     segments: entry.entrySegments,
@@ -1252,7 +1257,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
                     isWord: true,
                     isCommitted: true
                 )
-                print("New Anchor Index: ", newAnchorIndex ?? "nil")
+                print("\tNew Anchor Index: ", newAnchorIndex ?? "nil")
 
                 if let newAnchorIndex = newAnchorIndex {
                     print("\tSetting new anchor with index: ", newAnchorIndex)
@@ -1693,9 +1698,10 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         print("===== Selection Cursor: Copy Selection =====")
 
         if let selectionSegments = self.selectionSegments {
-            var duplicateSegments = [EntrySegment]()
-            for segment in selectionSegments {
-                duplicateSegments.append(segment.duplicate())
+            var duplicateSegments = [EntrySegment](repeating: selectionSegments.first!, count: selectionSegments.count)
+            DispatchQueue.concurrentPerform(iterations: selectionSegments.count) { index in
+                let duplicateSegment = selectionSegments[index].duplicate()
+                duplicateSegments[index] = duplicateSegment
             }
             self.clipboard = duplicateSegments
         }
@@ -1743,10 +1749,8 @@ class SelectionCursor: NSObject, UITextViewDelegate {
     func pasteClipboard(handler: (() -> Void)? = nil) {
         print("===== Selection Cursor: Paste Clipboard =====")
         if let entry = self.entryManager.currentEntry,
-           let anchor = self.anchor,
            let clipboard = self.clipboard,
            clipboard.count > 0 {
-            
             var pastedSegments = [EntrySegment]()
             for segment in clipboard {
                 let duplicateSegment = segment.duplicate(withNewUID: true)
@@ -1764,31 +1768,47 @@ class SelectionCursor: NSObject, UITextViewDelegate {
                 n: 0
             )
             
+            print("\tLast Index: ", newIndex ?? "nil")
+            
             var anchorIndex: Int?
-            if let index = newIndex, let cachedAnchorCaret = self.cachedAnchorCaret {
+            if let index = newIndex,
+               let cachedAnchorCaret = self.cachedAnchorCaret,
+               entry.entrySegments.count > cachedAnchorCaret.index // Sometimes we get a bug that creates this situation
+            {
                 print("\tCached Anchor and Anchor exist...")
                 print("\tUpdate anchor and cached anchor to be last segment in pasted segments")
                 anchorIndex = cachedAnchorCaret.index + index + 1
-            } else if let index = newIndex, let anchorCaret = self.anchorCaret {
+            } else if let index = newIndex,
+                let anchorCaret = self.anchorCaret
+            {
                 print("\tOnly Anchor exists...")
                 print("\tUpdate anchor to be last segment in pasted segments")
                 anchorIndex = anchorCaret.index + index + 1
-            } else {
+            } else if let index = newIndex,
+                self.anchorCaret == nil &&
+                self.cachedAnchorCaret == nil
+            {
                 print("\tNeither anchor nor cached anchor exist")
-                print("\tDo nothing.")
+                print("\tAssume we're at beginning of entry")
+                anchorIndex = index
+            }
+            
+            var insertTime = CMTime.zero
+            if let anchor = self.anchor {
+                insertTime = anchor.timeMapping.target.end
             }
             
             // Insert selection into entry
             entry.insertPassage(
                 segments: pastedSegments,
-                at: anchor.timeMapping.target.end
+                at: insertTime
             )
             
             if let index = anchorIndex, let _ = self.cachedAnchorCaret {
                 print("\tSetting new anchor and cached anchor: ", index)
                 self.setAnchorCaret(caret: Caret(index: index, trackType: .committed))
                 self.setCachedAnchorCaret(caret: Caret(index: index, trackType: .committed))
-            } else if let index = anchorIndex, let _ = self.anchorCaret {
+            } else if let index = anchorIndex {
                 print("\tSetting new anchor: ", index)
                 self.setAnchorCaret(caret: Caret(index: index, trackType: .committed))
             }
@@ -1805,6 +1825,12 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             self.notifications.executeError(
                 text: "Clipboard is empty."
             )
+        } else {
+            print("\t[Error] Unhandled path charted: ")
+            print("\tEntry: ", self.entryManager.currentEntry != nil ? "true" : "false")
+            print("\tAnchor: ", self.anchor != nil ? "true" : "false")
+            print("\tClipboard: ", self.clipboard != nil ? "true" : "false")
+            print("\tClipboard Count: ", self.clipboard!.count)
         }
         // We don't clear clipboard. Mimics behavior of copy/paste on computers
         checkRep()
@@ -1892,13 +1918,13 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         print("===== Selection Cursor: Set Selection (using TextRange) =====")
         
         var entrySegments: [EntrySegment]
-        var oldAnchorIndex = Int(Utils.UNKNOWN)
-        if let anchorCaret = self.anchorCaret {
+        var oldCachedAnchorIndex = Int(Utils.UNKNOWN)
+        if let cachedAnchorCaret = self.cachedAnchorCaret {
             // insert buffer at the correct place based on cursor position
             entrySegments = entry.entrySegments
-            oldAnchorIndex = anchorCaret.index
-            if oldAnchorIndex != Int(Utils.UNKNOWN) {
-                entrySegments.insert(contentsOf: entry.entryBuffer, at: oldAnchorIndex)
+            oldCachedAnchorIndex = cachedAnchorCaret.index
+            if oldCachedAnchorIndex != Int(Utils.UNKNOWN) {
+                entrySegments.insert(contentsOf: entry.entryBuffer, at: oldCachedAnchorIndex)
             } else {
                 entrySegments += entry.entryBuffer
             }
@@ -2204,6 +2230,33 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             } else {
                 self.anchorCaret = nil
             }
+            
+            if
+                let textView = self.textView,
+                let cursorView = self.cursorView,
+                let entry = self.entryManager.currentEntry,
+                entry.entrySegments.count == 0 &&
+                self.speechRecognition.isListeningForSpeech
+            {
+                print("No text while listening. Move cursor to beginning of entry...")
+                // We delay so that command bar can go up
+                Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { timer in
+                    let frame = Utils.getBeginningOfEntryFrame(
+                        textView: textView,
+                        cursorView: cursorView,
+                        font: self.state.font
+                    )
+                    
+                    UIView.animate(
+                        withDuration: Utils.CURSOR_TRANSITION_DURATION,
+                        delay: 0,
+                        options: [.curveEaseIn],
+                        animations: {
+                            self.cursorView!.frame = frame
+                        }
+                    )
+                }
+            }
         } else if let caret = caret,
                   let segment = self.getSegment(caret: caret),
                   let anchor = self.anchor,
@@ -2377,10 +2430,10 @@ class SelectionCursor: NSObject, UITextViewDelegate {
         print("===== Selection Cursor: Scroll To Bottom =====")
         let contentOffset = CGPoint(x: 0, y: self.textView!.contentSize.height - self.textView!.frame.height)
         self.textView!.setContentOffset(contentOffset, animated: true)
-        self.handleScroll(delay: 0.5)
+        self.handleEndScroll(delay: 0.5)
     }
     
-    func handleScroll(delay: TimeInterval) {
+    func handleEndScroll(delay: TimeInterval) {
         print("===== Selection Cursor: Handle Scroll =====")
         Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { timer in
             if let selectionTextRange = self.selectionTextRange,
@@ -2554,7 +2607,8 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             if let newContentSize = change?[.newKey] as? CGSize,
                let oldContentSize = change?[.oldKey] as? CGSize,
                newContentSize.height > self.textView!.frame.height &&
-                self.isAtEndOfTextView
+                self.isAtEndOfTextView &&
+                !self.hasSelection
             {
                 print("\tKeyPath: contentSize")
                 print("\tNew Observation Value (contentSize):\n\t\tnew: '\(newContentSize)'\n\t\told: '\(oldContentSize)'")
@@ -2708,7 +2762,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
             textView.attributedText.string.trimmingCharacters(in: .whitespacesAndNewlines).length == 0
         {
             // reset cursor position
-            Utils.initializeCursor(
+            Utils.placeCursorAtBeginningOfEntry(
                 textView: textView,
                 cursorView: cursorView,
                 font: self.state.font
@@ -2723,6 +2777,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
 extension SelectionCursor: UIScrollViewDelegate {
     public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         print("===== Scroll View Did End Dragging =====")
-        self.handleScroll(delay: Utils.TEXT_VIEW_SCROLL_TRANSITION_DURATION)
+        // Makes sure that cursor remains at bottom
+        self.handleEndScroll(delay: Utils.TEXT_VIEW_SCROLL_TRANSITION_DURATION)
     }
 }

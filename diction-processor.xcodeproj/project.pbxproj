@@ -92,6 +92,8 @@
 		8B766F5E24AC2AB200D41A13 /* BarycentricEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B766F4424AC2AB200D41A13 /* BarycentricEstimator.swift */; };
 		8B86B50724EF56C600568CDD /* EntryTrackType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B86B50624EF56C600568CDD /* EntryTrackType.swift */; };
 		8B88E97C2526E86F00DE3F75 /* SliderType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B88E97B2526E86F00DE3F75 /* SliderType.swift */; };
+		8B8A304A258599DE003B3EA7 /* welcome.lingual in Resources */ = {isa = PBXBuildFile; fileRef = 8B8A3049258599DE003B3EA7 /* welcome.lingual */; };
+		8B8A30582586CA3F003B3EA7 /* UITextView+VisibleRange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B8A30572586CA3F003B3EA7 /* UITextView+VisibleRange.swift */; };
 		8B8D55EB2530D60E004AD436 /* dialog.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8B8D55EA2530D60E004AD436 /* dialog.wav */; };
 		8B8D55F02530E02C004AD436 /* DialogItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B8D55EF2530E02C004AD436 /* DialogItem.swift */; };
 		8B8D55F52530E043004AD436 /* DialogAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B8D55F42530E043004AD436 /* DialogAction.swift */; };
@@ -259,6 +261,8 @@
 		8B766F4424AC2AB200D41A13 /* BarycentricEstimator.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BarycentricEstimator.swift; sourceTree = "<group>"; };
 		8B86B50624EF56C600568CDD /* EntryTrackType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryTrackType.swift; sourceTree = "<group>"; };
 		8B88E97B2526E86F00DE3F75 /* SliderType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SliderType.swift; sourceTree = "<group>"; };
+		8B8A3049258599DE003B3EA7 /* welcome.lingual */ = {isa = PBXFileReference; lastKnownFileType = file.bplist; path = welcome.lingual; sourceTree = "<group>"; };
+		8B8A30572586CA3F003B3EA7 /* UITextView+VisibleRange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITextView+VisibleRange.swift"; sourceTree = "<group>"; };
 		8B8D55EA2530D60E004AD436 /* dialog.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = dialog.wav; sourceTree = "<group>"; };
 		8B8D55EF2530E02C004AD436 /* DialogItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DialogItem.swift; sourceTree = "<group>"; };
 		8B8D55F42530E043004AD436 /* DialogAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DialogAction.swift; sourceTree = "<group>"; };
@@ -483,6 +487,14 @@
 			path = beethoven;
 			sourceTree = "<group>";
 		};
+		8B8A3048258599B1003B3EA7 /* entries */ = {
+			isa = PBXGroup;
+			children = (
+				8B8A3049258599DE003B3EA7 /* welcome.lingual */,
+			);
+			path = entries;
+			sourceTree = "<group>";
+		};
 		8BA3052F24C2867D0056E4DF /* sounds */ = {
 			isa = PBXGroup;
 			children = (
@@ -518,6 +530,7 @@
 				8BB685A324E8E04400F3285B /* NSRange+toTextRange.swift */,
 				8B40A28625699B57002C6B46 /* CenteredButton.swift */,
 				8B5C3A1C252B93A000A4DCA7 /* UITextView+NoActions.swift */,
+				8B8A30572586CA3F003B3EA7 /* UITextView+VisibleRange.swift */,
 				8B669B6424B0136500D5996B /* String+Substring+Replace+TrimTrailingPunctuation.swift */,
 				8BA3C35325293A80000B704B /* UIColor+hex.swift */,
 				8BA3056224D0FB450056E4DF /* Collection+distance.swift */,
@@ -561,6 +574,7 @@
 		8BEC136624906FF30056E767 /* diction-processor */ = {
 			isa = PBXGroup;
 			children = (
+				8B8A3048258599B1003B3EA7 /* entries */,
 				8B742199254D0991002B43EF /* protocols */,
 				8B3B52932537AF0600B2BEDB /* images */,
 				8B74881F24DCF4C6004C94A0 /* data-structures */,
@@ -757,6 +771,7 @@
 				8BA3054F24C28FCC0056E4DF /* processing.wav in Resources */,
 				8B40A2822568FB03002C6B46 /* speech-registered.wav in Resources */,
 				8BEC136F24906FF30056E767 /* Main.storyboard in Resources */,
+				8B8A304A258599DE003B3EA7 /* welcome.lingual in Resources */,
 				8BA3055024C28FCC0056E4DF /* incorrect-wake-phrase.wav in Resources */,
 				8BA3055324C28FCC0056E4DF /* repeat.wav in Resources */,
 			);
@@ -919,6 +934,7 @@
 				8B40A28725699B57002C6B46 /* CenteredButton.swift in Sources */,
 				8B766F2924AC2AA300D41A13 /* PitchCalculator.swift in Sources */,
 				8BED4B80257D71B9008F7A57 /* DictionarySection.swift in Sources */,
+				8B8A30582586CA3F003B3EA7 /* UITextView+VisibleRange.swift in Sources */,
 				8BA3055D24CB99AC0056E4DF /* VoiceCommandEngine.swift in Sources */,
 				8BA3056124CBD43D0056E4DF /* RecognitionTask.swift in Sources */,
 				8B7421DE254E2872002B43EF /* PitchRecognitionEngine.swift in Sources */,

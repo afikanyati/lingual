@@ -500,7 +500,7 @@ class EntryManager: NSObject {
                 }
                 
                 if let entryChangeHandler = self.entryChangeHandler {
-                    print("\tRunning Save Handler...")
+                    print("\tRunning Entry Change Handler...")
                     entryChangeHandler()
                     self.entryChangeHandler = nil
                 }
@@ -509,7 +509,7 @@ class EntryManager: NSObject {
                 
                 print("\tUpdate View with text: '\(entry.getText())'")
                 entry.handleOnSpeechUpdate(text: entry.getText())
-                
+
                 if let entryChangeHandler = self.entryChangeHandler {
                     print("\tRunning Save Handler...")
                     entryChangeHandler()
@@ -1585,7 +1585,10 @@ class EntryManager: NSObject {
                     handler: { [weak self]  action in
                     self?.isExportingEntry = true
                     let selectionFilename = "entry-\(UUID().uuidString)"
-                    
+
+                    #if DEBUG
+                    let _ = Utils.encodeLingualEntry(entry: entry, filename: selectionFilename)
+                    #else
                     Utils.exportEntry(
                         state: self!.state,
                         entry: entry,
@@ -1595,16 +1598,17 @@ class EntryManager: NSObject {
                     ) { entryURL in
                         self?.isExportingEntry = false
                         handler?()
-                        
+
                         NotificationCenter.default.post(
                             name: EntryManager.onEntryAudioExported,
                             object: nil,
                             userInfo: [ "entryURL" : entryURL]
                         )
                     }
-                    
+
                     // Increment Entry Audio Export Count
                     entry.incrementAudioExportCount()
+                    #endif
                 }),
                 DialogAction(
                     title: "Export Text",
@@ -3566,7 +3570,7 @@ class EntryManager: NSObject {
         // Update Undo/Redo History
         print("\tCreating and setting new snapshot...")
         
-        entry.duplicate(
+        let duplicateEntry = entry.duplicate(
             state: self.state,
             speechSynthesis: self.speechSynthesis,
             speechRecognition: self.speechRecognition,
@@ -3575,24 +3579,23 @@ class EntryManager: NSObject {
             pitchRecognition: self.pitchRecognition,
             entryManager: self,
             notifications: self.notifications
-        ) { [weak self] entry in
-            print("SWAGGGGG")
-            let newSnapshot = EntrySnapshot(
-                entry: entry, // we duplicate so there's no memory leaks/pointers to same memory locations
-                selectionAnchorCaret: self!.selectionCursor.anchorCaret?.duplicate(),
-                selectionFocusCaret: self!.selectionCursor.focusCaret?.duplicate(),
-                selectionCachedAnchorCaret: self!.selectionCursor.cachedAnchorCaret?.duplicate(),
-                undo: message
-            )
-            
-            self?.entryChangeHandler = handler
-            
-            self?.ignoreEntrySnapshotUpdate = ignoreUpdate
-            
-            self?.modifyEntry(snapshot: newSnapshot)
-            
-            self?.checkRep()
-        }
+        )
+        
+        let newSnapshot = EntrySnapshot(
+            entry: duplicateEntry, // we duplicate so there's no memory leaks/pointers to same memory locations
+            selectionAnchorCaret: self.selectionCursor.anchorCaret?.duplicate(),
+            selectionFocusCaret: self.selectionCursor.focusCaret?.duplicate(),
+            selectionCachedAnchorCaret: self.selectionCursor.cachedAnchorCaret?.duplicate(),
+            undo: message
+        )
+        
+        self.entryChangeHandler = handler
+        
+        self.ignoreEntrySnapshotUpdate = ignoreUpdate
+        
+        self.modifyEntry(snapshot: newSnapshot)
+        
+        self.checkRep()
     }
     
     @objc func undo(handler: (() -> Void)? = nil) {
@@ -3606,6 +3609,15 @@ class EntryManager: NSObject {
                 audioMessage: "undo \(undoMessage)",
                 withHaptics: true,
                 delay: 0
+            )
+            
+            NotificationCenter.default.post(
+                name: EntryManager.onUndoManagerChange,
+                object: nil,
+                userInfo: [
+                    "canUndo": self.undoManager.canUndo,
+                    "canRedo": self.undoManager.canRedo
+                ]
             )
         }
         
@@ -3639,6 +3651,15 @@ class EntryManager: NSObject {
                 withHaptics: true,
                 delay: 0
             )
+            
+            NotificationCenter.default.post(
+                name: EntryManager.onUndoManagerChange,
+                object: nil,
+                userInfo: [
+                    "canUndo": self.undoManager.canUndo,
+                    "canRedo": self.undoManager.canRedo
+                ]
+            )
         }
         
         if self.undoManager.canRedo {
@@ -3663,6 +3684,10 @@ class EntryManager: NSObject {
     func setCurrentEntry(index: Int? = nil) {
         print("===== Entry Manager: Set Current Entry =====")
         print("\tSet index to: ", index ?? "nil")
+        
+        self.currentEntryUndoSnapshot = nil
+        self.undoManager.removeAllActions()
+
         if let index = index {
             self.currentIndex = index
             self.setEntryModules(index: index)
@@ -3676,7 +3701,7 @@ class EntryManager: NSObject {
             // Make sure all data is correct
             self.currentEntry!.refresh()
             
-            self.currentEntry!.duplicate(
+            let duplicateEntry = self.currentEntry!.duplicate(
                 state: self.state,
                 speechSynthesis: self.speechSynthesis,
                 speechRecognition: self.speechRecognition,
@@ -3685,21 +3710,19 @@ class EntryManager: NSObject {
                 pitchRecognition: self.pitchRecognition,
                 entryManager: self,
                 notifications: self.notifications
-            ) { [weak self] entry in
-                self?.currentEntryUndoSnapshot = EntrySnapshot(
-                    entry: entry, // we duplicate so there's no memory leaks/pointers to same memory locations
-                    selectionAnchorCaret: self!.selectionCursor.anchorCaret,
-                    selectionFocusCaret: self!.selectionCursor.focusCaret,
-                    selectionCachedAnchorCaret: self!.selectionCursor.cachedAnchorCaret,
-                    undo: "to start of entry"
-                )
-                
-                print("Entry Segments: ", Utils.stringifySegments(segments: self!.currentEntry!.entrySegments))
-            }
+            )
+            
+            self.currentEntryUndoSnapshot = EntrySnapshot(
+                entry: duplicateEntry, // we duplicate so there's no memory leaks/pointers to same memory locations
+                selectionAnchorCaret: self.selectionCursor.anchorCaret,
+                selectionFocusCaret: self.selectionCursor.focusCaret,
+                selectionCachedAnchorCaret: self.selectionCursor.cachedAnchorCaret,
+                undo: "to start of entry"
+            )
+            
+            print("Entry Segments: ", Utils.stringifySegments(segments: self.currentEntry!.entrySegments))
         } else {
             self.currentIndex = nil
-            self.currentEntryUndoSnapshot = nil
-            self.undoManager.removeAllActions()
         }
 
         var userInfo: [String : Int] = [:]
@@ -3820,19 +3843,17 @@ extension EntryManager {
         let oldSnapshot: EntrySnapshot = self.currentEntryUndoSnapshot!
 
         let stateDiff = oldSnapshot.diffed(with: snapshot)
-        stateDidChange(diff: stateDiff)
+        entryDidChange(diff: stateDiff)
     }
 
-    private func stateDidChange(diff: EntrySnapshot.Diff) {
+    private func entryDidChange(diff: EntrySnapshot.Diff) {
 
         guard diff.hasChanges else {
-            print("NO DIFFS SADDDDDD")
             return
-            
         }
-
+        
         self.currentEntryUndoSnapshot = diff.to
-
+        
         self.undoManager.registerUndo(withTarget: self) { target in
             target.modifyEntry(snapshot: diff.from)
         }

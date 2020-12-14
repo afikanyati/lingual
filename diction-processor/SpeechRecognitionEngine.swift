@@ -1119,11 +1119,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             return
         }
         
-        // Remove selection if we have it activated
-        if self.selectionCursor.hasSelection {
-            self.selectionCursor.clearSelection()
-        }
-        
         self.listeningTimer?.invalidate()
         self.listeningTimer = nil
 
@@ -1753,13 +1748,11 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 
                 self.pauseListeningHandler = pauseListeningHandler
             } else {
-                let pauseListeningHandler = {
-                    onPauseHandler?()
-                    handleBroadcast()
-                    self.checkRep()
-                }
-                
-                self.pauseListeningHandler = pauseListeningHandler
+                // We don't use pause listening handler because we make no changes
+                // to recognition task
+                onPauseHandler?()
+                handleBroadcast()
+                self.checkRep()
             }
         } else {
             let pauseListeningHandler = {
@@ -2330,7 +2323,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 isValidVoiceCommand &&
                 !self.earlyValidVoiceCommandDetection
             {
-                print("Handle detect valid voice command...")
+                print("\tHandle detect valid voice command...")
                 self.handleDetectValidVoiceCommand(
                     voiceCommandType: voiceCommandType,
                     transcription: transcription,
@@ -2405,7 +2398,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                isValidVoiceCommand &&
                 !self.earlyValidVoiceCommandDetection
             {
-                print("Handle detect valid voice command...")
+                print("\tHandle detect valid voice command...")
                 self.handleDetectValidVoiceCommand(
                     voiceCommandType: voiceCommandType,
                     transcription: transcription,
@@ -2458,7 +2451,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             if let voiceCommandType = voiceCommandType,
                isValidVoiceCommand &&
                 !self.earlyValidVoiceCommandDetection {
-                print("Handle detect valid voice command...")
+                print("\tHandle detect valid voice command...")
                 self.handleDetectValidVoiceCommand(
                     voiceCommandType: voiceCommandType,
                     transcription: result.bestTranscription
@@ -2469,7 +2462,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 !isValidVoiceCommand &&
                 invalidType != .CLOSE_TO_LAST_VOICE_COMMAND &&
                 Utils.DEFAULT_START_LISTENING_DELAY + lastStartListeningDate.timeIntervalSinceNow < 0 {
-                print("Handle invalid voice command...")
+                print("\tHandle invalid voice command...")
                 // We don't want to repeat an error twice, hence why we only let those that weren't caught early through
                 self.handleInvalidVoiceCommand(transcription: result.bestTranscription)
             }
@@ -2530,7 +2523,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             if let voiceCommandType = voiceCommandType,
                isValidVoiceCommand &&
                 !self.earlyValidVoiceCommandDetection {
-                print("Handle detect valid voice command...")
+                print("\tHandle detect valid voice command...")
                 self.handleDetectValidVoiceCommand(
                     voiceCommandType: voiceCommandType,
                     transcription: result.bestTranscription
@@ -2615,7 +2608,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                isValidVoiceCommand &&
                 !self.earlyValidVoiceCommandDetection
             {
-                print("Handle detect valid voice command...")
+                print("\tHandle detect valid voice command...")
                 self.handleDetectValidVoiceCommand(
                     voiceCommandType: voiceCommandType,
                     transcription: result.bestTranscription
@@ -2627,7 +2620,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 invalidType != .CLOSE_TO_LAST_VOICE_COMMAND &&
                 Utils.DEFAULT_START_LISTENING_DELAY + lastStartListeningDate.timeIntervalSinceNow < 0
             {
-                print("Handle invalid voice command...")
+                print("\tHandle invalid voice command...")
                 // We don't want to repeat an error twice, hence why we only let those that weren't caught early through
                 self.handleInvalidVoiceCommand(transcription: result.bestTranscription)
             }

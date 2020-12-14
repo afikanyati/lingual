@@ -95,6 +95,12 @@ class ViewController: UIViewController, SegueProtocol {
                 withStopListeningButton: true,
                 withBackToEntriesButton: false
             )
+            
+            DispatchQueue.main.async {
+                // add table view buttons
+                let navigationController = Utils.getNavigationController()
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self.getWakeUpButton()]
+            }
         }
     }
     
@@ -592,6 +598,25 @@ class ViewController: UIViewController, SegueProtocol {
                 vc: self
             )
         }
+    }
+    
+    // MARK: - Helper Methods
+    
+    func getWakeUpButton() -> UIBarButtonItem {
+        let button  = UIButton(type: .custom)
+        button.frame = CGRect(x: 0.0, y: 0.0, width: Utils.NAVBAR_BUTTON_LENGTH, height: Utils.NAVBAR_BUTTON_LENGTH)
+        button.addTarget(self, action: #selector(self.wakeUp), for: .touchDown)
+        button.setImage(UIImage(systemName: "lock.open"), for: .normal)
+        button.tintColor = UIColor.systemGray
+        
+        let barButton = UIBarButtonItem(customView: button)
+        
+        return barButton
+    }
+    
+    @objc func wakeUp(_ sender: Any) {
+        print("===== View Controller: Wake Up =====")
+        self.speechRecognition.handleWakePhraseDetected()
     }
 }
 
