@@ -30,6 +30,8 @@ class Entry: AVMutableComposition, NSCoding {
     var entryManager: EntryManager!
 
     // MARK: - Composition Properties
+    /// Stores the name of the entry
+    public var title: String?
     /// Stores a unique identifier for entry
     private(set) var uid: String
     /// Stores the filename of the entry
@@ -188,8 +190,6 @@ class Entry: AVMutableComposition, NSCoding {
     private(set) var cachedTextArgsSet: Set<String>?
     /// Stores segments of last getText() call
     private(set) var cachedSegmentUIDSet: Set<String>?
-    /// Stores arguments of last getDuration() call
-    private(set) var cachedDurationArgsSet: Set<String>?
     /// Stores cached version of getBackgroundNoise
     private(set) var cachedBackgroundNoise: Double?
     
@@ -1196,7 +1196,7 @@ class Entry: AVMutableComposition, NSCoding {
             }
             
             return result
-        }) / Double(self.getDuration(filteredDuration: true).seconds / Double(TimeConstant.secsPerMin))
+        }) / Double(self.getDuration().seconds / Double(TimeConstant.secsPerMin))
         speakingRate = speakingRate.rounded(toPlaces: Utils.DEFAULT_FIG_COUNT)
         
         var initialSilenceDuration: CMTime?
@@ -4211,40 +4211,58 @@ class Entry: AVMutableComposition, NSCoding {
         return 0
     }
     
-    func getDuration(filteredDuration: Bool = false) -> CMTime {
-        let argumentArr: [String] = [
-            "filteredDuration=\(filteredDuration)"
-        ]
-        let argumentSet: Set = Set(argumentArr)
-
+    func getDuration() -> CMTime {
         // Use cached version if it exists
-        if let cachedDuration = self.cachedDuration,
-           let cachedDurationArgsSet = self.cachedDurationArgsSet,
-           argumentSet == cachedDurationArgsSet
+        if let cachedDuration = self.cachedDuration
         {
             return cachedDuration
         }
-
+        
         var duration: CMTime = CMTime.zero
         for segment in self.entrySegments {
-            if filteredDuration &&
-                !segment.isVoiceCommandWord() &&
+            if !segment.isVoiceCommandWord() &&
                 !segment.isDeleted() &&
-                !(
-                    self.state.withOmitSilences &&
-                    segment.isSilence() &&
-                    segment.timeMapping.target.duration.seconds > Utils.SILENCE_SKIP_THRESHOLD
-                ) {
+                (
+                    !self.state.withOmitSilences ||
+                    !(
+                        self.state.withOmitSilences &&
+                        segment.isSilence() &&
+                        segment.timeMapping.target.duration.seconds > Utils.SILENCE_SKIP_THRESHOLD
+                    )
+                )
+            {
                 duration = CMTimeAdd(duration, segment.getEffectiveDuration())
-            } else {
+            } else if !self.state.withOmitSilences {
                 duration = CMTimeAdd(duration, segment.getEffectiveDuration())
             }
         }
         
         self.cachedDuration = duration
-        self.cachedDurationArgsSet = argumentSet
         
         return self.cachedDuration!
+    }
+    
+    static func getDuration(segments: [EntrySegment], withOmitSilences: Bool) -> CMTime {
+        var duration: CMTime = CMTime.zero
+        for segment in segments {
+            if !segment.isVoiceCommandWord() &&
+                !segment.isDeleted() &&
+                (
+                    !withOmitSilences ||
+                    !(
+                        withOmitSilences &&
+                        segment.isSilence() &&
+                        segment.timeMapping.target.duration.seconds > Utils.SILENCE_SKIP_THRESHOLD
+                    )
+                )
+            {
+                duration = CMTimeAdd(duration, segment.getEffectiveDuration())
+            } else if !withOmitSilences {
+                duration = CMTimeAdd(duration, segment.getEffectiveDuration())
+            }
+        }
+        
+        return duration
     }
     
     func getDateCreated() -> Date {
@@ -4695,20 +4713,22 @@ class Entry: AVMutableComposition, NSCoding {
         self.cachedDuration = nil
         self.cachedTextArgsSet = nil
         self.cachedSegmentUIDSet = nil
-        self.cachedDurationArgsSet = nil
         self.cachedBackgroundNoise = nil
     }
     
     // Reference: http://www.gwtproject.org/javadoc/latest/com/google/gwt/i18n/client/DateTimeFormat.html
     func getTitle(attributes: [NSAttributedString.Key: Any] = [:], withDashes: Bool = false) -> NSMutableAttributedString {
+        if let title = self.title {
+            return NSMutableAttributedString(string: title, attributes: attributes)
+        }
+        
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "EEE MMM dd, yyyy"
         let dateString = dateFormatter.string(from: Date(timeIntervalSince1970: self.dateCreated))
         let timeFormatter = DateFormatter()
         timeFormatter.dateFormat = "h\(withDashes ? "-" : ":")mm\(withDashes ? "-" : ":")ss a"
         let timeString = timeFormatter.string(from: Date(timeIntervalSince1970: self.dateCreated))
-        let titleString = NSMutableAttributedString(string: "Entry\(withDashes ? " -" : "") \(dateString) at \(timeString)", attributes: attributes)
         
-        return titleString
+        return NSMutableAttributedString(string: "Entry\(withDashes ? " -" : "") \(dateString) at \(timeString)", attributes: attributes)
     }
 }

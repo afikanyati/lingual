@@ -152,9 +152,12 @@ class Utils {
     static let NEWLINE_CHAR = "\n\n"
     static let PLAYBACK_SCROLL_BUFFER: Int = 500
     static let TEXT_SCRUB_START_DELAY: TimeInterval = 0.2
-    static let TEXT_SCRUB_PAUSE_DELAY: TimeInterval = 0.1
+    static let TEXT_SCRUB_PAUSE_DELAY: TimeInterval = 0.2
     static let RECORD_FILE_BUS: Int = 0
     static let SPEECH_RECOGNITION_BUS: Int = 1
+    static let SEED_CONTENT_TITLE: String = "Welcome to Lingual"
+    static let PLAYBACK_SECOND_DURATION: TimeInterval = 1
+    static let INDEX_SEARCH_BUFFER: Int = 7
     
     static let pitchToFrequencyMap: [String : Double] = [
         "C0": 16,
@@ -970,7 +973,7 @@ class Utils {
                 }
                 
                 return result
-            }) / Double(normalizedCleansedSegments.first!.getEntry()!.getDuration(filteredDuration: true).seconds / Double(TimeConstant.secsPerMin))
+            }) / Double(normalizedCleansedSegments.first!.getEntry()!.getDuration().seconds / Double(TimeConstant.secsPerMin))
             speakingRate = speakingRate!.rounded(toPlaces: Utils.DEFAULT_FIG_COUNT)
         }
         
@@ -1605,7 +1608,7 @@ class Utils {
         if !speechRecognition.isListeningForSpeech && !entryManager.isWalkingEntry && !entryManager.isRunningEntry && Float(speechPlayer.player.currentTime().seconds).isNormal && !Float(speechPlayer.player.currentTime().seconds).isNaN {
             let navigationController = Utils.getNavigationController()
             let titleView = Utils.getTitleView(
-                text: "\(Utils.formattedTime(time: Float(speechPlayer.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(speechPlayer.player.currentItem!.duration.seconds)))",
+                text: "\(Utils.formattedTime(time: Float(speechPlayer.effectiveTimeElapsed.seconds)))/\(Utils.formattedTime(time: Float(speechPlayer.effectiveDuration!.seconds)))",
                 withRecording: speechRecognition.isListeningForSpeech,
                 asNotification: false,
                 asVoiceCommand: false
@@ -1710,76 +1713,82 @@ class Utils {
         // Get entry text
         let entryText = entry.getText()
         // Get index of lower part of text range relative to entry text
-        let lowerIndex = entryText.index(entryText.startIndex, offsetBy: Int(location))
+        var lowerIndex = entryText.index(entryText.startIndex, offsetBy: Int(location))
         // Get index of upper part of text range relative to entry text
-        let upperIndex = entryText.index(entryText.startIndex, offsetBy: Int(location) + length)
+        var upperIndex = entryText.index(entryText.startIndex, offsetBy: Int(location) + length)
         // Computer selection range
-        let selectionRangeStringIndex = lowerIndex..<upperIndex
+        var selectionRangeStringIndex = lowerIndex..<upperIndex
         // Get range text
-        let rangeText = String(entryText[selectionRangeStringIndex]).replace(Utils.NEWLINE_CHAR, with: " ")
+        var rangeText = String(entryText[selectionRangeStringIndex]).replace(Utils.NEWLINE_CHAR, with: " ")
         // Get all text before range
-        let beforeRangeText = String(entryText[entryText.startIndex..<lowerIndex]).replace(Utils.NEWLINE_CHAR, with: " ")
+        var beforeRangeText = String(entryText[entryText.startIndex..<lowerIndex]).replace(Utils.NEWLINE_CHAR, with: " ")
         // Get all text after range
-//        let afterRangeText = String(entryText[upperIndex..<entryText.endIndex]).replace(Utils.NEWLINE_CHAR, with: " ")
+        var afterRangeText = String(entryText[upperIndex..<entryText.endIndex]).replace(Utils.NEWLINE_CHAR, with: " ")
         
         // Determine number of words before range
-//        let numLowerWords = beforeRangeText.split(separator: " ").count
+        var numLowerWords = beforeRangeText.split(separator: " ").count
         // Determine number of spaces before range
-        let numLowerSpaces = beforeRangeText.filter { $0 == " " }.count
+        var numLowerSpaces = beforeRangeText.filter { $0 == " " }.count
         
         // We want the start of the range to be at the left of a space
         // Thus the first character of should be a space
         // We slide selection to the left until we meet criteria
-//        var i = 0
-//        while numLowerWords > numLowerSpaces && beforeRangeText.count > 0 && beforeRangeText.last != " " {
-//            i += 1
-//            lowerIndex = entryText.index(entryText.startIndex, offsetBy: Int(location - i))
-//            selectionRangeStringIndex = lowerIndex..<upperIndex
-//            rangeText = String(entryText[selectionRangeStringIndex]).replace(Utils.NEWLINE_CHAR, with: " ")
-//            beforeRangeText = String(entryText[entryText.startIndex..<lowerIndex]).replace(Utils.NEWLINE_CHAR, with: " ")
-//            numLowerWords = beforeRangeText.split(separator: " ").count
-//            numLowerSpaces = beforeRangeText.filter { $0 == " " }.count
-//        }
+        var i = 0
+        while numLowerWords > numLowerSpaces && beforeRangeText.count > 0 && beforeRangeText.last != " " {
+            i += 1
+            lowerIndex = entryText.index(entryText.startIndex, offsetBy: Int(location - i))
+            selectionRangeStringIndex = lowerIndex..<upperIndex
+            rangeText = String(entryText[selectionRangeStringIndex]).replace(Utils.NEWLINE_CHAR, with: " ")
+            beforeRangeText = String(entryText[entryText.startIndex..<lowerIndex]).replace(Utils.NEWLINE_CHAR, with: " ")
+            numLowerWords = beforeRangeText.split(separator: " ").count
+            numLowerSpaces = beforeRangeText.filter { $0 == " " }.count
+        }
         
         
         // Get number of words in range
-        let numRangeWords = rangeText.split(separator: " ").count
+        var numRangeWords = rangeText.split(separator: " ").count
         // Get number of spaces in range
-//        let numRangeSpaces = rangeText.filter { $0 == " " }.count
+        var numRangeSpaces = rangeText.filter { $0 == " " }.count
         
-        // We want the end of the range to be at the left of a space
-        // We slide selection to the right until we meet criteria
-//        var j = 0
-//        while numRangeSpaces <= numRangeWords && afterRangeText.count > 0 && afterRangeText.first != " " {
-//            j += 1
-//            upperIndex = entryText.index(entryText.startIndex, offsetBy: Int(location + length + j))
-//            selectionRangeStringIndex = lowerIndex..<upperIndex
-//            rangeText = String(entryText[selectionRangeStringIndex]).replace(Utils.NEWLINE_CHAR, with: " ")
-//            afterRangeText = String(entryText[upperIndex..<entryText.endIndex]).replace(Utils.NEWLINE_CHAR, with: " ")
-//            numRangeWords = rangeText.split(separator: " ").count
-//            numRangeSpaces = rangeText.filter { $0 == " " }.count
-//        }
-        
-        // Find segment indices that correspond
-        // to the words between the number of lower words
-        // and the number of lower words + number of range words
-        var numProcessedWords: Int = 0
-        var rangeSegments = [Int]()
-        for i in 0..<segments.count {
-            let segment = segments[i]
-            if segment.isActive() {
-                numProcessedWords += 1
-            }
-            
-            if segment.isActive() && numProcessedWords > numLowerSpaces && numProcessedWords <= numLowerSpaces + numRangeWords {
-                rangeSegments.append(i)
-            }
-            
-            if numProcessedWords > numLowerSpaces + numRangeWords {
-                break
-            }
+//         We want the end of the range to be at the left of a space
+//         We slide selection to the right until we meet criteria
+        var j = 0
+        while numRangeSpaces <= numRangeWords && afterRangeText.count > 0 && afterRangeText.first != " " {
+            j += 1
+            upperIndex = entryText.index(entryText.startIndex, offsetBy: Int(location + length + j))
+            selectionRangeStringIndex = lowerIndex..<upperIndex
+            rangeText = String(entryText[selectionRangeStringIndex]).replace(Utils.NEWLINE_CHAR, with: " ")
+            afterRangeText = String(entryText[upperIndex..<entryText.endIndex]).replace(Utils.NEWLINE_CHAR, with: " ")
+            numRangeWords = rangeText.split(separator: " ").count
+            numRangeSpaces = rangeText.filter { $0 == " " }.count
         }
         
+        // Find segment indices that correspond
+        // to the words in selection
+        let selectionRange = NSRange(
+            range: selectionRangeStringIndex,
+            in: entryText
+        )
+        
+        let numUpperWords = afterRangeText.split(separator: " ").count
+        
+        var rangeSegments = [Int]()
+        let startIndex = max(0, numLowerWords - Utils.INDEX_SEARCH_BUFFER)
+        let endIndex = min(segments.count - numUpperWords + Utils.INDEX_SEARCH_BUFFER, segments.count)
+        for (index, segment) in segments[startIndex..<endIndex].enumerated() {
+            let segmentTextRange = entry.getSegmentTextRange(of: segment)
+            
+            if let segmentTextRange = segmentTextRange,
+               NSIntersectionRange(
+                segmentTextRange,
+                selectionRange
+            ).length > 0 &&
+            segment.isActive()
+            {
+                rangeSegments.append(startIndex + index)
+            }
+        }
+
         return rangeSegments
     }
     
@@ -1817,17 +1826,25 @@ class Utils {
         // Find segment index that corresponds to
         // the last word in the lower half of the bissection
         // caused by the caret
-        var numProcessedWords: Int = 0
         var segmentIndex: Int?
-        for i in 0..<segments.count {
-            
-            let seg = segments[i]
-            if seg.isActive() {
-                numProcessedWords += 1
+        let lowerRange = NSRange(
+            range: entryText.startIndex..<caretIndex,
+            in: entryText
+        )
+        
+        let startIndex = max(0, numLowerWords - Utils.INDEX_SEARCH_BUFFER)
+        for (index, segment) in segments[startIndex..<segments.count].enumerated() {
+            let segmentTextRange = entry.getSegmentTextRange(of: segment)
+            if let segmentTextRange = segmentTextRange,
+               segment.isActive() &&
+                segmentTextRange.location < lowerRange.length
+            { // changing this affects touch scrubbing, insert passage placement, and cursor placement
+                segmentIndex = startIndex + index
             }
-
-            if seg.isActive() && numProcessedWords >= numLowerWords { // changing this affects touch scrubbing, insert passage placement, and cursor placement
-                segmentIndex = i
+            
+            if let segmentTextRange = segmentTextRange,
+               segmentTextRange.location >= lowerRange.length
+            {
                 break
             }
         }
@@ -2248,7 +2265,7 @@ class Utils {
     ) -> (EntryTrackType?, Int?) {
         var lastSegmentIndex: Int?
         var trackType: EntryTrackType?
-        if bufferSegments == nil {
+        if bufferSegments == nil || bufferSegments!.count == 0 {
             // No buffer segments were supplied
             // Search for nth last segment in committed segments only
             trackType = .committed
@@ -2262,7 +2279,7 @@ class Utils {
                     i += 1
                 }
             }
-        } else if let bufferSegments = bufferSegments {
+        } else if let bufferSegments = bufferSegments, bufferSegments.count > 0 {
             // Buffer segments were supplied
             // Search for nth last segment from segment array that is a composition of committed and buffer segments.
             if let cachedAnchorCaret = selectionCursor.cachedAnchorCaret {
@@ -2389,6 +2406,25 @@ class Utils {
         }
         
         return nil
+    }
+    
+    // Reference: https://stackoverflow.com/questions/49540035/how-to-store-audio-data-into-documents-directory
+    public static func writeToDocumentsDirectory(filename: String) {
+        let fileManager = FileManager.default
+        
+        let fileURL = Utils.getFileURL(of: "\(filename).caf")
+        if fileManager.fileExists(atPath: fileURL.path) {
+            // do nothing
+        } else {
+            // Get file from bundle
+            let bundlePath = Bundle.main.path(forResource: filename, ofType: "caf")!
+            let bundleURL = URL(fileURLWithPath: bundlePath)
+            do {
+                try fileManager.copyItem(at: bundleURL, to: fileURL)
+            } catch {
+                print("[Error in Write to Documents Directory] There was a problem copying '\(filename).caf' to Documents Directory.")
+            }
+        }
     }
     
     // Reference: https://stackoverflow.com/questions/33021064/how-to-generate-all-possible-combinations

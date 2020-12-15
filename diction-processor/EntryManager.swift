@@ -19,6 +19,7 @@ class EntryManager: NSObject {
     static let onExecuteEntryAction = Notification.Name(Notifications.onExecuteEntryAction.rawValue)
     static let onEntryAudioExported = Notification.Name(Notifications.onEntryAudioExported.rawValue)
     static let onUndoManagerChange = Notification.Name(Notifications.onUndoManagerChange.rawValue)
+    static let onSelectionDeleted = Notification.Name(Notifications.onSelectionDeleted.rawValue)
 
     // MARK: - App Modules
     
@@ -1587,7 +1588,12 @@ class EntryManager: NSObject {
                     let selectionFilename = "entry-\(UUID().uuidString)"
 
                     #if DEBUG
-                    let _ = Utils.encodeLingualEntry(entry: entry, filename: selectionFilename)
+                    let _ = Utils.encodeLingualEntry(entry: entry, filename: entry.filename)
+                    NotificationCenter.default.post(
+                        name: EntryManager.onEntryAudioExported,
+                        object: nil,
+                        userInfo: [ "entryURL" : selectionFilename]
+                    )
                     #else
                     Utils.exportEntry(
                         state: self!.state,
@@ -2186,7 +2192,7 @@ class EntryManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        guard let entry = self.currentEntry else {
+        guard let _ = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
                 voiceCommand: voiceCommand
@@ -2202,23 +2208,20 @@ class EntryManager: NSObject {
             return
         }
         
-        print("\tRegistering an entry change to the Undo Manager...")
-        self.registerEntryChange(entry: entry, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
-            self?.selectionCursor.adjustRateSelection(direction: .up) { [weak self] rate in
-                print("\tRegistering an entry change to the Undo Manager...")
-                self?.registerEntryChange(
-                    entry: self!.currentEntry!,
-                    undo: "increasing selection rate",
-                    handler: handler
-                )
-                
-                self?.notifications.executeFeedback(
-                    visualMessage: "Increase Selection Rate: \(rate.rounded(toPlaces: 2))",
-                    audioMessage: "increased selection rate to \(rate.rounded(toPlaces: 2))",
-                    discardPrior: true,
-                    withHaptics: true
-                )
-            }
+        self.selectionCursor.adjustRateSelection(direction: .up) { [weak self] rate in
+            print("\tRegistering an entry change to the Undo Manager...")
+            self?.registerEntryChange(
+                entry: self!.currentEntry!,
+                undo: "increasing selection rate",
+                handler: handler
+            )
+            
+            self?.notifications.executeFeedback(
+                visualMessage: "Increase Selection Rate: \(rate.rounded(toPlaces: 2))",
+                audioMessage: "increased selection rate to \(rate.rounded(toPlaces: 2))",
+                discardPrior: true,
+                withHaptics: true
+            )
         }
         
         NotificationCenter.default.post(
@@ -2243,7 +2246,7 @@ class EntryManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        guard let entry = self.currentEntry else {
+        guard let _ = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
                 voiceCommand: voiceCommand
@@ -2259,23 +2262,20 @@ class EntryManager: NSObject {
             return
         }
         
-        print("\tRegistering an entry change to the Undo Manager...")
-        self.registerEntryChange(entry: entry, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
-            self?.selectionCursor.adjustRateSelection(direction: .down) { [weak self] rate in
-                print("\tRegistering an entry change to the Undo Manager...")
-                self?.registerEntryChange(
-                    entry: self!.currentEntry!,
-                    undo: "decreasing selection rate",
-                    handler: handler
-                )
-                
-                self?.notifications.executeFeedback(
-                    visualMessage: "Decrease Selection Rate: \(rate.rounded(toPlaces: 2))",
-                    audioMessage: "decreased selection rate to \(rate.rounded(toPlaces: 2))",
-                    discardPrior: true,
-                    withHaptics: true
-                )
-            }
+        self.selectionCursor.adjustRateSelection(direction: .down) { [weak self] rate in
+            print("\tRegistering an entry change to the Undo Manager...")
+            self?.registerEntryChange(
+                entry: self!.currentEntry!,
+                undo: "decreasing selection rate",
+                handler: handler
+            )
+            
+            self?.notifications.executeFeedback(
+                visualMessage: "Decrease Selection Rate: \(rate.rounded(toPlaces: 2))",
+                audioMessage: "decreased selection rate to \(rate.rounded(toPlaces: 2))",
+                discardPrior: true,
+                withHaptics: true
+            )
         }
         
         NotificationCenter.default.post(
@@ -2300,7 +2300,7 @@ class EntryManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        guard let entry = self.currentEntry else {
+        guard let _ = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
                 voiceCommand: voiceCommand
@@ -2316,19 +2316,20 @@ class EntryManager: NSObject {
             return
         }
         
-        let undoMessage = "deleting '\(self.selectionCursor.selectionText ?? "selection")'"
-        
-        print("\tRegistering an entry change to the Undo Manager...")
-        self.registerEntryChange(entry: entry, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
-            self?.selectionCursor.deleteSelection(isCommit: isCommit) { [weak self] in
-                print("\tRegistering an entry change to the Undo Manager...")
-                self?.registerEntryChange(
-                    entry: self!.currentEntry!,
-                    undo: undoMessage,
-                    handler: handler
-                )
-            }
+        self.selectionCursor.deleteSelection(isCommit: isCommit) { [weak self] in
+            print("\tRegistering an entry change to the Undo Manager...")
+            self?.registerEntryChange(
+                entry: self!.currentEntry!,
+                undo: "deleting '\(self!.selectionCursor.selectionText ?? "selection")'",
+                handler: handler
+            )
         }
+        
+        NotificationCenter.default.post(
+            name: EntryManager.onSelectionDeleted,
+            object: nil,
+            userInfo: [:]
+        )
         
         NotificationCenter.default.post(
             name: EntryManager.onExecuteEntryAction,
@@ -2408,17 +2409,14 @@ class EntryManager: NSObject {
             print("\tClearing entry buffer...")
             entry.clearBuffer()
             
-            print("\tRegistering an entry change to the Undo Manager...")
-            self.registerEntryChange(entry: entry, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
-                self?.selectionCursor.acceptUpdateSelection(handler: { [weak self] in
-                    print("\tRegistering an entry change to the Undo Manager...")
-                    self?.registerEntryChange(
-                        entry: self!.currentEntry!,
-                        undo: "replacing '\(self?.selectionCursor.selectionText ?? "selection")'",
-                        handler: handler
-                    )
-                })
-            }
+            self.selectionCursor.acceptUpdateSelection(handler: { [weak self] in
+                print("\tRegistering an entry change to the Undo Manager...")
+                self?.registerEntryChange(
+                    entry: self!.currentEntry!,
+                    undo: "replacing '\(self?.selectionCursor.selectionText ?? "selection")'",
+                    handler: handler
+                )
+            })
         } else if !self.selectionCursor.hasSelection {
             self.notifications.executeError(
                 text: "No existing selection.",
@@ -2600,7 +2598,7 @@ class EntryManager: NSObject {
             print("\tTriggered by voice command.")
         }
         
-        guard let entry = self.currentEntry else {
+        guard let _ = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
                 voiceCommand: voiceCommand
@@ -2621,18 +2619,13 @@ class EntryManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        let undoMessage = "cutting '\(self.selectionCursor.selectionText ?? "selection")'"
-        
-        print("\tRegistering an entry change to the Undo Manager...")
-        self.registerEntryChange(entry: entry, undo: "selecting '\(self.selectionCursor.selectionText ?? "speech")'") { [weak self] in
-            self?.selectionCursor.cutSelection() { [weak self] in
-                print("\tRegistering an entry change to the Undo Manager...")
-                self?.registerEntryChange(
-                    entry: self!.currentEntry!,
-                    undo: undoMessage,
-                    handler: handler
-                )
-            }
+        self.selectionCursor.cutSelection() { [weak self] in
+            print("\tRegistering an entry change to the Undo Manager...")
+            self?.registerEntryChange(
+                entry: self!.currentEntry!,
+                undo: "cutting '\(self!.selectionCursor.selectionText ?? "selection")'",
+                handler: handler
+            )
         }
         
         NotificationCenter.default.post(
@@ -2652,7 +2645,7 @@ class EntryManager: NSObject {
             print("\tTriggered by voice command.")
         }
         
-        guard let entry = self.currentEntry else {
+        guard let _ = self.currentEntry else {
             self.notifications.executeError(
                 text: "No entry selected.",
                 voiceCommand: voiceCommand
@@ -2673,18 +2666,13 @@ class EntryManager: NSObject {
             soundEngine.voiceCommandAccept()
         }
         
-        let undoMessage = "pasting '\(self.selectionCursor.clipboard != nil ? Entry.getText(segments: self.selectionCursor.clipboard!) : "clipboard")'"
-        
-        print("\tRegistering an entry change to the Undo Manager...")
-        self.registerEntryChange(entry: entry, undo: "moving cursor") { [weak self] in
-            self?.selectionCursor.pasteClipboard() { [weak self] in
-                print("\tRegistering an entry change to the Undo Manager...")
-                self?.registerEntryChange(
-                    entry: self!.currentEntry!,
-                    undo: undoMessage,
-                    handler: handler
-                )
-            }
+        self.selectionCursor.pasteClipboard() { [weak self] in
+            print("\tRegistering an entry change to the Undo Manager...")
+            self?.registerEntryChange(
+                entry: self!.currentEntry!,
+                undo: "pasting '\(self!.selectionCursor.clipboard != nil ? Entry.getText(segments: self!.selectionCursor.clipboard!) : "clipboard")'",
+                handler: handler
+            )
         }
         
         NotificationCenter.default.post(
@@ -2822,20 +2810,17 @@ class EntryManager: NSObject {
         soundEngine.voiceCommandAccept()
         
         let executeRollback = {
-            print("\tRegistering an entry change to the Undo Manager...")
-            self.registerEntryChange(entry: entry, undo: "moving cursor") { [weak self] in
-                // Select Previous Commit
-                self?.selectCommit()
-                
-                // Delete current selection
-                self?.selectionCursor.deleteSelection(isCommit: true) { [weak self] in
-                    print("\tRegistering an entry change to the Undo Manager...")
-                    self?.registerEntryChange(
-                        entry: self!.currentEntry!,
-                        undo: "rolling back last commit",
-                        handler: handler
-                    )
-                }
+            // Select Previous Commit
+            self.selectCommit()
+            
+            // Delete current selection
+            self.selectionCursor.deleteSelection(isCommit: true) { [weak self] in
+                print("\tRegistering an entry change to the Undo Manager...")
+                self?.registerEntryChange(
+                    entry: self!.currentEntry!,
+                    undo: "rolling back last commit",
+                    handler: handler
+                )
             }
         }
         
@@ -2846,6 +2831,12 @@ class EntryManager: NSObject {
         } else {
             executeRollback()
         }
+        
+        NotificationCenter.default.post(
+            name: EntryManager.onSelectionDeleted,
+            object: nil,
+            userInfo: [:]
+        )
         
         NotificationCenter.default.post(
             name: EntryManager.onExecuteEntryAction,

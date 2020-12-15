@@ -443,17 +443,30 @@ class StateManager: NSObject {
         // Entries
         self.entries = notification.userInfo!["entries"] as? [Entry] ?? [Entry]()
         
-//        if !self.entries.contains(where: { $0.filename == "welcome" }) {
-//            if let entry = Utils.decodeLingualEntry(name: "welcome") {
-//                self.entries.append(entry)
-//            }
-//        }
-//
-//        if !self.entries.contains(where: { $0.filename == "voice-commands" }) {
-//            if let entry = Utils.decodeLingualEntry(name: "voice-commands") {
-//                self.entries.append(entry)
-//            }
-//        }
+        if !self.entries.contains(where: { $0.filename == "entry-016AAC62-FEFB-4D62-96DE-854FDC07585C" }) {
+            if let entry = Utils.decodeLingualEntry(name: "entry-016AAC62-FEFB-4D62-96DE-854FDC07585C") {
+                entry.title = Utils.SEED_CONTENT_TITLE
+                
+                // Add to the end of entries array
+                self.entries.append(entry)
+                
+                // Add audio files to documents directory if not there already
+                let filenames = [
+                    "entry-016AAC62-FEFB-4D62-96DE-854FDC07585C-69759620-1CE1-4182-A9BD-E1A891BBC69F",
+                    "entry-016AAC62-FEFB-4D62-96DE-854FDC07585C-19772B57-33D5-4689-B87A-A087FE67BE78"
+                ]
+                
+                for filename in filenames {
+                    Utils.writeToDocumentsDirectory(filename: filename.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!)
+                }
+            }
+        } else {
+            for entry in self.entries {
+                if entry.filename == "entry-016AAC62-FEFB-4D62-96DE-854FDC07585C" {
+                    entry.title = Utils.SEED_CONTENT_TITLE
+                }
+            }
+        }
         
         // User Settings
         let userSettings = notification.userInfo!["userSettings"] as? [String: Any]

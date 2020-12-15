@@ -534,6 +534,12 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             name: EntryManager.onEntryDeleted,
             object: nil
         )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onSelectionDeleted(notification:)),
+            name: EntryManager.onSelectionDeleted,
+            object: nil
+        )
         
         // SelectionCursor
         notificationCenter.addObserver(
@@ -843,7 +849,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
     @objc func onSpeechStartPlaying(notification: Notification) {
         print("===== Detail View Controller: On Speech Start Playing =====")
         print("\tFirst Segment: ", (notification.userInfo!["next"] as? EntrySegment)?.getText() ?? "nil")
-//        DispatchQueue.main.async { [weak self] in
         DispatchQueue.main.async { [weak self] in
             Utils.onSpeechStartPlaying(notification: notification) {
                 if let entry = self?.entryManager.currentEntry,
@@ -894,6 +899,28 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
                     }
                     // Update Text
                     self?.updateUIText(text: entry.getText(), highlightRange: range, transformations: entry.transformations)
+                }
+            }
+            
+            if let entry = self?.entryManager.currentEntry,
+               let segment = notification.userInfo!["previous"] as? EntrySegment,
+               let range = entry.getSegmentTextRange(of: segment),
+               let textView = self?.textView,
+               segment.getText().count > 0 &&
+                segment.isActive() &&
+                !self!.selectionCursor.hasSelection &&
+                !self!.entryManager.isWalkingEntry &&
+                !self!.entryManager.isRunningEntry
+            {
+                // Scroll Text into View
+                // Reference: https://stackoverflow.com/questions/50190942/scroll-uitextview-to-specific-text
+                let scrollLocation = min(range.location + Utils.PLAYBACK_SCROLL_BUFFER, textView.attributedText.string.count - 1)
+                let scrollLocationRange = NSRange(location: scrollLocation, length: 1)
+                if let visibleRange = textView.visibleRange,
+                   NSIntersectionRange(visibleRange, scrollLocationRange).length == 0
+                {
+                    print("\tScrolling range into view...")
+                    self!.textView!.scrollRangeToVisible(scrollLocationRange)
                 }
             }
             
@@ -1011,6 +1038,19 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             self?.refreshView()
             self?.setCursorVisibility(as: false)
             self?.performSegue(withIdentifier: Segues.moveFromDetailToEntryTable.rawValue, sender: nil)
+        }
+    }
+    
+    @objc func onSelectionDeleted(notification: Notification) {
+        print("===== Detail View Controller: On Selection Deleted =====")
+
+        DispatchQueue.main.async { [weak self] in
+            if let entryManager = self?.entryManager, let entry = entryManager.currentEntry {
+                print("\tUpdate Text View: ", entry.getText())
+                self?.updateUIText(text: entry.getText(), transformations: entry.transformations)
+            }
+            
+            self?.refreshView()
         }
     }
     
@@ -1138,7 +1178,7 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             // We use the static getText method to prevent stack overflow if entry is really long
             // This will cache the values in the segments that will make the work to run the proper one less
             if let entryManager = self?.entryManager, let entry = entryManager.currentEntry {
-                self?.updateUIText(text: Entry.getText(segments: entry.entrySegments), transformations: entry.transformations)
+                self?.updateUIText(text: entry.getText(), transformations: entry.transformations)
             }
         }
     }
@@ -1208,7 +1248,12 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
                 if let selectionTextRange = self?.selectionCursor.selectionTextRange, let textView = self?.selectionCursor.textView, let caretViewRect = self?.selectionCursor.caretViewPositionRequiresUpdate(textPosition: selectionTextRange.toTextRange(textInput: textView)!.end) {
                     print("\tSelection Cursor already has cursor position. Move it there.")
                     self?.cursorView?.frame = caretViewRect
-                } else if let entry = self?.entryManager.currentEntry, let textPosition = self?.textView?.endOfDocument, let caretViewRect = self?.selectionCursor.caretViewPositionRequiresUpdate(textPosition: textPosition), entry.entrySegments.count > 0 {
+                } else if let entry = self?.entryManager.currentEntry,
+                    let textPosition = self?.textView?.endOfDocument,
+                    let caretViewRect = self?.selectionCursor.caretViewPositionRequiresUpdate(textPosition: textPosition),
+                    self!.selectionCursor.cachedAnchor == nil &&
+                    entry.entrySegments.count > 0
+                {
                     print("\tEntry already has speech. Move cursor to end of document.")
                     self?.cursorView?.frame = caretViewRect
                 }
@@ -1226,7 +1271,12 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
                 if let selectionTextRange = self?.selectionCursor.selectionTextRange, let textView = self?.selectionCursor.textView, let caretViewRect = self?.selectionCursor.caretViewPositionRequiresUpdate(textPosition: selectionTextRange.toTextRange(textInput: textView)!.end) {
                     print("\tSelection Cursor already has cursor position. Move it there.")
                     self?.cursorView?.frame = caretViewRect
-                } else if let entry = self?.entryManager.currentEntry, let textPosition = self?.textView?.endOfDocument, let caretViewRect = self?.selectionCursor.caretViewPositionRequiresUpdate(textPosition: textPosition), entry.entrySegments.count > 0 {
+                } else if let entry = self?.entryManager.currentEntry,
+                    let textPosition = self?.textView?.endOfDocument,
+                    let caretViewRect = self?.selectionCursor.caretViewPositionRequiresUpdate(textPosition: textPosition),
+                    self!.selectionCursor.cachedAnchor == nil &&
+                    entry.entrySegments.count > 0
+                {
                     print("\tEntry already has speech. Move cursor to end of document.")
                     self?.cursorView?.frame = caretViewRect
                 }
@@ -1573,7 +1623,7 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             !self.speechPlayer.isPlayingEntry ||
             (
                 self.speechPlayer.isPlayingEntry &&
-                entry.speechPlayer.pausedPlayingEntry
+                self.speechPlayer.pausedPlayingEntry
             ) || (
                 self.speechPlayer.isPlayingEntry &&
                     self.selectionCursor.hasSelection

@@ -53,20 +53,19 @@ class SpeechPlayerEngine: NSObject {
     /// Stores a reference to the playback observer that executes after each segment
     private(set) var boundaryObserverToken: Any?
     /// Stores a reference to the playback observer that executes each second
-    private(set) var timerObserverToken: Any?
+    private(set) var playbackSecondTimer: Timer?
     /// Stores a reference to the playback observer that executes when playback is complete
     private(set) var completionObserverToken: Any?
     /// Stores a reference to the last segment processed during entry playback. Prevents repeat processing.
     private(set) var previousBoundarySegment: EntrySegment?
-    
     /// Specifies whether playing external segments
     private(set) var isPlayingExternalSegments = false
-    
     /// Stores segment range currently being played
     private(set) var playbackSegments: [EntrySegment]? = nil
-    
-    /// Stores segments currently being played
-    
+    /// Stores actual duration of playback
+    private(set) var effectiveDuration: CMTime?
+    /// Stores actual time elapsed since playback
+    private(set) var effectiveTimeElapsed = CMTime.zero
     /// Stores handlers to be executed when entry is played
     private(set) var onStartHandler: (() -> Void)?
     /// Stores handlers to be executed when entry is finished playing
@@ -211,6 +210,15 @@ class SpeechPlayerEngine: NSObject {
             self.pausedPlayingEntry = false
             self.isPlayingExternalSegments = false
             
+            // Make sure we don't have a ghost timer still active
+            self.playbackSecondTimer?.invalidate()
+            self.playbackSecondTimer = nil
+            
+            // We assume we continue from where we last left off in terms of effectiveTimeElapsed
+            self.playbackSecondTimer = Timer.scheduledTimer(withTimeInterval: Utils.PLAYBACK_SECOND_DURATION, repeats: true) { timer in
+                self.handlePeriodicTimeObserver()
+            }
+            
             if self.speechRecognition.isListeningForCommands && !AVAudioSession.isHeadphonesConnected {
                 self.speechRecognition.pauseListeningForVoiceCommands() {
                     self.player.play()
@@ -256,6 +264,12 @@ class SpeechPlayerEngine: NSObject {
             self.startPlaybackAt = from != nil ? from : entry.startTime
             self.stopPlaybackAt = to != nil ? to : entry.endTime
             self.playbackSegments = entry.entrySegments
+            self.effectiveTimeElapsed = CMTime.zero
+            self.effectiveDuration = Entry.getDuration(segments: self.playbackSegments!, withOmitSilences: self.state.withOmitSilences)
+            
+            // Make sure we don't have a ghost timer still active
+            self.playbackSecondTimer?.invalidate()
+            self.playbackSecondTimer = nil
 
             // Run Player
             let player = self.runPlayer(
@@ -285,10 +299,8 @@ class SpeechPlayerEngine: NSObject {
                     self.completionObserverToken = nil
                 }
                 
-                if let timerObserverToken = self.timerObserverToken {
-                    self.player.removeTimeObserver(timerObserverToken)
-                    self.timerObserverToken = nil
-                }
+                self.playbackSecondTimer?.invalidate()
+                self.playbackSecondTimer = nil
                 
                 self.player = player
             }
@@ -359,6 +371,8 @@ class SpeechPlayerEngine: NSObject {
             self.startPlaybackAt = CMTime.zero
             self.stopPlaybackAt = tempComposition.duration
             self.playbackSegments = segments
+            self.effectiveTimeElapsed = CMTime.zero
+            self.effectiveDuration = Entry.getDuration(segments: self.playbackSegments!, withOmitSilences: self.state.withOmitSilences)
 
             // Run Player
             let player = self.runPlayer(
@@ -391,10 +405,8 @@ class SpeechPlayerEngine: NSObject {
                     self.completionObserverToken = nil
                 }
                 
-                if let timerObserverToken = self.timerObserverToken {
-                    self.player.removeTimeObserver(timerObserverToken)
-                    self.timerObserverToken = nil
-                }
+                self.playbackSecondTimer?.invalidate()
+                self.playbackSecondTimer = nil
                 
                 self.player = player
             }
@@ -422,10 +434,15 @@ class SpeechPlayerEngine: NSObject {
         player.replaceCurrentItem(with: nil)
         
         self.playerLoopTimer?.invalidate()
+        self.playerLoopTimer = nil
+        self.playbackSecondTimer?.invalidate()
+        self.playbackSecondTimer = nil
 
         self.startPlaybackAt = nil
         self.stopPlaybackAt = nil
         self.playbackSegments = nil
+        self.effectiveDuration = nil
+        self.effectiveTimeElapsed = CMTime.zero
         self.pausedPlayingEntry = false
         self.isPlayingExternalSegments = false
         
@@ -445,6 +462,12 @@ class SpeechPlayerEngine: NSObject {
                 visualMessage: "Stop Playback",
                 withHaptics: true
             )
+        }
+        
+        if !self.speechRecognition.isListeningForSpeech && self.speechRecognition.pausedListeningForCommands && !AVAudioSession.isHeadphonesConnected {
+            self.speechRecognition.startListeningForVoiceCommands()
+        } else if self.speechRecognition.isListeningForSpeech && (self.speechRecognition.pausedListeningForSpeech || self.speechRecognition.pausedListeningForCommands) && !AVAudioSession.isHeadphonesConnected {
+            self.speechRecognition.startListeningForSpeech()
         }
         
         var userInfo: [String : () -> Void] = [:]
@@ -475,12 +498,18 @@ class SpeechPlayerEngine: NSObject {
             
             if let segment = segmentAtTime {
                 print("\tSkipping to: ", time.seconds)
+                
+                // Update Time Elapsed Value
+                self.effectiveTimeElapsed = Entry.getDuration(
+                    segments: Array(self.playbackSegments![0..<segment.getIndex() - self.playbackSegments!.first!.getIndex()]),
+                    withOmitSilences: self.state.withOmitSilences
+                )
                 self.player.seek(
                     to: segment.timeMapping.target.start,
                     toleranceBefore: CMTime.zero,
                     toleranceAfter: CMTime.zero
                 )
-                
+
                 // Handle Feedback
                 self.notifications.executeFeedback(
                     visualMessage: "Skip",
@@ -526,9 +555,11 @@ class SpeechPlayerEngine: NSObject {
             self.speechRecognition.startListeningForSpeech()
         }
 
-        if self.playerLoopTimer != nil {
-            self.playerLoopTimer?.invalidate()
-        }
+        self.playerLoopTimer?.invalidate()
+        self.playerLoopTimer = nil
+        
+        self.playbackSecondTimer?.invalidate()
+        self.playbackSecondTimer = nil
         
         if soundEngine.isProcessing {
             soundEngine.stopProcessing()
@@ -779,11 +810,8 @@ class SpeechPlayerEngine: NSObject {
     }
     
     func handleStartPlaying() -> EntrySegment? {
-        let timeScale = CMTimeScale(NSEC_PER_SEC)
-        let time = CMTime(seconds: 1, preferredTimescale: timeScale)
-
         print("\tSet Playback Second Handler...")
-        self.timerObserverToken = self.player.addPeriodicTimeObserver(forInterval: time, queue: .main) {time in
+        self.playbackSecondTimer = Timer.scheduledTimer(withTimeInterval: Utils.PLAYBACK_SECOND_DURATION, repeats: true) { timer in
             self.handlePeriodicTimeObserver()
         }
         
@@ -861,11 +889,20 @@ class SpeechPlayerEngine: NSObject {
     
     func handlePeriodicTimeObserver() {
         print("===== Speech Player Engine: Handle Periodic Time Observer =====")
+        // Update Effective Time Elapsed
+        self.effectiveTimeElapsed = CMTimeAdd(
+            self.effectiveTimeElapsed,
+            CMTimeMake(
+                value: Int64(Utils.DEFAULT_SEGMENT_TIMESCALE * 1),
+                timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
+            )
+        )
+
         // Broadcast Second Elapsing
         NotificationCenter.default.post(
             name: SpeechPlayerEngine.onSecondElapsed,
             object: nil,
-            userInfo: ["seconds": self.player.currentTime().seconds]
+            userInfo: ["seconds": self.effectiveTimeElapsed.seconds]
         )
     }
     
@@ -1127,11 +1164,8 @@ class SpeechPlayerEngine: NSObject {
             // print("===== Cleared Player Completion Token =====")
         }
         
-        if let timerObserverToken = self.timerObserverToken {
-            self.player.removeTimeObserver(timerObserverToken)
-            self.timerObserverToken = nil
-            // print("===== Cleared Player Timer Token =====")
-        }
+        self.playbackSecondTimer?.invalidate()
+        self.playbackSecondTimer = nil
         
         checkRep()
     }

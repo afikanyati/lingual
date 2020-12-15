@@ -133,7 +133,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
     }
     var selectionSegments: [EntrySegment]? {
         guard let entry = self.entryManager.currentEntry,
-              entry.entryBuffer.count == 0 else { return nil }
+              (entry.entryBuffer.count == 0 || self.isUpdatingSelection) else { return nil }
 
         var startIndex: Int?
         var endIndex: Int?
@@ -1405,6 +1405,7 @@ class SelectionCursor: NSObject, UITextViewDelegate {
     
     func handleUpdateSelection(segments: [EntrySegment]) {
         print("===== Selection Cursor: Handle Update Selection =====")
+        print("AYYY: ", self.anchorCaret ?? "nil", self.focusCaret ?? "nil", self.anchor ?? "nil", self.focus ?? "nil", self.selectionSegments ?? "nil")
         guard let entry = self.entryManager.currentEntry, let selectionText = self.selectionText, segments.count > 0 else {
             print("\t[Error]: ", self.entryManager.currentEntry != nil, self.selectionText != nil, segments.count > 0)
             return
@@ -2087,7 +2088,6 @@ class SelectionCursor: NSObject, UITextViewDelegate {
                 print("\tisLoopingSelection activate. Turning off...")
                 self.stopPlayingSelection()
             }
-            
             
             if let scaleSelectionRange = self.scaleSelectionRange, !self.isAtEndOfTextView {
                 print("\tFirst word index in scale selection range if not at end of text view and have selection range")

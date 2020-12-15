@@ -893,11 +893,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             return
         } else if self.isListeningForCommands && !self.pausedListeningForCommands {
             print("\tAlready listening for commands.")
-            if let stopListeningHandler = self.stopListeningHandler {
-                print("\tExecute stop listening handler...")
-                self.stopListeningHandler = nil
-                stopListeningHandler()
-            }
+            
             return
         }
         
@@ -1120,7 +1116,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         
         self.listeningTimer?.invalidate()
         self.listeningTimer = nil
-
+        
         self.handleStopListening(type: .SPEECH, onStopHandler: onStopHandler)
         
         if self.isListeningForSpeech {
@@ -1560,8 +1556,8 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                     var error: NSError?
                     let status = converter.convert(to: convertedBuffer, error: &error, withInputFrom: inputCallback)
                     
-                    print("Input Buffer: ", buffer.format)
-                    print("Converted Buffer: ", convertedBuffer.format)
+//                    print("Input Buffer: ", buffer.format)
+//                    print("Converted Buffer: ", convertedBuffer.format)
                     
                     if status != .error {
                         handleBuffer(convertedBuffer)

@@ -742,7 +742,7 @@ class ViewController: UIViewController, SegueProtocol {
 //            // print("Successfully executed playback secondT elapsed handler")
 //            DispatchQueue.main.async {
 //                if !self!.entry.isListeningForSpeech && self!.entry.player.currentTime().seconds != Double.infinity && self!.entry.player.currentTime().seconds != Double.nan && self!.entry.player.currentTime().seconds != -Double.infinity {
-//                    self?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: Float(self!.entry.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.entry.getDuration(filteredDuration: true).seconds)))"
+//                    self?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: Float(self!.entry.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.entry.getDuration().seconds)))"
 //                }
 //            }
 //        },
@@ -793,7 +793,7 @@ class ViewController: UIViewController, SegueProtocol {
 //            // print("Successfully executed playback secondT elapsed handler")
 //            DispatchQueue.main.async {
 //                if !self!.entry.isListeningForSpeech && self!.entry.player.currentTime().seconds != Double.infinity && self!.entry.player.currentTime().seconds != Double.nan && self!.entry.player.currentTime().seconds != -Double.infinity {
-//                    self?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: Float(self!.entry.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.entry.getDuration(filteredDuration: true).seconds)))"
+//                    self?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: Float(self!.entry.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.entry.getDuration().seconds)))"
 //                }
 //            }
 //        },

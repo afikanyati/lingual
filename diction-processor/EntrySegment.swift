@@ -562,13 +562,13 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
             // its the empty string for silence
             if previousWordIsSentenceTerminator && self.suggestsNewParagraph() {
                 // New line
-                text += Utils.NEWLINE_CHAR
+                text += forEcho ? "." : Utils.NEWLINE_CHAR
             } else if (!previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord) && !nextSegmentIsPunctuation && ((!nextSegmentIsVoiceCommand && !nextSegmentIsDeleted) || !existsWordsAfterVoiceCommandAndDeleted) && self.suggestsNewParagraph() {
                 // New Paragraph
                 // Sentence Terminators: Exclamation Mark, Question Mark, Period
                 let terminator = self.sentence.text.count > 0 && Utils.isQuestion(sentence: self.sentence.text) ? "?" : "."
                 let exclaimedTerminator = self.sentence.text.count > 0 && Utils.isQuestion(sentence: self.sentence.text) ? "?!" : "!"
-                text += "\(exclaimWord ? exclaimedTerminator : terminator)\n\n"
+                text += "\(exclaimWord ? exclaimedTerminator : terminator)\(forEcho ? "." : Utils.NEWLINE_CHAR)"
             } else if (!previousWordIsSentenceTerminator && previousWordIsValidLastSentenceWord) && !nextSegmentIsPunctuation && ((!nextSegmentIsVoiceCommand && !nextSegmentIsDeleted) || !existsWordsAfterVoiceCommandAndDeleted) && suggestsNewSentence() {
                 // Same Paragraph
                 // Sentence Terminators: Exclamation Mark, Question Mark, Period
@@ -602,9 +602,7 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
         }
         
         // Handle Punctuation
-        if forEcho && self.isPunctuation() {
-            text += " \(PunctuationMap[self.word] ?? "") \(self.word)"
-        } else if strictlyAsWord && self.isPunctuation() {
+        if strictlyAsWord && self.isPunctuation() {
             text += PunctuationMap[self.word] ?? self.word
         } else if self.isPunctuation() {
             text += self.word
@@ -687,105 +685,139 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
             return cachedTextHistory
         }
         
-        var text = ""
-        
-        if let untilTime = untilTime,
-           let entry = self.entry,
-           self.timeMapping.target.end <= untilTime &&
-            (
-                self.timeMapping.target.start >= fromTime ||
-                (
-                    entry.selectionCursor.cachedAnchor != nil &&
-                    entry.entryBuffer.count > 0 &&
-                    self.index != Int(Utils.UNKNOWN) &&
-                    self.index > entry.selectionCursor.cachedAnchor!.getIndex()
-                )
-            ) &&
-            !self.isVoiceCommandWord() &&
-            !self.isDeleted()
-        {
-            text = self.getText(
-                withTemporalSuggestions: withTemporalSuggestions,
-                withPunctuationSuggestions: withPunctuationSuggestions,
-                withFormattingSuggestions: withFormattingSuggestions,
-                strictlyAsWord: strictlyAsWord,
-                withCapitalization: withCapitalization,
-                withSpacePrefix: withSpacePrefix,
-                forEcho: forEcho
-            )
-        } else if let entry = self.entry,
-            untilTime == nil &&
-            (
-                self.timeMapping.target.start >= fromTime ||
-                (
-                    entry.selectionCursor.cachedAnchor != nil &&
-                    entry.entryBuffer.count > 0 &&
-                    self.index != Int(Utils.UNKNOWN) &&
-                    self.index > entry.selectionCursor.cachedAnchor!.getIndex()
-                )
-            ) &&
-            !self.isVoiceCommandWord() &&
-            !self.isDeleted()
-        {
-            text = self.getText(
-                withTemporalSuggestions: withTemporalSuggestions,
-                withPunctuationSuggestions: withPunctuationSuggestions,
-                withFormattingSuggestions: withFormattingSuggestions,
-                strictlyAsWord: strictlyAsWord,
-                withCapitalization: withCapitalization,
-                withSpacePrefix: withSpacePrefix,
-                forEcho: forEcho
-            )
-        }
-        
         if self.timeMapping.target.start == fromTime &&
             self.timeMapping.target.end == untilTime {
             // We dealing with a single segment
             //
             // cache values
+            let text = self.getText(
+                withTemporalSuggestions: withTemporalSuggestions,
+                withPunctuationSuggestions: withPunctuationSuggestions,
+                withFormattingSuggestions: withFormattingSuggestions,
+                strictlyAsWord: strictlyAsWord,
+                withCapitalization: withCapitalization,
+                withSpacePrefix: withSpacePrefix,
+                forEcho: forEcho
+            )
             self.cachedTextHistory = text
             self.cachedGetTextHistoryArguments = argumentSet
             self.cachedGetTextHistorySegments = segmentsSet
             return text
         }
         
-        if index > 0 {
-            let lowerIndex = index - 1
-            let lowerSegment = segments[lowerIndex]
-            if let entry = self.entry,
-               (
-                self.timeMapping.target.start >= fromTime ||
+        let text = self.generateTextHistory(
+            withTemporalSuggestions: withTemporalSuggestions,
+            withPunctuationSuggestions: withPunctuationSuggestions,
+            withFormattingSuggestions: withFormattingSuggestions,
+            strictlyAsWord: strictlyAsWord,
+            withCapitalization: withCapitalization,
+            withSpacePrefix: withSpacePrefix,
+            forEcho: forEcho,
+            index: self.index,
+            segments: segments,
+            segmentsSet: segmentsSet,
+            argumentSet: argumentSet,
+            from: fromTime,
+            until: untilTime
+        )
+        return text
+    }
+    
+    func generateTextHistory(
+        withTemporalSuggestions: Bool = false,
+        withPunctuationSuggestions: Bool = false,
+        withFormattingSuggestions: Bool = false,
+        strictlyAsWord: Bool = false,
+        withCapitalization: Bool = true,
+        withSpacePrefix: Bool = false,
+        forEcho: Bool = false,
+        index: Int,
+        segments: [EntrySegment],
+        segmentsSet: Set<String>,
+        argumentSet: Set<String>,
+        from fromTime: CMTime = CMTime.zero,
+        until untilTime: CMTime? = nil
+    ) -> String {
+        
+        var historyDict: [Int: String] = [:]
+        var lastIndex = 0
+        var rangeArr = [Int]()
+        for i in 0..<segments.count {
+            let segment = segments[i]
+            if let untilTime = untilTime,
+               let entry = segment.entry,
+               segment.timeMapping.target.end <= untilTime &&
                 (
-                    entry.selectionCursor.cachedAnchor != nil &&
-                    entry.entryBuffer.count > 0 &&
-                    self.index != Int(Utils.UNKNOWN) &&
-                    self.index > entry.selectionCursor.cachedAnchor!.getIndex()
-                )
-            ) {
-                // We let even voice commands and deleted segments here
-                // We would have skipped their contribution
-                text = lowerSegment.getTextHistory(
+                    segment.timeMapping.target.start >= fromTime ||
+                    (
+                        entry.selectionCursor.cachedAnchor != nil &&
+                        entry.entryBuffer.count > 0 &&
+                        segment.index != Int(Utils.UNKNOWN) &&
+                        segment.index > entry.selectionCursor.cachedAnchor!.getIndex()
+                    )
+                ) &&
+                !segment.isVoiceCommandWord() &&
+                !segment.isDeleted()
+            {
+                rangeArr.append(i)
+            } else if let entry = segment.entry,
+                untilTime == nil &&
+                (
+                    segment.timeMapping.target.start >= fromTime ||
+                    (
+                        entry.selectionCursor.cachedAnchor != nil &&
+                        entry.entryBuffer.count > 0 &&
+                        segment.index != Int(Utils.UNKNOWN) &&
+                        segment.index > entry.selectionCursor.cachedAnchor!.getIndex()
+                    )
+                ) &&
+                !segment.isVoiceCommandWord() &&
+                !segment.isDeleted()
+            {
+                rangeArr.append(i)
+            }
+        }
+        
+        for (index, segmentIndex) in rangeArr.enumerated() {
+            var text = ""
+            let segment = segments[segmentIndex]
+            if index == 0 {
+                text += segment.getText(
                     withTemporalSuggestions: withTemporalSuggestions,
                     withPunctuationSuggestions: withPunctuationSuggestions,
                     withFormattingSuggestions: withFormattingSuggestions,
                     strictlyAsWord: strictlyAsWord,
                     withCapitalization: withCapitalization,
                     withSpacePrefix: withSpacePrefix,
-                    forEcho: forEcho,
-                    index: lowerIndex,
-                    segments: segments,
-                    segmentsUIDSet: segmentsSet,
-                    from: fromTime,
-                    until: untilTime
-                ) + text
+                    forEcho: forEcho
+                )
+                historyDict[segmentIndex] = text
+                // cached values
+                segment.cachedTextHistory = text
+                segment.cachedGetTextHistoryArguments = argumentSet
+                segment.cachedGetTextHistorySegments = segmentsSet
+                lastIndex = segmentIndex
+            } else if index > 0 && historyDict[lastIndex] != nil {
+                text += historyDict[lastIndex]!
+                text += segment.getText(
+                    withTemporalSuggestions: withTemporalSuggestions,
+                    withPunctuationSuggestions: withPunctuationSuggestions,
+                    withFormattingSuggestions: withFormattingSuggestions,
+                    strictlyAsWord: strictlyAsWord,
+                    withCapitalization: withCapitalization,
+                    withSpacePrefix: withSpacePrefix,
+                    forEcho: forEcho
+                )
+                historyDict[segmentIndex] = text
+                // cached values
+                segment.cachedTextHistory = text
+                segment.cachedGetTextHistoryArguments = argumentSet
+                segment.cachedGetTextHistorySegments = segmentsSet
+                lastIndex = segmentIndex
             }
         }
         
-        // cached values
-        self.cachedTextHistory = text
-        self.cachedGetTextHistoryArguments = argumentSet
-        self.cachedGetTextHistorySegments = segmentsSet
-        return text
+        return historyDict[lastIndex] ?? ""
     }
     
     func getPhoneticallySimilarWords() -> [String] {
