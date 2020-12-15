@@ -838,7 +838,7 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
         var previousWordLexicalClass: NLTag?
         var previousWord = ""
         var i = 1
-        if self.isCommitted() && self.index > 0 && entry.entrySegments.count > self.index {
+        if self.isCommitted() && self.index > 0 && self.index - i < entry.entrySegments.count {
             while self.index - i >= 0 {
                 let previousSegment = entry.entrySegments[self.index - i]
                 if previousSegment.isSilence() || previousSegment.isVoiceCommandWord() || previousSegment.isDeleted() {
@@ -933,7 +933,7 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
         var previousWordIsValidLastSentenceWord = false
         var previousWordIsSentenceTerminator = false
         var i = 1
-        if self.isCommitted() && self.index > 0 && entry.entrySegments.count > self.index {
+        if self.isCommitted() && self.index > 0 && self.index - i < entry.entrySegments.count  {
             while self.index - i >= 0 {
                 let previousSegment = entry.entrySegments[self.index - i]
                 

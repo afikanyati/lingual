@@ -1769,11 +1769,11 @@ class Utils {
                 numProcessedWords += 1
             }
             
-            if segment.isActive() && numProcessedWords >= numLowerSpaces && numProcessedWords < numLowerSpaces + numRangeWords {
+            if segment.isActive() && numProcessedWords > numLowerSpaces && numProcessedWords <= numLowerSpaces + numRangeWords {
                 rangeSegments.append(i)
             }
             
-            if numProcessedWords >= numLowerSpaces + numRangeWords {
+            if numProcessedWords > numLowerSpaces + numRangeWords {
                 break
             }
         }

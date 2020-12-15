@@ -41,7 +41,7 @@ class EntryManager: NSObject {
     
     private(set) var currentIndex: Int? = nil
     var currentEntry: Entry? {
-        if let index = self.currentIndex {
+        if let index = self.currentIndex, self.state.activeEntries.count > index {
             return self.state.activeEntries[index]
         }
         

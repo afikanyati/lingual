@@ -723,36 +723,44 @@ class Entry: AVMutableComposition, NSCoding {
         
         print("===== Entry: Perform Transcription Update =====")
         print("\tTranscript Text: ", transcription.formattedString)
+        var nextBuffer = [EntrySegment]()
         for (index, segment) in transcription.segments.enumerated() {
-            self.processTranscriptSegment(
+            let segment = self.processTranscriptSegment(
                 segment: segment,
                 transcriptionIndex: index,
-                transcription: transcription
+                transcription: transcription,
+                nextBuffer: nextBuffer
             )
+
+            if let segment = segment {
+                nextBuffer.append(segment)
+            }
         }
+        print ("\tOld Buffer: ", Utils.stringifySegments(segments: self.entryBuffer))
+        print("\tUpdating buffer...")
+        self.entryBuffer = nextBuffer
+        print ("\tNew Buffer: ", Utils.stringifySegments(segments: self.entryBuffer))
     }
     
-    func processTranscriptSegment(segment: SFTranscriptionSegment, transcriptionIndex: Int, transcription: SFTranscription) {
+    func processTranscriptSegment(
+        segment: SFTranscriptionSegment,
+        transcriptionIndex: Int,
+        transcription: SFTranscription,
+        nextBuffer: [EntrySegment]
+    ) -> EntrySegment? {
         // When we create duplicates of entries because of the undo manager, so remain in memory
         // To avoid multiple copies of the same entry mutating values, we only allow the one that matches memory addresses with currentEntry through
         guard let entryManager = self.entryManager, let currentEntry = entryManager.currentEntry, Unmanaged.passUnretained(self).toOpaque() == Unmanaged.passUnretained(currentEntry).toOpaque() else {
             print("\t[Error] Override processTranscriptSegment method call because we attempted to modify entry that's not currently set in Entry Manager.")
-            return
+            return nil
         }
-        
-        // get existing segments
-        var bufferSegments = self.entryBuffer
         
         // Manage NLP
         var segmentTags: [String : NLTag?]
         var sentiment: [ScaleUnitType: Float]?
-        if self.entryBuffer.count == 0 || transcriptionIndex >= self.entryBuffer.count {
-             // New segment, compute values
-            (segmentTags, sentiment) = computeSegmentTags(
-                transcription: transcription,
-                transcriptionIndex: transcriptionIndex
-            )
-        } else if transcriptionIndex < self.entryBuffer.count {
+        if transcriptionIndex < self.entryBuffer.count &&
+            self.entryBuffer[transcriptionIndex].getText().lowercased() == segment.substring.lowercased()
+        {
             // existing segment, get values
             let existingSegment = self.entryBuffer[transcriptionIndex]
             segmentTags = [
@@ -765,13 +773,16 @@ class Entry: AVMutableComposition, NSCoding {
                 sentiment = sentimentScore
             }
         } else {
-            fatalError("\t[Error] There was a problem computing segment tags")
+            (segmentTags, sentiment) = computeSegmentTags(
+                transcription: transcription,
+                transcriptionIndex: transcriptionIndex
+            )
         }
         
         // Compute segment text
         let word = transcriptionIndex == 0
-            && bufferSegments.count > 0
-            && !bufferSegments.last!.isSentenceTerminator()
+            && nextBuffer.count > 0
+            && !nextBuffer.last!.isSentenceTerminator()
             && !Utils.isFirstPersonSingularPronoun(segment.substring) ?
                 segment.substring.lowercased()
                 :
@@ -783,7 +794,7 @@ class Entry: AVMutableComposition, NSCoding {
         if segment.duration <= 0 {
             // temporary segment
             // give it default temporary values
-            if self.entryBuffer.count == 0 {
+            if nextBuffer.count == 0 {
                 // First temporary segment
                 
                 // Set source timestamp
@@ -815,7 +826,7 @@ class Entry: AVMutableComposition, NSCoding {
         
         guard let currentClipUID = self.currentClipUID else {
             print("\t[Error] There was a problem processing segment. Missing Clip UID")
-            return
+            return nil
         }
         let entrySegment = EntrySegment(
             entry: self,
@@ -837,60 +848,41 @@ class Entry: AVMutableComposition, NSCoding {
             lexicalClass: segmentTags["lexicalClass"]!,
             nameType: segmentTags["nameType"]!,
             lemma: segmentTags["lemma"]!,
-            sentimentScore: sentiment ?? nil,
+            sentimentScore: sentiment,
             withPunctuationSuggestions: self.state.withPunctuationSuggestions,
             voiceCommandWord: false
         )
         
-        
-        if self.entryBuffer.count == 0 || transcriptionIndex >= bufferSegments.count {
-            // New segment, append to speechSegments
-            bufferSegments.append(entrySegment)
-            self.entryBuffer = bufferSegments
-            self.handleMutation()
-        } else if transcriptionIndex < bufferSegments.count {
-
-            // Existing segment, overwrite old copy
-            // This assumes the new version is a better approximation of user speech
-            let oldSegment = bufferSegments[transcriptionIndex]
-            if oldSegment != entrySegment {
-                // determine if we need to replace selection values
-                // prevent replacing selection values if we're processing a selection update
-                let replaceSelectionAnchor = oldSegment == self.selectionCursor.anchor && !self.selectionCursor.isUpdatingSelection
-                let replaceSelectionFocus = oldSegment == self.selectionCursor.focus && !self.selectionCursor.isUpdatingSelection
-                let replaceSelectionCachedAnchor = oldSegment == self.selectionCursor.cachedAnchor && !self.selectionCursor.isUpdatingSelection
-                
-                // Transfer voice command status
-                let isVoiceCommandWord = oldSegment.isVoiceCommandWord()
-                entrySegment.setIsVoiceCommandWord(to: isVoiceCommandWord)
-                
-                // set updated segments
-                bufferSegments[transcriptionIndex] = entrySegment
-                self.entryBuffer = bufferSegments
-                
-                // update selection anchor
-                if replaceSelectionAnchor {
-                    self.selectionCursor.setAnchorCaret(caret: Caret(index: transcriptionIndex, trackType: .buffer))
-                }
-                
-                // update selection focus
-                if replaceSelectionFocus {
-                    self.selectionCursor.setFocusCaret(caret: Caret(index: transcriptionIndex, trackType: .buffer))
-                }
-                
-                // update selection cached anchor
-                if replaceSelectionCachedAnchor {
-                    self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: transcriptionIndex, trackType: .buffer))
-                }
-                
-                self.handleMutation()
-            } else {
-                // Existing segment without changes encountered.
-                // print("Existing segment without changes encountered.")
+        // Existing segment, overwrite old copy
+        if self.entryBuffer.count > transcriptionIndex {
+            let oldSegment = self.entryBuffer[transcriptionIndex]
+            // determine if we need to replace selection values
+            // prevent replacing selection values if we're processing a selection update
+            let replaceSelectionAnchor = oldSegment == self.selectionCursor.anchor && !self.selectionCursor.isUpdatingSelection
+            let replaceSelectionFocus = oldSegment == self.selectionCursor.focus && !self.selectionCursor.isUpdatingSelection
+            let replaceSelectionCachedAnchor = oldSegment == self.selectionCursor.cachedAnchor && !self.selectionCursor.isUpdatingSelection
+            
+            // Transfer voice command status
+            let isVoiceCommandWord = oldSegment.isVoiceCommandWord()
+            entrySegment.setIsVoiceCommandWord(to: isVoiceCommandWord)
+            
+            // update selection anchor
+            if replaceSelectionAnchor {
+                self.selectionCursor.setAnchorCaret(caret: Caret(index: transcriptionIndex, trackType: .buffer))
             }
-        } else {
-            print("\t[Error] There was a problem with pigeonholing segment")
+            
+            // update selection focus
+            if replaceSelectionFocus {
+                self.selectionCursor.setFocusCaret(caret: Caret(index: transcriptionIndex, trackType: .buffer))
+            }
+            
+            // update selection cached anchor
+            if replaceSelectionCachedAnchor {
+                self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: transcriptionIndex, trackType: .buffer))
+            }
         }
+        
+        return entrySegment
     }
     
     // We set sound intensity here because its when we with certainty have correct time data with pauses factored in
