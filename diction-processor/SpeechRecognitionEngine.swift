@@ -47,7 +47,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         "rison shine",
         "razon shine"
     ]
-    let recordBus = 0
     private(set) var audioEngine = AVAudioEngine()
     let speechRecognizer: SFSpeechRecognizer? = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private(set) var request: SFSpeechAudioBufferRecognitionRequest?
@@ -1214,7 +1213,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
 //
 //
 //            let node = audioEngine.inputNode
-//            node.removeTap(onBus: self.recordBus)
+//            node.removeTap(onBus: Utils.SPEECH_RECOGNITION_BUS)
 //
 //            audioEngine.stop()
 //            // We instantiate new audio engine in case headphones have been added or removed
@@ -1488,7 +1487,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             }
             
             let node = self.audioEngine.inputNode
-            let inputFormat = node.outputFormat(forBus: self.recordBus)
+            let inputFormat = node.outputFormat(forBus: Utils.SPEECH_RECOGNITION_BUS)
             print("===== Recording Info ===== \n\tSoftware Format: \(inputFormat.sampleRate)\n\tHardware Format: \(AVAudioSession.sharedInstance().sampleRate) \n\tInput Latency: \(self.session.inputLatency.rounded(toPlaces: 5)) \n\tOutput Latency: \(self.session.outputLatency.rounded(toPlaces: 5)) \n\tIOBufferDuration: \(self.session.ioBufferDuration.rounded(toPlaces: 5))")
             
     //        let recordSettings: [String : AnyObject] = [
@@ -1517,7 +1516,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             }
             
             // Tap into microphone bus to receive and process audio input buffers
-            node.installTap(onBus: self.recordBus, bufferSize: 1024, format: inputFormat) { [unowned self] (buffer, _) in
+            node.installTap(onBus: Utils.SPEECH_RECOGNITION_BUS, bufferSize: 1024, format: inputFormat) { [unowned self] (buffer, _) in
                 var newBufferAvailable = true
                 let inputCallback: AVAudioConverterInputBlock = { inNumPackets, outStatus in
                     if newBufferAvailable {
@@ -1529,19 +1528,10 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                         return nil
                     }
                 }
-
-                // Downsample buffer: https://stackoverflow.com/questions/39595444/avaudioengine-downsample-issue#
-                // Rationale: https://www.andyibanez.com/posts/speech-recognition-sfspeechrecognizer/
-                if let convertedBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: AVAudioFrameCount(outputFormat.sampleRate) * buffer.frameLength / AVAudioFrameCount(buffer.format.sampleRate)) {
-                    var error: NSError?
-                    let status = converter.convert(to: convertedBuffer, error: &error, withInputFrom: inputCallback)
-                    assert(status != .error)
-
-//                    print("Input Buffer: ", buffer.format)
-//                    print("Converted Buffer: ", convertedBuffer.format)
-                    
+                
+                let handleBuffer: (_ audioBuffer: AVAudioPCMBuffer) -> Void = { audioBuffer in
                     // Capture buffer
-                    self.request!.append(convertedBuffer)
+                    self.request!.append(audioBuffer)
                     
                     // Handle sound intensity and pitch information
                     // Sound Intensity
@@ -1562,6 +1552,22 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                         object: nil,
                         userInfo: [ "buffer" : buffer ]
                     )
+                }
+
+                // Downsample buffer: https://stackoverflow.com/questions/39595444/avaudioengine-downsample-issue#
+                // Rationale: https://www.andyibanez.com/posts/speech-recognition-sfspeechrecognizer/
+                if let convertedBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: AVAudioFrameCount(outputFormat.sampleRate) * buffer.frameLength / AVAudioFrameCount(buffer.format.sampleRate)) {
+                    var error: NSError?
+                    let status = converter.convert(to: convertedBuffer, error: &error, withInputFrom: inputCallback)
+                    
+                    print("Input Buffer: ", buffer.format)
+                    print("Converted Buffer: ", convertedBuffer.format)
+                    
+                    if status != .error {
+                        handleBuffer(convertedBuffer)
+                    }
+                } else {
+                    handleBuffer(buffer)
                 }
 
                 if !self.executedListeningStartHandler {
@@ -1701,7 +1707,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     
     func handlePauseListening(type: RecognitionTask, preventListeningForCommands: Bool = false, onPauseHandler: (() -> Void)? = nil) {
         let node = self.audioEngine.inputNode
-        node.removeTap(onBus: self.recordBus)
+        node.removeTap(onBus: Utils.SPEECH_RECOGNITION_BUS)
         
         let executePause = {
             self.audioEngine.stop() // Things get message when we use self.audioEngine.pause(). Affects ability to listen again afterwards
@@ -1797,7 +1803,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
 //        }
         
         let node = self.audioEngine.inputNode
-        node.removeTap(onBus: self.recordBus)
+        node.removeTap(onBus: Utils.SPEECH_RECOGNITION_BUS)
         
         // End punctuation suggestion timers
         if let sentenceSuggestionTimer = self.sentenceSuggestionTimer, self.state.withPunctuationSuggestions {

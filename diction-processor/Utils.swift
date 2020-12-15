@@ -153,6 +153,8 @@ class Utils {
     static let PLAYBACK_SCROLL_BUFFER: Int = 500
     static let TEXT_SCRUB_START_DELAY: TimeInterval = 0.2
     static let TEXT_SCRUB_PAUSE_DELAY: TimeInterval = 0.1
+    static let RECORD_FILE_BUS: Int = 0
+    static let SPEECH_RECOGNITION_BUS: Int = 1
     
     static let pitchToFrequencyMap: [String : Double] = [
         "C0": 16,

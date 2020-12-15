@@ -402,7 +402,7 @@ class Entry: AVMutableComposition, NSCoding {
         do {
             try recordFile = AVAudioFile(
                 forWriting: Utils.getFileURL(of: "\(self.filename)-\(self.currentClipUID!)\(self.fileType)"),
-                settings: self.speechRecognition.audioEngine.inputNode.inputFormat(forBus: self.speechRecognition.recordBus).settings
+                settings: self.speechRecognition.audioEngine.inputNode.inputFormat(forBus: Utils.RECORD_FILE_BUS).settings
             )
             authorizedToListenForSpeech = true
             print("\tSource URL for writing entry successfully created: \(self.filename)-\(self.currentClipUID!)\(self.fileType)")
