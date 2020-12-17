@@ -99,6 +99,11 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
     @IBOutlet weak var undoButton: UIView?
     @IBOutlet weak var redoButton: UIView?
     
+    // Export Indicator
+    // Reference: https://stackoverflow.com/questions/38416434/how-to-implement-loading-spinner-in-xcode
+    @IBOutlet weak var exportIndicator: UIActivityIndicatorView!
+    
+    
     // Cursor
     var cursorView: UIView?
     
@@ -229,6 +234,11 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
         // remove notification observers
         NotificationCenter.default.removeObserver(self)
         
+        // End active timers
+        self.invalidateTimers()
+        
+        self.exportIndicator.stopAnimating()
+        
         // Notify observers of disappearing
         NotificationCenter.default.post(
             name: DetailViewController.onWillDisappear,
@@ -318,6 +328,13 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             name: UIApplication.didEnterBackgroundNotification,
             object: nil
         )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(self.appWillTerminate),
+            name: UIApplication.willTerminateNotification,
+            object: nil
+        )
+        
 
         // Observe ViewController
         notificationCenter.addObserver(
@@ -540,6 +557,18 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             name: EntryManager.onSelectionDeleted,
             object: nil
         )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onStartedEntryAudioExport(notification:)),
+            name: EntryManager.onStartedEntryAudioExport,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onStoppedEntryAudioExport(notification:)),
+            name: EntryManager.onStoppedEntryAudioExport,
+            object: nil
+        )
         
         // SelectionCursor
         notificationCenter.addObserver(
@@ -588,9 +617,19 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
         self.dictionaryViewController = nil
     }
     
+    @objc func appWillTerminate() {
+        print("===== Detail View Controller: App Will Terminate =====")
+        
+        self.invalidateTimers()
+        self.exportIndicator.stopAnimating()
+    }
+    
     @objc func appMovedToBackground() {
         print("===== Detail View Controller: App Moved to Background =====")
         DispatchQueue.main.async { [weak self] in
+            if self == nil {
+                return
+            }
             // keep recording outside of app if entry started
             if !self!.speechRecognition.isListeningForSpeech {
                 self?.performSegue(withIdentifier: Segues.moveFromDetailToEntryTable.rawValue, sender: nil)
@@ -603,6 +642,10 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
     @objc func onPitchUpdate(notification: Notification) {
         // print("===== Detail View Controller: On Pitch Update =====")
         DispatchQueue.main.async { [weak self] in
+            if self == nil {
+                return
+            }
+            
             if let speechPlayer = self?.speechPlayer, let pitchLabel = self?.pitchLabel {
                 Utils.onPitchUpdate(
                     notification: notification,
@@ -988,6 +1031,20 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
         
         DispatchQueue.main.async { [weak self] in
             self?.refreshView()
+        }
+    }
+    
+    @objc func onStartedEntryAudioExport(notification: Notification) {
+        print("===== Detail View Controller: On Started Entry Audio Export =====")
+        DispatchQueue.main.async { [weak self] in
+            self?.exportIndicator.startAnimating()
+        }
+    }
+    
+    @objc func onStoppedEntryAudioExport(notification: Notification) {
+        print("===== Detail View Controller: On Stopped Entry Audio Export =====")
+        DispatchQueue.main.async { [weak self] in
+            self?.exportIndicator.stopAnimating()
         }
     }
     
@@ -2144,6 +2201,12 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             commandButton.isHidden = true
         }
     }
+    
+    func invalidateTimers() {
+        print("===== Detail View Controller: Invalidate Timers =====")
+        self.cursorBlinkTimer?.invalidate()
+        self.textScrubTimer?.invalidate()
+    }
 
     // MARK: - Key-Value Observer
     
@@ -2639,12 +2702,12 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
     // MARK: - UndoManager Methods
     
     @IBAction func undoTapped() {
-        print("===== Detail View Controller: Undo Manager =====")
+        print("===== Detail View Controller: Undo Tapped =====")
         self.entryManager.undo()
     }
     
     @IBAction func redoTapped() {
-        print("===== Detail View Controller: Redo Manager =====")
+        print("===== Detail View Controller: Redo Tapped =====")
         self.entryManager.redo()
     }
     

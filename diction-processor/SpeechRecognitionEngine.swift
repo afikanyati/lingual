@@ -86,6 +86,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     private(set) var sentenceSuggestionTimer: Timer?
     private(set) var paragraphSuggestionTimer: Timer?
     private(set) var speechRecognizedTimer: Timer?
+    private(set) var detectVoiceCommandTimer: Timer?
     private(set) var lastSpeechRecognizerHypothesizeDate: Date?
     private(set) var lastStartListeningDate: Date?
     /// Stores the timestamp when we last started listening
@@ -144,6 +145,9 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     deinit {
         // remove notification observers
         NotificationCenter.default.removeObserver(self)
+        
+        // End active timers
+        self.invalidateTimers()
 
         // remove volume observer
         self.session.removeObserver(
@@ -243,13 +247,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             self,
             selector: #selector(self.appMovedToBackground),
             name: UIApplication.didEnterBackgroundNotification,
-            object: nil
-        )
-        
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(self.appWillTerminate),
-            name: UIApplication.willTerminateNotification,
             object: nil
         )
         
@@ -363,6 +360,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     
     @objc func appMovedToBackground() {
         print("===== Speech Recognition Engine: App Moved to Background =====")
+        
         if !self.state.appActivated {
             print("\tStop listening for wake phrase...")
             self.stopListeningForWakePhrase()
@@ -395,6 +393,9 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     
     @objc func appWillTerminate() {
         print("===== Speech Recognition Engine: App Will Terminate =====")
+        
+        self.invalidateTimers()
+        
         if self.isListeningForSpeech {
             print("\tCurrently listening for speech. Stop listening before terminating application...")
             self.stopListeningForSpeech()
@@ -1407,7 +1408,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     // MARK: - Helper Methods
     
     func exhaustSpeechRecognizedQueue() {
-        print("===== Speech Recognition Engine - Exhaust Speech Recognized Queue =====")
+        print("===== Speech Recognition Engine: Exhaust Speech Recognized Queue =====")
         let _ = self.speechRecognizedQueue.dequeue()
         soundEngine.speechRegistered()
         self.speechRecognizedTimer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: false) { timer in
@@ -1417,6 +1418,15 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 self.speechRecognizedTimer = nil
             }
         }
+    }
+    
+    func invalidateTimers() {
+        print("===== Speech Recognition Engine: Invalidate Timers =====")
+        self.listeningTimer?.invalidate()
+        self.sentenceSuggestionTimer?.invalidate()
+        self.paragraphSuggestionTimer?.invalidate()
+        self.speechRecognizedTimer?.invalidate()
+        self.detectVoiceCommandTimer?.invalidate()
     }
     
     func handleStartListening(
@@ -2326,11 +2336,14 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 !self.earlyValidVoiceCommandDetection
             {
                 print("\tHandle detect valid voice command...")
-                self.handleDetectValidVoiceCommand(
-                    voiceCommandType: voiceCommandType,
-                    transcription: transcription,
-                    earlyDetection: true
-                )
+                self.detectVoiceCommandTimer?.invalidate()
+                self.detectVoiceCommandTimer = Timer.scheduledTimer(withTimeInterval: Utils.VALID_VOICE_COMMAND_DELAY, repeats: false) { timer in
+                    self.handleDetectValidVoiceCommand(
+                        voiceCommandType: voiceCommandType,
+                        transcription: transcription,
+                        earlyDetection: true
+                    )
+                }
             } else {
                 print("\t[Error] Did not handle valid voice command:")
                 print("\tIs Valid Voice Command: ", isValidVoiceCommand)
@@ -2401,11 +2414,14 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 !self.earlyValidVoiceCommandDetection
             {
                 print("\tHandle detect valid voice command...")
-                self.handleDetectValidVoiceCommand(
-                    voiceCommandType: voiceCommandType,
-                    transcription: transcription,
-                    earlyDetection: true
-                )
+                self.detectVoiceCommandTimer?.invalidate()
+                self.detectVoiceCommandTimer = Timer.scheduledTimer(withTimeInterval: Utils.VALID_VOICE_COMMAND_DELAY, repeats: false) { timer in
+                    self.handleDetectValidVoiceCommand(
+                        voiceCommandType: voiceCommandType,
+                        transcription: transcription,
+                        earlyDetection: true
+                    )
+                }
             } else {
                 print("\t[Error] Did not handle valid voice command:")
                 print("\tIs Valid Voice Command: ", isValidVoiceCommand)
@@ -2454,10 +2470,13 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                isValidVoiceCommand &&
                 !self.earlyValidVoiceCommandDetection {
                 print("\tHandle detect valid voice command...")
-                self.handleDetectValidVoiceCommand(
-                    voiceCommandType: voiceCommandType,
-                    transcription: result.bestTranscription
-                )
+                self.detectVoiceCommandTimer?.invalidate()
+                self.detectVoiceCommandTimer = Timer.scheduledTimer(withTimeInterval: Utils.VALID_VOICE_COMMAND_DELAY, repeats: false) { timer in
+                    self.handleDetectValidVoiceCommand(
+                        voiceCommandType: voiceCommandType,
+                        transcription: result.bestTranscription
+                    )
+                }
             } else if let lastStartListeningDate = self.lastStartListeningDate,
                 !self.earlyValidVoiceCommandDetection &&
                 !self.earlyInvalidVoiceCommandDetection &&
@@ -2526,10 +2545,13 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                isValidVoiceCommand &&
                 !self.earlyValidVoiceCommandDetection {
                 print("\tHandle detect valid voice command...")
-                self.handleDetectValidVoiceCommand(
-                    voiceCommandType: voiceCommandType,
-                    transcription: result.bestTranscription
-                )
+                self.detectVoiceCommandTimer?.invalidate()
+                self.detectVoiceCommandTimer = Timer.scheduledTimer(withTimeInterval: Utils.VALID_VOICE_COMMAND_DELAY, repeats: false) { timer in
+                    self.handleDetectValidVoiceCommand(
+                        voiceCommandType: voiceCommandType,
+                        transcription: result.bestTranscription
+                    )
+                }
             } else {
                 print("\t[Error] Did not handle valid voice command:")
                 print("\tIs Valid Voice Command: ", isValidVoiceCommand)
@@ -2611,10 +2633,13 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 !self.earlyValidVoiceCommandDetection
             {
                 print("\tHandle detect valid voice command...")
-                self.handleDetectValidVoiceCommand(
-                    voiceCommandType: voiceCommandType,
-                    transcription: result.bestTranscription
-                )
+                self.detectVoiceCommandTimer?.invalidate()
+                self.detectVoiceCommandTimer = Timer.scheduledTimer(withTimeInterval: Utils.VALID_VOICE_COMMAND_DELAY, repeats: false) { timer in
+                    self.handleDetectValidVoiceCommand(
+                        voiceCommandType: voiceCommandType,
+                        transcription: result.bestTranscription
+                    )
+                }
             } else if let lastStartListeningDate = self.lastStartListeningDate,
                 !self.earlyValidVoiceCommandDetection &&
                 !self.earlyInvalidVoiceCommandDetection &&

@@ -9,6 +9,7 @@
 import Foundation
 import AVFoundation
 import Speech
+import UIKit
 
 class NotificationEngine {
     // MARK: - Notifications
@@ -43,6 +44,9 @@ class NotificationEngine {
     deinit {
         // remove notification observers
         NotificationCenter.default.removeObserver(self)
+        
+        // End active timers
+        self.invalidateTimers()
     }
     
     // MARK: - Validation
@@ -76,6 +80,19 @@ class NotificationEngine {
             name: SpeechRecognitionEngine.onIncorrectWakePhrase,
             object: nil
         )
+        
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(self.appWillTerminate),
+            name: UIApplication.willTerminateNotification,
+            object: nil
+        )
+    }
+    
+    @objc func appWillTerminate() {
+        print("===== Notification Engine: App Will Terminate =====")
+        
+        self.invalidateTimers()
     }
     
     @objc func onWakePhraseDetected(notification: Notification) {
@@ -379,5 +396,12 @@ class NotificationEngine {
         }
         
         checkRep()
+    }
+    
+    func invalidateTimers() {
+        print("===== Notification Engine: Invalidate Timers =====")
+        self.appNotificationTimer?.invalidate()
+        self.errorFeedbackTimer?.invalidate()
+        self.successFeedbackTimer?.invalidate()
     }
 }

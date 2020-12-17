@@ -52,6 +52,7 @@ public class VoiceCommandEngine: NSObject {
     // MARK: - Methods
 
     func isCommand(query: String) -> (VoiceCommand, [Int])? {
+        let LONGEST_PHRASE_WORD_COUNT = 2 // no phrases have more than two words
         var actionTokens = [Token]()
         var objectTokens = [Token]()
         var actionObjectTokens = [Token]()
@@ -155,7 +156,7 @@ public class VoiceCommandEngine: NSObject {
         
         let possibleTokens = Utils.permute(
             list: filteredBagOfWords,
-            maxWordJoins: 2,
+            maxWordJoins: LONGEST_PHRASE_WORD_COUNT,
             separator: " "
         )
         
@@ -406,6 +407,14 @@ public class VoiceCommandEngine: NSObject {
         // Check all combinations of tokens for all posible valid voice commands
         // Q1: What if there are more than one?
         // A1:Prioritize based on mode
+        
+        var utteredWords = [Token]()
+        for word in filteredBagOfWords {
+            if let token = TokenMap[word] {
+                utteredWords.append(token)
+            }
+        }
+        let utteredWordsSet = Set(utteredWords)
 
         var voiceCommand: VoiceCommand?
         var voiceCommandSet: Set<Token>?
@@ -527,23 +536,19 @@ public class VoiceCommandEngine: NSObject {
         } else if self.entryListManager.isRunningEntryList {
             // Run Entry List Mode
             print("\tRun Entry List Mode...")
-            
-            var utteredWords = [Token]()
-            for word in filteredBagOfWords {
-                if let token = TokenMap[word] {
-                    utteredWords.append(token)
-                }
-            }
-            let utteredWordsSet = Set(utteredWords)
-            
-            // Prioritize commands with entry in them
+
+            var mostCommandWords = 0
             for commandSet in viableVoiceCommandSets {
-                if !commandSet.contains(.ENTRY) && commandSet.intersection(utteredWordsSet).count > 0 {
+                let tokenInterSectionCount = commandSet.intersection(utteredWordsSet).count
+                if !commandSet.contains(.ENTRY) &&
+                tokenInterSectionCount > 0 &&
+                tokenInterSectionCount > mostCommandWords
+                {
                     print("\tPrioritizing voice commands with uttered words...")
                     // We want to prioritize other commands before settling for walk entry
                     voiceCommand = VoiceCommandMap[commandSet]
                     voiceCommandSet = commandSet
-                    break
+                    mostCommandWords = tokenInterSectionCount
                 }
             }
             
@@ -585,23 +590,19 @@ public class VoiceCommandEngine: NSObject {
         } else if self.entryListManager.isWalkingEntryList {
             // Walk Entry List Mode
             print("\tWalk Entry List Mode...")
-            
-            var utteredWords = [Token]()
-            for word in filteredBagOfWords {
-                if let token = TokenMap[word] {
-                    utteredWords.append(token)
-                }
-            }
-            let utteredWordsSet = Set(utteredWords)
-            
-            // Prioritize commands with entry in them
+
+            var mostCommandWords = 0
             for commandSet in viableVoiceCommandSets {
-                if !commandSet.contains(.ENTRY) && commandSet.intersection(utteredWordsSet).count > 0 {
+                let tokenInterSectionCount = commandSet.intersection(utteredWordsSet).count
+                if !commandSet.contains(.ENTRY) &&
+                tokenInterSectionCount > 0 &&
+                tokenInterSectionCount > mostCommandWords
+                {
                     print("\tPrioritizing voice commands with uttered words...")
                     // We want to prioritize other commands before settling for walk entry
                     voiceCommand = VoiceCommandMap[commandSet]
                     voiceCommandSet = commandSet
-                    break
+                    mostCommandWords = tokenInterSectionCount
                 }
             }
             
@@ -643,11 +644,29 @@ public class VoiceCommandEngine: NSObject {
         } else if self.selectionCursor.hasSelection {
             // Selection Mode
             print("\tSelection Mode...")
+            
+            var mostCommandWords = 0
             for commandSet in viableVoiceCommandSets {
-                if commandSet.contains(.SELECTION) || commandSet.contains(.SELECTION_RATE) {
+                let tokenInterSectionCount = commandSet.intersection(utteredWordsSet).count
+                if tokenInterSectionCount > 0 &&
+                tokenInterSectionCount > mostCommandWords
+                {
+                    print("\tPrioritizing voice commands with uttered words...")
+                    // We want to prioritize other commands before settling for walk entry
                     voiceCommand = VoiceCommandMap[commandSet]
                     voiceCommandSet = commandSet
-                    break
+                    mostCommandWords = tokenInterSectionCount
+                }
+            }
+            
+            if voiceCommand == nil &&
+                voiceCommandSet == nil {
+                for commandSet in viableVoiceCommandSets {
+                    if commandSet.contains(.SELECTION) || commandSet.contains(.SELECTION_RATE) {
+                        voiceCommand = VoiceCommandMap[commandSet]
+                        voiceCommandSet = commandSet
+                        break
+                    }
                 }
             }
         } else if self.uiManager.dialogIsVisible {

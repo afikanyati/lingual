@@ -52,12 +52,13 @@ class StorageManager: NSObject {
                 echoRate: state._echoRate,
                 appOpens: state.appOpens,
                 audioDeviceUse: state.audioDeviceUse,
+                microphoneUse: state.microphoneUse,
                 entryViews: state.entryViews,
                 entryPlays: state.entryPlays,
                 entryTextExports: state.entryTextExports,
                 entryAudioExports: state.entryAudioExports,
                 activeEntryWordCounts: state.activeEntryWordCounts,
-                deletedEntryWordCounts: state.activeEntryWordCounts,
+                deletedEntryWordCounts: state.deletedEntryWordCounts,
                 voiceCommands: state.voiceCommands,
                 voiceCommandStream: self.speechRecognition.voiceCommandStream
             )
@@ -80,12 +81,13 @@ class StorageManager: NSObject {
             self.saveAppTelemetry(
                 appOpens: state.appOpens,
                 audioDeviceUse: state.audioDeviceUse,
+                microphoneUse: state.microphoneUse,
                 entryViews: state.entryViews,
                 entryPlays: state.entryPlays,
                 entryTextExports: state.entryTextExports,
                 entryAudioExports: state.entryAudioExports,
                 activeEntryWordCounts: state.activeEntryWordCounts,
-                deletedEntryWordCounts: state.activeEntryWordCounts,
+                deletedEntryWordCounts: state.deletedEntryWordCounts,
                 voiceCommands: state.voiceCommands
             )
             self.saveVoiceCommandStream(voiceCommandStream: self.speechRecognition.voiceCommandStream)
@@ -341,6 +343,18 @@ class StorageManager: NSObject {
             print("\t[Error] There was a problem retrieving audioDeviceUse Data object.")
         }
         
+        // Microphone Use
+        if let savedObj = defaults.object(forKey: "microphoneUse") as? Data {
+            if let microphoneUse = try? NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(savedObj) as? [MicrophoneDatum] {
+                print("\tSuccessfully fetched \(microphoneUse.count) microphone datum!")
+                appTelemetry["microphoneUse"] = microphoneUse
+            } else {
+                print("\t[Error] There was a problem fetching microphoneUse.")
+            }
+        } else {
+            print("\t[Error] There was a problem retrieving microphoneUse Data object.")
+        }
+        
         // Entry Views
         if let savedObj = defaults.object(forKey: "entryViews") as? Data {
             if let entryViews = try? NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(savedObj) as? [TimeInterval] {
@@ -592,6 +606,7 @@ class StorageManager: NSObject {
     func saveAppTelemetry(
         appOpens: [TimeInterval],
         audioDeviceUse: [AudioDeviceDatum],
+        microphoneUse: [MicrophoneDatum],
         entryViews: [TimeInterval],
         entryPlays: [TimeInterval],
         entryTextExports: [TimeInterval],
@@ -618,6 +633,15 @@ class StorageManager: NSObject {
             print("\tSuccessfully saved \(audioDeviceUse.count) audioDeviceUse!")
         } else {
             print("\t[Error] There was a problem converting audioDeviceUse to Data object.")
+        }
+        
+        // Microphone Use
+        if let savedData = try? NSKeyedArchiver.archivedData(withRootObject: microphoneUse, requiringSecureCoding: false) {
+            let defaults = UserDefaults.standard
+            defaults.set(savedData, forKey: "microphoneUse")
+            print("\tSuccessfully saved \(microphoneUse.count) microphoneUse!")
+        } else {
+            print("\t[Error] There was a problem converting microphoneUse to Data object.")
         }
         
         // Entry Views
@@ -705,6 +729,7 @@ class StorageManager: NSObject {
         echoRate: Float,
         appOpens: [TimeInterval],
         audioDeviceUse: [AudioDeviceDatum],
+        microphoneUse: [MicrophoneDatum],
         entryViews: [TimeInterval],
         entryPlays: [TimeInterval],
         entryTextExports: [TimeInterval],
@@ -767,6 +792,10 @@ class StorageManager: NSObject {
                     if audioDeviceUse.count > 0 {
                         let audioUse = audioDeviceUse.map { String(describing: $0) }
                         record["audioDeviceUse"] = audioUse as CKRecordValue
+                    }
+                    if microphoneUse.count > 0 {
+                        let micUse = microphoneUse.map { String(describing: $0) }
+                        record["microphoneUse"] = micUse as CKRecordValue
                     }
                     if entryViews.count > 0 {
                         let views = entryViews.map({(interval: TimeInterval) -> String in
@@ -878,6 +907,10 @@ class StorageManager: NSObject {
                 if audioDeviceUse.count > 0 {
                     let audioUse = audioDeviceUse.map { String(describing: $0) }
                     userRecord["audioDeviceUse"] = audioUse as CKRecordValue
+                }
+                if microphoneUse.count > 0 {
+                    let micUse = microphoneUse.map { String(describing: $0) }
+                    userRecord["microphoneUse"] = micUse as CKRecordValue
                 }
                 if entryViews.count > 0 {
                     let views = entryViews.map({(interval: TimeInterval) -> String in

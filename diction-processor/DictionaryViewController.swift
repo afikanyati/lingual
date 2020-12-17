@@ -979,6 +979,7 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
         let navigationController = Utils.getNavigationController()
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationController?.navigationItem.largeTitleDisplayMode = .always
+        self.navigationItem.title = "Dictionary"
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -1001,8 +1002,6 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
             // add table view buttons
             navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = []
         }
-        
-        self.navigationItem.title = "Dictionary"
         
         // Register the custom header view.
         self.tableView.register(DictionaryViewTableHeader.self, forHeaderFooterViewReuseIdentifier: "DictionaryViewTableHeader")
@@ -1276,6 +1275,9 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
     @objc func appMovedToBackground() {
         print("===== Dictionary View Controller: App Moved to Background =====")
         DispatchQueue.main.async { [weak self] in
+            if self == nil {
+                return
+            }
             // keep recording outside of app if entry started
             if !self!.speechRecognition.isListeningForSpeech {
                 self?.performSegue(withIdentifier: Segues.moveFromDictionaryToEntryTable.rawValue, sender: nil)
@@ -1360,6 +1362,10 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
     @objc func onPitchUpdate(notification: Notification) {
         // print("===== View Controller: On Pitch Update =====")
         DispatchQueue.main.async { [weak self] in
+            if self == nil {
+                return
+            }
+            
             let pitchDatum = notification.userInfo!["pitch"] as? PitchDatum
             
             if let pitch = pitchDatum?.pitch,

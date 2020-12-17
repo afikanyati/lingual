@@ -77,6 +77,7 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationController?.navigationItem.largeTitleDisplayMode = .always
         navigationController?.navigationBar.sizeToFit()
+        self.navigationItem.title = "Entries"
         
         self.reloadTable()
     }
@@ -104,9 +105,6 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
             // add table view buttons
             navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self.getDictionaryButton()]
         }
-        
-        self.navigationItem.title = "Entries"
-        
         
         // Notify observers of loading
         NotificationCenter.default.post(
@@ -425,6 +423,10 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
     @objc func appMovedToBackground() {
         print("===== Entry Table View Controller: App Moved to Background =====")
         DispatchQueue.main.async { [weak self] in
+            if self == nil {
+                return
+            }
+            
             // keep recording outside of app if entry started
             if !self!.speechRecognition.isListeningForSpeech {
                 self?.performSegue(withIdentifier: Segues.moveFromEntryTableToSleep.rawValue, sender: nil)
@@ -509,6 +511,10 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
     @objc func onPitchUpdate(notification: Notification) {
         // print("===== Entry Table View Controller: On Pitch Update =====")
         DispatchQueue.main.async { [weak self] in
+            if self == nil {
+                return
+            }
+            
             let pitchDatum = notification.userInfo!["pitch"] as? PitchDatum
             
             if let pitch = pitchDatum?.pitch,

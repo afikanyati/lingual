@@ -20,6 +20,8 @@ class EntryManager: NSObject {
     static let onEntryAudioExported = Notification.Name(Notifications.onEntryAudioExported.rawValue)
     static let onUndoManagerChange = Notification.Name(Notifications.onUndoManagerChange.rawValue)
     static let onSelectionDeleted = Notification.Name(Notifications.onSelectionDeleted.rawValue)
+    static let onStartedEntryAudioExport = Notification.Name(Notifications.onStartedEntryAudioExport.rawValue)
+    static let onStoppedEntryAudioExport = Notification.Name(Notifications.onStoppedEntryAudioExport.rawValue)
 
     // MARK: - App Modules
     
@@ -106,11 +108,15 @@ class EntryManager: NSObject {
         self.setEntryModules() // Removing this will not show preview text on entries within entry table
         
         self.configureNotificationObservers()
+        self._undoManager.groupsByEvent = false
     }
     
     deinit {
         // remove notification observers
         NotificationCenter.default.removeObserver(self)
+        
+        // End active timers
+        self.invalidateTimers()
 
         // remove observer from snapshot
         self.removeObserver(
@@ -144,6 +150,14 @@ class EntryManager: NSObject {
     func configureNotificationObservers() {
         let notificationCenter = NotificationCenter.default
         
+        // App
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(self.appWillTerminate),
+            name: UIApplication.willTerminateNotification,
+            object: nil
+        )
+        
         // Entry Manager
         self.addObserver(
             self,
@@ -167,6 +181,12 @@ class EntryManager: NSObject {
             name: StateManager.onFetchedEntries,
             object: nil
         )
+    }
+    
+    @objc func appWillTerminate() {
+        print("===== Entry Manager: App Will Terminate =====")
+        
+        self.invalidateTimers()
     }
     
     @objc func onFetchedEntries(notification: Notification) {
@@ -412,9 +432,9 @@ class EntryManager: NSObject {
                let _ = change?[.oldKey] as? EntrySnapshot,
                !self.ignoreEntrySnapshotUpdate
             {
-                print("\tNew Entry Snapshot Received! Save to state")
+                print("\tUndo/Redo Entry Snapshot Received! Save to state...")
                 let duplicateEntry = newSnapshot.entry
-                
+
                 // Handle Current Clip UID
                 if let entry = self.currentEntry,
                    duplicateEntry.currentClipUID == nil &&
@@ -425,7 +445,7 @@ class EntryManager: NSObject {
                     let currentClipUID = entry.currentClipUID
                     duplicateEntry.setCurrentClipUID(uid: currentClipUID)
                 }
-                
+
                 // Handle Record Start Date
                 if let entry = self.currentEntry,
                    duplicateEntry.recordStartDate == nil &&
@@ -436,7 +456,7 @@ class EntryManager: NSObject {
                     let recordStartDate = entry.recordStartDate
                     duplicateEntry.setRecordStartDate(date: recordStartDate)
                 }
-                
+
                 // Handle Record File
                 if let entry = self.currentEntry,
                    duplicateEntry.recordFile == nil &&
@@ -447,17 +467,17 @@ class EntryManager: NSObject {
                     let recordFile = entry.recordFile
                     duplicateEntry.setRecordFile(file: recordFile)
                 }
-                
+
                 // Make sure all data is correct
                 duplicateEntry.refresh()
 
                 // Set Entry
                 print("\tSave entry into state...")
                 self.state.saveEntry(entry: duplicateEntry) // we duplicate so there's no memory leaks/pointers to same memory locations
-                
+
                 print("\tSet Node Modules...")
                 self.setEntryModules(index: self.currentIndex)
-                
+
                 print("\tUpdate selection carets...")
                 if let anchorCaret = newSnapshot.selectionAnchorCaret {
                     print("\tUpdated selection achor:")
@@ -470,7 +490,7 @@ class EntryManager: NSObject {
                     print("\tTo: nil")
                     self.selectionCursor.setAnchorCaret()
                 }
-                
+
                 if let focusCaret = newSnapshot.selectionFocusCaret {
                     print("\tUpdated selection focus:")
                     print("\tFrom: ", self.selectionCursor.focusCaret ?? "nil")
@@ -482,7 +502,7 @@ class EntryManager: NSObject {
                     print("\tTo: nil")
                     self.selectionCursor.setFocusCaret()
                 }
-                
+
                 if let cachedAnchorCaret = newSnapshot.selectionCachedAnchorCaret {
                     print("\tUpdated selection cached anchor:")
                     print("\tFrom: ", self.selectionCursor.cachedAnchorCaret ?? "nil")
@@ -494,19 +514,20 @@ class EntryManager: NSObject {
                     print("\tTo: nil")
                     self.selectionCursor.setCachedAnchorCaret()
                 }
-                
+
                 if let entry = self.currentEntry {
                     print("\tUpdate View with text: '\(entry.getText())'")
                     entry.handleOnSpeechUpdate(text: entry.getText())
                 }
-                
+
                 if let entryChangeHandler = self.entryChangeHandler {
                     print("\tRunning Entry Change Handler...")
                     entryChangeHandler()
                     self.entryChangeHandler = nil
                 }
+                
             } else if let entry = self.currentEntry, self.ignoreEntrySnapshotUpdate {
-                print("\tIgnored entry snapshot because it was after a commit...")
+                print("\tMost forward changes to entry snapshot are ignored...")
                 
                 print("\tUpdate View with text: '\(entry.getText())'")
                 entry.handleOnSpeechUpdate(text: entry.getText())
@@ -1528,23 +1549,32 @@ class EntryManager: NSObject {
                     style: .default,
                     handler: { [weak self] action in
                     self?.isExportingEntry = true
-                    let selectionFilename = "entry-\(UUID().uuidString)"
+                    NotificationCenter.default.post(
+                        name: EntryManager.onStartedEntryAudioExport,
+                        object: nil,
+                        userInfo: [:]
+                    )
                     
-                    Utils.exportEntry(
-                        state: self!.state,
-                        entry: entry,
-                        filename: selectionFilename,
-                        fileType: entry.fileType,
-                        timeRange: selectionTimeRange
-                    ) { entryURL in
-                        self?.isExportingEntry = false
-                        handler?()
-                        
-                        NotificationCenter.default.post(
-                            name: EntryManager.onEntryAudioExported,
-                            object: nil,
-                            userInfo: [ "entryURL" : entryURL]
-                        )
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        Utils.exportEntry(
+                            state: self!.state,
+                            entry: entry,
+                            timeRange: selectionTimeRange
+                        ) { entryURL in
+                            self?.isExportingEntry = false
+                            handler?()
+                            
+                            NotificationCenter.default.post(
+                                name: EntryManager.onStoppedEntryAudioExport,
+                                object: nil,
+                                userInfo: [:]
+                            )
+                            NotificationCenter.default.post(
+                                name: EntryManager.onEntryAudioExported,
+                                object: nil,
+                                userInfo: [ "entryURL" : entryURL]
+                            )
+                        }
                     }
                 }),
                 DialogAction(
@@ -1585,35 +1615,50 @@ class EntryManager: NSObject {
                     style: .default,
                     handler: { [weak self]  action in
                     self?.isExportingEntry = true
-                    let selectionFilename = "entry-\(UUID().uuidString)"
+                    NotificationCenter.default.post(
+                        name: EntryManager.onStartedEntryAudioExport,
+                        object: nil,
+                        userInfo: [:]
+                    )
 
                     #if DEBUG
+                    let selectionFilename = "entry-\(UUID().uuidString)"
                     let _ = Utils.encodeLingualEntry(entry: entry, filename: entry.filename)
+                    NotificationCenter.default.post(
+                        name: EntryManager.onStoppedEntryAudioExport,
+                        object: nil,
+                        userInfo: [:]
+                    )
                     NotificationCenter.default.post(
                         name: EntryManager.onEntryAudioExported,
                         object: nil,
                         userInfo: [ "entryURL" : selectionFilename]
                     )
                     #else
-                    Utils.exportEntry(
-                        state: self!.state,
-                        entry: entry,
-                        filename: selectionFilename,
-                        fileType: entry.fileType,
-                        timeRange: entry.timeRange
-                    ) { entryURL in
-                        self?.isExportingEntry = false
-                        handler?()
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        Utils.exportEntry(
+                            state: self!.state,
+                            entry: entry,
+                            timeRange: entry.timeRange
+                        ) { entryURL in
+                            self?.isExportingEntry = false
+                            handler?()
 
-                        NotificationCenter.default.post(
-                            name: EntryManager.onEntryAudioExported,
-                            object: nil,
-                            userInfo: [ "entryURL" : entryURL]
-                        )
+                            NotificationCenter.default.post(
+                                name: EntryManager.onStoppedEntryAudioExport,
+                                object: nil,
+                                userInfo: [:]
+                            )
+                            NotificationCenter.default.post(
+                                name: EntryManager.onEntryAudioExported,
+                                object: nil,
+                                userInfo: [ "entryURL" : entryURL]
+                            )
+                            
+                            // Increment Entry Audio Export Count
+                            entry.incrementAudioExportCount()
+                        }
                     }
-
-                    // Increment Entry Audio Export Count
-                    entry.incrementAudioExportCount()
                     #endif
                 }),
                 DialogAction(
@@ -2967,7 +3012,7 @@ class EntryManager: NSObject {
         soundEngine.voiceCommandAccept()
         
         let currentAnchor = self.selectionCursor.cachedAnchor ?? self.selectionCursor.anchor
-        var selectionIndex: Int?
+        var anchorIndex: Int?
         if let segment = currentAnchor, self.selectionCursor.isAtEndOfTextView {
             print("\tAttempt to set last word as selection...")
             // set last word as selection
@@ -2978,7 +3023,7 @@ class EntryManager: NSObject {
                 print("\tIs Deleted: ", segment.isDeleted())
                 print("\tIs Voice Command Word: ", segment.isVoiceCommandWord())
                 print("\tIs Silence: ", segment.isSilence())
-                selectionIndex = Utils.getSegmentIndex(
+                anchorIndex = Utils.getSegmentIndex(
                     segment: segment,
                     segments: entry.entrySegments,
                     type: .previous,
@@ -2986,7 +3031,7 @@ class EntryManager: NSObject {
                     isCommitted: true
                 )
             } else {
-                selectionIndex = segment.getIndex()
+                anchorIndex = segment.getIndex()
             }
         } else if let segment = currentAnchor {
             // set word after anchor as selection
@@ -2998,7 +3043,7 @@ class EntryManager: NSObject {
                 print("\tIs Deleted: ", segment.isDeleted())
                 print("\tIs Voice Command Word: ", segment.isVoiceCommandWord())
                 print("\tIs Silence: ", segment.isSilence())
-                selectionIndex = Utils.getSegmentIndex(
+                anchorIndex = Utils.getSegmentIndex(
                     segment: segment,
                     segments: entry.entrySegments,
                     type: .next,
@@ -3006,14 +3051,14 @@ class EntryManager: NSObject {
                     isCommitted: true
                 )
             } else {
-                selectionIndex = segment.getIndex()
+                anchorIndex = segment.getIndex()
             }
         }
         
-        print("Selection Index: ", selectionIndex ?? "nil")
+        print("Anchor Index: ", anchorIndex ?? "nil")
         
-        if let selectionIndex = selectionIndex, selectionIndex != Int(Utils.UNKNOWN) {
-            let referenceSegment = entry.entrySegments[selectionIndex]
+        if let anchorIndex = anchorIndex, anchorIndex != Int(Utils.UNKNOWN) {
+            let referenceSegment = entry.entrySegments[anchorIndex]
             print("\tFound reference segment: ", referenceSegment.getText())
             // Play Sound
             soundEngine.voiceCommandAccept()
@@ -3058,6 +3103,12 @@ class EntryManager: NSObject {
                         scale: scale,
                         scaleRange: paragraphDetails.entryRange
                     )
+                } else {
+                    print("\t[Error] There was a problem selecting paragraph. Unable to locate paragraph using reference segment.")
+                    self.notifications.executeError(
+                        text: "Unable to locate suitable paragraph to select.",
+                        voiceCommand: true
+                    )
                 }
             case .sentence:
                 print("\tLooking for sentence...")
@@ -3097,6 +3148,12 @@ class EntryManager: NSObject {
                         scale: scale,
                         scaleRange: sentenceDetails.entryRange
                     )
+                } else {
+                    print("\t[Error] There was a problem selecting sentence. Unable to locate sentence using reference segment.")
+                    self.notifications.executeError(
+                        text: "Unable to locate suitable sentence to select.",
+                        voiceCommand: true
+                    )
                 }
             default:
                 if scale == .word {
@@ -3107,8 +3164,8 @@ class EntryManager: NSObject {
                 
                 print("\tSetting selection...")
                 self.selectionCursor.setSelection(
-                    anchorCaret: Caret(index: selectionIndex, trackType: .committed),
-                    focusCaret: Caret(index: selectionIndex, trackType: .committed),
+                    anchorCaret: Caret(index: anchorIndex, trackType: .committed),
+                    focusCaret: Caret(index: anchorIndex, trackType: .committed),
                     scale: scale
                 )
                 break
@@ -3555,38 +3612,40 @@ class EntryManager: NSObject {
     
     // message should start with a present progressive verb: -ing
     // so utterance will be: undo verb-ing object
-    func registerEntryChange(entry: Entry, undo message: String, ignoreUpdate: Bool = false, handler: (() -> Void)? = nil) {
+    func registerEntryChange(entry: Entry, undo message: String, ignoreUpdate: Bool = true, handler: (() -> Void)? = nil) {
         print("===== Entry Manager: Register Entry Change  =====")
 
         // Update Undo/Redo History
         print("\tCreating and setting new snapshot...")
         
-        let duplicateEntry = entry.duplicate(
-            state: self.state,
-            speechSynthesis: self.speechSynthesis,
-            speechRecognition: self.speechRecognition,
-            speechPlayer: self.speechPlayer,
-            selectionCursor: self.selectionCursor,
-            pitchRecognition: self.pitchRecognition,
-            entryManager: self,
-            notifications: self.notifications
-        )
-        
-        let newSnapshot = EntrySnapshot(
-            entry: duplicateEntry, // we duplicate so there's no memory leaks/pointers to same memory locations
-            selectionAnchorCaret: self.selectionCursor.anchorCaret?.duplicate(),
-            selectionFocusCaret: self.selectionCursor.focusCaret?.duplicate(),
-            selectionCachedAnchorCaret: self.selectionCursor.cachedAnchorCaret?.duplicate(),
-            undo: message
-        )
-        
-        self.entryChangeHandler = handler
-        
-        self.ignoreEntrySnapshotUpdate = ignoreUpdate
-        
-        self.modifyEntry(snapshot: newSnapshot)
-        
-        self.checkRep()
+        DispatchQueue.global(qos: .utility).async {
+            let duplicateEntry = entry.duplicate(
+                state: self.state,
+                speechSynthesis: self.speechSynthesis,
+                speechRecognition: self.speechRecognition,
+                speechPlayer: self.speechPlayer,
+                selectionCursor: self.selectionCursor,
+                pitchRecognition: self.pitchRecognition,
+                entryManager: self,
+                notifications: self.notifications
+            )
+            
+            let newSnapshot = EntrySnapshot(
+                entry: duplicateEntry, // we duplicate so there's no memory leaks/pointers to same memory locations
+                selectionAnchorCaret: self.selectionCursor.anchorCaret?.duplicate(),
+                selectionFocusCaret: self.selectionCursor.focusCaret?.duplicate(),
+                selectionCachedAnchorCaret: self.selectionCursor.cachedAnchorCaret?.duplicate(),
+                undo: message
+            )
+            
+            self.entryChangeHandler = handler
+            
+            self.ignoreEntrySnapshotUpdate = ignoreUpdate
+            
+            self.modifyEntry(snapshot: newSnapshot)
+            
+            self.checkRep()
+        }
     }
     
     @objc func undo(handler: (() -> Void)? = nil) {
@@ -3823,6 +3882,16 @@ class EntryManager: NSObject {
         
         checkRep()
     }
+    
+    // MARK: - Helper Methods
+    
+    func invalidateTimers() {
+        print("===== Entry Manager: Invalidate Timers =====")
+        self.walkingTimer?.invalidate()
+        self.walkLoopDelayTimer?.invalidate()
+        self.echoDelayTimer?.invalidate()
+        self.runningTimer?.invalidate()
+    }
 }
 
 // MARK: - Undo Manager
@@ -3845,9 +3914,13 @@ extension EntryManager {
         
         self.currentEntryUndoSnapshot = diff.to
         
+        // Reference: https://medium.com/@swetasheth.ce570/introducing-simple-undo-redo-in-swift-cd7b9b0e349
+        // Reference: https://developer.apple.com/documentation/foundation/undomanager/1417407-groupsbyevent
+        self.undoManager.beginUndoGrouping()
         self.undoManager.registerUndo(withTarget: self) { target in
             target.modifyEntry(snapshot: diff.from)
         }
+        self.undoManager.endUndoGrouping()
         
         NotificationCenter.default.post(
             name: EntryManager.onUndoManagerChange,

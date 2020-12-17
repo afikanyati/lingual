@@ -157,6 +157,7 @@
 		8BED4B9B257DBF85008F7A57 /* DictionaryViewTableCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BED4B9A257DBF85008F7A57 /* DictionaryViewTableCell.swift */; };
 		8BED4BAA257DF622008F7A57 /* DictionaryViewTableHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BED4BA9257DF622008F7A57 /* DictionaryViewTableHeader.swift */; };
 		8BED4BAF257E129D008F7A57 /* UIView+Border.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BED4BAE257E129D008F7A57 /* UIView+Border.swift */; };
+		8BFC8AA62589C497009A1DB0 /* MicrophoneDatum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BFC8AA52589C497009A1DB0 /* MicrophoneDatum.swift */; };
 		EFCD311834F5FA424F68B4E4 /* libPods-diction-processor.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D1458E52ABFDE185D82A961F /* libPods-diction-processor.a */; };
 /* End PBXBuildFile section */
 
@@ -336,6 +337,7 @@
 		8BED4B9A257DBF85008F7A57 /* DictionaryViewTableCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionaryViewTableCell.swift; sourceTree = "<group>"; };
 		8BED4BA9257DF622008F7A57 /* DictionaryViewTableHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionaryViewTableHeader.swift; sourceTree = "<group>"; };
 		8BED4BAE257E129D008F7A57 /* UIView+Border.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIView+Border.swift"; sourceTree = "<group>"; };
+		8BFC8AA52589C497009A1DB0 /* MicrophoneDatum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophoneDatum.swift; sourceTree = "<group>"; };
 		D1458E52ABFDE185D82A961F /* libPods-diction-processor.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-diction-processor.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DB540E91EDCF2D33D7D8D9EA /* Pods-diction-processor.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-diction-processor.debug.xcconfig"; path = "Target Support Files/Pods-diction-processor/Pods-diction-processor.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -431,6 +433,7 @@
 				8B669B6A24B2C3DD00D5996B /* PitchDatum.swift */,
 				8B766E8B24A8094300D41A13 /* SoundIntensityDatum.swift */,
 				8B4293B6256C943400A513A3 /* AudioDeviceDatum.swift */,
+				8BFC8AA52589C497009A1DB0 /* MicrophoneDatum.swift */,
 				8B66BFDF253BD17F0085A94F /* VoiceCommandDatum.swift */,
 				8B766E8824A7D7D200D41A13 /* Sentence.swift */,
 				8B2935E32581880900BDFB0D /* Paragraph.swift */,
@@ -909,6 +912,7 @@
 				8B766F4824AC2AB200D41A13 /* Buffer.swift in Sources */,
 				8BA3052E24C286550056E4DF /* SoundEffectEngine.swift in Sources */,
 				8B766F5424AC2AB200D41A13 /* QuinnsSecondEstimator.swift in Sources */,
+				8BFC8AA62589C497009A1DB0 /* MicrophoneDatum.swift in Sources */,
 				8B2935E42581880900BDFB0D /* Paragraph.swift in Sources */,
 				8BC6E10425107E61003DD26A /* DirectionType.swift in Sources */,
 				8B766F4724AC2AB200D41A13 /* YINTransformer.swift in Sources */,
@@ -1135,8 +1139,9 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MARKETING_VERSION = 1.0.3;
 				OTHER_SWIFT_FLAGS = "$(inherited) -D COCOAPODS -Xcc -fmodule-map-file=\"${PODS_CONFIGURATION_BUILD_DIR}/SwiftSVG/SwiftSVG.modulemap\" -D DEBUG";
-				PRODUCT_BUNDLE_IDENTIFIER = "com.afikanyati.diction-processor";
+				PRODUCT_BUNDLE_IDENTIFIER = com.afikanyati.lingual;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -1156,7 +1161,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.afikanyati.diction-processor";
+				MARKETING_VERSION = 1.0.3;
+				PRODUCT_BUNDLE_IDENTIFIER = com.afikanyati.lingual;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;

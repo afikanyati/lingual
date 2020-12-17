@@ -1764,14 +1764,20 @@
                                     <constraint firstItem="Tco-bL-zSD" firstAttribute="centerX" secondItem="v1x-94-15m" secondAttribute="centerX" id="xmE-NJ-7Pg"/>
                                 </constraints>
                             </view>
+                            <activityIndicatorView hidden="YES" opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="750" verticalHuggingPriority="750" hidesWhenStopped="YES" style="large" translatesAutoresizingMaskIntoConstraints="NO" id="MKJ-gR-JT1" userLabel="Export Indicator">
+                                <rect key="frame" x="188.5" y="456.5" width="37" height="37"/>
+                                <color key="color" red="0.85882352939999995" green="0.53725490200000003" blue="0.29411764709999999" alpha="1" colorSpace="calibratedRGB"/>
+                            </activityIndicatorView>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                         <constraints>
+                            <constraint firstItem="MKJ-gR-JT1" firstAttribute="centerY" secondItem="6Tk-OE-BBY" secondAttribute="centerY" id="17j-Aw-zk4"/>
                             <constraint firstItem="6Tk-OE-BBY" firstAttribute="bottom" secondItem="NP2-Ys-Ufm" secondAttribute="bottom" id="1ar-Pc-ScE"/>
                             <constraint firstItem="VQr-2O-kOR" firstAttribute="leading" secondItem="6Tk-OE-BBY" secondAttribute="leading" priority="500" constant="362.5" id="6Hh-g1-eh5"/>
                             <constraint firstItem="6Tk-OE-BBY" firstAttribute="trailing" secondItem="nkY-JO-vng" secondAttribute="trailing" constant="20" id="H9L-7G-bki"/>
                             <constraint firstItem="qWP-6t-6mG" firstAttribute="leading" secondItem="6Tk-OE-BBY" secondAttribute="leading" id="In2-cy-Lmh"/>
+                            <constraint firstItem="MKJ-gR-JT1" firstAttribute="centerX" secondItem="6Tk-OE-BBY" secondAttribute="centerX" id="KH1-kX-jvZ"/>
                             <constraint firstItem="sVW-Yq-JIG" firstAttribute="leading" secondItem="6Tk-OE-BBY" secondAttribute="leading" id="Kie-wc-98A"/>
                             <constraint firstItem="6Tk-OE-BBY" firstAttribute="trailing" secondItem="Ht0-xa-6Fc" secondAttribute="trailing" id="Kkd-fl-dZt"/>
                             <constraint firstItem="6Tk-OE-BBY" firstAttribute="top" secondItem="MXM-2I-uDb" secondAttribute="top" id="LpT-vj-HN5"/>
@@ -1813,6 +1819,7 @@
                         <outlet property="exitSliderButton" destination="88x-K7-N2H" id="Hq4-2f-77G"/>
                         <outlet property="exitWalkRunButton" destination="WTY-vs-DOu" id="1td-9L-B5N"/>
                         <outlet property="exportButton" destination="pir-kT-Cor" id="Xc6-tW-o6G"/>
+                        <outlet property="exportIndicator" destination="MKJ-gR-JT1" id="IuS-Mu-cQk"/>
                         <outlet property="increaseRateButton" destination="llz-Gj-MCS" id="iEd-VI-zIh"/>
                         <outlet property="inspectClipboardButton" destination="j9F-d2-jUG" id="Rsb-E8-vR5"/>
                         <outlet property="menuBar" destination="Ht0-xa-6Fc" id="yYT-Qa-gcv"/>

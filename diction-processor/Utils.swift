@@ -156,8 +156,10 @@ class Utils {
     static let RECORD_FILE_BUS: Int = 0
     static let SPEECH_RECOGNITION_BUS: Int = 1
     static let SEED_CONTENT_TITLE: String = "Welcome to Lingual"
+    static let SEED_CONTENT_FILENAME: String = "entry-016AAC62-FEFB-4D62-96DE-854FDC07585C"
     static let PLAYBACK_SECOND_DURATION: TimeInterval = 1
     static let INDEX_SEARCH_BUFFER: Int = 7
+    static let VALID_VOICE_COMMAND_DELAY: TimeInterval = 0.3 // 0.2 was too fast
     
     static let pitchToFrequencyMap: [String : Double] = [
         "C0": 16,
@@ -232,15 +234,10 @@ class Utils {
     public static func exportEntry(
         state: StateManager,
         entry: Entry,
-        filename: String,
-        fileType: String,
         timeRange: CMTimeRange,
         onFinishHandler: ((_ entryURL: String) -> Void)? = nil
     ) {
         print("===== Utils: Export Entry =====")
-        
-        let filePath = Utils.getFileURL(of: "\(filename)\(fileType)").absoluteString
-        let _ = Utils.deleteIfExistingFile(atPath: filePath)
 
         if !AVAssetExportSession.exportPresets(compatibleWith: entry).contains(AVAssetExportPresetAppleM4A) {
             fatalError("\t[Error] Expected export preset value not compatible with entry")
@@ -345,7 +342,7 @@ class Utils {
         exporter.exportAsynchronously() {
             DispatchQueue.global(qos: .userInitiated).async {
                 if exporter.status == AVAssetExportSession.Status.completed {
-                    print("===== Entry successfully exported: \(filename).m4a =====")
+                    print("===== Entry successfully exported: \(entry.filename).m4a =====")
                     onFinishHandler?(url.lastPathComponent)
                 } else {
                     print("===== [Error] Unable to export entry =====")
@@ -1147,35 +1144,40 @@ class Utils {
                 // Compute text range
                 let lowerRange = lowerSegment.entry!.getSegmentTextRange(of: lowerSegment)
                 let upperRange = upperSegment.entry!.getSegmentTextRange(of: upperSegment)
-                let lowerLocation = lowerRange!.location
-                let upperLocation = upperRange!.location
-                let upperLength = upperRange!.length
-                let textRange = NSRange(location: lowerLocation, length: (upperLocation - lowerLocation) + upperLength)
-                print("\tCompute cleansed transformation textRange: ", textRange)
                 
-                // Compute range
-                let entryRange = range
-                print("\tCompute cleansed transformation entryRange: ", entryRange)
-                
-                // Collect segment uids
-                var uids: [String: Int] = [:]
-                for segment in segments[entryRange] {
-                    uids[segment.getUID()] = segment.getIndex()
+                if let lowerRange = lowerRange, let upperRange = upperRange {
+                    let lowerLocation = lowerRange.location
+                    let upperLocation = upperRange.location
+                    let upperLength = upperRange.length
+                    let textRange = NSRange(location: lowerLocation, length: (upperLocation - lowerLocation) + upperLength)
+                    print("\tCompute cleansed transformation textRange: ", textRange)
+                    
+                    // Compute range
+                    let entryRange = range
+                    print("\tCompute cleansed transformation entryRange: ", entryRange)
+                    
+                    // Collect segment uids
+                    var uids: [String: Int] = [:]
+                    for segment in segments[entryRange] {
+                        uids[segment.getUID()] = segment.getIndex()
+                    }
+                    print("\tCompute cleansed transformation segmentIndexMap: ", uids)
+                    
+                    let cleansedTransformation = EntryTransformation(
+                        type: transformation.type,
+                        uids: uids,
+                        text: text,
+                        value: value,
+                        textRange: textRange,
+                        entryRange: entryRange
+                    )
+                    print("\tInstantiate cleansed transformation: ", cleansedTransformation)
+                    
+                    cleansedTransformations.append(cleansedTransformation)
+                    print("Add cleansed transformation to array...")
+                } else {
+                    print("\t[Error] There was a problem locating lower or upper range.")
                 }
-                print("\tCompute cleansed transformation segmentIndexMap: ", uids)
-                
-                let cleansedTransformation = EntryTransformation(
-                    type: transformation.type,
-                    uids: uids,
-                    text: text,
-                    value: value,
-                    textRange: textRange,
-                    entryRange: entryRange
-                )
-                print("\tInstantiate cleansed transformation: ", cleansedTransformation)
-                
-                cleansedTransformations.append(cleansedTransformation)
-                print("Add cleansed transformation to array...")
             }
         }
         

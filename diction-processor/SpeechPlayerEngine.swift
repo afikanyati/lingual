@@ -8,6 +8,7 @@
 
 import Foundation
 import AVFoundation
+import UIKit
 
 class SpeechPlayerEngine: NSObject {
     // MARK: - Notifications
@@ -86,6 +87,9 @@ class SpeechPlayerEngine: NSObject {
     deinit {
         // remove notification observers
         NotificationCenter.default.removeObserver(self)
+        
+        // End active timers
+        self.invalidateTimers()
     }
     
     // MARK: - Validation
@@ -108,6 +112,14 @@ class SpeechPlayerEngine: NSObject {
         
         notificationCenter.addObserver(
             self,
+            selector: #selector(self.appWillTerminate),
+            name: UIApplication.willTerminateNotification,
+            object: nil
+        )
+        
+        // Voice Commands
+        notificationCenter.addObserver(
+            self,
             selector: #selector(onProcessedVoiceCommand(notification:)),
             name: VoiceCommandEngine.onProcessedVoiceCommand,
             object: nil
@@ -128,6 +140,12 @@ class SpeechPlayerEngine: NSObject {
             name: DetailViewController.onChangedPlayerRate,
             object: nil
         )
+    }
+    
+    @objc func appWillTerminate() {
+        print("===== Speech Player Engine: App Will Terminate =====")
+
+        self.invalidateTimers()
     }
     
     @objc func onProcessedVoiceCommand(notification: Notification) {
@@ -1168,6 +1186,12 @@ class SpeechPlayerEngine: NSObject {
         self.playbackSecondTimer = nil
         
         checkRep()
+    }
+    
+    func invalidateTimers() {
+        print("===== Speech Player Engine: Invalidate Timers =====")
+        self.playerLoopTimer?.invalidate()
+        self.playbackSecondTimer?.invalidate()
     }
     
     // MARK: - Key-Value Observer

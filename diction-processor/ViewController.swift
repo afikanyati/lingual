@@ -55,6 +55,11 @@ class ViewController: UIViewController, SegueProtocol {
         super.viewWillAppear(animated)
         
         self.configureNotificationObservers()
+        
+        // Prevent large title
+        let navigationController = Utils.getNavigationController()
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationController?.navigationItem.largeTitleDisplayMode = .never
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -76,11 +81,6 @@ class ViewController: UIViewController, SegueProtocol {
         self.wakePhraseLabel?.text = "\"\(self.speechRecognition.wakePhrases[0].capitalizeFirstLetter())\""
         
         self.prepareGeneralView()
-        
-        // Prevent large title
-        let navigationController = Utils.getNavigationController()
-        navigationController?.navigationBar.prefersLargeTitles = false
-        navigationController?.navigationItem.largeTitleDisplayMode = .never
         
         // Notify observers of loading
         NotificationCenter.default.post(
@@ -435,6 +435,10 @@ class ViewController: UIViewController, SegueProtocol {
     @objc func onPitchUpdate(notification: Notification) {
         // print("===== View Controller: On Pitch Update =====")
         DispatchQueue.main.async { [weak self] in
+            if self == nil {
+                return
+            }
+            
             if let speechPlayer = self?.speechPlayer, let pitchLabel = self?.pitchLabel {
                 Utils.onPitchUpdate(
                     notification: notification,
@@ -464,6 +468,12 @@ class ViewController: UIViewController, SegueProtocol {
             notification: notification,
             speechRecognition: self.speechRecognition
         )
+        
+        DispatchQueue.main.async {
+            // add table view buttons
+            let navigationController = Utils.getNavigationController()
+            navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self.getWakeUpButton()]
+        }
     }
     
     @objc func onStartedListeningForCommands(notification: Notification) {

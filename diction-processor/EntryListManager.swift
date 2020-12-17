@@ -6,6 +6,7 @@
 //  Copyright © 2020 Afika Nyati. All rights reserved.
 //
 
+import UIKit
 import Foundation
 import AVFoundation
 
@@ -65,6 +66,9 @@ class EntryListManager: NSObject {
     deinit {
         // remove notification observers
         NotificationCenter.default.removeObserver(self)
+        
+        // End active timers
+        self.invalidateTimers()
     }
     
     // MARK: - Validation
@@ -88,6 +92,14 @@ class EntryListManager: NSObject {
     func configureNotificationObservers() {
         let notificationCenter = NotificationCenter.default
         
+        // App
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(self.appWillTerminate),
+            name: UIApplication.willTerminateNotification,
+            object: nil
+        )
+        
         // Voice Commands
         notificationCenter.addObserver(
             self,
@@ -103,6 +115,12 @@ class EntryListManager: NSObject {
             name: StateManager.onFetchedEntries,
             object: nil
         )
+    }
+    
+    @objc func appWillTerminate() {
+        print("===== Entry List Manager: App Will Terminate =====")
+        
+        self.invalidateTimers()
     }
     
     @objc func onFetchedEntries(notification: Notification) {
@@ -847,5 +865,14 @@ class EntryListManager: NSObject {
         }
 
         checkRep()
+    }
+    
+    // MARK: - Helper Methods
+    
+    func invalidateTimers() {
+        print("===== Entry List Manager: Invalidate Timers =====")
+        self.walkingTimer?.invalidate()
+        self.walkLoopDelayTimer?.invalidate()
+        self.runningTimer?.invalidate()
     }
 }

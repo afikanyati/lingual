@@ -521,19 +521,29 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
                 passiveSegments = Array(echoSegments[echoRange])
             }
             
-            guard utterance.speechString.trimTrailingPunctuation() == Entry.getText(
-                    segments: passiveSegments, withTemporalSuggestions: false,
-                    withPunctuationSuggestions: self.state.withPunctuationSuggestions,
-                    withFormattingSuggestions: self.state.withFormattingSuggestions,
-                    strictlyAsWord: false,
-                    withCapitalization: self.state.withCapitalization,
-                    forEcho: false
-            ).trimTrailingPunctuation() else { return }
+            guard utterance.speechString.trimTrailingPunctuation() == Entry.getText(segments: passiveSegments).trimTrailingPunctuation() else { return }
+                        
+            var textRange = characterRange
+            // find lowest segment that is a word
+            var lowestEchoSegment: EntrySegment?
+            for segment in passiveSegments {
+                if !segment.isSilence() && !segment.isVoiceCommandWord() && !segment.isDeleted() {
+                    lowestEchoSegment = segment
+                    break
+                }
+            }
+
+            if let entry = self.entryManager.currentEntry,
+               let lowestEchoSegment = lowestEchoSegment,
+               let lowestEchoSegmentRange = entry.getSegmentTextRange(of: lowestEchoSegment)
+            {
+                textRange = NSRange(location: lowestEchoSegmentRange.location + characterRange.location, length: characterRange.length)
+            }
             
             NotificationCenter.default.post(
                 name: SpeechSynthesisEngine.onEchoUpdate,
                 object: nil,
-                userInfo: [ "highlightRange": characterRange]
+                userInfo: [ "highlightRange": textRange]
             )
         }
         

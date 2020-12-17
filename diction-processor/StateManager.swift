@@ -48,6 +48,7 @@ class StateManager: NSObject {
     
     private(set) var appOpens = [TimeInterval]()
     private(set) var audioDeviceUse = [AudioDeviceDatum]()
+    private(set) var microphoneUse = [MicrophoneDatum]()
     private(set) var entryViews = [TimeInterval]()
     private(set) var entryPlays = [TimeInterval]()
     private(set) var entryTextExports = [TimeInterval]()
@@ -188,6 +189,8 @@ class StateManager: NSObject {
             name: SpeechRecognitionEngine.onWakePhraseDetected,
             object: nil
         )
+        
+        // Views
         notificationCenter.addObserver(
             self,
             selector: #selector(onViewDidLoad(notification:)),
@@ -261,9 +264,11 @@ class StateManager: NSObject {
         // Switch over the route change reason.
         switch reason {
         case .newDeviceAvailable: // New device found.
-            self.detectAudioDevice()
+            self.detectAudioDevice(withSave: false)
+            self.analyzeMicrophone()
         case .oldDeviceUnavailable: // Old device removed.
-            self.detectAudioDevice()
+            self.detectAudioDevice(withSave: false)
+            self.analyzeMicrophone()
         default:
             break
         }
@@ -443,8 +448,8 @@ class StateManager: NSObject {
         // Entries
         self.entries = notification.userInfo!["entries"] as? [Entry] ?? [Entry]()
         
-        if !self.entries.contains(where: { $0.filename == "entry-016AAC62-FEFB-4D62-96DE-854FDC07585C" }) {
-            if let entry = Utils.decodeLingualEntry(name: "entry-016AAC62-FEFB-4D62-96DE-854FDC07585C") {
+        if !self.entries.contains(where: { $0.filename == Utils.SEED_CONTENT_FILENAME }) {
+            if let entry = Utils.decodeLingualEntry(name: Utils.SEED_CONTENT_FILENAME) {
                 entry.title = Utils.SEED_CONTENT_TITLE
                 
                 // Add to the end of entries array
@@ -462,7 +467,7 @@ class StateManager: NSObject {
             }
         } else {
             for entry in self.entries {
-                if entry.filename == "entry-016AAC62-FEFB-4D62-96DE-854FDC07585C" {
+                if entry.filename == Utils.SEED_CONTENT_FILENAME {
                     entry.title = Utils.SEED_CONTENT_TITLE
                 }
             }
@@ -512,6 +517,7 @@ class StateManager: NSObject {
             print("\tAble to cast appTelemetry as [String: Any]")
             self.appOpens = appTelemetry["appOpens"] as? [TimeInterval] ?? [TimeInterval]()
             self.audioDeviceUse = appTelemetry["audioDeviceUse"] as?  [AudioDeviceDatum] ?? [AudioDeviceDatum]()
+            self.microphoneUse = appTelemetry["microphoneUse"] as?  [MicrophoneDatum] ?? [MicrophoneDatum]()
             self.entryViews = appTelemetry["entryViews"] as? [TimeInterval] ?? [TimeInterval]()
             self.entryPlays = appTelemetry["entryPlays"] as? [TimeInterval] ?? [TimeInterval]()
             self.entryTextExports = appTelemetry["entryTextExports"] as? [TimeInterval] ?? [TimeInterval]()
@@ -521,6 +527,7 @@ class StateManager: NSObject {
             print("\t[Error] Unable to cast appTelemetry as [String: Any]")
             self.appOpens = [TimeInterval]()
             self.audioDeviceUse = [AudioDeviceDatum]()
+            self.microphoneUse = [MicrophoneDatum]()
             self.entryViews = [TimeInterval]()
             self.entryPlays = [TimeInterval]()
             self.entryTextExports = [TimeInterval]()
@@ -534,8 +541,9 @@ class StateManager: NSObject {
         // Only execute these once we've fetched state so we don't accidentally overwrite it
         //
         // These methods call save.
-        self.incrementOpenCount()
-        self.detectAudioDevice()
+        self.incrementOpenCount(withSave: false)
+        self.detectAudioDevice(withSave: false)
+        self.analyzeMicrophone()
         
         NotificationCenter.default.post(
             name: StateManager.onFetchedEntries,
@@ -583,10 +591,12 @@ class StateManager: NSObject {
     
     // MARK: - Telemetry
     
-    func incrementOpenCount() {
+    func incrementOpenCount(withSave: Bool = true) {
         print("===== State Manager: Increment Open Count =====")
         self.appOpens.append(Date().timeIntervalSince1970)
-        self.save()
+        if withSave {
+            self.save()
+        }
         checkRep()
     }
     
@@ -1006,7 +1016,7 @@ class StateManager: NSObject {
         checkRep()
     }
     
-    func detectAudioDevice() {
+    func detectAudioDevice(withSave: Bool = true) {
         print("===== State Manager: Detect Audio Device =====")
         if AVAudioSession.isHeadphonesConnected && AVAudioSession.bluetoothAudioConnected {
             print("\tRegistered Bluetooth Headphones...")
@@ -1034,7 +1044,33 @@ class StateManager: NSObject {
             self.audioDeviceUse.append(audioDeviceDatum)
         }
         
-        self.save()
+        if withSave {
+            self.save()
+        }
+        
+        checkRep()
+    }
+    
+    func analyzeMicrophone(withSave: Bool = true) {
+        print("===== State Manager: Analyze Microphone =====")
+        
+        let audioEngine = AVAudioEngine()
+        let node = audioEngine.inputNode
+        let inputFormat = node.outputFormat(forBus: Utils.SPEECH_RECOGNITION_BUS)
+        let softwareSampleRate = inputFormat.sampleRate
+        let hardwareSampleRate = AVAudioSession.sharedInstance().sampleRate
+        
+        let microphoneDatum = MicrophoneDatum(
+            date: Date(),
+            softwareSampleRate: softwareSampleRate,
+            hardwareSampleRate: hardwareSampleRate
+        )
+        
+        self.microphoneUse.append(microphoneDatum)
+        
+        if withSave {
+            self.save()
+        }
         checkRep()
     }
     

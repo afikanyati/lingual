@@ -652,7 +652,7 @@ class Entry: AVMutableComposition, NSCoding {
         {
             // If we only allow to enter here if we have an existing snapshot,
             // Undoing to the start will make us have no snapshots and then we will never be able to register another entry change
-            self.entryManager.registerEntryChange(entry: self, undo: "committing new speech", ignoreUpdate: true)
+            self.entryManager.registerEntryChange(entry: self, undo: "committing new speech")
         }
     }
     
@@ -2091,18 +2091,20 @@ class Entry: AVMutableComposition, NSCoding {
                 updatedSegments = self.entrySegments + segments
             } else {
                 print("\tSearch for insert segment...")
+                // Both are timeMapping.target.end because we're looking for the endTime not startTime
                 let insertSegment = Utils.binarySearch(
                     in: self.entrySegments,
                     isLower: { segment in
                         return segment.timeMapping.target.end < time
                     },
                     isHigher: { segment in
-                        return segment.timeMapping.target.start > time
+                        return segment.timeMapping.target.end > time
                     }
                 )
                 
                 if let insertSegment = insertSegment {
                     let insertIndex = insertSegment.getIndex() + 1
+                    print("\tSegments: ", Utils.stringifySegments(segments: self.entrySegments))
                     print("\tLocated insert segment at index: ", insertIndex)
                     print("\tStitching new segments together...")
                     updatedSegments = Array(self.entrySegments[0..<insertIndex]) + segments + self.entrySegments[insertIndex..<self.entrySegments.count]
@@ -2192,6 +2194,19 @@ class Entry: AVMutableComposition, NSCoding {
             // Check rep invariant
             self.handleMutation()
         }
+        
+        if let _ = self.state, self.transformations.count > 0 {
+            var segmentIndexMap: [String : Int] = [:]
+            self.entrySegments.forEach { segmentIndexMap[$0.getUID()] = $0.getIndex() }
+            self.transformations = Utils.cleanseTransformations(
+                transformations: self.transformations,
+                segments: self.entrySegments,
+                segmentIndexMap: segmentIndexMap,
+                omitSilences: false,
+                omitVoiceCommands: false,
+                omitDeleted: false
+            )
+        }
 
         if !self.selectionCursor.isUpdatingSelection {
             self.handleOnSpeechUpdate(text: self.getText())
@@ -2229,10 +2244,11 @@ class Entry: AVMutableComposition, NSCoding {
             removeRangeLeftSegment = firstSegment
         } else {
             print("\tSearching for index of left segment of removal segments...")
+            // Both are timeMapping.target.start because we're looking for the startTime not endTime
             removeRangeLeftSegment = Utils.binarySearch(
                 in: self.entrySegments,
                 isLower: { segment in
-                    return segment.timeMapping.target.end < beforeTime
+                    return segment.timeMapping.target.start < beforeTime
                 },
                 isHigher: { segment in
                     return segment.timeMapping.target.start > beforeTime
@@ -2246,13 +2262,14 @@ class Entry: AVMutableComposition, NSCoding {
             removeRangeRightSegment = lastSegment
         } else {
             print("\tSearching for index of right segment of removal segments...")
+            // Both are timeMapping.target.end because we're looking for the endTime not startTime
             removeRangeRightSegment = Utils.binarySearch(
                 in: self.entrySegments,
                 isLower: { segment in
                     return segment.timeMapping.target.end < afterTime
                 },
                 isHigher: { segment in
-                    return segment.timeMapping.target.start > afterTime
+                    return segment.timeMapping.target.end > afterTime
                 }
             )
         }
@@ -2302,7 +2319,7 @@ class Entry: AVMutableComposition, NSCoding {
             
             // After Segments
             DispatchQueue.concurrentPerform(iterations: self.entrySegments.count - rightIndex) { [weak self] index in
-                print("\tReset text history: ", self?.entrySegments[rightIndex + index].getText() ?? "nil", self?.entrySegments[rightIndex + index].getIndex() ?? "nil")
+                print("\tReset text history: '\(self?.entrySegments[rightIndex + index].getText() ?? "nil")' at index: ", self?.entrySegments[rightIndex + index].getIndex() ?? "nil")
                 self?.entrySegments[rightIndex + index].handleMutation()
             }
         } else if let _ = removeRangeLeftSegment, removeRangeRightSegment == nil {
@@ -2349,6 +2366,19 @@ class Entry: AVMutableComposition, NSCoding {
         if let segment = segment, updateCachedAnchor && segment.isActive() {
             print("\tUpdating selection cursor cached anchor...")
             self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: segment.getIndex(), trackType: .committed))
+        }
+        
+        if let _ = self.state, self.transformations.count > 0 {
+            var segmentIndexMap: [String : Int] = [:]
+            self.entrySegments.forEach { segmentIndexMap[$0.getUID()] = $0.getIndex() }
+            self.transformations = Utils.cleanseTransformations(
+                transformations: self.transformations,
+                segments: self.entrySegments,
+                segmentIndexMap: segmentIndexMap,
+                omitSilences: false,
+                omitVoiceCommands: false,
+                omitDeleted: false
+            )
         }
         
         // we don't change text view in this mode, so text won't be available
@@ -3986,6 +4016,7 @@ class Entry: AVMutableComposition, NSCoding {
     func getSentenceDetails(forTrackTime: CMTime) -> Sentence? {
         print("===== Entry: Get Sentence Details =====")
         
+        // We use end and start here because of peculiarity of sentences
         let sentenceSegment = Utils.binarySearch(
             in: self.entrySegments,
             isLower: { segment in
@@ -4018,6 +4049,7 @@ class Entry: AVMutableComposition, NSCoding {
     func getParagraphDetails(forTrackTime: CMTime) -> Paragraph? {
         print("===== Entry: Get Paragraph Details =====")
 
+        // We use end and start here because of peculiarity of paragraphs
         let paragraphSegment = Utils.binarySearch(
             in: self.entrySegments,
             isLower: { segment in

@@ -31,7 +31,7 @@ class SoundIntensityDatum: NSObject, NSCoding {
 
     required init?(coder: NSCoder) {
         self.date = coder.decodeObject(forKey: "date") as! Date
-        self.power = coder.decodeObject(forKey: "power") as! Double
+        self.power = coder.decodeDouble(forKey: "power")
     }
    
     func setDate(value: Date) {
