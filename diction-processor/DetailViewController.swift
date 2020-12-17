@@ -733,7 +733,7 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
  
         DispatchQueue.main.async { [weak self] in
             let navigationController = Utils.getNavigationController()
-            if !self!.speechRecognition.isListeningForSpeech {
+            if self != nil && !self!.speechRecognition.isListeningForSpeech {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getDeleteEntryButton()]
             } else {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [] // remove delete button when listening for speech
@@ -838,6 +838,12 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             notification: notification,
             speechRecognition: self.speechRecognition
         )
+        
+        // Remove navigation buttons
+        DispatchQueue.main.async {
+            let navigationController = Utils.getNavigationController()
+            navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = []
+        }
     }
     
     @objc func onStopNotification(notification: Notification) {
@@ -848,6 +854,19 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             speechRecognition: self.speechRecognition,
             selectionCursor: self.selectionCursor
         )
+        
+        // Add back navigation buttons
+        DispatchQueue.main.async { [weak self] in
+            let navigationController = Utils.getNavigationController()
+            if self != nil && !self!.speechRecognition.isListeningForSpeech {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getDeleteEntryButton()]
+            } else {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [] // remove delete button when listening for speech
+            }
+            if let _ = self?.selectionCursor.clipboard {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems?.insert(self!.getPasteClipboardButton(), at: 0)
+            }
+        }
     }
     
     @objc func onStartIndefiniteNotification(notification: Notification) {
@@ -863,7 +882,7 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
         print("===== Detail View Controller: On Entry Complete =====")
         DispatchQueue.main.async { [weak self] in
             let navigationController = Utils.getNavigationController()
-            if !self!.speechRecognition.isListeningForSpeech {
+            if self != nil && !self!.speechRecognition.isListeningForSpeech {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getDeleteEntryButton()]
             } else {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [] // remove delete button when listening for speech
@@ -1064,7 +1083,7 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
         DispatchQueue.main.async { [weak self] in
             let navigationController = Utils.getNavigationController()
             self?.adjustCommandBar()
-            if !self!.speechRecognition.isListeningForSpeech {
+            if self != nil && !self!.speechRecognition.isListeningForSpeech {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getDeleteEntryButton()]
             } else {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [] // remove delete button when listening for speech
@@ -1161,7 +1180,7 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
     func prepareNavbar() {
         DispatchQueue.main.async { [weak self] in
             let navigationController = Utils.getNavigationController()
-            if !self!.speechRecognition.isListeningForSpeech {
+            if self != nil && !self!.speechRecognition.isListeningForSpeech {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self!.getDeleteEntryButton()]
             } else {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [] // remove delete button when listening for speech

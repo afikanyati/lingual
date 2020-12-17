@@ -174,7 +174,7 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
                 ),
                 DictionaryAction(
                     tokens: [VoiceCommandEngine.Token.EXIT.value().uppercased(), "LEAVE", "CLOSE"],
-                    description: "Navigate out of a selected entry back to the entry list.",
+                    description: "(From the entry detail) Navigate out of a selected entry back to the entry list.",
                     example: "Exit entry"
                 )
             ]
@@ -290,7 +290,7 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
         ),
         DictionarySection(
             title: [VoiceCommandEngine.Token.SELECTION.value().uppercased()],
-            details: "An isolation of speech while listening for entry speech.",
+            details: "A user-defined segment of speech in an entry.",
             isAccordion: false,
             isExpanded: false,
             actions: [
@@ -388,7 +388,7 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
         ),
         DictionarySection(
             title: [VoiceCommandEngine.Token.WORD.value().uppercased()],
-            details: "An isolation of a word while listening for entry speech.",
+            details: "A word selection in an entry.",
             isAccordion: false,
             isExpanded: false,
             actions: [
@@ -456,7 +456,7 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
         ),
         DictionarySection(
             title: [VoiceCommandEngine.Token.SENTENCE.value().uppercased()],
-            details: "An isolation of a sentence while listening for entry speech.",
+            details: "A sentence selection in an entry.",
             isAccordion: false,
             isExpanded: false,
             actions: [
@@ -534,7 +534,7 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
         ),
         DictionarySection(
             title: [VoiceCommandEngine.Token.PARAGRAPH.value().uppercased(), "PASSAGE", "SECTION"],
-            details: "An isolation of a paragraph while listening for entry speech.",
+            details: "A paragraph selection in an entry.",
             isAccordion: false,
             isExpanded: false,
             actions: [
@@ -928,7 +928,7 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
                 ),
                 DictionaryLine(
                     title: "Object Omission",
-                    body: "When in an “object mode”, such as we have selected speech, omitting the object is permitted. e.g. \"SHIFT WALK RIGHT\" -> \"SHIFT RIGHT\""
+                    body: "When in an “object mode”, such as when we have selected speech, omitting the object is permitted. e.g. \"SHIFT WALK RIGHT\" -> \"SHIFT RIGHT\""
                 ),
                 DictionaryLine(
                     title: "Action Omission",
@@ -1279,7 +1279,7 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
                 return
             }
             // keep recording outside of app if entry started
-            if !self!.speechRecognition.isListeningForSpeech {
+            if self != nil && !self!.speechRecognition.isListeningForSpeech {
                 self?.performSegue(withIdentifier: Segues.moveFromDictionaryToEntryTable.rawValue, sender: nil)
             }
         }

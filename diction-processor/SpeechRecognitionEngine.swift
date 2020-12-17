@@ -2572,12 +2572,20 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 print("\tSetting punctuation suggestion timers...")
                 // Initiate Punctuation Suggestion Timers
                 print("\tSentence Suggestion Timer: \(Utils.NEW_SENTENCE_PAUSE_DURATION) s \(lastSpeechRecognizerHypothesizeDate.timeIntervalSinceNow) s")
-                self.sentenceSuggestionTimer = Timer.scheduledTimer(withTimeInterval: max(0, Utils.NEW_SENTENCE_PAUSE_DURATION + lastSpeechRecognizerHypothesizeDate.timeIntervalSinceNow), repeats: false) { timer in
+                self.sentenceSuggestionTimer = Timer.scheduledTimer(withTimeInterval: max(0, Utils.NEW_SENTENCE_PAUSE_DURATION + lastSpeechRecognizerHypothesizeDate.timeIntervalSinceNow), repeats: false) { [weak self] timer in
                     soundEngine.sentenceSuggestion()
+                    self?.notifications.executeFeedback(
+                        visualMessage: "New Sentence",
+                        withHaptics: true
+                    )
                 }
                 print("\tParagraph Suggestion Timer: \(Utils.NEW_PARAGRAPH_PAUSE_DURATION) s \(lastSpeechRecognizerHypothesizeDate.timeIntervalSinceNow) s")
-                self.paragraphSuggestionTimer = Timer.scheduledTimer(withTimeInterval: max(0, Utils.NEW_PARAGRAPH_PAUSE_DURATION + lastSpeechRecognizerHypothesizeDate.timeIntervalSinceNow), repeats: false) { timer in
+                self.paragraphSuggestionTimer = Timer.scheduledTimer(withTimeInterval: max(0, Utils.NEW_PARAGRAPH_PAUSE_DURATION + lastSpeechRecognizerHypothesizeDate.timeIntervalSinceNow), repeats: false) { [weak self] timer in
                     soundEngine.paragraphSuggestion()
+                    self?.notifications.executeFeedback(
+                        visualMessage: "New line",
+                        withHaptics: true
+                    )
                 }
             }
             // MARK: - Listening for Commands (Handled by didHypothesizeTranscription, but updating it)
