@@ -223,7 +223,8 @@ class Entry: AVMutableComposition, NSCoding {
         selectionCursor: SelectionCursor? = nil,
         pitchRecognition: PitchRecognitionEngine? = nil,
         entryManager: EntryManager? = nil,
-        notifications: NotificationEngine? = nil
+        notifications: NotificationEngine? = nil,
+        handler: ((_ entry: Entry) -> Void)? = nil
     ) {
         print("===== Entry: Initialization =====")
         print("\tFilename: ", filename)
@@ -287,10 +288,12 @@ class Entry: AVMutableComposition, NSCoding {
                 segments: entrySegments,
                 replaceEntryDetails: false,
                 saveToLowLevelRepr: true,
-                saveToState: false
+                saveToState: false,
+                handler: handler
             )
         } else {
             print("\tNo segments to insert. Return entry...")
+            handler?(self)
         }
     }
     
@@ -3596,9 +3599,106 @@ class Entry: AVMutableComposition, NSCoding {
         pitchRecognition: PitchRecognitionEngine? = nil,
         entryManager: EntryManager? = nil,
         notifications: NotificationEngine? = nil,
-        processSegments: Bool = true
+        processSegments: Bool = true,
+        handler: ((_ entry: Entry) -> Void)? = nil
     ) -> Entry {
         print("===== Entry \(self.uid): Duplicate ======")
+        
+        let prepareDuplicate: (_ entry: Entry) -> Void = { entry in
+            // Set Date Created
+            entry.dateCreated = self.dateCreated
+            
+            // Set Date Modified
+            entry.dateModified = self.dateModified
+
+            // Set Committed Buffer Ranges
+            if self.committedBufferRanges.count > 0 {
+                var committedBufferRanges = [Range<Int>](repeating: 0..<1, count: self.committedBufferRanges.count)
+                DispatchQueue.concurrentPerform(iterations: self.committedBufferRanges.count) { [weak self] index in
+                    let duplicateRange = self!.committedBufferRanges[index].lowerBound..<self!.committedBufferRanges[index].upperBound
+                    committedBufferRanges[index] = duplicateRange
+                }
+
+                entry.committedBufferRanges = committedBufferRanges
+            }
+            
+            // Set Transformations
+            if self.transformations.count > 0 {
+                var transformations = [EntryTransformation](repeating: self.transformations.first!, count: self.transformations.count)
+                DispatchQueue.concurrentPerform(iterations: self.transformations.count) { [weak self] index in
+                    let duplicateTransformation = EntryTransformation(
+                        type: self!.transformations[index].type,
+                        uids: self!.transformations[index].uids,
+                        text: self!.transformations[index].text,
+                        value: self!.transformations[index].value,
+                        textRange: self!.transformations[index].textRange,
+                        entryRange: self!.transformations[index].entryRange
+                    )
+                    transformations[index] = duplicateTransformation
+                }
+                entry.transformations = transformations
+            }
+            
+            // Set Authorized To Listen For Speech
+            entry.authorizedToListenForSpeech = self.authorizedToListenForSpeech
+
+            // Set Clips
+            entry.clips = self.clips
+            
+            // Set Current Clip UID
+            entry.setCurrentClipUID(uid: self.currentClipUID)
+
+            // Set Record Start Date
+            entry.recordStartDate = self.recordStartDate
+            
+            // Set Accumulated Duration
+            entry.accumulatedDuration = self.accumulatedDuration
+            
+            // Set Record File
+            entry.recordFile = self.recordFile
+            
+            // Set Is Deleted
+            entry.isDeleted = self.isDeleted
+            
+            // Set Views
+            if self.views.count > 0 {
+                var views = [TimeInterval](repeating: 0, count: self.views.count)
+                DispatchQueue.concurrentPerform(iterations: self.views.count) { [weak self] index in
+                    views[index] = self!.views[index]
+                }
+                entry.views = views
+            }
+            
+            // Set Plays
+            if self.plays.count > 0 {
+                var plays = [TimeInterval](repeating: 0, count: self.plays.count)
+                DispatchQueue.concurrentPerform(iterations: self.plays.count) { [weak self] index in
+                    plays[index] = self!.plays[index]
+                }
+                entry.plays = plays
+            }
+            
+            // Set Text Exports
+            if self.textExports.count > 0 {
+                var textExports = [TimeInterval](repeating: 0, count: self.textExports.count)
+                DispatchQueue.concurrentPerform(iterations: self.textExports.count) { [weak self] index in
+                    textExports[index] = self!.textExports[index]
+                }
+                entry.textExports = textExports
+            }
+            
+            // Audio Exports
+            if self.audioExports.count > 0 {
+                var audioExports = [TimeInterval](repeating: 0, count: self.audioExports.count)
+                DispatchQueue.concurrentPerform(iterations: self.audioExports.count) { [weak self] index in
+                    audioExports[index] = self!.audioExports[index]
+                }
+                entry.audioExports = audioExports
+            }
+            
+            handler?(entry)
+        }
+        
         let entry = Entry(
             uid: self.uid,
             filename: self.filename,
@@ -3612,97 +3712,8 @@ class Entry: AVMutableComposition, NSCoding {
             pitchRecognition: pitchRecognition,
             entryManager: entryManager,
             notifications: notifications
-        )
-        
-        // Set Date Created
-        entry.dateCreated = self.dateCreated
-        
-        // Set Date Modified
-        entry.dateModified = self.dateModified
-
-        // Set Committed Buffer Ranges
-        if self.committedBufferRanges.count > 0 {
-            var committedBufferRanges = [Range<Int>](repeating: 0..<1, count: self.committedBufferRanges.count)
-            DispatchQueue.concurrentPerform(iterations: self.committedBufferRanges.count) { [weak self] index in
-                let duplicateRange = self!.committedBufferRanges[index].lowerBound..<self!.committedBufferRanges[index].upperBound
-                committedBufferRanges[index] = duplicateRange
-            }
-
-            entry.committedBufferRanges = committedBufferRanges
-        }
-        
-        // Set Transformations
-        if self.transformations.count > 0 {
-            var transformations = [EntryTransformation](repeating: self.transformations.first!, count: self.transformations.count)
-            DispatchQueue.concurrentPerform(iterations: self.transformations.count) { [weak self] index in
-                let duplicateTransformation = EntryTransformation(
-                    type: self!.transformations[index].type,
-                    uids: self!.transformations[index].uids,
-                    text: self!.transformations[index].text,
-                    value: self!.transformations[index].value,
-                    textRange: self!.transformations[index].textRange,
-                    entryRange: self!.transformations[index].entryRange
-                )
-                transformations[index] = duplicateTransformation
-            }
-            entry.transformations = transformations
-        }
-        
-        // Set Authorized To Listen For Speech
-        entry.authorizedToListenForSpeech = self.authorizedToListenForSpeech
-
-        // Set Clips
-        entry.clips = self.clips
-        
-        // Set Current Clip UID
-        entry.setCurrentClipUID(uid: self.currentClipUID)
-
-        // Set Record Start Date
-        entry.recordStartDate = self.recordStartDate
-        
-        // Set Accumulated Duration
-        entry.accumulatedDuration = self.accumulatedDuration
-        
-        // Set Record File
-        entry.recordFile = self.recordFile
-        
-        // Set Is Deleted
-        entry.isDeleted = self.isDeleted
-        
-        // Set Views
-        if self.views.count > 0 {
-            var views = [TimeInterval](repeating: 0, count: self.views.count)
-            DispatchQueue.concurrentPerform(iterations: self.views.count) { [weak self] index in
-                views[index] = self!.views[index]
-            }
-            entry.views = views
-        }
-        
-        // Set Plays
-        if self.plays.count > 0 {
-            var plays = [TimeInterval](repeating: 0, count: self.plays.count)
-            DispatchQueue.concurrentPerform(iterations: self.plays.count) { [weak self] index in
-                plays[index] = self!.plays[index]
-            }
-            entry.plays = plays
-        }
-        
-        // Set Text Exports
-        if self.textExports.count > 0 {
-            var textExports = [TimeInterval](repeating: 0, count: self.textExports.count)
-            DispatchQueue.concurrentPerform(iterations: self.textExports.count) { [weak self] index in
-                textExports[index] = self!.textExports[index]
-            }
-            entry.textExports = textExports
-        }
-        
-        // Audio Exports
-        if self.audioExports.count > 0 {
-            var audioExports = [TimeInterval](repeating: 0, count: self.audioExports.count)
-            DispatchQueue.concurrentPerform(iterations: self.audioExports.count) { [weak self] index in
-                audioExports[index] = self!.audioExports[index]
-            }
-            entry.audioExports = audioExports
+        ) { entry in
+            prepareDuplicate(entry)
         }
         
         return entry
@@ -3794,7 +3805,8 @@ class Entry: AVMutableComposition, NSCoding {
         replaceEntryDetails: Bool = false,
         saveToLowLevelRepr: Bool = false,
         saveToState: Bool = true,
-        computeSentencesAndParagraphs: Bool = true
+        computeSentencesAndParagraphs: Bool = true,
+        handler: ((_ entry: Entry) -> Void)? = nil
     ) {
         print("===== Entry: Set Segments =====")
         
@@ -3886,6 +3898,8 @@ class Entry: AVMutableComposition, NSCoding {
                 // We don't run handle save when entry ended. We run it at the end of on speech update
                 self.handleSave()
             }
+            
+            handler?(self)
         } catch {
             print("\t[Error] There was a problem updating entry segments")
         }

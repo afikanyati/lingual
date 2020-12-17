@@ -631,7 +631,7 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
                 return
             }
             // keep recording outside of app if entry started
-            if !self!.speechRecognition.isListeningForSpeech {
+            if self != nil && !self!.speechRecognition.isListeningForSpeech {
                 self?.performSegue(withIdentifier: Segues.moveFromDetailToEntryTable.rawValue, sender: nil)
             }
             

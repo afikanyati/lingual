@@ -258,6 +258,15 @@ class EntryListManager: NSObject {
             visualMessage: "\(runOverride ? "Run" : "Walk") activated!",
             withHaptics: true
         )
+        
+        if runOverride && !AVAudioSession.isHeadphonesConnected {
+            Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_NOTIFICATION_DURATION, repeats: false) { timer in
+                self.notifications.executeFeedback(
+                    visualMessage: "Use headphones for sound",
+                    withHaptics: true
+                )
+            }
+        }
 
         // Activate isWalkingEntry if we don't have a run override
         self.isWalkingEntryList = !runOverride
@@ -370,7 +379,8 @@ class EntryListManager: NSObject {
                 if let currentIndex = self?.entryManager.currentIndex, currentIndex + 1 < self!.state.activeEntries.count {
                     self?.walkNextEntry(runOverride: true)
                 } else {
-                    self?.pauseRun()
+                    self?.exitWalkRun()
+                    self?.entryManager.setCurrentEntry()
                 }
             }
 

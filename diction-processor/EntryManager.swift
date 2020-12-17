@@ -22,6 +22,8 @@ class EntryManager: NSObject {
     static let onSelectionDeleted = Notification.Name(Notifications.onSelectionDeleted.rawValue)
     static let onStartedEntryAudioExport = Notification.Name(Notifications.onStartedEntryAudioExport.rawValue)
     static let onStoppedEntryAudioExport = Notification.Name(Notifications.onStoppedEntryAudioExport.rawValue)
+    static let onStartedEntrySetting = Notification.Name(Notifications.onStartedEntrySetting.rawValue)
+    static let onStoppedEntrySetting = Notification.Name(Notifications.onStoppedEntrySetting.rawValue)
 
     // MARK: - App Modules
     
@@ -77,6 +79,8 @@ class EntryManager: NSObject {
     private(set) var isExportingEntry = false
     /// Stores flag of whether we should not accept entry snapshot update after commit
     private(set) var ignoreEntrySnapshotUpdate = false
+    /// Stores whether we're setting entry
+    private(set) var isSettingEntry = false
     
     // MARK: - Initialization and Deinitialization
     
@@ -3731,7 +3735,7 @@ class EntryManager: NSObject {
     
     // MARK: - Setters
     
-    func setCurrentEntry(index: Int? = nil) {
+    func setCurrentEntry(index: Int? = nil, handler: (() -> Void)? = nil) {
         print("===== Entry Manager: Set Current Entry =====")
         print("\tSet index to: ", index ?? "nil")
         
@@ -3739,6 +3743,12 @@ class EntryManager: NSObject {
         self.undoManager.removeAllActions()
 
         if let index = index {
+            self.isSettingEntry = true
+            NotificationCenter.default.post(
+                name: EntryManager.onStartedEntrySetting,
+                object: nil,
+                userInfo: [:]
+            )
             self.currentIndex = index
             self.setEntryModules(index: index)
             // Increment Entry Views
@@ -3747,30 +3757,43 @@ class EntryManager: NSObject {
             {
                 self.currentEntry!.incrementViewCount()
             }
-            
-            // Make sure all data is correct
-            self.currentEntry!.refresh()
-            
-            let duplicateEntry = self.currentEntry!.duplicate(
-                state: self.state,
-                speechSynthesis: self.speechSynthesis,
-                speechRecognition: self.speechRecognition,
-                speechPlayer: self.speechPlayer,
-                selectionCursor: self.selectionCursor,
-                pitchRecognition: self.pitchRecognition,
-                entryManager: self,
-                notifications: self.notifications
-            )
-            
-            self.currentEntryUndoSnapshot = EntrySnapshot(
-                entry: duplicateEntry, // we duplicate so there's no memory leaks/pointers to same memory locations
-                selectionAnchorCaret: self.selectionCursor.anchorCaret,
-                selectionFocusCaret: self.selectionCursor.focusCaret,
-                selectionCachedAnchorCaret: self.selectionCursor.cachedAnchorCaret,
-                undo: "to start of entry"
-            )
-            
-            print("Entry Segments: ", Utils.stringifySegments(segments: self.currentEntry!.entrySegments))
+            DispatchQueue.global(qos: .userInitiated).async {
+                // Make sure all data is correct
+                if let currentEntry = self.currentEntry {
+                    currentEntry.refresh()
+                    let _ = currentEntry.duplicate(
+                        state: self.state,
+                        speechSynthesis: self.speechSynthesis,
+                        speechRecognition: self.speechRecognition,
+                        speechPlayer: self.speechPlayer,
+                        selectionCursor: self.selectionCursor,
+                        pitchRecognition: self.pitchRecognition,
+                        entryManager: self,
+                        notifications: self.notifications
+                    ) { entry in
+                        self.currentEntryUndoSnapshot = EntrySnapshot(
+                            entry: entry, // we duplicate so there's no memory leaks/pointers to same memory locations
+                            selectionAnchorCaret: self.selectionCursor.anchorCaret,
+                            selectionFocusCaret: self.selectionCursor.focusCaret,
+                            selectionCachedAnchorCaret: self.selectionCursor.cachedAnchorCaret,
+                            undo: "to start of entry"
+                        )
+                        self.isSettingEntry = false
+                        NotificationCenter.default.post(
+                            name: EntryManager.onStoppedEntrySetting,
+                            object: nil,
+                            userInfo: [:]
+                        )
+                        handler?()
+                        print("Entry Segments: ", Utils.stringifySegments(segments: currentEntry.entrySegments))
+                    }
+                } else {
+                    print("\t[Error] There was a problem setting the entry.")
+                    self.notifications.executeError(
+                        text: "Error opening entry"
+                    )
+                }
+            }
         } else {
             self.currentIndex = nil
         }

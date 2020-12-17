@@ -124,7 +124,7 @@ class NotificationEngine {
         text: String,
         type: NotificationType? = nil,
         isVoiceCommand: Bool = false,
-        duration: TimeInterval? = 5
+        duration: TimeInterval? = Utils.DEFAULT_NOTIFICATION_DURATION
     ) {
         print("===== Notification Engine: Schedule Notification =====")
         let notificationItem = NotificationItem(
@@ -289,7 +289,7 @@ class NotificationEngine {
                     self?.scheduleNotification(
                         text: visualMessage,
                         isVoiceCommand: isVoiceCommand,
-                        duration: 3
+                        duration: Utils.DEFAULT_NOTIFICATION_DURATION
                     )
                     if !self!.isExhaustingNotificationQueue {
                         self?.exhaustNotificationQueue()
@@ -355,7 +355,7 @@ class NotificationEngine {
             self.scheduleNotification(
                 text: text,
                 isVoiceCommand: false,
-                duration: 3
+                duration: Utils.DEFAULT_NOTIFICATION_DURATION
             )
             self.exhaustNotificationQueue()
             

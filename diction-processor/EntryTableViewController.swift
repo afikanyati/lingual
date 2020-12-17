@@ -25,6 +25,7 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
     @IBOutlet weak var soundIntensityIndicatorHeight: NSLayoutConstraint?
     @IBOutlet weak var soundIntensityIndicatorPositionBottom: NSLayoutConstraint?
     @IBOutlet weak var pitchLabel: UILabel?
+    @IBOutlet weak var settingIndicator: UIActivityIndicatorView!
     
     // MARK: - App State
     var state: StateManager!
@@ -103,7 +104,7 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
         let navigationController = Utils.getNavigationController()
         DispatchQueue.main.async {
             // add table view buttons
-            navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self.getDictionaryButton()]
+            navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self.getDictionaryButton(), self.getRunListButton()]
         }
         
         // Notify observers of loading
@@ -375,6 +376,18 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
             name: EntryManager.onEntryDeleted,
             object: nil
         )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onStartedEntrySetting(notification:)),
+            name: EntryManager.onStartedEntrySetting,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onStoppedEntrySetting(notification:)),
+            name: EntryManager.onStoppedEntrySetting,
+            object: nil
+        )
         
         // Entry List Manager
         notificationCenter.addObserver(
@@ -428,7 +441,7 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
             }
             
             // keep recording outside of app if entry started
-            if !self!.speechRecognition.isListeningForSpeech {
+            if self != nil && !self!.speechRecognition.isListeningForSpeech {
                 self?.performSegue(withIdentifier: Segues.moveFromEntryTableToSleep.rawValue, sender: nil)
             }
         }
@@ -525,6 +538,7 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
                 let navigationController = Utils.getNavigationController()
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
                     self!.getDictionaryButton(),
+                    self!.getRunListButton(),
                     Utils.getPitchLabel(
                         pitchText: pitch.note.string,
                         font: UIFont.systemFont(ofSize: Utils.DEFAULT_FONT_SIZE, weight: .bold)
@@ -614,12 +628,10 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
             speechRecognition: self.speechRecognition
         )
         
-        // Remove pitch label while presenting notification
-        DispatchQueue.main.async { [weak self] in
+        // Remove all buttons while presenting notification
+        DispatchQueue.main.async {
             let navigationController = Utils.getNavigationController()
-            navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
-                self!.getDictionaryButton()
-            ]
+            navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = []
         }
     }
     
@@ -631,6 +643,15 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
             speechRecognition: self.speechRecognition,
             selectionCursor: self.selectionCursor
         )
+        
+        // Bring back buttons while presenting notification
+        DispatchQueue.main.async { [weak self] in
+            let navigationController = Utils.getNavigationController()
+            navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
+                self!.getDictionaryButton(),
+                self!.getRunListButton()
+            ]
+        }
     }
     
     @objc func onStartIndefiniteNotification(notification: Notification) {
@@ -645,7 +666,8 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
         DispatchQueue.main.async { [weak self] in
             let navigationController = Utils.getNavigationController()
             navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
-                self!.getDictionaryButton()
+                self!.getDictionaryButton(),
+                self!.getRunListButton()
             ]
         }
     }
@@ -737,6 +759,20 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
         }
     }
     
+    @objc func onStartedEntrySetting(notification: Notification) {
+        print("===== Entry Table View Controller: On Started Entry Setting =====")
+        DispatchQueue.main.async { [weak self] in
+            self?.settingIndicator.startAnimating()
+        }
+    }
+    
+    @objc func onStoppedEntrySetting(notification: Notification) {
+        print("===== Entry Table View Controller: On Stopped Entry Setting =====")
+        DispatchQueue.main.async { [weak self] in
+            self?.settingIndicator.stopAnimating()
+        }
+    }
+    
     // MARK: - Segues
     
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
@@ -761,6 +797,7 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
                 detailViewController.uiManager = self.uiManager
                 detailViewController.voiceCommandEngine = self.voiceCommandEngine
             }
+            self.navigationItem.title = ""
             self.speechRecognition.activateListeningIndicator(
                 withRecording: self.speechRecognition.isListeningForSpeech,
                 withStopListeningButton: !self.speechRecognition.isListeningForSpeech,
@@ -890,7 +927,7 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
                 let navigationController = Utils.getNavigationController()
                 DispatchQueue.main.async {
                     // add table view buttons
-                    navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self.getDictionaryButton()]
+                    navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self.getDictionaryButton(), self.getRunListButton()]
                 }
             } else if let newOffset = change?[.newKey] as? CGPoint,
               newOffset.y < Utils.NAVIGATION_BAR_THRESHOLD_HEIGHT &&
@@ -902,7 +939,7 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
                 let navigationController = Utils.getNavigationController()
                 DispatchQueue.main.async {
                     // add table view buttons
-                    navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self.getDictionaryButton()]
+                    navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self.getDictionaryButton(), self.getRunListButton()]
                 }
             }
         }
@@ -942,6 +979,28 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
         button.addTarget(self, action: #selector(self.enterDictionary), for: .touchDown)
         button.setImage(UIImage(systemName: "book.closed"), for: .normal)
         button.setTitle("View Dictionary", for: .normal)
+        button.titleLabel?.font = UIFont.systemFont(ofSize: 11)
+        button.tintColor = UIColor.systemGray
+        if let tableView = self.tableView,
+           tableView.contentOffset.y >= Utils.NAVIGATION_BAR_THRESHOLD_HEIGHT
+        {
+            button.setTitleColor(UIColor.systemGray5, for: .normal)
+        } else {
+            button.setTitleColor(UIColor.darkGray, for: .normal)
+        }
+        
+        let barButton = UIBarButtonItem(customView: button)
+        
+        return barButton
+    }
+    
+    func getRunListButton() -> UIBarButtonItem {
+        let button  = CenteredButton(type: .custom)
+
+        button.frame = CGRect(x: 0.0, y: 0.0, width: Utils.NAVBAR_BUTTON_LENGTH, height: Utils.NAVBAR_BUTTON_LENGTH)
+        button.addTarget(self, action: #selector(self.handleRunList), for: .touchDown)
+        button.setImage(UIImage(systemName: "hare"), for: .normal)
+        button.setTitle("Run List", for: .normal)
         button.titleLabel?.font = UIFont.systemFont(ofSize: 11)
         button.tintColor = UIColor.systemGray
         if let tableView = self.tableView,
@@ -1015,6 +1074,10 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
         }
     }
     
+    @objc func handleRunList() {
+        self.entryListManager.runEntryList()
+    }
+    
     // MARK: - Table View
     
     // Reference: https://medium.com/@martinlasek/tutorial-adding-a-uitableview-programmatically-433cb17ae07d
@@ -1055,8 +1118,12 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
                 text: "Error. Another entry is being edited."
             )
         } else {
-            self.entryManager.setCurrentEntry(index: indexPath.row)
-            self.performSegue(withIdentifier: Segues.moveFromEntryTableToDetail.rawValue, sender: nil)
+            self.entryManager.setCurrentEntry(index: indexPath.row) { [weak self] in
+                DispatchQueue.main.async {
+                    self?.performSegue(withIdentifier: Segues.moveFromEntryTableToDetail.rawValue, sender: nil)
+                }
+            }
+            // We segue to detail page when we receive onStoppedSetting Entry notification
         }
         
         // Give haptic feedback

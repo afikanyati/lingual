@@ -79,6 +79,8 @@ enum Notifications: String {
     case onSelectionDeleted
     case onStartedEntryAudioExport
     case onStoppedEntryAudioExport
+    case onStartedEntrySetting
+    case onStoppedEntrySetting
     
     // Entry List Manager
     case onEntrySelected
