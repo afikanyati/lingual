@@ -1772,6 +1772,7 @@ public class VoiceCommandEngine: NSObject {
     //        Set([.VIEW, .HELP]) : .VIEW_HELP,
         Set([.GRANT, .PERMISSION]) : .GRANT_PERMISSION,
         Set([.CANCEL, .DIALOG]) : .CANCEL_DIALOG,
+        Set([.EXIT, .DIALOG]) : .CANCEL_DIALOG,
         Set([.CONTINUE, .DIALOG]) : .CONTINUE_DIALOG
     ]
     
@@ -2059,7 +2060,8 @@ public class VoiceCommandEngine: NSObject {
         ]),
         .DIALOG: Set([
             .CANCEL,
-            .CONTINUE
+            .CONTINUE,
+            .EXIT
         ]),
         .RATE: Set([]),
         .LIST: Set([

@@ -161,6 +161,7 @@ class Utils {
     static let INDEX_SEARCH_BUFFER: Int = 7
     static let VALID_VOICE_COMMAND_DELAY: TimeInterval = 0.3 // 0.2 was too fast
     static let DEFAULT_NOTIFICATION_DURATION: TimeInterval = 3
+    static let UI_DIALOG_DELAY: TimeInterval = 0.2
     
     static let pitchToFrequencyMap: [String : Double] = [
         "C0": 16,

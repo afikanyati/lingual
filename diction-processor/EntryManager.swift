@@ -884,8 +884,10 @@ class EntryManager: NSObject {
                     feedbackAudioMessage: "permission granted",
                     style: .default,
                     handler: { action in
-                    self.speechRecognition.requestPermissions(handler: {
-                        self.speechRecognition.configureListeningForWakePhrase()
+                    self.speechRecognition.requestPermissions(handler: { [weak self] in
+                        self?.speechRecognition.configureListening() { [weak self] in
+                            self?.speechRecognition.startListeningForWakePhrase()
+                        }
                     })
                 }),
                 DialogAction(
@@ -1066,9 +1068,11 @@ class EntryManager: NSObject {
                     feedbackAudioMessage: "permission granted",
                     style: .default,
                     handler: { action in
-                    self.speechRecognition.requestPermissions() {
-                        self.speechRecognition.configureListeningForWakePhrase()
-                    }
+                    self.speechRecognition.requestPermissions(handler: { [weak self] in
+                        self?.speechRecognition.configureListening() { [weak self] in
+                            self?.speechRecognition.startListeningForWakePhrase()
+                        }
+                    })
                 }),
                 DialogAction(
                     title: "Cancel",

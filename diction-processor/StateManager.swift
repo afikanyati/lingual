@@ -934,9 +934,10 @@ class StateManager: NSObject {
             soundEngine.voiceCommandAccept()
             Utils.setMainVolume(to: newVolume)
 
+            let volumePercent = Int(newVolume * 100)
             self.notifications.executeFeedback(
-                visualMessage: "Volume increase: \(newVolume)",
-                audioMessage: "Volume increased to \(newVolume)",
+                visualMessage: "Volume increase: \(volumePercent)%",
+                audioMessage: "Volume increased to \(volumePercent)%",
                 withHaptics: true
             )
             
@@ -963,9 +964,10 @@ class StateManager: NSObject {
             soundEngine.voiceCommandAccept()
             Utils.setMainVolume(to: newVolume)
             
+            let volumePercent = Int(newVolume * 100)
             self.notifications.executeFeedback(
-                visualMessage: "Volume decrease: \(newVolume)",
-                audioMessage: "Volume decreased to \(newVolume)",
+                visualMessage: "Volume decrease: \(volumePercent)%",
+                audioMessage: "Volume decreased to \(volumePercent)%",
                 withHaptics: true
             )
             

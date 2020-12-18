@@ -126,57 +126,73 @@ class UIManager: NSObject {
         dialogItem: DialogItem
     ) {
         print("===== UIManager: Present Dialog =====")
-        // Play Sound
-        soundEngine.presentDialog()
         
-        // Present Feedback
-        self.notifications.executeFeedback(
-            visualMessage: dialogItem.title,
-            audioMessage: dialogItem.message,
-            withHaptics: true
-        )
-        
-        let dialog = UIAlertController(
-            title: dialogItem.title,
-            message: dialogItem.message,
-            preferredStyle: dialogItem.preferredStyle
-        )
-        
-        for act in dialogItem.actions {
-            let alertAction = UIAlertAction(
-                title: act.title,
-                style: act.style,
-                handler: {action in
-                    if self.speechSynthesis.isPlayingEcho {
-                        self.speechSynthesis.stopEcho()
-                    }
-                    // Dismiss Dialog
-                    self.dismissDialog()
-                    
-                    if act.feedbackVisualMessage != nil || act.feedbackAudioMessage != nil {
-                        self.notifications.executeFeedback(
-                            visualMessage: act.feedbackVisualMessage,
-                            audioMessage: act.feedbackAudioMessage,
-                            discardPrior: true,
-                            withHaptics: true
-                        )
-                    }
-                    
-                    act.handler?(action)
-                }
+        func presentDialog() {
+            let dialog = UIAlertController(
+                title: dialogItem.title,
+                message: dialogItem.message,
+                preferredStyle: dialogItem.preferredStyle
             )
             
-            dialog.addAction(alertAction)
-        }
-
-        DispatchQueue.main.async { [weak self] in
-            let vc = Utils.getNavigationController()?.visibleViewController
-            if let vc = vc {
-                self?.dialogIsVisible = true
-                self?.dialogActions = dialogItem.actions
-                vc.present(dialog, animated: true, completion: nil)
-                self?.checkRep()
+            for act in dialogItem.actions {
+                let alertAction = UIAlertAction(
+                    title: act.title,
+                    style: act.style,
+                    handler: {action in
+                        if self.speechSynthesis.isPlayingEcho {
+                            self.speechSynthesis.stopEcho()
+                        }
+                        // Dismiss Dialog
+                        self.dismissDialog()
+                        
+                        if act.feedbackVisualMessage != nil || act.feedbackAudioMessage != nil {
+                            self.notifications.executeFeedback(
+                                visualMessage: act.feedbackVisualMessage,
+                                audioMessage: act.feedbackAudioMessage,
+                                discardPrior: true,
+                                withHaptics: true
+                            )
+                        }
+                        
+                        act.handler?(action)
+                    }
+                )
+                
+                dialog.addAction(alertAction)
             }
+            
+            let vc = Utils.getNavigationController()?.visibleViewController
+            // Play Sound
+            soundEngine.presentDialog()
+            
+            // Present Feedback
+            self.notifications.executeFeedback(
+                visualMessage: dialogItem.title,
+                audioMessage: dialogItem.message,
+                withHaptics: true
+            )
+            
+            self.dialogIsVisible = true
+            self.dialogActions = dialogItem.actions
+            vc!.present(dialog, animated: true, completion: nil)
+            self.checkRep()
+        }
+        
+        func attemptToPresentDialog() {
+            let vc = Utils.getNavigationController()?.visibleViewController
+            if let _ = vc {
+                presentDialog()
+            } else {
+                Timer.scheduledTimer(withTimeInterval: Utils.UI_DIALOG_DELAY, repeats: false) { timer in
+                    DispatchQueue.main.async {
+                        attemptToPresentDialog()
+                    }
+                }
+            }
+        }
+        
+        DispatchQueue.main.async {
+            attemptToPresentDialog()
         }
     }
     

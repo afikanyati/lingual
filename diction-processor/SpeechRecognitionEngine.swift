@@ -138,7 +138,9 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         if let speechRecognizer = self.speechRecognizer, !self.isListeningForWakePhrase && self.state.withOnDeviceRecognition && self.listeningPermissionsGranted && speechRecognizer.supportsOnDeviceRecognition {
             print("===== Speech Recognition Engine: Initializer - Configure listening for wake phrase =====")
             // Start listening for wake word
-            self.configureListeningForWakePhrase()
+            self.configureListening() { [weak self] in
+                self?.startListeningForWakePhrase()
+            }
         }
     }
     
@@ -385,7 +387,9 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             self.startListeningForVoiceCommands()
         } else if !self.state.appActivated && !self.isListeningForWakePhrase && self.listeningPermissionsGranted {
             print("\tInitiate listening for wake phrase...")
-            self.configureListeningForWakePhrase()
+            self.configureListening() {  [weak self] in
+                self?.startListeningForWakePhrase()
+            }
         } else {
             print("\tNo action taken.")
         }
@@ -422,8 +426,10 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         case .newDeviceAvailable: // New device found.
             // Reset listening for wake word
             if !self.state.appActivated && self.isListeningForWakePhrase {
-                self.stopListeningForWakePhrase() {
-                    self.configureListeningForWakePhrase()
+                self.stopListeningForWakePhrase() { [weak self] in
+                    self?.configureListening() {  [weak self] in
+                        self?.startListeningForWakePhrase()
+                    }
                 }
             } else if self.isListeningForSpeech {
                 self.stopListeningForSpeech() {
@@ -440,8 +446,10 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         case .oldDeviceUnavailable: // Old device removed.
             // Reset listening for wake word
             if !self.state.appActivated {
-                self.stopListeningForWakePhrase() {
-                    self.configureListeningForWakePhrase()
+                self.stopListeningForWakePhrase() { [weak self] in
+                    self?.configureListening() {  [weak self] in
+                        self?.startListeningForWakePhrase()
+                    }
                 }
             } else if self.isListeningForSpeech && !self.selectionCursor.hasSelection {
                 self.speechPlayer.stop(withFeedback: false) {
@@ -535,39 +543,85 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     
     func requestPermissions(handler: (() -> Void)? = nil) {
         print("===== Speech Recognition Engine: Request Permissions =====")
-        SFSpeechRecognizer.requestAuthorization {
-            [unowned self] (authStatus) in
-            print("\tQuerying SFSpeechRecognizer.requestAuthorization:")
-            switch authStatus {
-            case .authorized:
-                print("\t- Speech recognition permission granted.")
-                self.setSpeechRecognizerAuthorized(as: true)
-            case .denied:
-                print("\t- Speech recognition permission denied.")
-            case .restricted:
-                print("\t- Speech recognition not available on device.")
-            case .notDetermined:
-                print("\t- Speech recognition not determined.")
-            @unknown default:
-                print("\t- Unknown permission state received: \(authStatus).")
+        var speechRecognitionDenied = false
+        var handleSpeechRecognitionPermissions: (() -> Void)?
+        let handleMicrophonePermissions = {
+            self.session.requestRecordPermission() {
+                allowed in
+                print("\tQuerying session.requestRecordPermission:")
+                if allowed && !speechRecognitionDenied {
+                    print("\t- Permission to record audio granted.")
+                    self.setSpeechRecognizerAuthorized(as: true)
+                    self.setSessionAuthorized(as: true)
+                    handler?()
+                } else if !allowed {
+                    print("\t- Permission to record audio denied.")
+                    let dialogActions = [
+                        DialogAction(
+                            title: "Close",
+                            voiceCommand: .CANCEL_DIALOG,
+                            feedbackVisualMessage: "Dialog Closed!",
+                            feedbackAudioMessage: "dialog closed.",
+                            style: .cancel,
+                            handler: nil
+                        )
+                    ]
+                    
+                    let dialogItem = DialogItem(
+                        title: "Microphone access not enabled.",
+                        message: "App requires microphone access to continue. Please activate it in your device settings under the Lingual app section.",
+                        preferredStyle: .alert,
+                        actions: dialogActions
+                    )
+                    self.uiManager.presentDialog(dialogItem: dialogItem)
+                } else if speechRecognitionDenied {
+                    handleSpeechRecognitionPermissions!()
+                }
+            }
+        }
+        handleSpeechRecognitionPermissions = {
+            SFSpeechRecognizer.requestAuthorization {
+                [unowned self] (authStatus) in
+                print("\tQuerying SFSpeechRecognizer.requestAuthorization:")
+                switch authStatus {
+                case .authorized:
+                    print("\t- Speech recognition permission granted.")
+                    handleMicrophonePermissions()
+                case .denied:
+                    print("\t- Speech recognition permission denied.")
+                    speechRecognitionDenied = true
+                    let dialogActions = [
+                        DialogAction(
+                            title: "Close",
+                            voiceCommand: .CANCEL_DIALOG,
+                            feedbackVisualMessage: "Dialog Closed!",
+                            feedbackAudioMessage: "dialog closed.",
+                            style: .cancel,
+                            handler: nil
+                        )
+                    ]
+                    
+                    let dialogItem = DialogItem(
+                        title: "Speech Recognition not enabled.",
+                        message: "App requires speech recognition to continue. Please activate it in your device settings under the Lingual app section.",
+                        preferredStyle: .alert,
+                        actions: dialogActions
+                    )
+                    self.uiManager.presentDialog(dialogItem: dialogItem)
+                case .restricted:
+                    print("\t- Speech recognition not available on device.")
+                case .notDetermined:
+                    print("\t- Speech recognition not determined.")
+                @unknown default:
+                    print("\t- Unknown permission state received: \(authStatus).")
+                }
             }
         }
         
-        self.session.requestRecordPermission() {
-            allowed in
-            print("\tQuerying session.requestRecordPermission:")
-            if allowed {
-                print("\t- Permission to record audio granted.")
-                self.setSessionAuthorized(as: true)
-                handler?()
-            } else {
-                print("\t- Permission to record audio denied.")
-                // Consider hiding your playback button
-            }
-        }
+        handleSpeechRecognitionPermissions!()
     }
     
-    func configureListeningForWakePhrase() {
+    func configureListening(handler: @escaping () -> Void) {
         print("===== Speech Recognition: Configure Listening For Wake Phrase =====")
         let authStatus = SFSpeechRecognizer.authorizationStatus()
         
@@ -579,8 +633,10 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                     feedbackVisualMessage: "Permission Granted!",
                     feedbackAudioMessage: "permission granted",
                     style: .default,
-                    handler: { [unowned self] action in
-                    self.requestPermissions()
+                    handler: { [weak self] action in
+                    self?.requestPermissions() {
+                        handler()
+                    }
                 }),
                 DialogAction(
                     title: "Cancel",
@@ -600,8 +656,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             )
             self.uiManager.presentDialog(dialogItem: dialogItem)
         } else {
-            // pitch engine used to determine if user is male or female
-            self.startListeningForWakePhrase()
+            handler()
         }
     }
     
@@ -668,7 +723,9 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             // Start Listening
             if self.state.appActivated {
                 // Listening For Commands
-                self.startListeningForVoiceCommands()
+                self.configureListening() {  [weak self] in
+                    self?.startListeningForVoiceCommands()
+                }
                 // Because it's missing in the actual handleListening method for voice commands
                 Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
                     soundEngine.startListening()
@@ -679,14 +736,15 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                     discardPrior: true,
                     withHaptics: true
                 )
-            } else {
-                self.startListeningForWakePhrase()
-                self.notifications.executeFeedback(
-                    visualMessage: "Start Listening",
-                    audioMessage: "Started listening for wake phrase.",
-                    discardPrior: true,
-                    withHaptics: true
-                )
+            } else if let speechRecognizer = self.speechRecognizer,
+                !self.isListeningForWakePhrase &&
+                self.state.withOnDeviceRecognition &&
+                self.listeningPermissionsGranted &&
+                speechRecognizer.supportsOnDeviceRecognition
+            {
+                self.configureListening() {  [weak self] in
+                    self?.startListeningForWakePhrase()
+                }
             }
         }
         
@@ -1379,7 +1437,9 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             let listeningPermissionsGranted = self.listeningPermissionsGranted
             if let _ = self.speechRecognizer, !self.isListeningForWakePhrase && withOnDeviceRecognition && listeningPermissionsGranted && supportsOnDeviceRecognition {
                 print("\tReceived listeningPermissionsGranted and all systems ready =====")
-                self.configureListeningForWakePhrase()
+                self.configureListening() {  [weak self] in
+                    self?.startListeningForWakePhrase()
+                }
             } else {
                 print("\tReceived listeningPermissionsGranted but not all systems ready:")
                 print("\tspeechRecognizer: ", self.speechRecognizer != nil ? "available" : "unavailable")
@@ -1394,7 +1454,9 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             let listeningPermissionsGranted = self.listeningPermissionsGranted
             if let _ = self.speechRecognizer, !self.isListeningForWakePhrase && withOnDeviceRecognition && listeningPermissionsGranted && supportsOnDeviceRecognition {
                 print("\tReceived supportsOnDeviceRecognition and all systems ready =====")
-                self.configureListeningForWakePhrase()
+                self.configureListening() {  [weak self] in
+                    self?.startListeningForWakePhrase()
+                }
             } else {
                 print("\tReceived supportsOnDeviceRecognition but not all systems ready:")
                 print("\tspeechRecognizer: ", self.speechRecognizer != nil ? "available" : "unavailable")
