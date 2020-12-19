@@ -27,6 +27,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             uiManager: uiManager
         )
         uiManager.state = state
+        notifications.state = state
         let speechPlayer = SpeechPlayerEngine(
             state: state,
             notifications: notifications

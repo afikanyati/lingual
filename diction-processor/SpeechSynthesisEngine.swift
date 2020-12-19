@@ -276,7 +276,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
                 let synthesizerItem = SynthesizerItem(
                     synthesizer: self.speechSynthesizer,
                     text: text,
-                    voice: Utils.getSynthesizerVoice(withRegister: self.state.speaker.register),
+                    voice: Utils.getSynthesizerVoice(withRegister: self.state.speaker.register, state: self.state),
                     rate: self.echoRate,
                     volume: Utils.playbackVolume
                 )
@@ -417,7 +417,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
         let synthesizerItem = SynthesizerItem(
             synthesizer: self.speechSynthesizer,
             text: echoText,
-            voice: Utils.getSynthesizerVoice(withRegister: self.state.speaker.register),
+            voice: Utils.getSynthesizerVoice(withRegister: self.state.speaker.register, state: self.state),
             rate: self.echoRate,
             volume: Utils.playbackVolume
         )
@@ -560,7 +560,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
             let synthesizerItem = SynthesizerItem(
                 synthesizer: self.speechSynthesizer,
                 text: unprocessedUtterance,
-                voice: Utils.getSynthesizerVoice(withRegister: self.state.speaker.register),
+                voice: Utils.getSynthesizerVoice(withRegister: self.state.speaker.register, state: self.state),
                 rate: self.echoRate,
                 volume: Utils.playbackVolume
             )

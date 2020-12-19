@@ -702,7 +702,7 @@ class Utils {
     
     // Reference: https://stackoverflow.com/questions/57134259/how-to-resolve-keywindow-was-deprecated-in-ios-13-0
     // Reference: https://stackoverflow.com/questions/32201292/access-navigationcontroller-from-a-viewcontroller-that-i-opened-using-modal-in-s
-    public static func getSynthesizerVoice(withRegister register: VocalRegister? = nil) -> AVSpeechSynthesisVoice? {
+    public static func getSynthesizerVoice(withRegister register: VocalRegister? = nil, state: StateManager) -> AVSpeechSynthesisVoice? {
         var synthesizerVoice: AVSpeechSynthesisVoice?
         voicesLoop: for voice in AVSpeechSynthesisVoice.speechVoices() {
             if (Locale.current.regionCode == "AU") && (register == .male || register == nil) && (voice.name == "Lee (Enhanced)" && voice.quality == .enhanced) {
@@ -740,7 +740,7 @@ class Utils {
         
         if let synthesizerVoice = synthesizerVoice {
             return synthesizerVoice
-        } else {
+        } else if !state.promptedForEnhancedVoices {
             var voiceName = "Tom"
             voicesLoop: for voice in AVSpeechSynthesisVoice.speechVoices() {
                 if (Locale.current.regionCode == "AU") && (register == .male || register == nil) && (voice.name == "Lee (Enhanced)" && voice.quality == .enhanced) {
@@ -769,7 +769,7 @@ class Utils {
                     voiceName = "Allison"
                 }
             }
-            let alertController = UIAlertController(title: "Better Echo Voices Available", message: "Please install \(voiceName) (Enhanced) voice to allow for enhanced dictation. Go to Accessibility > Spoken Content> Voices and select \(voiceName) (Enhanced)", preferredStyle: .alert)
+            let alertController = UIAlertController(title: "Better Artificial Voices Available", message: "For a more enhanced voice feedback experience, install the \(voiceName) (Enhanced) voice. Go to Accessibility > Spoken Content> Voices > English and select \(voiceName) (Enhanced)", preferredStyle: .alert)
             let voicesURL = "App-prefs:ACCESSIBILITY"
             // let appURL = UIApplication.openSettingsURLString
             let settingsAction = UIAlertAction(title: "Settings", style: .default) { (_) -> Void in
@@ -795,6 +795,8 @@ class Utils {
                     vc.present(alertController, animated: true, completion: nil)
                 }
             }
+            
+            state.setPromptedForEnhancedVoices(to: true)
         }
         
         return synthesizerVoice

@@ -78,6 +78,7 @@ class StateManager: NSObject {
     private(set) var detailViewReady = false
     private(set) var entryTableViewReady = false
     private(set) var playedStartupSound = false
+    private(set) var promptedForEnhancedVoices = false
     private(set) var font = UIFont.systemFont(ofSize: Utils.DEFAULT_FONT_SIZE)
     
     // MARK: - Entries
@@ -919,6 +920,10 @@ class StateManager: NSObject {
 //        print("===== State Manager: Set Speaker Pitch =====")
 //        print("\tSet to: ", pitch?.entry.string ?? "nil")
         self.speaker.setSpeakerPitch(to: pitch)
+    }
+    
+    func setPromptedForEnhancedVoices(to value: Bool) {
+        self.promptedForEnhancedVoices = value
     }
     
     // MARK: - Voice Commands

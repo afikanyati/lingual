@@ -1338,7 +1338,8 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
             
             // Give audio feedback
             let voice = Utils.getSynthesizerVoice(
-                withRegister: .female
+                withRegister: .female,
+                state: entry.state
             )
             let synthesizerItem = SynthesizerItem(
                 synthesizer: entry.speechSynthesis.speechSynthesizer,
@@ -1360,7 +1361,8 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
             
             // Give audiio feedback
             let voice = Utils.getSynthesizerVoice(
-                withRegister: .female
+                withRegister: .female,
+                state: entry.state
             )
             let synthesizerItem = SynthesizerItem(
                 synthesizer: entry.speechSynthesis.speechSynthesizer,

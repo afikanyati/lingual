@@ -110,10 +110,18 @@ public class VoiceCommandEngine: NSObject {
                 for set in voiceCommandSets {
                     // Loop through tokens
                     for token in set {
-                        if ObjectToken.contains(token) && !objectTokens.contains(token) {
+                        if ObjectToken.contains(token) &&
+                        !objectTokens.contains(token) &&
+                        token != .TEXT &&
+                        token != .AUDIO
+                        {
                             // Add token to object list if its an object
                             objectTokens.append(token)
-                        } else if ActionObjectToken.contains(token) && !actionObjectTokens.contains(token) {
+                        } else if ActionObjectToken.contains(token) &&
+                        !actionObjectTokens.contains(token) &&
+                        token != .TEXT &&
+                        token != .AUDIO
+                        {
                             // Add token to object list if its an object
                             actionObjectTokens.append(token)
                         }

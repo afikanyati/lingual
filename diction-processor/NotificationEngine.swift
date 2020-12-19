@@ -20,6 +20,7 @@ class NotificationEngine {
     
     // MARK: - App Modules
     
+    var state: StateManager!
     var speechSynthesis: SpeechSynthesisEngine!
     var speechRecognition: SpeechRecognitionEngine!
     
@@ -301,7 +302,7 @@ class NotificationEngine {
                     print("\tAudio Message: \(audioMessage)")
                     // we don't run when !AVAudioSession.isHeadphonesConnected
                     // because we will will catch the words and process them
-                    let voice = Utils.getSynthesizerVoice(withRegister: .female)
+                    let voice = Utils.getSynthesizerVoice(withRegister: .female, state: self!.state)
 
                     let synthesizerItem = SynthesizerItem(
                         synthesizer: self!.speechSynthesis.speechSynthesizer,
@@ -363,7 +364,7 @@ class NotificationEngine {
             hapticEngine.error()
             
             let errorHandler: () -> Void  = {
-                let voice = Utils.getSynthesizerVoice(withRegister: .female)
+                let voice = Utils.getSynthesizerVoice(withRegister: .female, state: self.state)
                 let synthesizerItem = SynthesizerItem(
                     synthesizer: self.speechSynthesis.speechSynthesizer,
                     text: text,
