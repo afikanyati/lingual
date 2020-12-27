@@ -356,6 +356,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
         self.isPlayingPassiveEcho = false
         self.echoRange = nil
         self.echoSegments = nil
+        self.updateEchoRate = false
 
         handler?()
         
@@ -492,6 +493,77 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
     }
     
     public func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, willSpeakRangeOfSpeechString characterRange: NSRange, utterance: AVSpeechUtterance) {
+        // Process realtime changes to echo rate
+        if let entry = self.entryManager.currentEntry,
+           let echoRange = self.echoRange,
+           let echoSegments = self.echoSegments,
+           self.updateEchoRate &&
+            self.state.appActivated
+        {
+            print("\tUpdating echo rate mid-echo...")
+            print("\tCurrent Character Range: ", characterRange)
+            // Stop speech synthesizer
+            self.speechSynthesizer.stopSpeaking(at: .immediate)
+            self.updateEchoRate = false
+            self.interruptedEcho = true
+            
+            // find new segments
+            let passiveSegments: [EntrySegment]
+            switch (echoSegmentsTrackType) {
+            case .buffer:
+                passiveSegments = Array(entry.entryBuffer[echoRange])
+            case .committed:
+                passiveSegments = Array(entry.entrySegments[echoRange])
+            default:
+                passiveSegments = Array(echoSegments[echoRange])
+            }
+            
+            var lowestIndex: Int?
+            for (index, segment) in passiveSegments.enumerated() {
+                if segment.getText().lowercased() == NSString(string: utterance.speechString).substring(with: characterRange).lowercased() {
+                    print("\tLowest index: ", index)
+                    lowestIndex = index
+                    break
+                }
+            }
+            
+            var text = Entry.getText(
+                segments: Array(echoSegments[self.echoRange!]),
+                withTemporalSuggestions: false,
+                withPunctuationSuggestions: self.state.withPunctuationSuggestions,
+                withFormattingSuggestions: self.state.withFormattingSuggestions,
+                strictlyAsWord: false,
+                withCapitalization: self.state.withCapitalization,
+                forEcho: false
+            )
+
+            if let lowestIndex = lowestIndex {
+                self.echoRange = echoRange.lowerBound + lowestIndex..<echoRange.upperBound
+                print("\tUpdated segments: ", Utils.stringifySegments(segments: Array(echoSegments[self.echoRange!])))
+                text = Entry.getText(
+                    segments: Array(echoSegments[self.echoRange!]),
+                    withTemporalSuggestions: false,
+                    withPunctuationSuggestions: self.state.withPunctuationSuggestions,
+                    withFormattingSuggestions: self.state.withFormattingSuggestions,
+                    strictlyAsWord: false,
+                    withCapitalization: self.state.withCapitalization,
+                    forEcho: false
+                )
+            }
+            
+            // Run remainder utterance
+            let synthesizerItem = SynthesizerItem(
+                synthesizer: self.speechSynthesizer,
+                text: text,
+                voice: Utils.getSynthesizerVoice(withRegister: self.state.speaker.register, state: self.state),
+                rate: self.echoRate,
+                volume: Utils.playbackVolume
+            )
+            self.runSpeechSynthesizer(item: synthesizerItem)
+            
+            return
+        }
+        
         // Highlight word currently being uttered
         if let entry = self.entryManager.currentEntry,
             let echoRange = self.echoRange,
@@ -506,6 +578,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
                 self.isPlayingPassiveEcho
             )
         {
+            print("\tAttemping to highlight corresponding text word...")
             // We do this so that we have the most recent version of the segment sources
             // When we commit segments, we create new entries and there are sometimes
             // race conditions where the segments in entry do not have their
@@ -520,15 +593,22 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
             default:
                 passiveSegments = Array(echoSegments[echoRange])
             }
-            
-            guard utterance.speechString.trimTrailingPunctuation() == Entry.getText(segments: passiveSegments).trimTrailingPunctuation() else { return }
-                        
+
+            guard utterance.speechString.lowercased().trimTrailingPunctuation() == Entry.getText(segments: passiveSegments).lowercased().trimTrailingPunctuation() else {
+                print("\t[Error] Speech Synthesizer Utterance does not match with specified echo.")
+                print("\tSynthesizer Text: \(utterance.speechString.lowercased().trimTrailingPunctuation())")
+                print("\tEcho Range: ", echoRange)
+                print("\tEcho Text: '\(Entry.getText(segments: passiveSegments).lowercased().trimTrailingPunctuation())'")
+                return
+            }
+
             var textRange = characterRange
             // find lowest segment that is a word
             var lowestEchoSegment: EntrySegment?
             for segment in passiveSegments {
                 if !segment.isSilence() && !segment.isVoiceCommandWord() && !segment.isDeleted() {
                     lowestEchoSegment = segment
+                    print("\tFound lowest echo word: ", lowestEchoSegment!.getText())
                     break
                 }
             }
@@ -538,6 +618,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
                let lowestEchoSegmentRange = entry.getSegmentTextRange(of: lowestEchoSegment)
             {
                 textRange = NSRange(location: lowestEchoSegmentRange.location + characterRange.location, length: characterRange.length)
+                print("\tComputed highlight text range: ", textRange)
             }
             
             NotificationCenter.default.post(
@@ -545,29 +626,6 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
                 object: nil,
                 userInfo: [ "highlightRange": textRange]
             )
-        }
-        
-        // Process realtime changes to echo rate
-        if let _ = self.entryManager.currentEntry, self.updateEchoRate, self.state.appActivated {
-            // Compute unprocessed utterance
-            let numProcessedChar = max(0, characterRange.location)
-            let unprocessedUtterance = utterance.speechString.substring(fromIndex: numProcessedChar).lowercased()
-            
-            // Stop speech synthesizer
-            self.speechSynthesizer.stopSpeaking(at: .immediate)
-            
-            // Run remainder utterance
-            let synthesizerItem = SynthesizerItem(
-                synthesizer: self.speechSynthesizer,
-                text: unprocessedUtterance,
-                voice: Utils.getSynthesizerVoice(withRegister: self.state.speaker.register, state: self.state),
-                rate: self.echoRate,
-                volume: Utils.playbackVolume
-            )
-            self.runSpeechSynthesizer(item: synthesizerItem)
-            
-            self.updateEchoRate = false
-            self.interruptedEcho = true
         }
     }
 
@@ -602,6 +660,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
             self.echoSegments = nil
             self.echoRange = nil
             self.echoSegmentsTrackType = nil
+            self.updateEchoRate = false
             
             // Update View
             NotificationCenter.default.post(
@@ -615,6 +674,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
             self.echoSegments = nil
             self.echoRange = nil
             self.echoSegmentsTrackType = nil
+            self.updateEchoRate = false
             
             // Update View
             NotificationCenter.default.post(
@@ -627,9 +687,10 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
         self.tempOnEchoFinish?()
         self.tempOnEchoFinish = nil
         
-        if self.state.appActivated && self.speechRecognition.pausedListeningForCommands && !self.speechSynthesizer.isSpeaking && !AVAudioSession.isHeadphonesConnected {
+        if self.state.appActivated && self.speechRecognition.pausedListeningForCommands && !self.speechPlayer.isPlayingEntry && !self.speechSynthesizer.isSpeaking && !AVAudioSession.isHeadphonesConnected {
             // when headphones are off we don't listen for voice commands while echoing
             // but on completion we turn it back on
+            // but we only turn back on if speech not being played back
             self.speechRecognition.startListeningForVoiceCommands() {
                 // Call after isPlayingEcho is set to false by tempOnEchoFinish
                 NotificationCenter.default.post(
@@ -638,9 +699,10 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
                     userInfo: [:]
                 )
             }
-        } else if let entry = self.entryManager.currentEntry, self.state.appActivated && entry.speechRecognition.pausedListeningForSpeech && !self.speechSynthesizer.isSpeaking && !AVAudioSession.isHeadphonesConnected && !self.entryManager.isRunningEntry && !self.entryManager.isWalkingEntry {
+        } else if let entry = self.entryManager.currentEntry, self.state.appActivated && entry.speechRecognition.pausedListeningForSpeech && !self.speechPlayer.isPlayingEntry && !self.speechSynthesizer.isSpeaking && !AVAudioSession.isHeadphonesConnected && !self.entryManager.isRunningEntry && !self.entryManager.isWalkingEntry {
             // when headphones are off we don't listen for speech while echoing
             // but on completion we turn it back on
+            // but we only turn back on if speech not being played back
             entry.speechRecognition.startListeningForSpeech(
                 onStartHandler: {
                     // Call after isPlayingEcho is set to false by tempOnEchoFinish

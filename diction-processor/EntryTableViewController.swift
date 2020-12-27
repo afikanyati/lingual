@@ -104,7 +104,17 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
         let navigationController = Utils.getNavigationController()
         DispatchQueue.main.async {
             // add table view buttons
-            navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self.getDictionaryButton(), self.getRunListButton()]
+            if self.entryListManager.isRunningEntryList {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
+                    self.getDictionaryButton(),
+                    self.getExitRunListButton()
+                ]
+            } else {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
+                    self.getDictionaryButton(),
+                    self.getRunListButton()
+                ]
+            }
         }
         
         // Notify observers of loading
@@ -536,14 +546,25 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
                 !self!.notifications.isPresentingVisualNotification
             {
                 let navigationController = Utils.getNavigationController()
-                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
-                    self!.getDictionaryButton(),
-                    self!.getRunListButton(),
-                    Utils.getPitchLabel(
-                        pitchText: pitch.note.string,
-                        font: UIFont.systemFont(ofSize: Utils.DEFAULT_FONT_SIZE, weight: .bold)
-                    )
-                ]
+                if self!.entryListManager.isRunningEntryList {
+                    navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
+                        self!.getDictionaryButton(),
+                        self!.getExitRunListButton(),
+                        Utils.getPitchLabel(
+                            pitchText: pitch.note.string,
+                            font: UIFont.systemFont(ofSize: Utils.DEFAULT_FONT_SIZE, weight: .bold)
+                        )
+                    ]
+                } else {
+                    navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
+                        self!.getDictionaryButton(),
+                        self!.getRunListButton(),
+                        Utils.getPitchLabel(
+                            pitchText: pitch.note.string,
+                            font: UIFont.systemFont(ofSize: Utils.DEFAULT_FONT_SIZE, weight: .bold)
+                        )
+                    ]
+                }
             }
             
             if let speechPlayer = self?.speechPlayer, let pitchLabel = self?.pitchLabel {
@@ -647,10 +668,17 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
         // Bring back buttons while presenting notification
         DispatchQueue.main.async { [weak self] in
             let navigationController = Utils.getNavigationController()
-            navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
-                self!.getDictionaryButton(),
-                self!.getRunListButton()
-            ]
+            if self!.entryListManager.isRunningEntryList {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
+                    self!.getDictionaryButton(),
+                    self!.getExitRunListButton()
+                ]
+            } else {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
+                    self!.getDictionaryButton(),
+                    self!.getRunListButton()
+                ]
+            }
         }
     }
     
@@ -665,10 +693,17 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
         // Remove pitch label while presenting notification
         DispatchQueue.main.async { [weak self] in
             let navigationController = Utils.getNavigationController()
-            navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
-                self!.getDictionaryButton(),
-                self!.getRunListButton()
-            ]
+            if self!.entryListManager.isRunningEntryList {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
+                    self!.getDictionaryButton(),
+                    self!.getExitRunListButton()
+                ]
+            } else {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
+                    self!.getDictionaryButton(),
+                    self!.getRunListButton()
+                ]
+            }
         }
     }
     
@@ -927,7 +962,17 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
                 let navigationController = Utils.getNavigationController()
                 DispatchQueue.main.async {
                     // add table view buttons
-                    navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self.getDictionaryButton(), self.getRunListButton()]
+                    if self.entryListManager.isRunningEntryList {
+                        navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
+                            self.getDictionaryButton(),
+                            self.getExitRunListButton()
+                        ]
+                    } else {
+                        navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
+                            self.getDictionaryButton(),
+                            self.getRunListButton()
+                        ]
+                    }
                 }
             } else if let newOffset = change?[.newKey] as? CGPoint,
               newOffset.y < Utils.NAVIGATION_BAR_THRESHOLD_HEIGHT &&
@@ -939,7 +984,17 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
                 let navigationController = Utils.getNavigationController()
                 DispatchQueue.main.async {
                     // add table view buttons
-                    navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [self.getDictionaryButton(), self.getRunListButton()]
+                    if self.entryListManager.isRunningEntryList {
+                        navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
+                            self.getDictionaryButton(),
+                            self.getExitRunListButton()
+                        ]
+                    } else {
+                        navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
+                            self.getDictionaryButton(),
+                            self.getRunListButton()
+                        ]
+                    }
                 }
             }
         }
@@ -1016,6 +1071,28 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
         return barButton
     }
     
+    func getExitRunListButton() -> UIBarButtonItem {
+        let button  = CenteredButton(type: .custom)
+
+        button.frame = CGRect(x: 0.0, y: 0.0, width: Utils.NAVBAR_BUTTON_LENGTH, height: Utils.NAVBAR_BUTTON_LENGTH)
+        button.addTarget(self, action: #selector(self.handleExitRunList), for: .touchDown)
+        button.setImage(UIImage(systemName: "hare"), for: .normal)
+        button.setTitle("Exit Run", for: .normal)
+        button.titleLabel?.font = UIFont.systemFont(ofSize: 11)
+        button.tintColor = UIColor.systemGray
+        if let tableView = self.tableView,
+           tableView.contentOffset.y >= Utils.NAVIGATION_BAR_THRESHOLD_HEIGHT
+        {
+            button.setTitleColor(UIColor.systemGray5, for: .normal)
+        } else {
+            button.setTitleColor(UIColor.darkGray, for: .normal)
+        }
+        
+        let barButton = UIBarButtonItem(customView: button)
+        
+        return barButton
+    }
+    
     func reloadTable() {
         print("===== Entry Table View Controller: Reload Table =====")
         DispatchQueue.main.async { [weak self] in
@@ -1075,7 +1152,29 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
     }
     
     @objc func handleRunList() {
-        self.entryListManager.runEntryList()
+        self.entryListManager.runEntryList() {
+            DispatchQueue.main.async {
+                let navigationController = Utils.getNavigationController()
+                // change table view buttons
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
+                    self.getDictionaryButton(),
+                    self.getExitRunListButton()
+                ]
+            }
+        }
+    }
+    
+    @objc func handleExitRunList() {
+        self.entryListManager.exitWalkRun(clearCurrentEntry: true) {
+            DispatchQueue.main.async {
+                let navigationController = Utils.getNavigationController()
+                // change table view buttons
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
+                    self.getDictionaryButton(),
+                    self.getRunListButton()
+                ]
+            }
+        }
     }
     
     // MARK: - Table View

@@ -37,8 +37,6 @@ class EntryListManager: NSObject {
     private(set) var pausedRunningEntryList = false
     /// Stores a reference to a timer that drives walking loop behavior
     private(set) var walkingTimer: Timer?
-    /// Stores a reference to a timer that drives delay of walk loop intiation
-    private(set) var walkLoopDelayTimer: Timer?
     /// Stores a reference to a timer that drives delayed echo while walking
     private(set) var runningTimer: Timer?
     
@@ -146,10 +144,18 @@ class EntryListManager: NSObject {
         case .SHIFT_NEXT_WALK_ELEMENT:
             if self.isWalkingEntryList {
                 self.walkNextEntry(handler: handler)
+            } else if self.isRunningEntryList {
+                self.walkNextEntry(runOverride: true) {
+                    self.runEntryList(onStartHandler: handler)
+                }
             }
         case .SHIFT_PREVIOUS_WALK_ELEMENT:
             if self.isWalkingEntryList {
                 self.walkPreviousEntry(handler: handler)
+            } else if self.isRunningEntryList {
+                self.walkPreviousEntry(runOverride: true) {
+                    self.runEntryList(onStartHandler: handler)
+                }
             }
         case .PAUSE_RUN:
             if self.isRunningEntryList {
@@ -157,7 +163,7 @@ class EntryListManager: NSObject {
             }
         case .EXIT_WALK:
             if self.isWalkingEntryList {
-                self.exitWalkRun(handler: handler)
+                self.exitWalkRun(clearCurrentEntry: true, handler: handler)
             }
         case .ENTER_DICTIONARY:
             self.enterDictionary(handler: handler)
@@ -259,12 +265,14 @@ class EntryListManager: NSObject {
             withHaptics: true
         )
         
-        if runOverride && !AVAudioSession.isHeadphonesConnected {
-            Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_NOTIFICATION_DURATION, repeats: false) { timer in
-                self.notifications.executeFeedback(
-                    visualMessage: "Use headphones for sound",
-                    withHaptics: true
-                )
+        if !AVAudioSession.isHeadphonesConnected {
+            DispatchQueue.main.async {
+                Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_NOTIFICATION_DURATION, repeats: false) { timer in
+                    self.notifications.executeFeedback(
+                        visualMessage: "Use headphones for sound",
+                        withHaptics: true
+                    )
+                }
             }
         }
 
@@ -280,69 +288,81 @@ class EntryListManager: NSObject {
         
         let index = 0
         
-        if self.entryManager.currentIndex == nil {
-            self.entryManager.setCurrentEntry(index: index)
-        }
-        
-        guard let currentEntry = self.entryManager.currentEntry else {
-            self.notifications.executeError(
-                text: "Unable to start \(runOverride ? "running" : "walking").",
-                voiceCommand: true
-            )
-            return
-        }
-        
-        // Send out notification so view can select entry
-        NotificationCenter.default.post(
-            name: EntryListManager.onEntrySelected,
-            object: nil,
-            userInfo: ["index" : index]
-        )
-        
-        // start looping walk
-        if AVAudioSession.isHeadphonesConnected {
-            guard currentEntry.entrySegments.count > 0 else {
-                // Present Feedback
-                self.notifications.executeFeedback(
-                    visualMessage: "Empty entry.",
-                    audioMessage: "Empty entry.",
-                    withHaptics: true
+        let handleWalkEntryList = {
+            guard let currentEntry = self.entryManager.currentEntry else {
+                self.notifications.executeError(
+                    text: "Unable to start \(runOverride ? "running" : "walking").",
+                    voiceCommand: true
                 )
-                
-                onStartHandler?()
                 return
             }
             
-            let previewDuration = CMTimeMake(
-                value: Int64(floor(Utils.DEFAULT_SEGMENT_TIMESCALE * min(currentEntry.getDuration().seconds, Utils.PREVIEW_ENTRY_DURATION))),
-                timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
+            // Send out notification so view can select entry
+            NotificationCenter.default.post(
+                name: EntryListManager.onEntrySelected,
+                object: nil,
+                userInfo: ["index" : index]
             )
-            let makeStep = {
-                self.speechPlayer.play(
-                    entry: currentEntry,
-                    from: CMTime.zero,
-                    to: previewDuration
+            
+            // start looping walk
+            if AVAudioSession.isHeadphonesConnected {
+                guard currentEntry.entrySegments.count > 0 else {
+                    // Present Feedback
+                    self.notifications.executeFeedback(
+                        visualMessage: "Empty entry.",
+                        audioMessage: "Empty entry.",
+                        withHaptics: true
+                    )
+                    
+                    DispatchQueue.main.async {
+                        Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                            onStartHandler?()
+                        }
+                    }
+                    
+                    return
+                }
+                
+                let previewDuration = CMTimeMake(
+                    value: Int64(floor(Utils.DEFAULT_SEGMENT_TIMESCALE * min(currentEntry.getDuration().seconds, Utils.PREVIEW_ENTRY_DURATION))),
+                    timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
                 )
-            }
-
-            let walkLoopDelayTimer = Timer.scheduledTimer(withTimeInterval: Utils.WALKING_START_DELAY_DURATION, repeats: false) { [weak self] timer in
+                print("\tPreview Duration: ", previewDuration.seconds)
+                let makeStep = {
+                    self.speechPlayer.play(
+                        segments: Entry.getDurationSegments(
+                            segments: currentEntry.entrySegments,
+                            duration: previewDuration,
+                            withOmitSilences: self.state.withOmitSilences
+                        )
+                    )
+                }
+                
                 makeStep()
 
-                // Make sure that the repeat is at least as long as
-                let walkingTimer = Timer.scheduledTimer(withTimeInterval: min(currentEntry.getDuration().seconds, Utils.PREVIEW_ENTRY_DURATION) * TimeInterval( 1 / self!.speechPlayer.playbackRate), repeats: true) { timer in
-                    makeStep()
+                if !runOverride {
+                    // Make sure that the repeat is at least as long as
+                    DispatchQueue.main.async {
+                        self.walkingTimer = Timer.scheduledTimer(withTimeInterval: previewDuration.seconds * TimeInterval( 1 / self.speechPlayer.playbackRate), repeats: true) { timer in
+                            makeStep()
+                        }
+                    }
                 }
-
-                self?.walkingTimer = walkingTimer
             }
 
-            self.walkLoopDelayTimer = walkLoopDelayTimer
+            // execute start handler
+            onStartHandler?()
+            
+            self.checkRep()
         }
-
-        // execute start handler
-        onStartHandler?()
         
-        checkRep()
+        if self.entryManager.currentIndex == nil {
+            self.entryManager.setCurrentEntry(index: index) {
+                handleWalkEntryList()
+            }
+        } else {
+            handleWalkEntryList()
+        }
     }
     
     func runEntryList(onStartHandler: (() -> Void)? = nil) {
@@ -360,35 +380,56 @@ class EntryListManager: NSObject {
             
             return
         }
-        
-        if self.isRunningEntryList && !self.pausedRunningEntryList {
-            self.notifications.executeError(
-                text: "Already running entry list.",
-                voiceCommand: true
-            )
-            return
-        }
 
         self.isRunningEntryList = true
-        
-        let runHandler = {
-            onStartHandler?()
-            
-            // start automated walking
-            let runningTimer = Timer.scheduledTimer(withTimeInterval: Utils.PREVIEW_ENTRY_DURATION * TimeInterval( 1 / self.speechPlayer.playbackRate), repeats: true) { [weak self] timer in
-                if let currentIndex = self?.entryManager.currentIndex, currentIndex + 1 < self!.state.activeEntries.count {
-                    self?.walkNextEntry(runOverride: true)
-                } else {
-                    self?.exitWalkRun()
-                    self?.entryManager.setCurrentEntry()
+    
+        func nextRunEntry() {
+            if let currentIndex = self.entryManager.currentIndex, currentIndex + 1 < self.state.activeEntries.count {
+                let currentEntryDuration = self.state.activeEntries[currentIndex].getDuration()
+                let previewDuration = CMTimeMake(
+                    value: Int64(floor(Utils.DEFAULT_SEGMENT_TIMESCALE * min(currentEntryDuration.seconds, Utils.PREVIEW_ENTRY_DURATION))),
+                    timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
+                )
+                // start automated walking
+                DispatchQueue.main.async {
+                    self.runningTimer = Timer.scheduledTimer(withTimeInterval: previewDuration.seconds * TimeInterval( 1 / self.speechPlayer.playbackRate), repeats: false) { [weak self] timer in
+                        self?.walkNextEntry(runOverride: true) {
+                            nextRunEntry()
+                        }
+                    }
                 }
+            } else if let currentIndex = self.entryManager.currentIndex {
+                let currentEntryDuration = self.state.activeEntries[currentIndex].getDuration()
+                let previewDuration = CMTimeMake(
+                    value: Int64(floor(Utils.DEFAULT_SEGMENT_TIMESCALE * min(currentEntryDuration.seconds, Utils.PREVIEW_ENTRY_DURATION))),
+                    timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
+                )
+                print("\tDelay Timer Duration: ", previewDuration.seconds)
+                DispatchQueue.main.async {
+                    self.runningTimer = Timer.scheduledTimer(withTimeInterval: previewDuration.seconds * TimeInterval( 1 / self.speechPlayer.playbackRate), repeats: false) { [weak self] timer in
+                        self?.exitWalkRun()
+                        self?.entryManager.setCurrentEntry()
+                    }
+                }
+            } else {
+                self.exitWalkRun()
+                self.entryManager.setCurrentEntry()
             }
-
-            self.runningTimer = runningTimer
         }
-
+        
         // Start walk
-        self.walkEntryList(runOverride: true, onStartHandler: runHandler)
+        if self.entryManager.currentEntry == nil {
+            self.walkEntryList(runOverride: true) {
+                // start automated walking
+                nextRunEntry()
+                onStartHandler?()
+            }
+        } else {
+            self.runningTimer?.invalidate()
+            self.runningTimer = nil
+            nextRunEntry()
+            onStartHandler?()
+        }
 
         checkRep()
     }
@@ -429,88 +470,95 @@ class EntryListManager: NSObject {
            let _ = self.entryManager.currentEntry,
            previousIndex + 1 < self.state.activeEntries.count
         {
-            // Updating walking index
-            let currentIndex = previousIndex + 1
-            self.entryManager.setCurrentEntry(index: currentIndex)
-            
-            guard let currentEntry = self.entryManager.currentEntry else {
-                self.notifications.executeError(
-                    text: "Unable to retrieve current entry.",
-                    voiceCommand: true
-                )
-                return
-            }
-
-            // Present Feedback
-            self.notifications.executeFeedback(
-                visualMessage: "Next entry",
-                withHaptics: true
-            )
-
-            // Stop previous walking loop
-            self.walkingTimer?.invalidate()
-            self.walkingTimer = nil
-
-            // Stop previous walking loop delay
-            self.walkLoopDelayTimer?.invalidate()
-            self.walkLoopDelayTimer = nil
-
-            // Stop playback
-            if self.speechPlayer.isPlayingEntry {
-                self.speechPlayer.stop(withFeedback: false)
-            }
-            
-            // Send out notification so view can select entry
-            NotificationCenter.default.post(
-                name: EntryListManager.onEntrySelected,
-                object: nil,
-                userInfo: ["index" : currentIndex]
-            )
-
-            // start looping walk
-            if AVAudioSession.isHeadphonesConnected {
-                
-                guard currentEntry.entrySegments.count > 0 else {
-                    // Present Feedback
-                    self.notifications.executeFeedback(
-                        visualMessage: "Empty entry.",
-                        audioMessage: "Empty entry.",
-                        withHaptics: true
+            let handleWalkNextEntry = {
+                guard let currentIndex = self.entryManager.currentIndex,
+                    let currentEntry = self.entryManager.currentEntry else
+                {
+                    self.notifications.executeError(
+                        text: "Unable to retrieve current entry.",
+                        voiceCommand: true
                     )
-                    
-                    handler?()
                     return
                 }
-                let previewDuration = CMTimeMake(
-                    value: Int64(floor(Utils.DEFAULT_SEGMENT_TIMESCALE * min(currentEntry.getDuration().seconds, Utils.PREVIEW_ENTRY_DURATION))),
-                    timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
-                )
-                let makeStep = {
-                    self.speechPlayer.play(
-                        entry: currentEntry,
-                        from: CMTime.zero,
-                        to: previewDuration
-                    )
-                }
 
-                let walkLoopDelayTimer = Timer.scheduledTimer(withTimeInterval: Utils.WALKING_START_DELAY_DURATION, repeats: false) { [weak self] timer in
+                // Present Feedback
+                self.notifications.executeFeedback(
+                    visualMessage: "Next entry",
+                    withHaptics: true
+                )
+
+                // Stop previous walking loop
+                self.walkingTimer?.invalidate()
+                self.walkingTimer = nil
+
+                // Stop playback
+                if self.speechPlayer.isPlayingEntry {
+                    self.speechPlayer.stop(withFeedback: false)
+                }
+                
+                // Send out notification so view can select entry
+                NotificationCenter.default.post(
+                    name: EntryListManager.onEntrySelected,
+                    object: nil,
+                    userInfo: ["index" : currentIndex]
+                )
+
+                // start looping walk
+                if AVAudioSession.isHeadphonesConnected {
+                    
+                    guard currentEntry.entrySegments.count > 0 else {
+                        // Present Feedback
+                        self.notifications.executeFeedback(
+                            visualMessage: "Empty entry.",
+                            audioMessage: "Empty entry.",
+                            withHaptics: true
+                        )
+                        
+                        DispatchQueue.main.async {
+                            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                                handler?()
+                            }
+                        }
+                        
+                        return
+                    }
+                    let previewDuration = CMTimeMake(
+                        value: Int64(floor(Utils.DEFAULT_SEGMENT_TIMESCALE * min(currentEntry.getDuration().seconds, Utils.PREVIEW_ENTRY_DURATION))),
+                        timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
+                    )
+                    print("\tPreview Duration: ", previewDuration.seconds)
+                    let makeStep = {
+                        self.speechPlayer.play(
+                            segments: Entry.getDurationSegments(
+                                segments: currentEntry.entrySegments,
+                                duration: previewDuration,
+                                withOmitSilences: self.state.withOmitSilences
+                            )
+                        )
+                    }
+                    
                     makeStep()
 
-                    // Make sure that the repeat is at least as long as
-                    let walkingTimer = Timer.scheduledTimer(withTimeInterval: min(currentEntry.getDuration().seconds, Utils.PREVIEW_ENTRY_DURATION) * TimeInterval( 1 / self!.speechPlayer.playbackRate), repeats: true) { timer in
-                        makeStep()
+                    if !runOverride {
+                        // Make sure that the repeat is at least as long as
+                        DispatchQueue.main.async {
+                            self.walkingTimer = Timer.scheduledTimer(withTimeInterval: previewDuration.seconds * TimeInterval( 1 / self.speechPlayer.playbackRate), repeats: true) { timer in
+                                makeStep()
+                            }
+                        }
                     }
-
-                    self?.walkingTimer = walkingTimer
                 }
 
-                self.walkLoopDelayTimer = walkLoopDelayTimer
+                // execute handler
+                handler?()
             }
-
-            // execute handler
-            handler?()
+            // Updating walking index
+            let currentIndex = previousIndex + 1
+            self.entryManager.setCurrentEntry(index: currentIndex) {
+                handleWalkNextEntry()
+            }
         } else if self.entryManager.isRunningEntry {
-            self.exitWalkRun()
+            self.exitWalkRun(clearCurrentEntry: true)
         } else {
             self.notifications.executeError(
                 text: "At end of entry list.",
@@ -521,7 +569,7 @@ class EntryListManager: NSObject {
         checkRep()
     }
     
-    func walkPreviousEntry(handler: (() -> Void)? = nil) {
+    func walkPreviousEntry(runOverride: Bool = false, handler: (() -> Void)? = nil) {
         print("===== Entry Manager: Walk Previous Entry =====")
         print("\tTriggered by voice command.")
         
@@ -544,7 +592,7 @@ class EntryListManager: NSObject {
         
         if !self.isWalkingEntryList && !self.isRunningEntryList {
             self.notifications.executeError(
-                text: "Not walking entry list.",
+                text: "Not \(runOverride ? "running" : "walking") entry list.",
                 voiceCommand: true
             )
             return
@@ -557,86 +605,93 @@ class EntryListManager: NSObject {
            let _ = self.entryManager.currentEntry,
            previousIndex - 1 >= 0
         {
-            // Updating walking index
-            let currentIndex = previousIndex - 1
-            self.entryManager.setCurrentEntry(index: currentIndex)
-            
-            guard let currentEntry = self.entryManager.currentEntry else {
-                self.notifications.executeError(
-                    text: "Unable to retrieve current entry.",
-                    voiceCommand: true
-                )
-                return
-            }
-
-            // Present Feedback
-            self.notifications.executeFeedback(
-                visualMessage: "Previous word",
-                withHaptics: true
-            )
-
-            // Stop previous walking loop
-            self.walkingTimer?.invalidate()
-            self.walkingTimer = nil
-
-            // Stop previous walking loop delay
-            self.walkLoopDelayTimer?.invalidate()
-            self.walkLoopDelayTimer = nil
-
-            // Stop playback
-            if self.speechPlayer.isPlayingEntry {
-                self.speechPlayer.stop(withFeedback: false)
-            }
-            
-            // Send out notification so view can select entry
-            NotificationCenter.default.post(
-                name: EntryListManager.onEntrySelected,
-                object: nil,
-                userInfo: ["index" : currentIndex]
-            )
-
-            // start looping walk
-            if AVAudioSession.isHeadphonesConnected {
-                guard currentEntry.entrySegments.count > 0 else {
-                    // Present Feedback
-                    self.notifications.executeFeedback(
-                        visualMessage: "Empty entry.",
-                        audioMessage: "Empty entry.",
-                        withHaptics: true
+            let handleWalkPreviousEntry = {
+                guard let currentIndex = self.entryManager.currentIndex,
+                    let currentEntry = self.entryManager.currentEntry else
+                {
+                    self.notifications.executeError(
+                        text: "Unable to retrieve current entry.",
+                        voiceCommand: true
                     )
-                    
-                    handler?()
                     return
                 }
-                
-                let previewDuration = CMTimeMake(
-                    value: Int64(floor(Utils.DEFAULT_SEGMENT_TIMESCALE * min(currentEntry.getDuration().seconds, Utils.PREVIEW_ENTRY_DURATION))),
-                    timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
-                )
-                let makeStep = {
-                    self.speechPlayer.play(
-                        entry: currentEntry,
-                        from: CMTime.zero,
-                        to: previewDuration
-                    )
-                }
 
-                let walkLoopDelayTimer = Timer.scheduledTimer(withTimeInterval: Utils.WALKING_START_DELAY_DURATION, repeats: false) { [weak self] timer in
+                // Present Feedback
+                self.notifications.executeFeedback(
+                    visualMessage: "Previous word",
+                    withHaptics: true
+                )
+
+                // Stop previous walking loop
+                self.walkingTimer?.invalidate()
+                self.walkingTimer = nil
+
+                // Stop playback
+                if self.speechPlayer.isPlayingEntry {
+                    self.speechPlayer.stop(withFeedback: false)
+                }
+                
+                // Send out notification so view can select entry
+                NotificationCenter.default.post(
+                    name: EntryListManager.onEntrySelected,
+                    object: nil,
+                    userInfo: ["index" : currentIndex]
+                )
+
+                // start looping walk
+                if AVAudioSession.isHeadphonesConnected {
+                    guard currentEntry.entrySegments.count > 0 else {
+                        // Present Feedback
+                        self.notifications.executeFeedback(
+                            visualMessage: "Empty entry.",
+                            audioMessage: "Empty entry.",
+                            withHaptics: true
+                        )
+                        
+                        DispatchQueue.main.async {
+                            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                                handler?()
+                            }
+                        }
+                        
+                        return
+                    }
+                    
+                    let previewDuration = CMTimeMake(
+                        value: Int64(floor(Utils.DEFAULT_SEGMENT_TIMESCALE * min(currentEntry.getDuration().seconds, Utils.PREVIEW_ENTRY_DURATION))),
+                        timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
+                    )
+                    let makeStep = {
+                        self.speechPlayer.play(
+                            segments: Entry.getDurationSegments(
+                                segments: currentEntry.entrySegments,
+                                duration: previewDuration,
+                                withOmitSilences: self.state.withOmitSilences
+                            )
+                        )
+                    }
+                    
                     makeStep()
 
-                    // Make sure that the repeat is at least as long as
-                    let walkingTimer = Timer.scheduledTimer(withTimeInterval: min(currentEntry.getDuration().seconds, Utils.PREVIEW_ENTRY_DURATION) * TimeInterval( 1 / self!.speechPlayer.playbackRate), repeats: true) { timer in
-                        makeStep()
+                    if !runOverride {
+                        // Make sure that the repeat is at least as long as
+                        DispatchQueue.main.async {
+                            self.walkingTimer = Timer.scheduledTimer(withTimeInterval: previewDuration.seconds * TimeInterval( 1 / self.speechPlayer.playbackRate), repeats: true) { timer in
+                                makeStep()
+                            }
+                        }
                     }
-
-                    self?.walkingTimer = walkingTimer
                 }
 
-                self.walkLoopDelayTimer = walkLoopDelayTimer
+                // execute handler
+                handler?()
             }
 
-            // execute handler
-            handler?()
+            // Updating walking index
+            let currentIndex = previousIndex - 1
+            self.entryManager.setCurrentEntry(index: currentIndex) {
+                handleWalkPreviousEntry()
+            }
         } else {
             self.notifications.executeError(
                 text: "At beginning of entry list.",
@@ -702,10 +757,6 @@ class EntryListManager: NSObject {
         // Stop previous walking loop
         self.walkingTimer?.invalidate()
         self.walkingTimer = nil
-
-        // Stop previous walking loop delay
-        self.walkLoopDelayTimer?.invalidate()
-        self.walkLoopDelayTimer = nil
 
         // Stop playback
         if self.speechPlayer.isPlayingEntry {
@@ -794,14 +845,10 @@ class EntryListManager: NSObject {
         self.walkingTimer?.invalidate()
         self.walkingTimer = nil
 
-        // Stop previous walking loop delay
-        self.walkLoopDelayTimer?.invalidate()
-        self.walkLoopDelayTimer = nil
-
         let handleExitWalk = {
             var visualMessage: String?
             var audioMessage: String?
-            if self.entryManager.isRunningEntry {
+            if self.isRunningEntryList {
                 visualMessage = "Exit Run"
                 audioMessage = "run exited."
             } else {
@@ -882,7 +929,6 @@ class EntryListManager: NSObject {
     func invalidateTimers() {
         print("===== Entry List Manager: Invalidate Timers =====")
         self.walkingTimer?.invalidate()
-        self.walkLoopDelayTimer?.invalidate()
         self.runningTimer?.invalidate()
     }
 }

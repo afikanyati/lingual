@@ -1537,6 +1537,9 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         // flag to run start handler
         self.executedListeningStartHandler = false
         
+        // inactive handler
+        self.isActive = true
+        
         let executeListening: () -> Bool = {
             if self.audioEngine.isRunning {
                 print("\tStopped running audio engine...")

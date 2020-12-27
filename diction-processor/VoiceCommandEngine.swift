@@ -88,6 +88,7 @@ public class VoiceCommandEngine: NSObject {
         
         if self.entryManager.isRunningEntry || self.entryListManager.isRunningEntryList {
             actionObjectTokens.append(.RUN)
+            actionObjectTokens.append(.WALK) // We put this hear so user can say next
         }
         
         if self.entryManager.isWalkingEntry || self.entryListManager.isWalkingEntryList {
@@ -205,6 +206,19 @@ public class VoiceCommandEngine: NSObject {
         }
         
         print("\tToken Mappings: ", tokenMappings)
+        
+        // We can add entry and list token if we're walking entry list
+        //
+        // We place it here so it doesn't affect seeking spatial relation tokens above
+        //
+        // Only add if we received any other token
+        if let _ = Utils.getNavigationController()?.visibleViewController as? EntryTableViewController,
+            let _ = self.entryManager.currentEntry,
+            possibleTokens.count > 0
+        {
+            objectTokens.append(.ENTRY)
+            objectTokens.append(.LIST)
+        }
 
         // Determine if action can be inferred
         // - object only has one action
@@ -240,7 +254,9 @@ public class VoiceCommandEngine: NSObject {
                     }
                 }
             }
-        } else if actionTokens.count == 0 &&
+        }
+        
+        if actionTokens.count == 0 &&
             actionObjectTokens.count > 0
         {
             for token in actionObjectTokens {
@@ -271,18 +287,6 @@ public class VoiceCommandEngine: NSObject {
         // Determine if object can be inferred
         if actionTokens.contains(.UNDO) || actionTokens.contains(.REDO) {
             objectTokens.append(.CHANGE)
-        }
-        
-        // We can add entry token if we're walking entry list
-        //
-        // We place it here so it doesn't affect seeking spatial relation tokens above
-        //
-        // Only add if we received any other token
-        if let _ = Utils.getNavigationController()?.visibleViewController as? EntryTableViewController,
-            let _ = self.entryManager.currentEntry,
-            possibleTokens.count > 0
-        {
-            objectTokens.append(.ENTRY)
         }
 
         // Verify we have suitable number of types of tokens to continue

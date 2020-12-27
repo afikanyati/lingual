@@ -215,8 +215,8 @@ class EntryManager: NSObject {
         case .PAUSE_ENTRY:
             self.pauseEntry(voiceCommand: true, handler: handler)
         case .START_ENTRY:
-            if let _ = Utils.getNavigationController()?.visibleViewController as? EntryTableViewController, let _ = self.currentEntry {
-                print("\tFound existing entry while in Entry List after receving 'start entry' via voice command. Remove it to trigger new entry creation.")
+            if let _ = self.currentEntry {
+                print("\tFound existing entry after receving 'start entry' via voice command. Remove it to trigger new entry creation.")
                 self.setCurrentEntry()
             }
             self.startEntry(voiceCommand: true, handler: handler)
@@ -3230,14 +3230,6 @@ class EntryManager: NSObject {
             return
         }
         
-        guard self.speechRecognition.isListeningForSpeech else {
-            self.notifications.executeError(
-                text: "Must be editing entry to remove selection.",
-                voiceCommand: true
-            )
-            return
-        }
-        
         guard self.selectionCursor.hasSelection else {
             self.notifications.executeError(
                 text: "Select speech to execute action.",
@@ -3665,6 +3657,7 @@ class EntryManager: NSObject {
             self.notifications.executeFeedback(
                 visualMessage: "Undo",
                 audioMessage: "undo \(undoMessage)",
+                discardPrior: true,
                 withHaptics: true,
                 delay: 0
             )
@@ -3706,6 +3699,7 @@ class EntryManager: NSObject {
             self.notifications.executeFeedback(
                 visualMessage: "Redo",
                 audioMessage: "redo \(redoMessage)",
+                discardPrior: true,
                 withHaptics: true,
                 delay: 0
             )

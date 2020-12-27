@@ -22,6 +22,7 @@ class StateManager: NSObject {
     var storageManager: StorageManager
     var notifications: NotificationEngine
     var uiManager: UIManager
+    var speechSynthesis: SpeechSynthesisEngine!
     
     // MARK: - User Settings
     
@@ -284,7 +285,9 @@ class StateManager: NSObject {
         print("===== State Manager: On View Did Load =====")
         if !self.playedStartupSound {
             // Play Startup Sound
-            soundEngine.startup()
+            if AVAudioSession.isHeadphonesConnected {
+                soundEngine.startup()
+            }
             self.playedStartupSound = true
         }
         
@@ -672,19 +675,19 @@ class StateManager: NSObject {
     
     // Implementing real-time rate change: https://stackoverflow.com/questions/25499803/how-to-change-speech-rate-during-speaking-using-avspeechsynthesizer-in-ios-7
     func setEchoRate(to rate: Float) {
-        print("===== State Manager: Set Echo Rate: \(rate.rounded(toPlaces: 2)) =====")
+        print("===== State Manager: Set Echo Rate: \((rate / Utils.DEFAULT_ECHO_RATE).rounded(toPlaces: 2)) =====")
         
-        if rate > self._echoRate {
+        if rate > self._echoRate && !self.speechSynthesis.speechSynthesizer.isSpeaking {
             self.notifications.executeFeedback(
-                visualMessage: "Increase Echo Rate: \(rate.rounded(toPlaces: 2))",
-                audioMessage: "increased echo rate to \(rate.rounded(toPlaces: 2))",
+                visualMessage: "Increase Echo Rate: \((rate / Utils.DEFAULT_ECHO_RATE).rounded(toPlaces: 2))",
+                audioMessage: "increased echo rate to \((rate / Utils.DEFAULT_ECHO_RATE).rounded(toPlaces: 2))",
                 discardPrior: true,
                 withHaptics: true
             )
-        } else if rate < self._echoRate {
+        } else if rate < self._echoRate && !self.speechSynthesis.speechSynthesizer.isSpeaking {
             self.notifications.executeFeedback(
-                visualMessage: "Decrease Echo Rate: \(rate.rounded(toPlaces: 2))",
-                audioMessage: "decreased echo rate to \(rate.rounded(toPlaces: 2))",
+                visualMessage: "Decrease Echo Rate: \((rate / Utils.DEFAULT_ECHO_RATE).rounded(toPlaces: 2))",
+                audioMessage: "decreased echo rate to \((rate / Utils.DEFAULT_ECHO_RATE).rounded(toPlaces: 2))",
                 discardPrior: true,
                 withHaptics: true
             )

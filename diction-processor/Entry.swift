@@ -4288,6 +4288,35 @@ class Entry: AVMutableComposition, NSCoding {
         return self.cachedDuration!
     }
     
+    static func getDurationSegments(segments: [EntrySegment], duration: CMTime, withOmitSilences: Bool) -> [EntrySegment] {
+        var cumulativeDuration: CMTime = CMTime.zero
+        var durationSegments = [EntrySegment]()
+        for segment in segments {
+            durationSegments.append(segment)
+            let effectiveDuration = segment.getEffectiveDuration()
+            if cumulativeDuration + effectiveDuration <= duration &&
+                !segment.isVoiceCommandWord() &&
+                !segment.isDeleted() &&
+                (
+                    !withOmitSilences ||
+                    !(
+                        withOmitSilences &&
+                        segment.isSilence() &&
+                        segment.timeMapping.target.duration.seconds > Utils.SILENCE_SKIP_THRESHOLD
+                    )
+                )
+            {
+                cumulativeDuration = CMTimeAdd(cumulativeDuration, effectiveDuration)
+            } else if cumulativeDuration + effectiveDuration <= duration && !withOmitSilences {
+                cumulativeDuration = CMTimeAdd(cumulativeDuration, effectiveDuration)
+            } else if cumulativeDuration + effectiveDuration > duration {
+                break
+            }
+        }
+        
+        return durationSegments
+    }
+    
     static func getDuration(segments: [EntrySegment], withOmitSilences: Bool) -> CMTime {
         var duration: CMTime = CMTime.zero
         for segment in segments {

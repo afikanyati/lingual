@@ -243,7 +243,12 @@ class SpeechPlayerEngine: NSObject {
                     onStartHandler?()
                 }
             } else if self.speechRecognition.isListeningForSpeech && !AVAudioSession.isHeadphonesConnected {
-                self.speechRecognition.pauseListeningForSpeech(preventListeningForCommands: true) {
+                if !self.speechRecognition.pausedListeningForSpeech {
+                    self.speechRecognition.pauseListeningForSpeech(preventListeningForCommands: true) {
+                        self.player.play()
+                        onStartHandler?()
+                    }
+                } else {
                     self.player.play()
                     onStartHandler?()
                 }
@@ -325,13 +330,21 @@ class SpeechPlayerEngine: NSObject {
         }
         
         if self.speechRecognition.isListeningForCommands && !AVAudioSession.isHeadphonesConnected {
-            print("\tListening for commands without headphones. Stop listening while we play speech...")
-            self.speechRecognition.pauseListeningForVoiceCommands() {
+            if !self.speechRecognition.pausedListeningForSpeech {
+                print("\tListening for commands without headphones. Stop listening while we play speech...")
+                self.speechRecognition.pauseListeningForVoiceCommands() {
+                    playHandler()
+                }
+            } else {
                 playHandler()
             }
         } else if self.speechRecognition.isListeningForSpeech && !AVAudioSession.isHeadphonesConnected {
-            print("\tListening for speech without headphones. Stop listening while we play speech...")
-            self.speechRecognition.pauseListeningForSpeech(preventListeningForCommands: true) {
+            if !self.speechRecognition.pausedListeningForSpeech {
+                print("\tListening for speech without headphones. Stop listening while we play speech...")
+                self.speechRecognition.pauseListeningForSpeech(preventListeningForCommands: true) {
+                    playHandler()
+                }
+            } else {
                 playHandler()
             }
         } else {

@@ -233,7 +233,8 @@ class NotificationEngine {
     func stopNotification() {
         print("===== Notification Engine: Stop Notification =====")
         
-        if self.speechSynthesis.speechSynthesizer.isSpeaking {
+        if self.speechSynthesis.speechSynthesizer.isSpeaking && self.speechSynthesis.echoSegments == nil {
+            // Only stop if echo was only produced by notification
             self.speechSynthesis.stopEcho(withFeedback: false)
         }
         

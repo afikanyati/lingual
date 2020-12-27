@@ -29,7 +29,7 @@ class Utils {
     static let MALE_LOWEST_VOICED_SPEECH_FREQUENCY: Double = 82
     static let FEMALE_HIGHEST_VOICED_SPEECH_FREQUENCY: Double = 1047
     static let UNKNOWN: Double = -1
-    static let SILENCE_SKIP_THRESHOLD = 0.1
+    static let SILENCE_SKIP_THRESHOLD = 0.3
     static let CURSOR_WIDTH = 2
     static let CURSOR_TRANSITION_DURATION: TimeInterval = 0.15
     static let TEXT_VIEW_SCROLL_TRANSITION_DURATION: TimeInterval = 0.3
