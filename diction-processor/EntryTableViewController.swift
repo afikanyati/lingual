@@ -406,6 +406,12 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
             name: EntryListManager.onEntrySelected,
             object: nil
         )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(onExitEntryListWalkRun(notification:)),
+            name: EntryListManager.onExitEntryListWalkRun,
+            object: nil
+        )
     }
     
     @objc func onDetailViewDidLoad(notification: Notification) {
@@ -546,7 +552,7 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
                 !self!.notifications.isPresentingVisualNotification
             {
                 let navigationController = Utils.getNavigationController()
-                if self!.entryListManager.isRunningEntryList {
+                if self != nil && self!.entryListManager.isRunningEntryList {
                     navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
                         self!.getDictionaryButton(),
                         self!.getExitRunListButton(),
@@ -580,6 +586,10 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
     @objc func onPowerUpdate(notification: Notification) {
         // print("===== Entry Table View Controller: On Power Update =====")
         DispatchQueue.main.async { [weak self] in
+            if self == nil {
+                return
+            }
+            
             if let view = self?.view, let soundIntensityIndicatorHeight = self?.soundIntensityIndicatorHeight {
                 Utils.onPowerUpdate(
                     notification: notification,
@@ -667,8 +677,12 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
         
         // Bring back buttons while presenting notification
         DispatchQueue.main.async { [weak self] in
+            if self == nil {
+                return
+            }
+            
             let navigationController = Utils.getNavigationController()
-            if self!.entryListManager.isRunningEntryList {
+            if self != nil && self!.entryListManager.isRunningEntryList {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
                     self!.getDictionaryButton(),
                     self!.getExitRunListButton()
@@ -692,8 +706,12 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
         
         // Remove pitch label while presenting notification
         DispatchQueue.main.async { [weak self] in
+            if self == nil {
+                return
+            }
+            
             let navigationController = Utils.getNavigationController()
-            if self!.entryListManager.isRunningEntryList {
+            if self != nil && self!.entryListManager.isRunningEntryList {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [
                     self!.getDictionaryButton(),
                     self!.getExitRunListButton()
@@ -791,6 +809,16 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
         let index = notification.userInfo!["index"] as! Int?
         DispatchQueue.main.async { [weak self] in
             self?.selectTableRow(index: index, scrollIntoView: true)
+        }
+    }
+    
+    @objc func onExitEntryListWalkRun(notification: Notification) {
+        print("===== Entry Table View Controller: On Exit Entry List Walk Run =====")
+        
+        DispatchQueue.main.async { [weak self] in
+            if let indexPath = self?.tableView?.indexPathForSelectedRow {
+                self?.tableView?.deselectRow(at: indexPath, animated: true)
+            }
         }
     }
     

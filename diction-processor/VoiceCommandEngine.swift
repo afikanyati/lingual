@@ -553,6 +553,8 @@ public class VoiceCommandEngine: NSObject {
             for commandSet in viableVoiceCommandSets {
                 let tokenInterSectionCount = commandSet.intersection(utteredWordsSet).count
                 if !commandSet.contains(.ENTRY) &&
+                !commandSet.contains(.LIST) &&
+                !commandSet.contains(.ENTRY_LIST) &&
                 tokenInterSectionCount > 0 &&
                 tokenInterSectionCount > mostCommandWords
                 {
@@ -570,6 +572,19 @@ public class VoiceCommandEngine: NSObject {
                     if commandSet.contains(.ENTRY) && !commandSet.contains(.RUN) {
                         print("\tPrioritizing entry voice command...")
                         // We want to prioritize other commands before settling for run entry
+                        voiceCommand = VoiceCommandMap[commandSet]
+                        voiceCommandSet = commandSet
+                        break
+                    }
+                }
+            }
+            
+            if voiceCommand == nil &&
+                voiceCommandSet == nil {
+                for commandSet in viableVoiceCommandSets {
+                    if (commandSet.contains(.LIST) || commandSet.contains(.ENTRY_LIST)) && !commandSet.contains(.WALK) {
+                        print("\tPrioritizing entry list voice command...")
+                        // We want to prioritize other commands before settling for walk entry
                         voiceCommand = VoiceCommandMap[commandSet]
                         voiceCommandSet = commandSet
                         break
@@ -607,6 +622,8 @@ public class VoiceCommandEngine: NSObject {
             for commandSet in viableVoiceCommandSets {
                 let tokenInterSectionCount = commandSet.intersection(utteredWordsSet).count
                 if !commandSet.contains(.ENTRY) &&
+                !commandSet.contains(.LIST) &&
+                !commandSet.contains(.ENTRY_LIST) &&
                 tokenInterSectionCount > 0 &&
                 tokenInterSectionCount > mostCommandWords
                 {
@@ -623,6 +640,19 @@ public class VoiceCommandEngine: NSObject {
                 for commandSet in viableVoiceCommandSets {
                     if commandSet.contains(.ENTRY) && !commandSet.contains(.WALK) {
                         print("\tPrioritizing entry voice command...")
+                        // We want to prioritize other commands before settling for walk entry
+                        voiceCommand = VoiceCommandMap[commandSet]
+                        voiceCommandSet = commandSet
+                        break
+                    }
+                }
+            }
+            
+            if voiceCommand == nil &&
+                voiceCommandSet == nil {
+                for commandSet in viableVoiceCommandSets {
+                    if (commandSet.contains(.LIST) || commandSet.contains(.ENTRY_LIST)) && !commandSet.contains(.WALK) {
+                        print("\tPrioritizing entry list voice command...")
                         // We want to prioritize other commands before settling for walk entry
                         voiceCommand = VoiceCommandMap[commandSet]
                         voiceCommandSet = commandSet

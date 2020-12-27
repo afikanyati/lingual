@@ -791,7 +791,7 @@ class EntryManager: NSObject {
                     title: "Cancel",
                     voiceCommand: .CANCEL_DIALOG,
                     feedbackVisualMessage: "Canceled!",
-                    feedbackAudioMessage: "Command canceled.",
+                    feedbackAudioMessage: "Action canceled.",
                     style: .cancel,
                     handler: { action in
                         handler?()
@@ -894,7 +894,7 @@ class EntryManager: NSObject {
                     title: "Cancel",
                     voiceCommand: .CANCEL_DIALOG,
                     feedbackVisualMessage: "Canceled!",
-                    feedbackAudioMessage: "Command canceled.",
+                    feedbackAudioMessage: "Action canceled.",
                     style: .cancel,
                     handler: nil
                 )
@@ -1078,7 +1078,7 @@ class EntryManager: NSObject {
                     title: "Cancel",
                     voiceCommand: .CANCEL_DIALOG,
                     feedbackVisualMessage: "Canceled!",
-                    feedbackAudioMessage: "Command canceled.",
+                    feedbackAudioMessage: "Action canceled.",
                     style: .cancel,
                     handler: nil
                 )
@@ -1599,7 +1599,7 @@ class EntryManager: NSObject {
                     title: "Cancel",
                     voiceCommand: .CANCEL_DIALOG,
                     feedbackVisualMessage: "Canceled!",
-                    feedbackAudioMessage: "Command canceled.",
+                    feedbackAudioMessage: "Action canceled.",
                     style: .cancel,
                     handler: nil
                 )
@@ -1686,7 +1686,7 @@ class EntryManager: NSObject {
                     title: "Cancel",
                     voiceCommand: .CANCEL_DIALOG,
                     feedbackVisualMessage: "Canceled!",
-                    feedbackAudioMessage: "Command canceled.",
+                    feedbackAudioMessage: "Action canceled.",
                     style: .cancel,
                     handler: nil
                 )

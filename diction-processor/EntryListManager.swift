@@ -14,6 +14,7 @@ class EntryListManager: NSObject {
     // MARK: - Notifications
     
     static let onEntrySelected = Notification.Name(Notifications.onEntrySelected.rawValue)
+    static let onExitEntryListWalkRun = Notification.Name(Notifications.onExitEntryListWalkRun.rawValue)
 
     // MARK: - App Modules
     
@@ -324,7 +325,7 @@ class EntryListManager: NSObject {
                 }
                 
                 let previewDuration = CMTimeMake(
-                    value: Int64(floor(Utils.DEFAULT_SEGMENT_TIMESCALE * min(currentEntry.getDuration().seconds, Utils.PREVIEW_ENTRY_DURATION))),
+                    value: runOverride ? Int64(floor(Utils.DEFAULT_SEGMENT_TIMESCALE * min(currentEntry.getDuration().seconds, Utils.PREVIEW_ENTRY_DURATION))) : Int64(floor(Utils.DEFAULT_SEGMENT_TIMESCALE * Utils.PREVIEW_ENTRY_DURATION)),
                     timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
                 )
                 print("\tPreview Duration: ", previewDuration.seconds)
@@ -523,7 +524,7 @@ class EntryListManager: NSObject {
                         return
                     }
                     let previewDuration = CMTimeMake(
-                        value: Int64(floor(Utils.DEFAULT_SEGMENT_TIMESCALE * min(currentEntry.getDuration().seconds, Utils.PREVIEW_ENTRY_DURATION))),
+                        value: runOverride ? Int64(floor(Utils.DEFAULT_SEGMENT_TIMESCALE * min(currentEntry.getDuration().seconds, Utils.PREVIEW_ENTRY_DURATION))) : Int64(floor(Utils.DEFAULT_SEGMENT_TIMESCALE * Utils.PREVIEW_ENTRY_DURATION)),
                         timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
                     )
                     print("\tPreview Duration: ", previewDuration.seconds)
@@ -658,7 +659,7 @@ class EntryListManager: NSObject {
                     }
                     
                     let previewDuration = CMTimeMake(
-                        value: Int64(floor(Utils.DEFAULT_SEGMENT_TIMESCALE * min(currentEntry.getDuration().seconds, Utils.PREVIEW_ENTRY_DURATION))),
+                        value: runOverride ? Int64(floor(Utils.DEFAULT_SEGMENT_TIMESCALE * min(currentEntry.getDuration().seconds, Utils.PREVIEW_ENTRY_DURATION))) : Int64(floor(Utils.DEFAULT_SEGMENT_TIMESCALE * Utils.PREVIEW_ENTRY_DURATION)),
                         timescale: Int32(Utils.DEFAULT_SEGMENT_TIMESCALE)
                     )
                     let makeStep = {
@@ -830,6 +831,12 @@ class EntryListManager: NSObject {
         if clearCurrentEntry {
             // Clear current entry
             self.entryManager.setCurrentEntry()
+            
+            NotificationCenter.default.post(
+                name: EntryListManager.onExitEntryListWalkRun,
+                object: nil,
+                userInfo: [:]
+            )
         }
 
         // Stop current playback

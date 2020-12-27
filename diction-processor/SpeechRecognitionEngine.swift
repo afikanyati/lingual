@@ -642,7 +642,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                     title: "Cancel",
                     voiceCommand: .CANCEL_DIALOG,
                     feedbackVisualMessage: "Canceled!",
-                    feedbackAudioMessage: "Command canceled.",
+                    feedbackAudioMessage: "Action canceled.",
                     style: .cancel,
                     handler: nil
                 )

@@ -84,6 +84,7 @@ enum Notifications: String {
     
     // Entry List Manager
     case onEntrySelected
+    case onExitEntryListWalkRun
     
     // StorageManager
     case onFetchedStoredState

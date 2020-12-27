@@ -165,6 +165,10 @@ class UIManager: NSObject {
             // Play Sound
             soundEngine.presentDialog()
             
+            if !soundEngine.isPlayingModalAmbience {
+                soundEngine.startModalAmbience()
+            }
+            
             // Present Feedback
             self.notifications.executeFeedback(
                 visualMessage: dialogItem.title,
@@ -199,6 +203,9 @@ class UIManager: NSObject {
     func dismissDialog() {
         print("===== UIManager: Dismiss Dialog =====")
         DispatchQueue.main.async { [weak self] in
+            // Turn off ambient track
+            soundEngine.stopModalAmbience()
+            
             let vc = Utils.getNavigationController()?.visibleViewController
             if let vc = vc {
                 vc.dismiss(animated: true)
