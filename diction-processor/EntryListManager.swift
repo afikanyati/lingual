@@ -939,3 +939,251 @@ class EntryListManager: NSObject {
         self.runningTimer?.invalidate()
     }
 }
+
+// List of tests:
+
+// Useful Resources:
+// Viewing App Storage on Device: https://stackoverflow.com/questions/15219511/theres-a-way-to-access-the-document-folder-in-iphone-ipad-real-device-no-simu
+// Debugging EXC_BAD_ACCESS: https://code.tutsplus.com/tutorials/what-is-exc_bad_access-and-how-to-debug-it--cms-24544
+
+// ====== Before Wake Phrase =====
+// +++++ On-server recognition
+// +++++ With and without headphones
+// TODO: set withOnDeviceRecognition = false
+//
+// 1) No words
+// Instructions: Open app and wait a minute without saying a word.
+// Expected result: Console should continue listening for wake phrase
+//
+// 2) Some words
+// Instructions: Open app and say words, but not the wake phrase
+// Expected result: Console should continue listening for wake phrase
+//
+// 3) No words before a minute. Wake phrase after a minute
+// Instructions: Only run if test #1 and #2 pass. Open app. Say wake phrase after a minute.
+// Expected result: App should activate.
+//
+// 4) Some words before a minute. Wake phrase after a minute
+// Instructions: Only run if test #1 and #2 pass. Open app and say words, but not the wake phrase. Say wake phrase after a minute.
+// Expected result: App should activate.
+//
+// +++++ On-device recognition
+// +++++ With and without headphoness
+// TODO: set withOnDeviceRecognition = true
+//
+// 5) No words
+// Instructions: Open app and wait a minute without saying a word.
+// Expected result: Console should continue listening for wake phrase
+//
+// 6) Some words
+// Instructions: Open app and say words, but not the wake phrase
+// Expected result: Console should continue listening for wake phrase
+//
+// 7) No words before a minute. Wake phrase after a minute
+// Instructions: Only run if test #1 and #2 pass. Open app. Say wake phrase after a minute.
+// Expected result: App should activate.
+//
+// 8) Some words before a minute. Wake phrase after a minute
+// Instructions: Only run if test #1 and #2 pass. Open app and say words, but not the wake phrase. Say wake phrase after a minute.
+// Expected result: App should activate.
+//
+// ===== After Wake Phrase =====
+// 9) Move to Background / Move to Foreground resets Wake Phrase
+// Instructions: Open app. Say wake phrase. Go to Home screen and return to app.
+// Expected Result: App should be inactive and listening for wake phrase
+//
+// +++++ On-server recognition
+// +++++ With and without headphoness
+// TODO: set withOnDeviceRecognition = true
+//
+// 10) No words for a minute
+// Instructions: Open app. Say wake phrase. Start entry. Wait a minute without saying a word. Say words after a minute.
+// Expected Result: No words should be transcribed before a minute. Words shold be transcribed after a minute. Session should be fluid.
+//
+// 11) Some words in a minute. More words after.
+// Instructions: Open app. Say wake phrase. Start entry. Say some words before a minute. Say more words after a minute.
+// Expected Result: Some words should be transcribed before a minute. More words should be stranscribed after a minute. Session should be fluid. The timestamps should be accurate for each word.
+//
+// +++++ On-device recognition
+// +++++ With and without headphoness
+// TODO: set withOnDeviceRecognition = true
+//
+// 12) No words for a minute
+// Instructions: Open app. Say wake phrase. Start entry. Wait a minute without saying a word. Say words after a minute.
+// Expected Result: No words should be transcribed before a minute. Words shold be transcribed after a minute. Session should be fluid.
+//
+// 13) Some words in a minute. More words after.
+// Instructions: Open app. Say wake phrase. Start entry. Say some words before a minute. Say more words after a minute.
+// Expected Result: Some words should be transcribed before a minute. More words should be stranscribed after a minute. Session should be fluid. The timestamps should be accurate for each word.
+//
+// 14) Spaced out audio while using on-device recognition
+// Instructions: Speak out an entry with at least five seconds of silence between each word
+// Expected result: On playback, the silences should be removed and the focus word on screen should be aligned with the word being uttered.
+//
+// 15) Test Punctuation Suggestion: Ignore Adjective
+// Instructions: Utter the following: "This is a beautiful". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Utter "home".
+// Expected Result: There should not be a new paragraph created between 'beautiful' and 'home'.
+//
+// 16) Test Punctuation Suggestion: End on Adjective
+// Instructions: Utter the following: "This is beautiful". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. "you are the best".
+// Expected Result: There should be a new paragraph created between "This is beautiful" and "you are the best". "You" should be capitalized and there should be no leading space on second sentence
+// Warning: Sometimes the transcript returns back a starting time for "you" that happens well before it is uttered. There is no control of this unfortunately
+//
+// 17) Test Punctuation Suggestion: End on Negative Adjective
+// Instructions: Utter the following: "This is not beautiful". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. "you are the word".
+// Expected Result: There should be a new paragraph created between "This is not beautiful" and "you are the worst". "You" should be capitalized and there should be no leading space on second sentence
+// Warning: Sometimes the transcript returns back a starting time for "you" that happens well before it is uttered. There is no control of this unfortunately
+//
+// 18) Test Punctuation Suggestion: End on Negative Quantifier Adjective
+// Instructions: Utter the following: "This is so beautiful". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. "Can I have it?". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds.
+// Expected Result: There should be a new paragraph created between "This is not beautiful" and "Can I have it?". "Can" should be capitalized and there should be a question mark at the end of the sentence.
+// Warning: Sometimes the transcript returns back a starting time for "can" that happens well before it is uttered. There is no control of this unfortunately
+//
+// 19) Test Punctuation and Temporal Suggestions Active
+// Instructions: In createNewEntry() method, set 'withTemporalSuggestions' and 'withPunctuationSuggestions' to true. And open application
+// Expected Result:  You should see a 'Conflicting View Modes' error dialog telling you it's selected punctuation suggestions.
+//
+// 20) Test Change Audio Inputs
+// Instructions: Start the app without earphones connected. While on the Wake Phrase Screen, connect earphones. Utter wake phrase.
+// Expected Result: The wake phrase should be registered without error
+//
+// 22) Test Trim Entry: Permanent
+//
+// ===== Code Needed =====
+//entry.trim(keeping: entry.getSentenceDetails(number: 1)!.timeRange, permanent: true) {
+//    self.entry.play(
+//        onStartHandler: { [weak self] in
+//            // print("Successfully executed playback on start handler")
+//            DispatchQueue.main.async {
+//                self?.playAudioButton.setTitle(PAUSE_ENTRY_LABEL, for: .normal)
+//            }
+//        },
+//        secondElapseHandler: { [weak self] in
+//            // print("Successfully executed playback secondT elapsed handler")
+//            DispatchQueue.main.async {
+//                if !self!.entry.isListeningForSpeech && self!.entry.player.currentTime().seconds != Double.infinity && self!.entry.player.currentTime().seconds != Double.nan && self!.entry.player.currentTime().seconds != -Double.infinity {
+//                    self?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: Float(self!.entry.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.entry.getDuration().seconds)))"
+//                }
+//            }
+//        },
+//        segmentBoundaryHandler: { [weak self] in
+//            // print("Successfully executed playback on segment boundary handler")
+//            DispatchQueue.main.async {
+//                if let segment = self?.entry.getSegment(type: .current), segment.getText().count > 0 && segment.isActive(), let highlightRange = self?.entry.getSegmentTextRange(of: segment) {
+//                    // update text
+//                    self?.updateUIText(text: self!.entry.getText(), highlightRange: highlightRange, transformations: self!.entry.transformations)
+//                }
+//
+//                if let segment = self?.entry.getSegment(type: .current), let pitch = segment.getPitch() {
+//                    // update pitch
+//                    self?.pitchLabel.text = pitch.note.string
+//                }
+//            }
+//        }, onFinishHandler: { [weak self] in
+//            // print("Successfully executed playback on finish handler")
+//            DispatchQueue.main.async {
+//                self?.updateUIText(text: self!.entry.getText(), transformations: self!.entry.transformations)
+//                if !self!.entry.isListeningForSpeech {
+//                    self?.navigationBar.topItem?.title = ""
+//                }
+//
+//                self?.adjustCommandBar()
+//                self?.adjustMenuBar()
+//            }
+//        }
+//    )
+//}
+// =======================
+//
+// Instructions: Place code in an area where it maybe be executable. Utter the following: "This is the first sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the second sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the third sentence".
+// Expected Result: System should play back: "This is the second sentence".
+//
+// 23) Test Trim Entry: Not Permanent
+//
+// ===== Code Needed =====
+//entry.trim(keeping: entry.getSentenceDetails(number: 1)!.timeRange, permanent: false) {
+//    self.entry.play(
+//        onStartHandler: { [weak self] in
+//            // print("Successfully executed playback on start handler")
+//            DispatchQueue.main.async {
+//                self?.playAudioButton.setTitle(PAUSE_ENTRY_LABEL, for: .normal)
+//            }
+//        },
+//        secondElapseHandler: { [weak self] in
+//            // print("Successfully executed playback secondT elapsed handler")
+//            DispatchQueue.main.async {
+//                if !self!.entry.isListeningForSpeech && self!.entry.player.currentTime().seconds != Double.infinity && self!.entry.player.currentTime().seconds != Double.nan && self!.entry.player.currentTime().seconds != -Double.infinity {
+//                    self?.navigationBar.topItem?.title = "\(Utils.formattedTime(time: Float(self!.entry.player.currentTime().seconds)))/\(Utils.formattedTime(time: Float(self!.entry.getDuration().seconds)))"
+//                }
+//            }
+//        },
+//        segmentBoundaryHandler: { [weak self] in
+//            // print("Successfully executed playback on segment boundary handler")
+//            DispatchQueue.main.async {
+//                if let segment = self?.entry.getSegment(type: .current), segment.getText().count > 0 && segment.isActive(), let highlightRange = self?.entry.getSegmentTextRange(of: segment) {
+//                    // update text
+//                    self?.updateUIText(text: self!.entry.getText(), highlightRange: highlightRange, transformations: self!.entry.transformations)
+//                }
+//
+//                if let segment = self?.entry.getSegment(type: .current), let pitch = segment.getPitch() {
+//                    // update pitch
+//                    self?.pitchLabel.text = pitch.note.string
+//                }
+//            }
+//        }, onFinishHandler: { [weak self] in
+//            // print("Successfully executed playback on finish handler")
+//            DispatchQueue.main.async {
+//                self?.updateUIText(text: self!.entry.getText(), transformations: self!.entry.transformations)
+//                if !self!.entry.isListeningForSpeech {
+//                    self?.navigationBar.topItem?.title = ""
+//                }
+//
+//                self?.adjustCommandBar()
+//                self?.adjustMenuBar()
+//            }
+//        }
+//    )
+//}
+// =======================
+//
+// Instructions: Place code in an area where it maybe be executable. Utter the following: "This is the first sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the second sentence". Wait NEW_PARAGRAPH_PAUSE_DURATION_MULTIPLIER seconds. Then utter: "This is the third sentence".
+// Expected Result: System should play back: "This is the second sentence".
+//
+// 25) Duplicate Entry
+//
+// ===== Code Needed =====
+//entry.duplicate() { entry in
+//    self.tempEntry = entry
+//    self.tempEntry?.play() {
+//        print("Finished Sentence!")
+//    }
+//}
+// =======================
+//
+// Instructions: Place code in an area where it maybe be executable. Record any entry.
+// Expected Result: System should play back your entry.
+//
+// 26) Voice Commands
+//
+// Instructions: Open app and utter wake phrase. Start entry by uttering "Start Entry". Speak an entry. End entry by uttering "Stop Entry". Play entry by uttering "Play Entry".
+// Expected Result: Your entry should playback *** without *** 'Stop Entry' in it.
+//
+// 27) Uttering Voice Command Mid-Entry
+//
+// Instructions: Open app and utter wake phrase. Start entry by uttering "Start Entry". Speak an entry. Mid entry utter "Play Entry". Let audio play until completion. Continue speaking an entry. End entry by uttering "Stop Entry". Play entry by uttering "Play Entry".
+// Expected Result: Mid-entry you should hear yourself utter the entry up until that point. After ending entry, your entry should playback *** without *** 'Stop Entry' in it.
+//
+// 28) Test track collapsing implementation
+//
+// Instructions: Open app and utter wake phrase. Start entry by uttering "Start Entry". Utter "this is the first sentence". Then utter "Play Entry". Let audio play until completion. Then utter "this is the second sentence". Then utter "Play Entry". Let audio play until completion. Then utter "this is the third sentence". Then utter "Play Entry". End entry by uttering "Stop Entry"
+// Expected Result: At each stage of "play entry", each new utterance should be added to the entry playback without voice command playback between each utterance.
+
+// 29) Double Play Entry Test
+//
+// Instructions: Open app and utter wake phrase. Start entry by uttering "Start Entry". Speak an entry. Mid entry utter "Play Entry". Let audio play until completion. After completion, utter "Play Entry" again.
+// Expected Result: Entry should be played back twice without any voice command utters played back.
+
+// 30) Emphasis Test
+//
+// Instructions:
+// Expected Result:

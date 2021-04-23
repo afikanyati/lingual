@@ -24,7 +24,7 @@ class Utils {
     static let DEFAULT_WITH_TEXT_STRICTLY_AS_WORDS = false
     static let DEFAULT_WITH_CAPITALIZATION = true
     static let DEFAULT_WITH_SKIP_PUNCTUATION = true
-    static let DEFAULT_WITH_OMIT_SILENCES = true
+    static let DEFAULT_WITH_OMIT_SILENCES = false
     static let DEFAULT_WITH_PASSIVE_ECHO = true
     static let MALE_LOWEST_VOICED_SPEECH_FREQUENCY: Double = 82
     static let FEMALE_HIGHEST_VOICED_SPEECH_FREQUENCY: Double = 1047
@@ -41,7 +41,7 @@ class Utils {
             // when talking, the avg. power was -33dB
             // ∆ = 42dB
             // We use 30dB to give some wiggle room
-            return 40
+            return 30
         }
         
         // Without headphones, in a relatively empty, small room, near the window, using iPhone SE mic, 30 cm away
@@ -1362,19 +1362,6 @@ class Utils {
         }
     }
     
-    public static func onStartedListeningForWakePhrase(
-        withBackToEntriesButton: Bool = false,
-        notification: Notification,
-        speechRecognition: SpeechRecognitionEngine
-    ) {
-        print("===== Utils: On Started Listening For Wake Phrase =====")
-        speechRecognition.activateListeningIndicator(
-            withRecording: false,
-            withStopListeningButton: true,
-            withBackToEntriesButton: withBackToEntriesButton
-        )
-    }
-    
     public static func onStartedListeningForCommands(
         withBackToEntriesButton: Bool = false,
         notification: Notification,
@@ -1544,7 +1531,7 @@ class Utils {
             let navigationController = Utils.getNavigationController()
             let titleView = Utils.getTitleView(
                 text: item.text,
-                withRecording: speechRecognition.isListeningForSpeech || !state.appActivated,
+                withRecording: speechRecognition.isListeningForSpeech,
                 asNotification: false,
                 asVoiceCommand: false
             )
@@ -2260,6 +2247,12 @@ class Utils {
             }
         })
         return "[\(segments.joined(separator: ", "))]"
+    }
+    
+    public static func hasVoiceCommandSegment(segments: [EntrySegment]) -> Bool {
+        return segments.reduce(false, { result, segment in
+            return result || segment.isVoiceCommandWord()
+        })
     }
     
     public static func getEntryNthLastSegmentIndex(

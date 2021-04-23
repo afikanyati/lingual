@@ -67,20 +67,6 @@ class NotificationEngine {
     
     func configureNotificationObservers() {
         let notificationCenter = NotificationCenter.default
-
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onWakePhraseDetected(notification:)),
-            name: SpeechRecognitionEngine.onWakePhraseDetected,
-            object: nil
-        )
-        
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onIncorrectWakePhrase(notification:)),
-            name: SpeechRecognitionEngine.onIncorrectWakePhrase,
-            object: nil
-        )
         
         notificationCenter.addObserver(
             self,
@@ -94,12 +80,6 @@ class NotificationEngine {
         print("===== Notification Engine: App Will Terminate =====")
         
         self.invalidateTimers()
-    }
-    
-    @objc func onWakePhraseDetected(notification: Notification) {
-        print("===== Notification Engine: On Wake Phrase Detected =====")
-        // Remove voice command hint text
-        self.stopNotification()
     }
     
     @objc func onIncorrectWakePhrase(notification: Notification) {

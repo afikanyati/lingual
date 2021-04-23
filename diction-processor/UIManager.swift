@@ -8,6 +8,7 @@
 
 import UIKit
 import Foundation
+import AVFoundation
 
 class UIManager: NSObject {
     // MARK: - Notifications
@@ -165,7 +166,7 @@ class UIManager: NSObject {
             // Play Sound
             soundEngine.presentDialog()
             
-            if !soundEngine.isPlayingModalAmbience {
+            if !soundEngine.isPlayingModalAmbience && AVAudioSession.isHeadphonesConnected {
                 soundEngine.startModalAmbience()
             }
             

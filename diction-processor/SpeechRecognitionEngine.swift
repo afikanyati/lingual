@@ -13,8 +13,6 @@ import Speech
 class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     // MARK: - Notifications
     
-    static let onStartedListeningForWakePhrase = Notification.Name(Notifications.onStartedListeningForWakePhrase.rawValue)
-    static let onStoppedListeningForWakePhrase = Notification.Name(Notifications.onStoppedListeningForWakePhrase.rawValue)
     static let onStartedListeningForCommands = Notification.Name(Notifications.onStartedListeningForCommands.rawValue)
     static let onPausedListeningForCommands = Notification.Name(Notifications.onPausedListeningForCommands.rawValue)
     static let onStoppedListeningForCommands = Notification.Name(Notifications.onStoppedListeningForCommands.rawValue)
@@ -24,8 +22,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     static let onRequestPrepareAudioFile = Notification.Name(Notifications.onRequestPrepareAudioFile.rawValue)
     static let onPowerUpdate = Notification.Name(Notifications.onPowerUpdate.rawValue)
     static let onSpeechUpdate = Notification.Name(Notifications.onSpeechUpdate.rawValue)
-    static let onWakePhraseDetected = Notification.Name(Notifications.onWakePhraseDetected.rawValue)
-    static let onIncorrectWakePhrase = Notification.Name(Notifications.onIncorrectWakePhrase.rawValue)
     static let onBufferItem = Notification.Name(Notifications.onBufferItem.rawValue)
     
     // MARK: - App Modules
@@ -42,11 +38,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     
     // MARK: - Speech Recognition Properties
     
-    let wakePhrases = [
-        "rise and shine",
-        "rison shine",
-        "razon shine"
-    ]
     private(set) var audioEngine = AVAudioEngine()
     let speechRecognizer: SFSpeechRecognizer? = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private(set) var request: SFSpeechAudioBufferRecognitionRequest?
@@ -60,7 +51,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     /// Indicates whether we have rejected broadcast speech and should reject again in didFinish
     private(set) var earlyBroadcastSpeechRejection = false
     private(set) var isActive = true
-    private(set) var isListeningForWakePhrase = false
     private(set) var isListeningForVolume = false
     /// Specifies whether entry is currently listening for voice commands
     private(set) var isListeningForCommands = false
@@ -135,11 +125,11 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             self.requestPermissions()
         }
         
-        if let speechRecognizer = self.speechRecognizer, !self.isListeningForWakePhrase && self.state.withOnDeviceRecognition && self.listeningPermissionsGranted && speechRecognizer.supportsOnDeviceRecognition {
+        if let speechRecognizer = self.speechRecognizer, !self.isListeningForCommands && self.state.withOnDeviceRecognition && self.listeningPermissionsGranted && speechRecognizer.supportsOnDeviceRecognition {
             print("===== Speech Recognition Engine: Initializer - Configure listening for wake phrase =====")
             // Start listening for wake word
             self.configureListening() { [weak self] in
-                self?.startListeningForWakePhrase()
+                self?.startListeningForVoiceCommands()
             }
         }
     }
@@ -220,11 +210,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         // make sure paused listening for commands only occurs if listening for commands
         result = result && ((self.isListeningForCommands && !self.pausedListeningForCommands) || (self.isListeningForCommands && self.pausedListeningForCommands) || (!self.isListeningForCommands && !self.pausedListeningForCommands))
 //        print("make sure paused listening for speech  only occurs if listening for commands: ", (self.isListeningForCommands && !self.pausedListeningForCommands), (self.isListeningForCommands && self.pausedListeningForCommands), (!self.isListeningForCommands && !self.pausedListeningForCommands))
-//        print("current result: ", result)
-        
-        // can't be listening for wake phrase and anything else
-        result = result && ((self.isListeningForWakePhrase && !self.isListeningForSpeech && !self.isListeningForCommands && !self.isListeningForVolume) || !self.isListeningForWakePhrase)
-//        print("can't be listening for wake phrase and anything else: ", (self.isListeningForWakePhrase && !self.isListeningForSpeech && !self.isListeningForCommands && !self.isListeningForVolume), !self.isListeningForWakePhrase)
 //        print("current result: ", result)
         
         // should not have a listening timer if we're not listening for speech
@@ -363,18 +348,10 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     @objc func appMovedToBackground() {
         print("===== Speech Recognition Engine: App Moved to Background =====")
         
-        if !self.state.appActivated {
-            print("\tStop listening for wake phrase...")
-            self.stopListeningForWakePhrase()
-        }
-        
         // keep recording outside of app if entry started
-        if !self.isListeningForSpeech {
+        if !self.isListeningForSpeech && self.isListeningForCommands {
             print("\tStop listening for voice commands...")
-            self.state.setAppActive(as: false)
-            if self.isListeningForCommands {
-                self.pauseListeningForVoiceCommands()
-            }
+            self.pauseListeningForVoiceCommands()
         }
         
         self.notifications.stopNotification()
@@ -382,16 +359,9 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
 
     @objc func appMovedToForeground() {
         print("===== Speech Recognition Engine: App Moved to Foreground =====")
-        if !self.state.appActivated && self.isListeningForCommands {
+        if !self.isListeningForSpeech && self.isListeningForCommands {
             print("\tInitiate listening for voice commands...")
             self.startListeningForVoiceCommands()
-        } else if !self.state.appActivated && !self.isListeningForWakePhrase && self.listeningPermissionsGranted {
-            print("\tInitiate listening for wake phrase...")
-            self.configureListening() {  [weak self] in
-                self?.startListeningForWakePhrase()
-            }
-        } else {
-            print("\tNo action taken.")
         }
     }
     
@@ -406,9 +376,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         } else if self.isListeningForCommands {
             print("\tCurrently listening for commands. Stop listening before terminating application...")
             self.stopListeningForVoiceCommands()
-        } else if self.isListeningForWakePhrase {
-            print("\tCurrently listening for wake phrase. Stop listening before terminating application...")
-            self.stopListeningForWakePhrase()
         }
     }
     
@@ -424,14 +391,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         // Switch over the route change reason.
         switch reason {
         case .newDeviceAvailable: // New device found.
-            // Reset listening for wake word
-            if !self.state.appActivated && self.isListeningForWakePhrase {
-                self.stopListeningForWakePhrase() { [weak self] in
-                    self?.configureListening() {  [weak self] in
-                        self?.startListeningForWakePhrase()
-                    }
-                }
-            } else if self.isListeningForSpeech {
+            if self.isListeningForSpeech {
                 self.stopListeningForSpeech() {
                     self.startListeningForSpeech()
                 }
@@ -445,13 +405,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             }
         case .oldDeviceUnavailable: // Old device removed.
             // Reset listening for wake word
-            if !self.state.appActivated {
-                self.stopListeningForWakePhrase() { [weak self] in
-                    self?.configureListening() {  [weak self] in
-                        self?.startListeningForWakePhrase()
-                    }
-                }
-            } else if self.isListeningForSpeech && !self.selectionCursor.hasSelection {
+            if self.isListeningForSpeech && !self.selectionCursor.hasSelection {
                 self.speechPlayer.stop(withFeedback: false) {
                     self.startListeningForSpeech()
                 }
@@ -670,82 +624,46 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         // Toggle Speech Recogntion
         self.isActive = !self.isActive
         
-        if self.isListeningForCommands || (!self.state.appActivated && self.isListeningForWakePhrase) {
+        if self.isListeningForCommands {
             // Stop Listening
-            if self.state.appActivated {
-                self.stopListeningForVoiceCommands() {[weak self] in
-                    DispatchQueue.main.async {
-                        var buttons: [UIBarButtonItem] = []
-                        
-                        if let _ = Utils.getNavigationController()?.visibleViewController as? DetailViewController  {
-                            let backToEntriesButton = self!.getBackToEntriesButton()
-                            buttons.append(backToEntriesButton)
-                        } else if let _ = Utils.getNavigationController()?.visibleViewController as? DictionaryViewController  {
-                            let backToEntriesButton = self!.getBackToEntriesButton()
-                            buttons.append(backToEntriesButton)
-                        }
-                        let stopListeningButton = self!.getStopListeningButton(withStopIndicator: true)
-                        buttons.append(stopListeningButton)
-                        Utils.getNavigationController()?.visibleViewController?.navigationItem.leftBarButtonItems = buttons
-                        self?.notifications.executeFeedback(
-                            visualMessage: "Stop Listening",
-                            audioMessage: "Stopped listening for speech.",
-                            discardPrior: true,
-                            withHaptics: true
-                        )
+            self.stopListeningForVoiceCommands() {[weak self] in
+                DispatchQueue.main.async {
+                    var buttons: [UIBarButtonItem] = []
+                    
+                    if let _ = Utils.getNavigationController()?.visibleViewController as? DetailViewController  {
+                        let backToEntriesButton = self!.getBackToEntriesButton()
+                        buttons.append(backToEntriesButton)
+                    } else if let _ = Utils.getNavigationController()?.visibleViewController as? DictionaryViewController  {
+                        let backToEntriesButton = self!.getBackToEntriesButton()
+                        buttons.append(backToEntriesButton)
                     }
-                }
-            } else {
-                self.stopListeningForWakePhrase() {[weak self] in
-                    DispatchQueue.main.async {
-                        var buttons: [UIBarButtonItem] = []
-                        
-                        if let _ = Utils.getNavigationController()?.visibleViewController as? DetailViewController  {
-                            let backToEntriesButton = self!.getBackToEntriesButton()
-                            buttons.append(backToEntriesButton)
-                        } else if let _ = Utils.getNavigationController()?.visibleViewController as? DictionaryViewController  {
-                            let backToEntriesButton = self!.getBackToEntriesButton()
-                            buttons.append(backToEntriesButton)
-                        }
-                        let stopListeningButton = self!.getStopListeningButton(withStopIndicator: true)
-                        buttons.append(stopListeningButton)
-                        Utils.getNavigationController()?.visibleViewController?.navigationItem.leftBarButtonItems = buttons
-                        self?.notifications.executeFeedback(
-                            visualMessage: "Stop Listening",
-                            audioMessage: "Stopped listening for wake  phrase.",
-                            discardPrior: true,
-                            withHaptics: true
-                        )
-                    }
+                    let stopListeningButton = self!.getStopListeningButton(withStopIndicator: true)
+                    buttons.append(stopListeningButton)
+                    Utils.getNavigationController()?.visibleViewController?.navigationItem.leftBarButtonItems = buttons
+                    self?.notifications.executeFeedback(
+                        visualMessage: "Stop Listening",
+                        audioMessage: "Stopped listening for speech.",
+                        discardPrior: true,
+                        withHaptics: true
+                    )
                 }
             }
         } else {
             // Start Listening
-            if self.state.appActivated {
-                // Listening For Commands
-                self.configureListening() {  [weak self] in
-                    self?.startListeningForVoiceCommands()
-                }
-                // Because it's missing in the actual handleListening method for voice commands
-                Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
-                    soundEngine.startListening()
-                }
-                self.notifications.executeFeedback(
-                    visualMessage: "Start Listening",
-                    audioMessage: "Started listening for speech.",
-                    discardPrior: true,
-                    withHaptics: true
-                )
-            } else if let speechRecognizer = self.speechRecognizer,
-                !self.isListeningForWakePhrase &&
-                self.state.withOnDeviceRecognition &&
-                self.listeningPermissionsGranted &&
-                speechRecognizer.supportsOnDeviceRecognition
-            {
-                self.configureListening() {  [weak self] in
-                    self?.startListeningForWakePhrase()
-                }
+            // Listening For Commands
+            self.configureListening() {  [weak self] in
+                self?.startListeningForVoiceCommands()
             }
+            // Because it's missing in the actual handleListening method for voice commands
+            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
+                soundEngine.startListening()
+            }
+            self.notifications.executeFeedback(
+                visualMessage: "Start Listening",
+                audioMessage: "Started listening for speech.",
+                discardPrior: true,
+                withHaptics: true
+            )
         }
         
         checkRep()
@@ -840,79 +758,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         let barButton = UIBarButtonItem(customView: button)
         
         return barButton
-    }
-    
-    func startListeningForWakePhrase() {
-        print("===== Speech Recognition Engine: Starting Listening for Wake Phrase =====")
-        
-        // If we're waiting for another session to wrap up, stage this one.
-        if let stopListeningHandler = self.stopListeningHandler {
-            print("\t[NOTE] Encountered existing 'stopListeningHandler'. Stage method to execute after handler.")
-            let oldHandler = stopListeningHandler
-            self.stopListeningHandler = {
-                oldHandler()
-                self.startListeningForWakePhrase()
-            }
-            
-            return
-        } else if let pauseListeningHandler = self.pauseListeningHandler {
-            print("\t[NOTE] Encountered existing 'pauseListeningHandler'. Stage method to execute after handler.")
-            let oldHandler = pauseListeningHandler
-            self.pauseListeningHandler = {
-                oldHandler()
-                self.startListeningForWakePhrase()
-            }
-            
-            return
-        }
-        
-        self.setLastRecognitionTask(task: RecognitionTask.WAKE_PHRASE)
-        
-        // Update Wake Phrase Flage
-        self.isListeningForWakePhrase = self.handleStartListening(
-            type: .WAKE_PHRASE,
-            contextualStrings: ["rise and shine"]
-        ) {
-            self.notifications.executeFeedback(
-                visualMessage: "Listening for Wake Phrase...",
-                audioMessage: "Say 'rise and shine' to wake from sleep.",
-                discardPrior: true,
-                withHaptics: true,
-                delay: 5
-            )
-        }
-        
-        checkRep()
-    }
-    
-    func stopListeningForWakePhrase(onStopHandler: (() -> Void)? = nil) {
-        print("===== Speech Recognition Engine: Stopping Listening for Wake Phrase =====")
-        
-        // If we're waiting for another session to wrap up, stage this one.
-        if let stopListeningHandler = self.stopListeningHandler {
-            print("\t[NOTE] Encountered existing 'stopListeningHandler'. Stage method to execute after handler.")
-            let oldHandler = stopListeningHandler
-            self.stopListeningHandler = {
-                oldHandler()
-                self.stopListeningForWakePhrase(onStopHandler: onStopHandler)
-            }
-            
-            return
-        } else if let pauseListeningHandler = self.pauseListeningHandler {
-            print("\t[NOTE] Encountered existing 'pauseListeningHandler'. Stage method to execute after handler.")
-            let oldHandler = pauseListeningHandler
-            self.pauseListeningHandler = {
-                oldHandler()
-                self.stopListeningForWakePhrase(onStopHandler: onStopHandler)
-            }
-            
-            return
-        }
-        
-        self.handleStopListening(type: .WAKE_PHRASE, onStopHandler: onStopHandler)
-        
-        // Update Wake Phrase Flage
-        self.isListeningForWakePhrase = false
     }
     
     func startListeningForVoiceCommands(
@@ -1435,10 +1280,10 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             let withOnDeviceRecognition = self.state.withOnDeviceRecognition
             let supportsOnDeviceRecognition = self.speechRecognizer!.supportsOnDeviceRecognition
             let listeningPermissionsGranted = self.listeningPermissionsGranted
-            if let _ = self.speechRecognizer, !self.isListeningForWakePhrase && withOnDeviceRecognition && listeningPermissionsGranted && supportsOnDeviceRecognition {
+            if let _ = self.speechRecognizer, !self.isListeningForCommands && withOnDeviceRecognition && listeningPermissionsGranted && supportsOnDeviceRecognition {
                 print("\tReceived listeningPermissionsGranted and all systems ready =====")
                 self.configureListening() {  [weak self] in
-                    self?.startListeningForWakePhrase()
+                    self?.startListeningForVoiceCommands()
                 }
             } else {
                 print("\tReceived listeningPermissionsGranted but not all systems ready:")
@@ -1452,10 +1297,10 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             let withOnDeviceRecognition = self.state.withOnDeviceRecognition
             let supportsOnDeviceRecognition = self.speechRecognizer!.supportsOnDeviceRecognition
             let listeningPermissionsGranted = self.listeningPermissionsGranted
-            if let _ = self.speechRecognizer, !self.isListeningForWakePhrase && withOnDeviceRecognition && listeningPermissionsGranted && supportsOnDeviceRecognition {
+            if let _ = self.speechRecognizer, !self.isListeningForCommands && withOnDeviceRecognition && listeningPermissionsGranted && supportsOnDeviceRecognition {
                 print("\tReceived supportsOnDeviceRecognition and all systems ready =====")
                 self.configureListening() {  [weak self] in
-                    self?.startListeningForWakePhrase()
+                    self?.startListeningForVoiceCommands()
                 }
             } else {
                 print("\tReceived supportsOnDeviceRecognition but not all systems ready:")
@@ -1506,12 +1351,10 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             self.speechPlayer.stop(withFeedback: false)
         }
         
-        if (type == .SPEECH && !self.pausedListeningForSpeech) ||
-            (type == .WAKE_PHRASE && self.state.playedStartupSound) {
+        if (type == .SPEECH && !self.pausedListeningForSpeech) {
             // Play Sound
             // We delay so that it can be heard
-            let delay: TimeInterval = type == .WAKE_PHRASE ? 1.5 : 1
-            Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { timer in
+            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
                 soundEngine.startListening()
             }
         }
@@ -1662,13 +1505,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                             object: nil,
                             userInfo: [:]
                         )
-                    case .WAKE_PHRASE:
-                        print("\tBroadcast 'onStartedListeningForWakePhrase' notification...")
-                        NotificationCenter.default.post(
-                            name: SpeechRecognitionEngine.onStartedListeningForWakePhrase,
-                            object: nil,
-                            userInfo: [:]
-                        )
                     }
 
                     onStartHandler?()
@@ -1754,8 +1590,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                 let isListening = executeListening()
                 
                 switch (type) {
-                case .WAKE_PHRASE:
-                    self.isListeningForWakePhrase = isListening
                 case .VOICE_COMMAND:
                     self.isListeningForCommands = isListening
                 case .SPEECH:
@@ -1764,8 +1598,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             }
             
             switch (type) {
-            case .WAKE_PHRASE:
-                return self.isListeningForWakePhrase
             case .VOICE_COMMAND:
                 return self.isListeningForCommands
             case .SPEECH:
@@ -1806,8 +1638,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
                     object: nil,
                     userInfo: [:]
                 )
-            case .WAKE_PHRASE:
-                break
             }
         }
 
@@ -1846,8 +1676,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     
     func handleStopListening(type: RecognitionTask, onStopHandler: (() -> Void)? = nil) {
         if (type == .SPEECH && !self.isListeningForSpeech) ||
-            (type == .VOICE_COMMAND && !self.isListeningForCommands) ||
-            (type == .WAKE_PHRASE && !self.isListeningForWakePhrase) {
+            (type == .VOICE_COMMAND && !self.isListeningForCommands) {
             self.notifications.executeError(
                 text: "Not currently listening.",
                 handler: onStopHandler
@@ -1902,13 +1731,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             case .VOICE_COMMAND:
                 NotificationCenter.default.post(
                     name: SpeechRecognitionEngine.onStoppedListeningForCommands,
-                    object: nil,
-                    userInfo: [:]
-                )
-            case .WAKE_PHRASE:
-                
-                NotificationCenter.default.post(
-                    name: SpeechRecognitionEngine.onStoppedListeningForWakePhrase,
                     object: nil,
                     userInfo: [:]
                 )
@@ -2012,84 +1834,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         }
         
         return text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-    
-    func searchForWakePhrase(
-        transcription: SFTranscription,
-        earlyDetection: Bool = false
-    ) {
-        print("===== Speech Recognition Engine: Search For Wake Phrase =====")
-        // Get transcription text
-        let text = self.getTranscriptText(segments: transcription.segments).lowercased()
-
-        // Process for wake phrase
-        if text.contains(self.wakePhrases[0]) ||
-            text.contains(self.wakePhrases[1]) ||
-            text.contains(self.wakePhrases[2]) {
-            // Set early detection flag on
-            self.earlyValidVoiceCommandDetection = earlyDetection
-            // Wake Phrase Detected
-            self.handleWakePhraseDetected()
-        } else if !text.contains("rise") &&
-            !text.contains("rise and") &&
-            !text.contains("rison") &&
-            !text.contains("razon") &&
-            !self.earlyInvalidVoiceCommandDetection { // we don't want to repeat error twice
-            // Set early detection flag on
-            self.earlyInvalidVoiceCommandDetection = earlyDetection
-            self.handleWakePhraseError(text: text, transcription: transcription)
-        }
-
-        return
-    }
-    
-    func handleWakePhraseDetected() {
-        print("===== Speech Recognition Engine: Handle Wake Phrase Detected =====")
-        self.stopListeningForWakePhrase() {
-            // Play Sound
-            // We delay so that it can be heard
-            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
-                soundEngine.correctWakePhrase()
-            }
-            
-            if self.state.withPunctuationSuggestions {
-                print("\tInvalidate punctuation suggestion timers...")
-                self.sentenceSuggestionTimer?.invalidate()
-                self.paragraphSuggestionTimer?.invalidate()
-            }
-            
-            self.earlyValidVoiceCommandDetection = false
-            
-            // Give haptic feedback
-            hapticEngine.success()
-            
-            // start listening for voice commands
-            self.startListeningForVoiceCommands()
-            
-            NotificationCenter.default.post(
-                name: SpeechRecognitionEngine.onWakePhraseDetected,
-                object: nil,
-                userInfo: [:]
-            )
-        }
-    }
-    
-    func handleWakePhraseError(text: String, transcription: SFTranscription) {
-        print("===== Speech Recognition Engine: Handle Wake Phrase Error =====")
-        // Play Sound
-        soundEngine.incorrectWakePhrase()
-        
-        // Give haptic feedback
-        hapticEngine.error()
-        
-        NotificationCenter.default.post(
-            name: SpeechRecognitionEngine.onIncorrectWakePhrase,
-            object: nil,
-            userInfo: [
-                "utterance": text,
-                "transcription": transcription
-            ]
-        )
     }
     
     func handleDetectValidVoiceCommand(
@@ -2343,8 +2087,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             print("\tSpeech Type: Listening For Speech")
         } else if self.isListeningForCommands {
             print("\tSpeech Type: Listening For Commands")
-        } else if self.isListeningForWakePhrase {
-            print("\tSpeech Type: Listening For Wake Phrase")
         } else {
             print("\t[Error] Unknown listening state.")
         }
@@ -2370,7 +2112,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         self.lastSpeechRecognizerHypothesizeDate = Date()
         
         // Handle Speech Recognized Sound
-        if AVAudioSession.isHeadphonesConnected {
+        if AVAudioSession.isHeadphonesConnected || !self.isListeningForSpeech {
             self.speechRecognizedQueue.enqueue(true)
             
             if self.speechRecognizedTimer == nil {
@@ -2378,15 +2120,8 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             }
         }
         
-        // MARK: - Wake Phrase
-        if !self.state.appActivated {
-            print("\tSearching for wake phrase...")
-            self.searchForWakePhrase(
-                transcription: transcription,
-                earlyDetection: true
-            )
         // MARK: - Listening for Commands
-        } else if self.isListeningForCommands && Utils.validSpeechPower(soundIntensityStream: self.soundIntensityStream, backgroundNoise: self.getBackgroundNoise()) {
+        if self.isListeningForCommands && Utils.validSpeechPower(soundIntensityStream: self.soundIntensityStream, backgroundNoise: self.getBackgroundNoise()) {
             print("\tListening for Commands...")
             // Analyze for voice commands
             let (isValidVoiceCommand, _, voiceCommandType, _) = self.isValidVoiceCommand(query: transcription.formattedString.lowercased())
@@ -2499,12 +2234,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         print("===== Speech Recognition Engine: didFinishRecognition ====")
         print("\tTranscription: ", result.bestTranscription.formattedString)
         
-        // MARK: - Wake Phrase
-        if !self.state.appActivated && !self.earlyValidVoiceCommandDetection {
-            print("\tSearching for wake phrase...")
-            self.searchForWakePhrase(transcription: result.bestTranscription)
-        // MARK: - Edge Case and Voice Commands
-        } else if (
+        if (
             self.isListeningForCommands &&
             self.entryManager.currentEntry?.entrySegments != nil &&
             self.entryManager.currentEntry!.entrySegments.count == 0

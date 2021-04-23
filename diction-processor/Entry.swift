@@ -1977,7 +1977,7 @@ class Entry: AVMutableComposition, NSCoding {
                 
                 currentSentenceNumber += 1
                 if index + 1 < segments[processRange].count {
-                    let nextSegment = segments[index + 1]
+                    let nextSegment = segments[processRange.startIndex + index + 1]
                     sentenceStartSegment = nextSegment
                     sentenceStartTime = nextSegment.timeMapping.target.start
                 }
@@ -2005,7 +2005,7 @@ class Entry: AVMutableComposition, NSCoding {
                     )
                     currentParagraphNumber += 1
                     if index + 1 < segments[processRange].count {
-                        let nextSegment = segments[index + 1]
+                        let nextSegment = segments[processRange.startIndex + index + 1]
                         paragraphStartSegment = nextSegment
                         paragraphStartTime = nextSegment.timeMapping.target.start
                     }
@@ -2091,7 +2091,20 @@ class Entry: AVMutableComposition, NSCoding {
                 print("\tSegments are being added to end of entry...")
                 insertingAtEndOfEntry = true
                 lastSentenceDetails = lastSegment.getSentence()
-                updatedSegments = self.entrySegments + segments
+                let shiftedSegments = self.normalizeSegments(
+                    segments: segments,
+                    normalizeType: .target,
+                    returnSegments: true,
+                    saveToState: false,
+                    startTime: time,
+                    startIndex: lastSegment.getIndex() + 1
+                )
+                
+                if let shiftedSegments = shiftedSegments {
+                    updatedSegments = self.entrySegments + shiftedSegments
+                } else {
+                    print("\t[Error] There was a problem shifted inserted segments that were to be placed at the end of the entry.")
+                }
             } else {
                 print("\tSearch for insert segment...")
                 // Both are timeMapping.target.end because we're looking for the endTime not startTime
@@ -3867,7 +3880,7 @@ class Entry: AVMutableComposition, NSCoding {
 
             if saveToLowLevelRepr {
                 // only save to mutable track if we're on first take or explicit flag is set
-                print("\tUpdating lower level track representation: ", Utils.stringifySegments(segments: finalSegments))
+                print("\t Updating lower level track representation: ", Utils.stringifySegments(segments: finalSegments))
                 try self.tracks[0].validateSegments(finalSegments)
                 print("\tNew segments are valid! Set to lower level track representation...")
                 self.tracks[0].segments = finalSegments
@@ -4497,28 +4510,6 @@ class Entry: AVMutableComposition, NSCoding {
                 self.entryBuffer[index] = duplicateSegment
             } else {
                 self.entrySegments[index] = duplicateSegment
-            }
-            
-            // determine track type
-            let trackType: EntryTrackType = self.entryBuffer.count > 0 ? .buffer : .committed
-            let index = self.entryBuffer.count > 0 ? index : duplicateSegment.getIndex()
-            
-            // update selection anchor
-            if duplicateSegment == self.selectionCursor.anchor {
-                print("\tReplacing Selection Cursor Anchor with version that is not voice command word...")
-                self.selectionCursor.setAnchorCaret(caret: Caret(index: index, trackType: trackType))
-            }
-            
-            // update selection focus
-            if duplicateSegment == self.selectionCursor.focus {
-                print("\tReplacing Selection Cursor Focus with version that is voice command word...")
-                self.selectionCursor.setFocusCaret(caret: Caret(index: index, trackType: trackType))
-            }
-            
-            // update selection cached anchor
-            if duplicateSegment == self.selectionCursor.cachedAnchor {
-                print("\tReplacing Selection Cursor Cached Anchor with version that is voice command word...")
-                self.selectionCursor.setCachedAnchorCaret(caret: Caret(index: index, trackType: trackType))
             }
         }
         

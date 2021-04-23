@@ -95,7 +95,6 @@
 		8B766F5D24AC2AB200D41A13 /* SimpleTransformer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B766F4324AC2AB200D41A13 /* SimpleTransformer.swift */; };
 		8B766F5E24AC2AB200D41A13 /* BarycentricEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B766F4424AC2AB200D41A13 /* BarycentricEstimator.swift */; };
 		8B86B50724EF56C600568CDD /* EntryTrackType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B86B50624EF56C600568CDD /* EntryTrackType.swift */; };
-		8B88E97C2526E86F00DE3F75 /* SliderType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B88E97B2526E86F00DE3F75 /* SliderType.swift */; };
 		8B8A30582586CA3F003B3EA7 /* UITextView+VisibleRange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B8A30572586CA3F003B3EA7 /* UITextView+VisibleRange.swift */; };
 		8B8D55EB2530D60E004AD436 /* dialog.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8B8D55EA2530D60E004AD436 /* dialog.wav */; };
 		8B8D55F02530E02C004AD436 /* DialogItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B8D55EF2530E02C004AD436 /* DialogItem.swift */; };
@@ -143,7 +142,6 @@
 		8BE508492578B919001400A7 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8BE508482578B919001400A7 /* CloudKit.framework */; };
 		8BEC136824906FF30056E767 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEC136724906FF30056E767 /* AppDelegate.swift */; };
 		8BEC136A24906FF30056E767 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEC136924906FF30056E767 /* SceneDelegate.swift */; };
-		8BEC136C24906FF30056E767 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEC136B24906FF30056E767 /* ViewController.swift */; };
 		8BEC136F24906FF30056E767 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 8BEC136D24906FF30056E767 /* Main.storyboard */; };
 		8BEC137224906FF30056E767 /* diction_processor.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 8BEC137024906FF30056E767 /* diction_processor.xcdatamodeld */; };
 		8BEC137424906FF60056E767 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8BEC137324906FF60056E767 /* Assets.xcassets */; };
@@ -268,7 +266,6 @@
 		8B766F4324AC2AB200D41A13 /* SimpleTransformer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SimpleTransformer.swift; sourceTree = "<group>"; };
 		8B766F4424AC2AB200D41A13 /* BarycentricEstimator.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BarycentricEstimator.swift; sourceTree = "<group>"; };
 		8B86B50624EF56C600568CDD /* EntryTrackType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryTrackType.swift; sourceTree = "<group>"; };
-		8B88E97B2526E86F00DE3F75 /* SliderType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SliderType.swift; sourceTree = "<group>"; };
 		8B8A30572586CA3F003B3EA7 /* UITextView+VisibleRange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITextView+VisibleRange.swift"; sourceTree = "<group>"; };
 		8B8D55EA2530D60E004AD436 /* dialog.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = dialog.wav; sourceTree = "<group>"; };
 		8B8D55EF2530E02C004AD436 /* DialogItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DialogItem.swift; sourceTree = "<group>"; };
@@ -318,7 +315,6 @@
 		8BEC136424906FF30056E767 /* diction-processor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "diction-processor.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BEC136724906FF30056E767 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		8BEC136924906FF30056E767 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
-		8BEC136B24906FF30056E767 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		8BEC136E24906FF30056E767 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		8BEC137124906FF30056E767 /* diction_processor.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = diction_processor.xcdatamodel; sourceTree = "<group>"; };
 		8BEC137324906FF60056E767 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -396,7 +392,6 @@
 				8BC6E10325107E61003DD26A /* DirectionType.swift */,
 				8B3BC5BE24F882F9004FCD7B /* SelectionChangeType.swift */,
 				8B86B50624EF56C600568CDD /* EntryTrackType.swift */,
-				8B88E97B2526E86F00DE3F75 /* SliderType.swift */,
 			);
 			path = enums;
 			sourceTree = "<group>";
@@ -598,7 +593,6 @@
 				8BE508442578B848001400A7 /* diction-processor.entitlements */,
 				8BEC136724906FF30056E767 /* AppDelegate.swift */,
 				8BEC136924906FF30056E767 /* SceneDelegate.swift */,
-				8BEC136B24906FF30056E767 /* ViewController.swift */,
 				8BED4B70257B604F008F7A57 /* DictionaryViewController.swift */,
 				8B7421EF254E3F9D002B43EF /* NotificationEngine.swift */,
 				8B7421EA254E3CDC002B43EF /* StorageManager.swift */,
@@ -846,7 +840,6 @@
 				8B3BC5BF24F882F9004FCD7B /* SelectionChangeType.swift in Sources */,
 				8B766F2824AC2AA300D41A13 /* NoteCalculator.swift in Sources */,
 				8B766F4B24AC2AB200D41A13 /* Array+Extensions.swift in Sources */,
-				8BEC136C24906FF30056E767 /* ViewController.swift in Sources */,
 				8BC6E10625130DD1003DD26A /* TransformationType.swift in Sources */,
 				8BA3055924C91A2B0056E4DF /* LinkedList.swift in Sources */,
 				8B4450BC258948AA0040C207 /* NSRange+Range.swift in Sources */,
@@ -888,7 +881,6 @@
 				8BEC136A24906FF30056E767 /* SceneDelegate.swift in Sources */,
 				8BB685A424E8E04500F3285B /* NSRange+toTextRange.swift in Sources */,
 				8B766F5224AC2AB200D41A13 /* EstimationError.swift in Sources */,
-				8B88E97C2526E86F00DE3F75 /* SliderType.swift in Sources */,
 				8B5C3A1D252B93A000A4DCA7 /* UITextView+NoActions.swift in Sources */,
 				8B766F5824AC2AB200D41A13 /* SignalTracker.swift in Sources */,
 				8B766E8E24A812AF00D41A13 /* PunctuationMap.swift in Sources */,

@@ -132,14 +132,6 @@ class SpeechPlayerEngine: NSObject {
             name: EntryManager.onEntryDeleted,
             object: nil
         )
-        
-        // DetailViewController
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onChangedPlayerRate(notification:)),
-            name: DetailViewController.onChangedPlayerRate,
-            object: nil
-        )
     }
     
     @objc func appWillTerminate() {
@@ -176,14 +168,6 @@ class SpeechPlayerEngine: NSObject {
     @objc func onEntryDeleted(notification: Notification) {
         print("===== Speech Player Engine: On Entry Deleted=====")
         self.stop(withFeedback: false)
-        
-        checkRep()
-    }
-    
-    @objc func onChangedPlayerRate(notification: Notification) {
-        print("===== Speech Player Engine: On Changed Player Entry =====")
-        let rate = notification.userInfo!["rate"] as! Float
-        let _ = self.setPlayerRate(rate: rate)
         
         checkRep()
     }
@@ -497,7 +481,11 @@ class SpeechPlayerEngine: NSObject {
         
         if !self.speechRecognition.isListeningForSpeech && self.speechRecognition.pausedListeningForCommands && !AVAudioSession.isHeadphonesConnected {
             self.speechRecognition.startListeningForVoiceCommands()
-        } else if self.speechRecognition.isListeningForSpeech && (self.speechRecognition.pausedListeningForSpeech || self.speechRecognition.pausedListeningForCommands) && !AVAudioSession.isHeadphonesConnected {
+        } else if self.speechRecognition.isListeningForSpeech && (
+            self.speechRecognition.pausedListeningForSpeech ||
+            self.speechRecognition.pausedListeningForCommands
+        ) && !AVAudioSession.isHeadphonesConnected
+        && !self.selectionCursor.hasSelection {
             self.speechRecognition.startListeningForSpeech()
         }
         
@@ -582,7 +570,11 @@ class SpeechPlayerEngine: NSObject {
         
         if !self.speechRecognition.isListeningForSpeech && self.speechRecognition.pausedListeningForCommands && !AVAudioSession.isHeadphonesConnected {
             self.speechRecognition.startListeningForVoiceCommands()
-        } else if self.speechRecognition.isListeningForSpeech && (self.speechRecognition.pausedListeningForSpeech || self.speechRecognition.pausedListeningForCommands) && !AVAudioSession.isHeadphonesConnected {
+        } else if self.speechRecognition.isListeningForSpeech && (
+            self.speechRecognition.pausedListeningForSpeech ||
+            self.speechRecognition.pausedListeningForCommands
+        ) && !AVAudioSession.isHeadphonesConnected
+        && !self.selectionCursor.hasSelection {
             self.speechRecognition.startListeningForSpeech()
         }
 
@@ -1141,7 +1133,7 @@ class SpeechPlayerEngine: NSObject {
                 soundEngine.stopProcessing()
             }
             
-            if self.state.appActivated && self.speechRecognition.pausedListeningForCommands && !AVAudioSession.isHeadphonesConnected {
+            if self.speechRecognition.pausedListeningForCommands && !AVAudioSession.isHeadphonesConnected {
                 print("\tStart listening for commands again...")
                 // when headphones are off we don't listen for voice commands while echoing
                 // but on completion we turn it back on
@@ -1153,11 +1145,11 @@ class SpeechPlayerEngine: NSObject {
                     )
                 }
             } else if let entry = self.entryManager.currentEntry,
-                self.state.appActivated &&
                 self.speechRecognition.pausedListeningForSpeech &&
                 !AVAudioSession.isHeadphonesConnected &&
                 !self.entryManager.isRunningEntry &&
-                !self.entryManager.isWalkingEntry
+                !self.entryManager.isWalkingEntry &&
+                !self.selectionCursor.hasSelection
             {
                 print("\tStart listening for speech again.")
                 // when headphones are off we don't listen for speech while echoing

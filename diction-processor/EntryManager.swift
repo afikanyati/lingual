@@ -215,7 +215,11 @@ class EntryManager: NSObject {
         case .PAUSE_ENTRY:
             self.pauseEntry(voiceCommand: true, handler: handler)
         case .START_ENTRY:
-            if let _ = self.currentEntry {
+            if let entry = self.currentEntry,
+               Utils.getNavigationController()?.visibleViewController as? EntryTableViewController != nil ||
+               entry.entrySegments.count > 0 {
+                // If we're in Detail Page, only create new entry if the current one has content
+                // If we're in Entry Table, also start a new one
                 print("\tFound existing entry after receving 'start entry' via voice command. Remove it to trigger new entry creation.")
                 self.setCurrentEntry()
             }
@@ -886,7 +890,7 @@ class EntryManager: NSObject {
                     handler: { action in
                     self.speechRecognition.requestPermissions(handler: { [weak self] in
                         self?.speechRecognition.configureListening() { [weak self] in
-                            self?.speechRecognition.startListeningForWakePhrase()
+                            self?.speechRecognition.startListeningForVoiceCommands()
                         }
                     })
                 }),
@@ -1070,7 +1074,7 @@ class EntryManager: NSObject {
                     handler: { action in
                     self.speechRecognition.requestPermissions(handler: { [weak self] in
                         self?.speechRecognition.configureListening() { [weak self] in
-                            self?.speechRecognition.startListeningForWakePhrase()
+                            self?.speechRecognition.startListeningForVoiceCommands()
                         }
                     })
                 }),
@@ -3074,95 +3078,77 @@ class EntryManager: NSObject {
             print("\tFind selection...")
             switch (scale) {
             case .paragraph:
-                print("\tLooking for paragraph...")
-                let paragraphDetails = entry.getParagraphDetails(forTrackTime: referenceSegment.timeMapping.target.start)
-                if let paragraphDetails = paragraphDetails {
-                    print("Found paragraph: ", paragraphDetails)
-                    var selectionStartIndex = paragraphDetails.entryRange.startIndex
-                    print("Selection Start Index: ", selectionStartIndex)
-                    if !entry.entrySegments[selectionStartIndex].isActive(),
-                    let index = Utils.getSegmentIndex(
-                       segment: entry.entrySegments[selectionStartIndex],
-                       segments: entry.entrySegments,
-                       type: .next,
-                       by: 1,
-                       isWord: true
-                    ) {
-                        selectionStartIndex = index
-                        print("Updated Selection Start Index: ", selectionStartIndex)
-                    }
-                    var selectionEndIndex = paragraphDetails.entryRange.endIndex - 1
-                    print("Selection End Index: ", selectionEndIndex)
-                    if !entry.entrySegments[selectionEndIndex].isActive(),
-                    let index = Utils.getSegmentIndex(
-                       segment: entry.entrySegments[selectionEndIndex],
-                       segments: entry.entrySegments,
-                       type: .previous,
-                       by: 1,
-                       isWord: true
-                    ) {
-                        selectionEndIndex = index
-                        print("Updated Selection End Index: ", selectionEndIndex)
-                    }
-                    print("\tSetting selection...")
-                    self.selectionCursor.setSelection(
-                        anchorCaret: Caret(index: selectionStartIndex, trackType: .committed),
-                        focusCaret: Caret(index: selectionEndIndex, trackType: .committed),
-                        scale: scale,
-                        scaleRange: paragraphDetails.entryRange
-                    )
-                } else {
-                    print("\t[Error] There was a problem selecting paragraph. Unable to locate paragraph using reference segment.")
-                    self.notifications.executeError(
-                        text: "Unable to locate suitable paragraph to select.",
-                        voiceCommand: true
-                    )
+                let paragraphDetails = referenceSegment.getParagraph()
+                print("Paragraph: ", paragraphDetails)
+                var selectionStartIndex = paragraphDetails.entryRange.startIndex
+                print("Selection Start Index: ", selectionStartIndex)
+                if !entry.entrySegments[selectionStartIndex].isActive(),
+                let index = Utils.getSegmentIndex(
+                   segment: entry.entrySegments[selectionStartIndex],
+                   segments: entry.entrySegments,
+                   type: .next,
+                   by: 1,
+                   isWord: true
+                ) {
+                    selectionStartIndex = index
+                    print("Updated Selection Start Index: ", selectionStartIndex)
                 }
+                var selectionEndIndex = paragraphDetails.entryRange.endIndex - 1
+                print("Selection End Index: ", selectionEndIndex)
+                if !entry.entrySegments[selectionEndIndex].isActive(),
+                let index = Utils.getSegmentIndex(
+                   segment: entry.entrySegments[selectionEndIndex],
+                   segments: entry.entrySegments,
+                   type: .previous,
+                   by: 1,
+                   isWord: true
+                ) {
+                    selectionEndIndex = index
+                    print("Updated Selection End Index: ", selectionEndIndex)
+                }
+                print("\tSetting selection...")
+                self.selectionCursor.setSelection(
+                    anchorCaret: Caret(index: selectionStartIndex, trackType: .committed),
+                    focusCaret: Caret(index: selectionEndIndex, trackType: .committed),
+                    scale: scale,
+                    scaleRange: paragraphDetails.entryRange
+                )
             case .sentence:
-                print("\tLooking for sentence...")
-                let sentenceDetails = entry.getSentenceDetails(forTrackTime: referenceSegment.timeMapping.target.start)
-                if let sentenceDetails = sentenceDetails {
-                    print("Found sentence: ", sentenceDetails)
-                    var selectionStartIndex = sentenceDetails.entryRange.startIndex
-                    print("Selection Start Index: ", selectionStartIndex)
-                    if !entry.entrySegments[selectionStartIndex].isActive(),
-                    let index = Utils.getSegmentIndex(
-                       segment: entry.entrySegments[selectionStartIndex],
-                       segments: entry.entrySegments,
-                       type: .next,
-                       by: 1,
-                       isWord: true
-                    ) {
-                        selectionStartIndex = index
-                        print("Updated Selection Start Index: ", selectionStartIndex)
-                    }
-                    var selectionEndIndex = sentenceDetails.entryRange.endIndex - 1
-                    print("Selection End Index: ", selectionEndIndex)
-                    if !entry.entrySegments[selectionEndIndex].isActive(),
-                    let index = Utils.getSegmentIndex(
-                       segment: entry.entrySegments[selectionEndIndex],
-                       segments: entry.entrySegments,
-                       type: .previous,
-                       by: 1,
-                       isWord: true
-                    ) {
-                        selectionEndIndex = index
-                        print("Updated Selection End Index: ", selectionEndIndex)
-                    }
-                    print("\tSetting selection...")
-                    self.selectionCursor.setSelection(
-                        anchorCaret: Caret(index: selectionStartIndex, trackType: .committed),
-                        focusCaret: Caret(index: selectionEndIndex, trackType: .committed),
-                        scale: scale,
-                        scaleRange: sentenceDetails.entryRange
-                    )
-                } else {
-                    print("\t[Error] There was a problem selecting sentence. Unable to locate sentence using reference segment.")
-                    self.notifications.executeError(
-                        text: "Unable to locate suitable sentence to select.",
-                        voiceCommand: true
-                    )
+                let sentenceDetails = referenceSegment.getSentence()
+                print("Sentence: ", sentenceDetails)
+                var selectionStartIndex = sentenceDetails.entryRange.startIndex
+                print("Selection Start Index: ", selectionStartIndex)
+                if !entry.entrySegments[selectionStartIndex].isActive(),
+                let index = Utils.getSegmentIndex(
+                   segment: entry.entrySegments[selectionStartIndex],
+                   segments: entry.entrySegments,
+                   type: .next,
+                   by: 1,
+                   isWord: true
+                ) {
+                    selectionStartIndex = index
+                    print("Updated Selection Start Index: ", selectionStartIndex)
                 }
+                var selectionEndIndex = sentenceDetails.entryRange.endIndex - 1
+                print("Selection End Index: ", selectionEndIndex)
+                if !entry.entrySegments[selectionEndIndex].isActive(),
+                let index = Utils.getSegmentIndex(
+                   segment: entry.entrySegments[selectionEndIndex],
+                   segments: entry.entrySegments,
+                   type: .previous,
+                   by: 1,
+                   isWord: true
+                ) {
+                    selectionEndIndex = index
+                    print("Updated Selection End Index: ", selectionEndIndex)
+                }
+                print("\tSetting selection...")
+                self.selectionCursor.setSelection(
+                    anchorCaret: Caret(index: selectionStartIndex, trackType: .committed),
+                    focusCaret: Caret(index: selectionEndIndex, trackType: .committed),
+                    scale: scale,
+                    scaleRange: sentenceDetails.entryRange
+                )
             default:
                 if scale == .word {
                     print("\tUsing reference word...")
@@ -3943,13 +3929,15 @@ extension EntryManager {
         }
         self.undoManager.endUndoGrouping()
         
-        NotificationCenter.default.post(
-            name: EntryManager.onUndoManagerChange,
-            object: nil,
-            userInfo: [
-                "canUndo": self.undoManager.canUndo,
-                "canRedo": self.undoManager.canRedo
-            ]
-        )
+        if self.speechRecognition.isListeningForSpeech {
+            NotificationCenter.default.post(
+                name: EntryManager.onUndoManagerChange,
+                object: nil,
+                userInfo: [
+                    "canUndo": self.undoManager.canUndo,
+                    "canRedo": self.undoManager.canRedo
+                ]
+            )
+        }
     }
 }

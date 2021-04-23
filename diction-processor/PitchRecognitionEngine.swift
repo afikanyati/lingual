@@ -56,19 +56,6 @@ class PitchRecognitionEngine: NSObject, PitchEngineDelegate {
     func configureNotificationObservers() {
         let notificationCenter = NotificationCenter.default
         
-        // Observe SpeechRecognitionEngine
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onStartedListening(notification:)),
-            name: SpeechRecognitionEngine.onStartedListeningForWakePhrase,
-            object: nil
-        )
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onStoppedListening(notification:)),
-            name: SpeechRecognitionEngine.onStoppedListeningForWakePhrase,
-            object: nil
-        )
         notificationCenter.addObserver(
             self,
             selector: #selector(onStartedListening(notification:)),
@@ -169,36 +156,6 @@ class PitchRecognitionEngine: NSObject, PitchEngineDelegate {
             // Add to pitch stream
             let pitchDatum = PitchDatum(date: Date(), pitch: pitch)
             self.pitchStream.append(pitchDatum)
-            
-            // Set speaker pitch
-            if !self.state.appActivated {
-                do {
-                    if self.state.speaker.pitch == nil {
-                        print("===== Pitch Recognition Engine: Base vocal frequency detected =====")
-                        // when uncommented, it stops system from hearing wake phrase
-//                        let rate: Float = 0.53
-//                        let volume = AVAudioSession.sharedInstance().outputVolume
-//                        let voice = Utils.getSynthesizerVoice(
-//                            withRegister: pitch.note.octave >= 4 ? .female : .male,
-//                            vc: self
-//                        )
-//                        let synthesizerItem = SynthesizerItem(
-//                            synthesizer: self.speechSynthesizer,
-//                            text: "Base vocal frequency detected",
-//                            voice: voice,
-//                            rate: rate,
-//                            volume: volume
-//                        )
-//
-//                        Utils.runSpeechSynthesizer(item: synthesizerItem)
-                    }
-
-                    let avgPitch = try Pitch(frequency: self.getPitch())
-                    self.state.setSpeakerPitch(to: avgPitch)
-                } catch {
-                    print("===== Pitch Recognition Engine: [Error] There was a problem calculating average pitch =====")
-                }
-            }
         }
         
         if pitch.frequency >= Utils.MALE_LOWEST_VOICED_SPEECH_FREQUENCY && pitch.frequency <= Utils.FEMALE_HIGHEST_VOICED_SPEECH_FREQUENCY && self.speechRecognition.soundIntensityStream.count > Utils.MIN_SEED_INTENSITY_POINTS && Utils.validSpeechPower(soundIntensityStream: self.speechRecognition.soundIntensityStream, backgroundNoise: self.speechRecognition.getBackgroundNoise()) {

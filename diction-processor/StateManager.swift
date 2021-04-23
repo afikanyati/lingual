@@ -74,8 +74,6 @@ class StateManager: NSObject {
     
     // MARK: - General
     
-    private(set) var appActivated = false
-    private(set) var mainViewReady = false
     private(set) var detailViewReady = false
     private(set) var entryTableViewReady = false
     private(set) var playedStartupSound = false
@@ -184,21 +182,7 @@ class StateManager: NSObject {
             object: nil
         )
         
-        // Speech Recognition Engine
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onWakePhraseDetected(notification:)),
-            name: SpeechRecognitionEngine.onWakePhraseDetected,
-            object: nil
-        )
-        
         // Views
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onViewDidLoad(notification:)),
-            name: ViewController.onDidLoad,
-            object: nil
-        )
         notificationCenter.addObserver(
             self,
             selector: #selector(onEntryTableViewDidLoad(notification:)),
@@ -209,12 +193,6 @@ class StateManager: NSObject {
             self,
             selector: #selector(onDetailViewDidLoad(notification:)),
             name: DetailViewController.onDidLoad,
-            object: nil
-        )
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onViewWillDisappear(notification:)),
-            name: ViewController.onWillDisappear,
             object: nil
         )
         notificationCenter.addObserver(
@@ -276,13 +254,8 @@ class StateManager: NSObject {
         }
     }
     
-    @objc func onWakePhraseDetected(notification: Notification) {
-        print("===== State Manager: On Wake Phrase Detected =====")
-        self.setAppActive(as: true)
-    }
-    
-    @objc func onViewDidLoad(notification: Notification) {
-        print("===== State Manager: On View Did Load =====")
+    @objc func onEntryTableViewDidLoad(notification: Notification) {
+        print("===== State Manager: On Entry Table View Did Load =====")
         if !self.playedStartupSound {
             // Play Startup Sound
             if AVAudioSession.isHeadphonesConnected {
@@ -291,7 +264,7 @@ class StateManager: NSObject {
             self.playedStartupSound = true
         }
         
-        self.mainViewReady = true
+        self.entryTableViewReady = true
         
         // We fetch stored state once view has loaded because
         // we know with reliability other modules would have been instantiated
@@ -300,19 +273,9 @@ class StateManager: NSObject {
         self.fetchStoredState()
     }
     
-    @objc func onEntryTableViewDidLoad(notification: Notification) {
-        print("===== State Manager: On Entry Table View Did Load =====")
-        self.entryTableViewReady = true
-    }
-    
     @objc func onDetailViewDidLoad(notification: Notification) {
         print("===== State Manager: On Detail View Did Load =====")
         self.detailViewReady = true
-    }
-    
-    @objc func onViewWillDisappear(notification: Notification) {
-        print("===== State Manager: On View Will Disappear =====")
-        self.mainViewReady = false
     }
     
     @objc func onEntryTableViewWillDisappear(notification: Notification) {
@@ -489,10 +452,10 @@ class StateManager: NSObject {
             self.withTextStrictlyAsWords = userSettings["withTextStrictlyAsWords"] as? Bool ?? Utils.DEFAULT_WITH_TEXT_STRICTLY_AS_WORDS
             self.withCapitalization = userSettings["withCapitalization"] as? Bool ?? Utils.DEFAULT_WITH_CAPITALIZATION
             self.withSkipPunctuation = userSettings["withSkipPunctuation"] as? Bool ?? Utils.DEFAULT_WITH_SKIP_PUNCTUATION
-            self.withOmitSilences = userSettings["withOmitSilences"] as? Bool ?? Utils.DEFAULT_WITH_OMIT_SILENCES
+//            self.withOmitSilences = userSettings["withOmitSilences"] as? Bool ?? Utils.DEFAULT_WITH_OMIT_SILENCES
             self.withPassiveEcho = userSettings["withPassiveEcho"] as? Bool ?? Utils.DEFAULT_WITH_PASSIVE_ECHO
-            self._playbackRate = userSettings["playbackRate"] as? Float ?? Utils.DEFAULT_PLAYBACK_RATE
-            self._echoRate = userSettings["echoRate"] as? Float ?? Utils.DEFAULT_ECHO_RATE
+//            self._playbackRate = userSettings["playbackRate"] as? Float ?? Utils.DEFAULT_PLAYBACK_RATE
+//            self._echoRate = userSettings["echoRate"] as? Float ?? Utils.DEFAULT_ECHO_RATE
             if let fontSize = userSettings["fontSize"] as? CGFloat {
                 self.font = UIFont.systemFont(ofSize: fontSize)
             } else {
@@ -508,10 +471,10 @@ class StateManager: NSObject {
             self.withTextStrictlyAsWords = Utils.DEFAULT_WITH_TEXT_STRICTLY_AS_WORDS
             self.withCapitalization = Utils.DEFAULT_WITH_CAPITALIZATION
             self.withSkipPunctuation = Utils.DEFAULT_WITH_SKIP_PUNCTUATION
-            self.withOmitSilences = Utils.DEFAULT_WITH_OMIT_SILENCES
+//            self.withOmitSilences = Utils.DEFAULT_WITH_OMIT_SILENCES
             self.withPassiveEcho = Utils.DEFAULT_WITH_PASSIVE_ECHO
-            self._playbackRate = Utils.DEFAULT_PLAYBACK_RATE
-            self._echoRate = Utils.DEFAULT_ECHO_RATE
+//            self._playbackRate = Utils.DEFAULT_PLAYBACK_RATE
+//            self._echoRate = Utils.DEFAULT_ECHO_RATE
             self.font = UIFont.systemFont(ofSize: Utils.DEFAULT_FONT_SIZE)
         }
         
@@ -641,13 +604,6 @@ class StateManager: NSObject {
     
     // MARK: - Setters
     
-    func setAppActive(as value: Bool) {
-        print("===== State Manager: Set App Active: \(value)  =====")
-        self.appActivated = value
-        
-        checkRep()
-    }
-    
     func setPlaybackRate(to rate: Float) {
         print("===== State Manager: Set Playback Rate: \(rate.rounded(toPlaces: 2)) =====")
         
@@ -732,15 +688,15 @@ class StateManager: NSObject {
         if self.withOmitSilences {
             // Present Feedback
             self.notifications.executeFeedback(
-                visualMessage: "Activate Silences",
-                audioMessage: "silences activated",
+                visualMessage: "Deactivate Silences",
+                audioMessage: "silences deactivated",
                 withHaptics: true
             )
         } else {
             // Present Feedback
             self.notifications.executeFeedback(
-                visualMessage: "Deactivate Silences",
-                audioMessage: "silences deactivated",
+                visualMessage: "Activate Silences",
+                audioMessage: "silences activated",
                 withHaptics: true
             )
         }

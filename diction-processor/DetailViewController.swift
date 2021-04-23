@@ -15,8 +15,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
     // MARK: - Notifications
     static let onDidLoad = Notification.Name(Notifications.onDetailViewControllerDidLoad.rawValue)
     static let onWillDisappear = Notification.Name(Notifications.onDetailViewControllerWillDisappear.rawValue)
-    static let onChangedPlayerRate = Notification.Name(Notifications.onChangedPlayerRate.rawValue)
-    static let onChangedEchoRate = Notification.Name(Notifications.onChangedEchoRate.rawValue)
 
     // MARK: - Outlets and Views
     
@@ -29,7 +27,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
     @IBOutlet weak var stopPlayingButton: UIView?
     @IBOutlet weak var echoButton: UIView?
     @IBOutlet weak var stopEchoButton: UIView?
-    @IBOutlet weak var exportButton: UIView?
     @IBOutlet weak var walkButton: UIView?
     
     // ===== Command Bar =====
@@ -45,8 +42,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
     @IBOutlet weak var pauseEchoButton: UIView?
     @IBOutlet weak var skipBackwardButton: UIView?
     @IBOutlet weak var skipForwardButton: UIView?
-    @IBOutlet weak var playbackRateButton: UIView?
-    @IBOutlet weak var echoRateButton: UIView?
     
     // Selection Buttons
     @IBOutlet weak var increaseRateButton: UIView?
@@ -80,12 +75,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
     // Menu Bar
     @IBOutlet weak var menuBar: UIStackView?
     @IBOutlet weak var menuBarPositionBottom: NSLayoutConstraint?
-    
-    // Slider
-    @IBOutlet weak var sliderView: UIView?
-    @IBOutlet weak var sliderViewPositionTop: NSLayoutConstraint?
-    @IBOutlet weak var slider: UISlider?
-    @IBOutlet weak var exitSliderButton: UIView?
     
     // Walk
     @IBOutlet weak var walkNextWordButton: UIView?
@@ -121,13 +110,10 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
     var voiceCommandEngine: VoiceCommandEngine!
     
     // MARK: - ViewController References
-    weak var viewController: ViewController?
     weak var entryTableViewController: EntryTableViewController?
     weak var dictionaryViewController: DictionaryViewController?
     
     // MARK: - General Properties
-    var sliderIsVisible = false
-    var sliderType: SliderType?
     var cursorBlinkTimer: Timer?
     var textScrubTimer: Timer?
 
@@ -167,7 +153,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
         // Prepare UI
         self.prepareMenuBar()
         self.prepareCommandBar()
-        self.prepareSlider()
         self.prepareTextView()
         self.prepareGeneralView()
         self.transformationLabel?.isHidden = true
@@ -299,14 +284,8 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
                 // 3) So that we are denied entry into other entries while other is being recorded
                 self.entryManager.setCurrentEntry()
             }
-        case .moveFromSleepToEntryTable:
-            print (">>>>> [Invalid Segue within DetailViewController] from ViewControlller to EntryTableViewController >>>>>")
-        case .moveFromSleepToDetail:
-            print (">>>>> [Invalid Segue within DetailViewController] from ViewControlller to DetailViewController >>>>>")
         case .moveFromEntryTableToDetail:
             print (">>>>> [Invalid Segue within DetailViewController] from EntryTableViewControlller to DetailViewController >>>>>")
-        case .moveFromEntryTableToSleep:
-            print (">>>>> [Invalid Segue within DetailViewController] from EntryTableViewControlller to ViewController >>>>>")
         case .moveFromEntryTableToDictionary:
             print (">>>>> [Invalid Segue within DetailViewController] from EntryTableViewControlller to DictionaryViewController >>>>>")
         case .moveFromDictionaryToEntryTable:
@@ -332,21 +311,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             self,
             selector: #selector(self.appWillTerminate),
             name: UIApplication.willTerminateNotification,
-            object: nil
-        )
-        
-
-        // Observe ViewController
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onViewDidLoad(notification:)),
-            name: ViewController.onDidLoad,
-            object: nil
-        )
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onViewWillDisappear(notification:)),
-            name: ViewController.onWillDisappear,
             object: nil
         )
         
@@ -393,12 +357,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
         )
         notificationCenter.addObserver(
             self,
-            selector: #selector(onStartedListeningForWakePhrase(notification:)),
-            name: SpeechRecognitionEngine.onStartedListeningForWakePhrase,
-            object: nil
-        )
-        notificationCenter.addObserver(
-            self,
             selector: #selector(onStartedListeningForCommands(notification:)),
             name: SpeechRecognitionEngine.onStartedListeningForCommands,
             object: nil
@@ -419,12 +377,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             self,
             selector: #selector(onPausedListening(notification:)),
             name: SpeechRecognitionEngine.onPausedListeningForSpeech,
-            object: nil
-        )
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onStoppedListening(notification:)),
-            name: SpeechRecognitionEngine.onStoppedListeningForWakePhrase,
             object: nil
         )
         notificationCenter.addObserver(
@@ -587,11 +539,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
         )
     }
     
-    @objc func onViewDidLoad(notification: Notification) {
-        print("===== Detail View Controller: On View Did Load =====")
-        self.viewController = storyboard?.instantiateViewController(withIdentifier: "ViewController") as? ViewController
-    }
-    
     @objc func onEntryTableViewDidLoad(notification: Notification) {
         print("===== Detail View Controller: On Entry Table View Did Load =====")
         self.entryTableViewController = storyboard?.instantiateViewController(withIdentifier: "EntryTableViewController") as? EntryTableViewController
@@ -600,11 +547,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
     @objc func onDictionaryViewDidLoad(notification: Notification) {
         print("===== Detail View Controller: On Dictionary View Did Load =====")
         self.dictionaryViewController = storyboard?.instantiateViewController(withIdentifier: "DictionaryViewController") as? DictionaryViewController
-    }
-    
-    @objc func onViewWillDisappear(notification: Notification) {
-        print("===== Detail View Controller: On View Will Disappear =====")
-        self.viewController = nil
     }
     
     @objc func onEntryTableViewWillDisappear(notification: Notification) {
@@ -706,15 +648,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
         }
     }
     
-    @objc func onStartedListeningForWakePhrase(notification: Notification) {
-        print("===== View Controller: On Started Listening For Wake Phrase =====")
-        Utils.onStartedListeningForWakePhrase(
-            withBackToEntriesButton: true,
-            notification: notification,
-            speechRecognition: self.speechRecognition
-        )
-    }
-    
     @objc func onStartedListeningForCommands(notification: Notification) {
         print("===== View Controller: On Started Listening For Commands =====")
         Utils.onStartedListeningForCommands(
@@ -738,8 +671,11 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             } else {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [] // remove delete button when listening for speech
             }
-            if let _ = self?.selectionCursor.clipboard {
+            if let _ = self?.selectionCursor.clipboard, self!.speechRecognition.isListeningForSpeech {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems?.insert(self!.getPasteClipboardButton(), at: 0)
+            }
+            if let entry = self?.entryManager.currentEntry, entry.entrySegments.count > 0 && !self!.speechRecognition.isListeningForSpeech {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems?.insert(self!.getExportEntryButton(), at: 0)
             }
         }
         
@@ -863,8 +799,11 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             } else {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [] // remove delete button when listening for speech
             }
-            if let _ = self?.selectionCursor.clipboard {
+            if let _ = self?.selectionCursor.clipboard, self!.speechRecognition.isListeningForSpeech {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems?.insert(self!.getPasteClipboardButton(), at: 0)
+            }
+            if let entry = self?.entryManager.currentEntry, entry.entrySegments.count > 0 && !self!.speechRecognition.isListeningForSpeech {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems?.insert(self!.getExportEntryButton(), at: 0)
             }
         }
     }
@@ -887,8 +826,11 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             } else {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [] // remove delete button when listening for speech
             }
-            if let _ = self?.selectionCursor.clipboard {
+            if let _ = self?.selectionCursor.clipboard, self!.speechRecognition.isListeningForSpeech {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems?.insert(self!.getPasteClipboardButton(), at: 0)
+            }
+            if let entry = self?.entryManager.currentEntry, entry.entrySegments.count > 0 && !self!.speechRecognition.isListeningForSpeech {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems?.insert(self!.getExportEntryButton(), at: 0)
             }
             
             // Remove Undo Buttons
@@ -1088,8 +1030,11 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             } else {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [] // remove delete button when listening for speech
             }
-            if let _ = self?.selectionCursor.clipboard {
+            if let _ = self?.selectionCursor.clipboard, self!.speechRecognition.isListeningForSpeech {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems?.insert(self!.getPasteClipboardButton(), at: 0)
+            }
+            if let entry = self?.entryManager.currentEntry, entry.entrySegments.count > 0 && !self!.speechRecognition.isListeningForSpeech {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems?.insert(self!.getExportEntryButton(), at: 0)
             }
         }
     }
@@ -1185,8 +1130,11 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             } else {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems = [] // remove delete button when listening for speech
             }
-            if let _ = self?.selectionCursor.clipboard {
+            if let _ = self?.selectionCursor.clipboard, self!.speechRecognition.isListeningForSpeech {
                 navigationController?.visibleViewController?.navigationItem.rightBarButtonItems?.insert(self!.getPasteClipboardButton(), at: 0)
+            }
+            if let entry = self?.entryManager.currentEntry, entry.entrySegments.count > 0 && !self!.speechRecognition.isListeningForSpeech {
+                navigationController?.visibleViewController?.navigationItem.rightBarButtonItems?.insert(self!.getExportEntryButton(), at: 0)
             }
         }
     }
@@ -1228,16 +1176,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
         commandBar.layer.masksToBounds = false
     }
     
-    func prepareSlider() {
-        self.slider?.minimumValue = Utils.MINIMUM_PLAYBACK_RATE
-        self.slider?.maximumValue = Utils.MAXIMUM_PLAYBACK_RATE
-        self.slider?.isContinuous = true
-        self.slider?.addTarget(self, action: #selector(self.sliderValueDidChange), for: .valueChanged)
-        
-        // Hide Slider
-        self.setSliderVisibility(as: false)
-    }
-    
     // Reference: https://stackoverflow.com/questions/3231896/how-to-set-margins-padding-in-uitextview
     func prepareTextView() {
         // Set textContainer font size
@@ -1266,6 +1204,22 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
         button.addTarget(self, action: #selector(self.handleDeleteEntry), for: .touchDown)
         button.setImage(UIImage(systemName: "trash"), for: .normal)
         button.setTitle("Delete Entry", for: .normal)
+        button.titleLabel?.font = UIFont.systemFont(ofSize: 11)
+        button.setTitleColor(UIColor.systemGray5, for: .normal)
+        button.tintColor = UIColor.systemGray
+        
+        let barButton = UIBarButtonItem(customView: button)
+        
+        return barButton
+    }
+    
+    func getExportEntryButton() -> UIBarButtonItem {
+        let button  = CenteredButton(type: .custom)
+
+        button.frame = CGRect(x: 0.0, y: 0.0, width: Utils.NAVBAR_BUTTON_LENGTH, height: Utils.NAVBAR_BUTTON_LENGTH)
+        button.addTarget(self, action: #selector(self.handleExportEntry), for: .touchDown)
+        button.setImage(UIImage(systemName: "square.and.arrow.up"), for: .normal)
+        button.setTitle("Export Entry", for: .normal)
         button.titleLabel?.font = UIFont.systemFont(ofSize: 11)
         button.setTitleColor(UIColor.systemGray5, for: .normal)
         button.tintColor = UIColor.systemGray
@@ -1550,7 +1504,7 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
     
     func setCommandBarVisibility(as visible: Bool) {
         if visible {
-            // Show Slider View
+            // Show Command Bar
             self.commandBar?.isHidden = false
 
             // Animate in Command Bar
@@ -1576,38 +1530,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             // Hide Command Bar
             Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { [weak self] timer in
                 self!.commandBar?.isHidden = true
-            }
-        }
-    }
-    
-    func setSliderVisibility(as visible: Bool) {
-        if visible {
-            // Show Slider View
-            self.sliderView?.isHidden = false
-
-            // Animate in Slider View
-            UIView.animate(
-                withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
-                delay: 0,
-                options: [.curveEaseIn],
-                animations: {
-                    self.sliderView?.alpha = 1
-                }
-            )
-        } else {
-            // Animate out Slider View
-            UIView.animate(
-                withDuration: Utils.DEFAULT_VIEW_TRANSITION_DURATION,
-                delay: 0,
-                options: [.curveEaseIn],
-                animations: {
-                    self.sliderView?.alpha = 0
-                }
-            )
-            
-            // Hide Slider View
-            Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { [weak self] timer in
-                self!.sliderView?.isHidden = true
             }
         }
     }
@@ -1814,28 +1736,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             self.hideButton(self.stopEchoButton)
         }
         
-        // Export Entry Button
-        if let entry = self.entryManager.currentEntry,
-           entry.entrySegments.count > 0 &&
-            !self.speechRecognition.isListeningForSpeech {
-            self.showButton(self.exportButton)
-            
-            // Change text
-            if self.selectionCursor.hasSelection {
-                let buttonLabel = self.exportButton?.subviews.filter {$0 is UILabel }
-                if let buttonLabel = buttonLabel?.first as? UILabel {
-                    buttonLabel.text = "Export Selection"
-                }
-            } else {
-                let buttonLabel = self.exportButton?.subviews.filter {$0 is UILabel }
-                if let buttonLabel = buttonLabel?.first as? UILabel {
-                    buttonLabel.text = "Export Entry"
-                }
-            }
-        } else {
-            self.hideButton(self.exportButton)
-        }
-        
         // Walk Element Button
         if let entry = self.entryManager.currentEntry, entry.entrySegments.count > 0 && !self.entryManager.isWalkingEntry {
             self.showButton(self.walkButton)
@@ -1856,13 +1756,7 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             self.hideButton(self.walkButton)
         }
         
-        // ===== Manage Visibility of Menu Bar =====
-    
-        if  self.state.appActivated {
-            self.setMenuBarVisibility(as: true)
-        } else {
-            self.setMenuBarVisibility(as: false)
-        }
+        self.setMenuBarVisibility(as: true)
     }
     
     func adjustCommandBar() {
@@ -1927,22 +1821,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             }
         } else {
             self.hideButton(self.pauseButton)
-        }
-        
-        // Playback Rate Button
-        if let entry = self.entryManager.currentEntry, entry.entrySegments.count > 0 {
-            numActiveButtons += 1
-            self.showButton(self.playbackRateButton)
-        } else {
-            self.hideButton(self.playbackRateButton)
-        }
-        
-        // Echo Rate Button
-        if let entry = self.entryManager.currentEntry, entry.entrySegments.count > 0 {
-            numActiveButtons += 1
-            self.showButton(self.echoRateButton)
-        } else {
-            self.hideButton(self.echoRateButton)
         }
         
         // ===== Conditional Buttons =====
@@ -2142,7 +2020,7 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
         
         // ===== Manage Visibility of CommandBar =====
     
-        if  numActiveButtons > 0 && self.state.appActivated {
+        if  numActiveButtons > 0 {
             self.setScrollViewVisibility(as: true)
         } else {
             self.setScrollViewVisibility(as: false)
@@ -2172,6 +2050,10 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
     
     @objc func handleDeleteEntry() {
         self.entryManager.deleteEntry()
+    }
+    
+    @objc func handleExportEntry() {
+        self.entryManager.exportEntry()
     }
     
     // MARK: - Helper Functions
@@ -2307,8 +2189,7 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
     @objc func handleTouchUp(touch: UIPanGestureRecognizer) {
         print("===== Touch Interaction: Touch Up =====")
         if let _ = self.entryManager.currentEntry,
-           touch.state == .began &&
-           self.state.appActivated
+           touch.state == .began
         
         {
             print("\tSet finger down to true...")
@@ -2317,7 +2198,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
             let textRange = self.textView!.selectedTextRange,
             !textRange.isEmpty &&
             touch.state == .ended &&
-            self.state.appActivated &&
             entry.entrySegments.count > 0
        {
             print("\tSet finger down to false...")
@@ -2330,7 +2210,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
         print("===== Touch Interaction: Single Tap =====")
         
         if let entry = self.entryManager.currentEntry,
-           self.state.appActivated &&
             entry.entrySegments.count > 0 &&
             (
                 self.speechRecognition.isListeningForSpeech ||
@@ -2377,7 +2256,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
 //            }
         } else if
             let entry = self.entryManager.currentEntry,
-            self.state.appActivated &&
             !self.speechRecognition.isListeningForSpeech
         {
             print("\tConsuming Entry => Playback to Entry")
@@ -2433,32 +2311,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
         }
     }
     
-    // Reference: https://www.appsdeveloperblog.com/create-uislider-in-swift-programmatically/
-    // Reference: https://stackoverflow.com/questions/25499803/how-to-change-speech-rate-during-speaking-using-avspeechsynthesizer-in-ios-7
-    @objc func sliderValueDidChange(_ sender: UISlider!) {
-        print("===== Screen Button: Slider Value Changed =====")
-        print("\tNew value: \(sender.value)")
-        
-        if  self.sliderType == .playback {
-            // Set new playback rate
-            self.speechPlayer.setPlaybackRate(to: sender.value)
-            
-            NotificationCenter.default.post(
-                name: DetailViewController.onChangedPlayerRate,
-                object: nil,
-                userInfo: [ "rate" : sender.value]
-            )
-        } else if self.sliderType == .echo {
-            NotificationCenter.default.post(
-                name: DetailViewController.onChangedEchoRate,
-                object: nil,
-                userInfo: [
-                    "rate" : sender.value
-                ]
-            )
-        }
-    }
-    
     // MARK: - Menu Bar Methods
     
     @IBAction func startEntry(_ sender: Any? = nil) {
@@ -2501,10 +2353,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
         self.entryManager.walkEntry()
     }
     
-    @IBAction func export(_ sender: Any? = nil) {
-        self.entryManager.exportEntry()
-    }
-    
     // MARK: - Resting Command Bar Methods
     
     @IBAction func moveHere(_ sender: Any? = nil) {
@@ -2537,134 +2385,6 @@ class DetailViewController: UIViewController, SegueProtocol, UIGestureRecognizer
     
     @IBAction func skipForward(_ sender: Any? = nil) {
         self.entryManager.skipForward()
-    }
-    
-    @IBAction func playbackRate(_ sender: Any? = nil) {
-        self.handlePlaybackRate()
-    }
-    
-    func handlePlaybackRate(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        if !voiceCommand {
-            print("===== Screen Button: Handle Playback Rate =====")
-        } else {
-            print("===== Voice Command: Handle Playback Rate =====")
-        }
-        
-        if voiceCommand {
-            // Play Sound
-            soundEngine.voiceCommandAccept()
-        }
-        
-        print("\tAdjusting flag to: true")
-        self.sliderIsVisible = true
-        self.sliderType = .playback
-        
-        print("\tSet Playback Slider Min and Max Values...")
-        self.slider?.minimumValue = Utils.MINIMUM_PLAYBACK_RATE
-        print("\tMin: ", self.slider?.minimumValue ?? "nil")
-        self.slider?.maximumValue = Utils.MAXIMUM_PLAYBACK_RATE
-        print("\tMax: ", self.slider?.maximumValue ?? "nil")
-        self.slider?.value = self.speechPlayer.playbackRate
-        
-        DispatchQueue.main.async { [weak self] in
-            print("\tHide Command Bar...")
-            self?.setCommandBarVisibility(as: false)
-            self?.refreshView()
-        }
-        
-        print("\tShow Slider View...")
-        Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) {[weak self] timer in
-            self!.setSliderVisibility(as: true)
-        }
-        
-        // Give haptic feedback
-//        hapticEngine.mediumImpact()
-        hapticEngine.success()
-        
-        handler?()
-    }
-    
-    @IBAction func echoRate(_ sender: Any? = nil) {
-        self.handleEchoRate()
-    }
-    
-    func handleEchoRate(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        if !voiceCommand {
-            print("===== Screen Button: Handle Echo Rate =====")
-        } else {
-            print("===== Voice Command: Handle Echo Rate =====")
-        }
-        
-        if voiceCommand {
-            // Play Sound
-            soundEngine.voiceCommandAccept()
-        }
-        
-        print("\tAdjusting flag to: true")
-        self.sliderIsVisible = true
-        self.sliderType = .echo
-        
-        print("\tSet Echo Slider Min and Max Values...")
-        self.slider?.minimumValue = Utils.MINIMUM_ECHO_RATE
-        print("\tMin: ", self.slider?.minimumValue ?? "nil")
-        self.slider?.maximumValue = Utils.MAXIMUM_ECHO_RATE
-        print("\tMax: ", self.slider?.maximumValue ?? "nil")
-        self.slider?.value = self.speechSynthesis.echoRate
-        
-        DispatchQueue.main.async { [weak self] in
-            print("\tHide Command Bar...")
-            self?.setCommandBarVisibility(as: false)
-            self?.refreshView()
-        }
-        
-        print("\tShow Slider View...")
-        Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { [weak self] timer in
-            self!.setSliderVisibility(as: true)
-        }
-        
-        // Give haptic feedback
-//        hapticEngine.mediumImpact()
-        hapticEngine.success()
-        
-        handler?()
-    }
-    
-    @IBAction func exitSlider(_ sender: Any? = nil) {
-        self.handleExitSlider()
-    }
-    
-    func handleExitSlider(voiceCommand: Bool = false, handler: (() -> Void)? = nil) {
-        if !voiceCommand {
-            print("===== Screen Button: Handle Exit Slider =====")
-        } else {
-            print("===== Voice Command: Handle Exit Slider =====")
-        }
-        
-        if voiceCommand {
-            // Play Sound
-            soundEngine.voiceCommandAccept()
-        }
-        
-        print("\tAdjusting flag to: false")
-        self.sliderIsVisible = false
-        self.sliderType = nil
-        
-        DispatchQueue.main.async { [weak self] in
-            print("\tHide Slider View...")
-            self?.setSliderVisibility(as: false)
-        }
-        
-        print("\tShow Command Bar...")
-        Timer.scheduledTimer(withTimeInterval: Utils.DEFAULT_VIEW_TRANSITION_DURATION, repeats: false) { [weak self] timer in
-            self!.setCommandBarVisibility(as: true)
-            self!.adjustCommandBar()
-        }
-        
-        // Give haptic feedback
-//        hapticEngine.mediumImpact()
-        hapticEngine.success()
-        
-        handler?()
     }
     
     @IBAction func walkNextWord(_ sender: Any? = nil) {

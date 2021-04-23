@@ -39,7 +39,6 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
     var voiceCommandEngine: VoiceCommandEngine!
     
     // MARK: - ViewController References
-    weak var viewController: ViewController?
     weak var entryTableViewController: EntryTableViewController?
     weak var detailViewController: DetailViewController?
     
@@ -1005,13 +1004,6 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
         
         // Register the custom header view.
         self.tableView.register(DictionaryViewTableHeader.self, forHeaderFooterViewReuseIdentifier: "DictionaryViewTableHeader")
-        
-        // Notify observers of loading
-        NotificationCenter.default.post(
-            name: ViewController.onDidLoad,
-            object: nil,
-            userInfo: [:]
-        )
     }
     
     override func viewWillDisappear(_ animated: Bool) {
@@ -1020,13 +1012,6 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
     
         // remove notification observers
         NotificationCenter.default.removeObserver(self)
-        
-        // Notify observers of disappearing
-        NotificationCenter.default.post(
-            name: ViewController.onWillDisappear,
-            object: nil,
-            userInfo: [:]
-        )
         
         // End Nature Sounds
         if soundEngine.isPlayingNatureAmbience {
@@ -1066,20 +1051,6 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
             self,
             selector: #selector(self.handleSecondaryAudio),
             name: AVAudioSession.silenceSecondaryAudioHintNotification,
-            object: nil
-        )
-        
-        // Observe ViewController
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onViewDidLoad(notification:)),
-            name: ViewController.onDidLoad,
-            object: nil
-        )
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onViewWillDisappear(notification:)),
-            name: ViewController.onWillDisappear,
             object: nil
         )
         
@@ -1126,12 +1097,6 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
         )
         notificationCenter.addObserver(
             self,
-            selector: #selector(onStartedListeningForWakePhrase(notification:)),
-            name: SpeechRecognitionEngine.onStartedListeningForWakePhrase,
-            object: nil
-        )
-        notificationCenter.addObserver(
-            self,
             selector: #selector(onStartedListeningForCommands(notification:)),
             name: SpeechRecognitionEngine.onStartedListeningForCommands,
             object: nil
@@ -1152,12 +1117,6 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
             self,
             selector: #selector(onPausedListening(notification:)),
             name: SpeechRecognitionEngine.onPausedListeningForSpeech,
-            object: nil
-        )
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onStoppedListening(notification:)),
-            name: SpeechRecognitionEngine.onStoppedListeningForWakePhrase,
             object: nil
         )
         notificationCenter.addObserver(
@@ -1242,11 +1201,6 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
         )
     }
     
-    @objc func onViewDidLoad(notification: Notification) {
-        print("===== Dictionary View Controller: On View Did Load =====")
-        self.viewController = storyboard?.instantiateViewController(withIdentifier: "ViewController") as? ViewController
-    }
-    
     @objc func onEntryTableViewDidLoad(notification: Notification) {
         print("===== Dictionary View Controller: On Entry Table View Did Load =====")
         self.entryTableViewController = storyboard?.instantiateViewController(withIdentifier: "EntryTableViewController") as? EntryTableViewController
@@ -1255,11 +1209,6 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
     @objc func onDetailViewDidLoad(notification: Notification) {
         print("===== Dictionary View Controller: On Detail View Did Load =====")
         self.detailViewController = storyboard?.instantiateViewController(withIdentifier: "DetailViewController") as? DetailViewController
-    }
-    
-    @objc func onViewWillDisappear(notification: Notification) {
-        print("===== Dictionary View Controller: On View Will Disappear =====")
-        self.viewController = nil
     }
     
     @objc func onEntryTableViewWillDisappear(notification: Notification) {
@@ -1403,14 +1352,6 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
                 )
             }
         }
-    }
-    
-    @objc func onStartedListeningForWakePhrase(notification: Notification) {
-        print("===== Dictionary View Controller: On Started Listening For Wake Phrase =====")
-        Utils.onStartedListeningForWakePhrase(
-            notification: notification,
-            speechRecognition: self.speechRecognition
-        )
     }
     
     @objc func onStartedListeningForCommands(notification: Notification) {
@@ -1594,14 +1535,8 @@ class DictionaryViewController: UITableViewController, SegueProtocol {
                 discardPrior: true,
                 withHaptics: true
             )
-        case .moveFromSleepToEntryTable:
-            print (">>>>> [Invalid Segue within DictionaryViewController] from ViewControlller to EntryTableViewController >>>>>")
-        case .moveFromSleepToDetail:
-            print (">>>>> [Invalid Segue within DictionaryViewController] from ViewControlller to DetailViewController >>>>>")
         case .moveFromEntryTableToDetail:
             print (">>>>> [Invalid Segue within ViewController] from EntryTableViewControlller to DetailViewController >>>>>")
-        case .moveFromEntryTableToSleep:
-            print (">>>>> [Invalid Segue within ViewController] from EntryTableViewControlller to ViewController >>>>>")
         case .moveFromDetailToEntryTable:
             print (">>>>> [Invalid Segue within ViewController] from DetailViewControlller to EntryTableViewController >>>>>")
         case .moveFromEntryTableToDictionary:

@@ -14,11 +14,8 @@ protocol SegueProtocol {
 }
 
 enum Segues: String {
-    case moveFromSleepToEntryTable
-    case moveFromSleepToDetail
     case moveFromEntryTableToDetail
     case moveFromEntryTableToDictionary
-    case moveFromEntryTableToSleep
     case moveFromDetailToEntryTable
     case moveFromDictionaryToEntryTable
     case noIdentifier = ""

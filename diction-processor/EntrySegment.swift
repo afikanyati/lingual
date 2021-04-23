@@ -34,9 +34,6 @@ class EntrySegment: AVCompositionTrackSegment, NSCoding {
     //
     // - Make sure to create a getter method instead of exposing the variable itself
     
-    // MARK: - ViewController References
-    weak var viewController: ViewController?
-    
     // MARK: - Identity Properties
     
     /// Stores a unique identifier for entry

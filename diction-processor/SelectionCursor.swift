@@ -2735,7 +2735,8 @@ class SelectionCursor: NSObject, UITextViewDelegate {
                     self.anchorCaret == Caret(index: secondLastSegmentIndex!, trackType: secondLastSegmentTrackType!)
                 ) ||
                 (
-                    self.anchorCaret != Caret(index: lastSegmentIndex, trackType: lastSegmentTrackType)
+                    self.anchorCaret != Caret(index: lastSegmentIndex, trackType: lastSegmentTrackType) &&
+                    !Utils.hasVoiceCommandSegment(segments: entry.entryBuffer)
                 ) ||
                 (
                     self.anchorCaret == nil

@@ -41,7 +41,6 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
     var voiceCommandEngine: VoiceCommandEngine!
     
     // MARK: - ViewController References
-    weak var viewController: ViewController?
     weak var detailViewController: DetailViewController?
     weak var dictionaryViewController: DictionaryViewController?
     
@@ -54,12 +53,6 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
     override func viewWillAppear(_ animated: Bool) {
         print("===== Entry Table View Controller: View Will Appear =====")
         super.viewWillAppear(animated)
-        
-        let state = UIApplication.shared.applicationState
-        if state == .background || state == .inactive {
-            print("\tApp is in the background. Segue to Sleep.")
-            self.performSegue(withIdentifier: Segues.moveFromEntryTableToSleep.rawValue, sender: nil)
-        }
 
         self.configureNotificationObservers()
         
@@ -195,20 +188,6 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
             context: nil
         )
         
-        // Observe ViewController
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onViewDidLoad(notification:)),
-            name: ViewController.onDidLoad,
-            object: nil
-        )
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onViewWillDisappear(notification:)),
-            name: ViewController.onWillDisappear,
-            object: nil
-        )
-        
         // Observe DetailView
         notificationCenter.addObserver(
             self,
@@ -252,12 +231,6 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
         )
         notificationCenter.addObserver(
             self,
-            selector: #selector(onStartedListeningForWakePhrase(notification:)),
-            name: SpeechRecognitionEngine.onStartedListeningForWakePhrase,
-            object: nil
-        )
-        notificationCenter.addObserver(
-            self,
             selector: #selector(onStartedListeningForCommands(notification:)),
             name: SpeechRecognitionEngine.onStartedListeningForCommands,
             object: nil
@@ -278,12 +251,6 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
             self,
             selector: #selector(onPausedListening(notification:)),
             name: SpeechRecognitionEngine.onPausedListeningForSpeech,
-            object: nil
-        )
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onStoppedListening(notification:)),
-            name: SpeechRecognitionEngine.onStoppedListeningForWakePhrase,
             object: nil
         )
         notificationCenter.addObserver(
@@ -419,19 +386,9 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
         self.detailViewController = storyboard?.instantiateViewController(withIdentifier: "DetailViewController") as? DetailViewController
     }
     
-    @objc func onViewDidLoad(notification: Notification) {
-        print("===== Entry Table View Controller: On View Did Load =====")
-        self.viewController = storyboard?.instantiateViewController(withIdentifier: "ViewController") as? ViewController
-    }
-    
     @objc func onDictionaryViewDidLoad(notification: Notification) {
         print("===== Entry Table View Controller: On Dictionary View Did Load =====")
         self.dictionaryViewController = storyboard?.instantiateViewController(withIdentifier: "DictionaryViewController") as? DictionaryViewController
-    }
-    
-    @objc func onViewWillDisappear(notification: Notification) {
-        print("===== Entry Table View Controller: On View Will Disappear =====")
-        self.viewController = nil
     }
     
     @objc func onDetailViewWillDisappear(notification: Notification) {
@@ -454,11 +411,6 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
         DispatchQueue.main.async { [weak self] in
             if self == nil {
                 return
-            }
-            
-            // keep recording outside of app if entry started
-            if self != nil && !self!.speechRecognition.isListeningForSpeech {
-                self?.performSegue(withIdentifier: Segues.moveFromEntryTableToSleep.rawValue, sender: nil)
             }
         }
     }
@@ -598,14 +550,6 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
                 )
             }
         }
-    }
-    
-    @objc func onStartedListeningForWakePhrase(notification: Notification) {
-        print("===== Entry Table View Controller: On Started Listening For Wake Phrase =====")
-        Utils.onStartedListeningForWakePhrase(
-            notification: notification,
-            speechRecognition: self.speechRecognition
-        )
     }
     
     @objc func onStartedListeningForCommands(notification: Notification) {
@@ -875,29 +819,6 @@ class EntryTableViewController: UIViewController, UITableViewDelegate, UITableVi
                 discardPrior: true,
                 withHaptics: true
             )
-        case .moveFromEntryTableToSleep:
-            print(">>>>> Segue from EntryTableViewController to ViewController >>>>>")
-            if let viewController = segue.destination as? ViewController {
-                viewController.state = self.state
-                viewController.speechRecognition = self.speechRecognition
-                viewController.speechSynthesis = self.speechSynthesis
-                viewController.pitchRecognition = self.pitchRecognition
-                viewController.notifications = self.notifications
-                viewController.speechPlayer = self.speechPlayer
-                viewController.selectionCursor = self.selectionCursor
-                viewController.entryManager = self.entryManager
-                viewController.entryListManager = self.entryListManager
-                viewController.uiManager = self.uiManager
-                viewController.voiceCommandEngine = self.voiceCommandEngine
-            }
-            self.speechRecognition.activateListeningIndicator(
-                withRecording: false,
-                withStopListeningButton: true
-            )
-        case .moveFromSleepToEntryTable:
-            print (">>>>> [Invalid Segue within EntryTableViewController] from ViewControlller to EntryTableViewController >>>>>")
-        case .moveFromSleepToDetail:
-            print (">>>>> [Invalid Segue within EntryTableViewController] from ViewControlller to DetailViewController >>>>>")
         case .moveFromDetailToEntryTable:
             print (">>>>> [Invalid Segue within EntryTableViewController] from DetailViewControlller to EntryTableViewController >>>>>")
         case .moveFromEntryTableToDictionary:

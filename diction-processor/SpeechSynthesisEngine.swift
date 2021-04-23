@@ -99,14 +99,6 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
     
     func configureNotificationObservers() {
         let notificationCenter = NotificationCenter.default
-
-        // SpeechRecognition
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onWakePhraseDetected(notification:)),
-            name: SpeechRecognitionEngine.onWakePhraseDetected,
-            object: nil
-        )
         
         // VoiceCommandEngine
         notificationCenter.addObserver(
@@ -121,14 +113,6 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
             self,
             selector: #selector(onEntryDeleted(notification:)),
             name: EntryManager.onEntryDeleted,
-            object: nil
-        )
-        
-        // DetailViewController
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(onChangedEchoRate(notification:)),
-            name: DetailViewController.onChangedEchoRate,
             object: nil
         )
         
@@ -147,12 +131,6 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
             name: Entry.onEntryCommittedBuffer,
             object: nil
         )
-    }
-    
-    @objc func onWakePhraseDetected(notification: Notification) {
-        print("===== Speech Synthesis Engine: On Wake Phrase Detected =====")
-        // Remove any speech synthesizing
-        self.emptySynthesizerQueue()
     }
     
     @objc func onProcessedVoiceCommand(notification: Notification) {
@@ -183,12 +161,6 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
     @objc func onEntryDeleted(notification: Notification) {
         print("===== Speech Synthesis Engine: On Entry Deleted =====")
         self.stopEcho(withFeedback: false)
-    }
-    
-    @objc func onChangedEchoRate(notification: Notification) {
-        print("===== Speech Synthesis Engine: On Changed Echo Rate =====")
-        let rate = notification.userInfo!["rate"] as! Float
-        self.setEchoRate(to: rate)
     }
     
     @objc func onSpeechStartedPlaying(notification: Notification) {
@@ -497,8 +469,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
         if let entry = self.entryManager.currentEntry,
            let echoRange = self.echoRange,
            let echoSegments = self.echoSegments,
-           self.updateEchoRate &&
-            self.state.appActivated
+           self.updateEchoRate
         {
             print("\tUpdating echo rate mid-echo...")
             print("\tCurrent Character Range: ", characterRange)
@@ -572,7 +543,6 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
            echoSegments.count > 0 &&
             echoSegments.count >= echoRange.count &&
             echoSegments.count >= echoRange.upperBound &&
-            self.state.appActivated &&
             (
                 self.isPlayingEcho ||
                 self.isPlayingPassiveEcho
@@ -687,7 +657,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
         self.tempOnEchoFinish?()
         self.tempOnEchoFinish = nil
         
-        if self.state.appActivated && self.speechRecognition.pausedListeningForCommands && !self.speechPlayer.isPlayingEntry && !self.speechSynthesizer.isSpeaking && !AVAudioSession.isHeadphonesConnected {
+        if self.speechRecognition.pausedListeningForCommands && !self.speechPlayer.isPlayingEntry && !self.speechSynthesizer.isSpeaking && !AVAudioSession.isHeadphonesConnected {
             // when headphones are off we don't listen for voice commands while echoing
             // but on completion we turn it back on
             // but we only turn back on if speech not being played back
@@ -699,7 +669,7 @@ class SpeechSynthesisEngine: NSObject, AVSpeechSynthesizerDelegate {
                     userInfo: [:]
                 )
             }
-        } else if let entry = self.entryManager.currentEntry, self.state.appActivated && entry.speechRecognition.pausedListeningForSpeech && !self.speechPlayer.isPlayingEntry && !self.speechSynthesizer.isSpeaking && !AVAudioSession.isHeadphonesConnected && !self.entryManager.isRunningEntry && !self.entryManager.isWalkingEntry {
+        } else if let entry = self.entryManager.currentEntry, entry.speechRecognition.pausedListeningForSpeech && !self.speechPlayer.isPlayingEntry && !self.speechSynthesizer.isSpeaking && !AVAudioSession.isHeadphonesConnected && !self.entryManager.isRunningEntry && !self.entryManager.isWalkingEntry {
             // when headphones are off we don't listen for speech while echoing
             // but on completion we turn it back on
             // but we only turn back on if speech not being played back

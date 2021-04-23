@@ -18,9 +18,7 @@ public final class SoundEffectEngine: NSObject {
     
     // Players
     var commitBufferPlayer: AVAudioPlayer? = nil
-    var correctWakePhrasePlayer: AVAudioPlayer? = nil
     var errorPlayer: AVAudioPlayer? = nil
-    var incorrectWakePhrasePlayer: AVAudioPlayer? = nil
     var playPlayer: AVAudioPlayer? = nil
     var processingPlayer: AVQueuePlayer? = nil
     var processingLooper: AVPlayerLooper? = nil
@@ -61,17 +59,6 @@ public final class SoundEffectEngine: NSObject {
             print("===== [Error] There was a problem importing 'Commit Buffer' sound =====")
         }
         
-        // Correct Wake Phrase
-        let correctWakePhrasePath = Bundle.main.path(forResource: "correct-wake-phrase", ofType: "wav")!
-        let correctWakePhraseURL = URL(fileURLWithPath: correctWakePhrasePath)
-
-        do {
-            self.correctWakePhrasePlayer = try AVAudioPlayer(contentsOf: correctWakePhraseURL)
-            self.players.append(self.correctWakePhrasePlayer)
-        } catch {
-            print("===== [Error] There was a problem importing 'Correct Wake Phrase' sound =====")
-        }
-        
         // Error
         let errorPath = Bundle.main.path(forResource: "error", ofType: "wav")!
         let errorURL = URL(fileURLWithPath: errorPath)
@@ -81,17 +68,6 @@ public final class SoundEffectEngine: NSObject {
             self.players.append(self.errorPlayer)
         } catch {
             print("===== [Error] There was a problem importing 'Error' sound =====")
-        }
-        
-        // Incorrect Wake Phrase
-        let incorrectWakePhrasePath = Bundle.main.path(forResource: "incorrect-wake-phrase", ofType: "wav")!
-        let incorrectWakePhraseURL = URL(fileURLWithPath: incorrectWakePhrasePath)
-
-        do {
-            self.incorrectWakePhrasePlayer = try AVAudioPlayer(contentsOf: incorrectWakePhraseURL)
-            self.players.append(self.incorrectWakePhrasePlayer)
-        } catch {
-            print("===== [Error] There was a problem importing 'Incorrect Wake Phrase' sound =====")
         }
         
         // Play
@@ -260,7 +236,7 @@ public final class SoundEffectEngine: NSObject {
 
         do {
             self.speechRegisteredPlayer = try AVAudioPlayer(contentsOf: speechRegisteredURL)
-            self.speechRegisteredPlayer?.volume = 0.2
+            self.speechRegisteredPlayer?.volume = 0.05
             self.players.append(self.speechRegisteredPlayer)
         } catch {
             print("===== [Error] There was a problem importing 'Speech Registered' sound =====")
@@ -283,17 +259,9 @@ public final class SoundEffectEngine: NSObject {
         commitBufferPlayer?.prepareToPlay()
         commitBufferPlayer?.play()
     }
-    func correctWakePhrase() {
-        correctWakePhrasePlayer?.prepareToPlay()
-        correctWakePhrasePlayer?.play()
-    }
     func error() {
         errorPlayer?.prepareToPlay()
         errorPlayer?.play()
-    }
-    func incorrectWakePhrase() {
-        incorrectWakePhrasePlayer?.prepareToPlay()
-        incorrectWakePhrasePlayer?.play()
     }
     func play() {
         playPlayer?.prepareToPlay()

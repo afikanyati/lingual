@@ -20,16 +20,12 @@ enum Notifications: String {
     // DetailViewController
     case onDetailViewControllerDidLoad
     case onDetailViewControllerWillDisappear
-    case onChangedPlayerRate
-    case onChangedEchoRate
     
     // DictionaryViewController
     case onDictionaryViewControllerDidLoad
     case onDictionaryViewControllerWillDisappear
     
     // SpeechRecognitionEngine
-    case onStartedListeningForWakePhrase
-    case onStoppedListeningForWakePhrase
     case onStartedListeningForCommands
     case onPausedListeningForCommands
     case onStoppedListeningForCommands
@@ -40,8 +36,6 @@ enum Notifications: String {
     case onPitchUpdate
     case onPowerUpdate
     case onSpeechUpdate
-    case onWakePhraseDetected
-    case onIncorrectWakePhrase
     case onBufferItem
     
     // VoiceCommand
