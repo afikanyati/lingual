@@ -1,0 +1,23 @@
+{
+  "name": "lingual-workspace",
+  "private": true,
+  "scripts": {
+    "dev": "yarn --cwd web dev",
+    "build": "yarn --cwd web build",
+    "test": "yarn test:assets && yarn --cwd web test && yarn test:native",
+    "test:native": "swift test --package-path native",
+    "test:e2e": "yarn --cwd web test:e2e",
+    "test:predeploy": "yarn test:security && yarn test:source-audit && yarn test:specifications && yarn test && yarn test:e2e",
+    "build:ios": "bash scripts/build-ios.sh",
+    "test:speech": "node scripts/verify-speech.mjs && node scripts/verify-speech-pauses.mjs",
+    "preview": "yarn --cwd web preview --port 5174",
+    "format": "yarn --cwd web prettier --write src tests",
+    "test:ios": "bash scripts/test-ios.sh",
+    "test:specifications": "node scripts/test-specifications.mjs",
+    "prepare:speech": "node scripts/prepare-speech-assets.mjs",
+    "test:assets": "node --test scripts/prepare-speech-assets.test.mjs",
+    "test:source-audit": "python3 scripts/native-source-audit.py",
+    "deploy:hosting": "yarn test:predeploy && firebase deploy --only hosting --project lingual-web-app",
+    "test:security": "node --test scripts/security-config.test.mjs"
+  }
+}

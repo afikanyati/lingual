@@ -1189,6 +1189,7 @@ public class VoiceCommandEngine: NSObject {
         }
     }
     
+    // ** IMPORTANT **: Keep in sync with web/src/enums/command.ts using scripts/extract-command-catalog.py.
     public enum VoiceCommand: String, CaseIterable {
         // Entry
         case PLAY_ENTRY = "play entry"
@@ -1275,9 +1276,9 @@ public class VoiceCommandEngine: NSObject {
         // Word
         case SELECT_WORD = "select word"
         // Sentence
-        case SELECT_SENTENCE = "delete sentence"
+        case SELECT_SENTENCE = "select sentence"
         // Paragraph
-        case SELECT_PARAGRAPH = "delete paragraph"
+        case SELECT_PARAGRAPH = "select paragraph"
         // Selection Update
         case ACCEPT_SELECTION_UPDATE = "accept selection update"
         case REDO_SELECTION_UPDATE = "redo selection update"
@@ -1641,8 +1642,8 @@ public class VoiceCommandEngine: NSObject {
         Set([.STOP, .PLAYBACK]) : .STOP_PLAYBACK,
         Set([.END, .PLAYBACK]) : .STOP_PLAYBACK,
         Set([.FINISH, .PLAYBACK]) : .STOP_PLAYBACK,
-        Set([.SKIP, .PLAYBACK, .NEXT]) : .SKIP_PLAYBACK_BACKWARD,
-        Set([.SKIP, .PLAYBACK, .PREVIOUS]) : .SKIP_PLAYBACK_FORWARD,
+        Set([.SKIP, .PLAYBACK, .NEXT]) : .SKIP_PLAYBACK_FORWARD,
+        Set([.SKIP, .PLAYBACK, .PREVIOUS]) : .SKIP_PLAYBACK_BACKWARD,
         // Punctuation
         Set([.ACTIVATE, .PUNCTUATION]) : .ACTIVATE_PUNCTUATION,
         Set([.ADJUST, .ON, .PUNCTUATION]) : .ACTIVATE_PUNCTUATION,
@@ -1791,8 +1792,8 @@ public class VoiceCommandEngine: NSObject {
         // Selection Rate
         Set([.INCREASE, .SELECTION_RATE]) : .INCREASE_SELECTION_RATE,
         Set([.INCREASE, .SELECTION]) : .INCREASE_SELECTION_RATE,
-        Set([.ADJUST, .UP, .SELECTION_RATE]) : .INCREASE_PLAYBACK_RATE,
-        Set([.ADJUST, .UP, .SELECTION]) : .INCREASE_PLAYBACK_RATE,
+        Set([.ADJUST, .UP, .SELECTION_RATE]) : .INCREASE_SELECTION_RATE,
+        Set([.ADJUST, .UP, .SELECTION]) : .INCREASE_SELECTION_RATE,
         Set([.DECREASE, .SELECTION_RATE]) : .DECREASE_SELECTION_RATE,
         Set([.DECREASE, .SELECTION]) : .DECREASE_SELECTION_RATE,
         Set([.ADJUST, .DOWN, .SELECTION_RATE]) : .DECREASE_SELECTION_RATE,

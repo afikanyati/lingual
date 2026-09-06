@@ -1,0 +1,1282 @@
+{
+  "commands": [
+    {
+      "id": "PLAY_ENTRY",
+      "label": "play entry"
+    },
+    {
+      "id": "PAUSE_ENTRY",
+      "label": "pause entry"
+    },
+    {
+      "id": "CREATE_ENTRY",
+      "label": "create entry"
+    },
+    {
+      "id": "START_ENTRY",
+      "label": "start entry"
+    },
+    {
+      "id": "STOP_ENTRY",
+      "label": "stop entry"
+    },
+    {
+      "id": "RESUME_ENTRY",
+      "label": "resume entry"
+    },
+    {
+      "id": "DELETE_ENTRY",
+      "label": "delete entry"
+    },
+    {
+      "id": "ECHO_ENTRY",
+      "label": "echo entry"
+    },
+    {
+      "id": "RUN_ENTRY",
+      "label": "run entry"
+    },
+    {
+      "id": "WALK_ENTRY",
+      "label": "walk entry"
+    },
+    {
+      "id": "EDIT_ENTRY",
+      "label": "edit entry"
+    },
+    {
+      "id": "EXPORT_ENTRY",
+      "label": "export entry"
+    },
+    {
+      "id": "ENTER_ENTRY",
+      "label": "enter entry"
+    },
+    {
+      "id": "WALK_ENTRY_LIST",
+      "label": "walk entry list"
+    },
+    {
+      "id": "RUN_ENTRY_LIST",
+      "label": "run entry list"
+    },
+    {
+      "id": "ENTER_ENTRY_LIST",
+      "label": "enter entry list"
+    },
+    {
+      "id": "PLAY_ECHO",
+      "label": "play echo"
+    },
+    {
+      "id": "START_ECHO",
+      "label": "start echo"
+    },
+    {
+      "id": "PAUSE_ECHO",
+      "label": "pause echo"
+    },
+    {
+      "id": "STOP_ECHO",
+      "label": "stop echo"
+    },
+    {
+      "id": "RESUME_ECHO",
+      "label": "resume echo"
+    },
+    {
+      "id": "PAUSE_PLAYBACK",
+      "label": "pause playback"
+    },
+    {
+      "id": "RESUME_PLAYBACK",
+      "label": "resume playback"
+    },
+    {
+      "id": "STOP_PLAYBACK",
+      "label": "stop playback"
+    },
+    {
+      "id": "SKIP_PLAYBACK_BACKWARD",
+      "label": "skip playback backward"
+    },
+    {
+      "id": "SKIP_PLAYBACK_FORWARD",
+      "label": "skip playback forward"
+    },
+    {
+      "id": "ACTIVATE_PUNCTUATION",
+      "label": "activate punctuation"
+    },
+    {
+      "id": "DEACTIVATE_PUNCTUATION",
+      "label": "deactivate punctuation"
+    },
+    {
+      "id": "ACTIVATE_SILENCES",
+      "label": "activate silences"
+    },
+    {
+      "id": "DEACTIVATE_SILENCES",
+      "label": "deactivate silences"
+    },
+    {
+      "id": "ACTIVATE_TEMPORAL_SUGGESTIONS",
+      "label": "activate temporal suggestions"
+    },
+    {
+      "id": "DEACTIVATE_TEMPORAL_SUGGESTIONS",
+      "label": "deactivate temporal suggestions"
+    },
+    {
+      "id": "ACTIVATE_PUNCTUATION_SUGGESTIONS",
+      "label": "activate punctuation suggestions"
+    },
+    {
+      "id": "DEACTIVATE_PUNCTUATION_SUGGESTIONS",
+      "label": "deactivate punctuation suggestions"
+    },
+    {
+      "id": "ACTIVATE_FORMATTING_SUGGESTIONS",
+      "label": "activate formatting suggestions"
+    },
+    {
+      "id": "DEACTIVATE_FORMATTING_SUGGESTIONS",
+      "label": "deactivate formatting suggestions"
+    },
+    {
+      "id": "ACTIVATE_PASSIVE_ECHO",
+      "label": "activate passive echo"
+    },
+    {
+      "id": "DEACTIVATE_PASSIVE_ECHO",
+      "label": "deactivate passive echo"
+    },
+    {
+      "id": "INCREASE_VOLUME",
+      "label": "increase volume"
+    },
+    {
+      "id": "DECREASE_VOLUME",
+      "label": "decrease volume"
+    },
+    {
+      "id": "INCREASE_ECHO_RATE",
+      "label": "increase echo rate"
+    },
+    {
+      "id": "DECREASE_ECHO_RATE",
+      "label": "decrease echo rate"
+    },
+    {
+      "id": "INCREASE_PLAYBACK_RATE",
+      "label": "increase playback rate"
+    },
+    {
+      "id": "DECREASE_PLAYBACK_RATE",
+      "label": "decrease playback rate"
+    },
+    {
+      "id": "DELETE_SELECTION",
+      "label": "delete selection"
+    },
+    {
+      "id": "UPDATE_SELECTION",
+      "label": "update selection"
+    },
+    {
+      "id": "COPY_SELECTION",
+      "label": "copy selection"
+    },
+    {
+      "id": "CUT_SELECTION",
+      "label": "cut selection"
+    },
+    {
+      "id": "EXPORT_SELECTION",
+      "label": "export selection"
+    },
+    {
+      "id": "RUN_SELECTION",
+      "label": "run selection"
+    },
+    {
+      "id": "WALK_SELECTION",
+      "label": "walk selection"
+    },
+    {
+      "id": "ENTER_SELECTION",
+      "label": "enter selection"
+    },
+    {
+      "id": "REMOVE_SELECTION",
+      "label": "remove selection"
+    },
+    {
+      "id": "EXPAND_SELECTION",
+      "label": "expand selection"
+    },
+    {
+      "id": "REDUCE_SELECTION",
+      "label": "reduce selection"
+    },
+    {
+      "id": "PLAY_SELECTION",
+      "label": "play selection"
+    },
+    {
+      "id": "ECHO_SELECTION",
+      "label": "echo selection"
+    },
+    {
+      "id": "PAUSE_RUN",
+      "label": "pause run"
+    },
+    {
+      "id": "EXIT_WALK",
+      "label": "exit walk"
+    },
+    {
+      "id": "SHIFT_ANCHOR_RIGHT",
+      "label": "shift anchor right"
+    },
+    {
+      "id": "SHIFT_ANCHOR_LEFT",
+      "label": "shift anchor left"
+    },
+    {
+      "id": "SHIFT_FOCUS_RIGHT",
+      "label": "shift focus right"
+    },
+    {
+      "id": "SHIFT_FOCUS_LEFT",
+      "label": "shift focus left"
+    },
+    {
+      "id": "SHIFT_SELECTION_FORWARD",
+      "label": "shift selection forward"
+    },
+    {
+      "id": "SHIFT_SELECTION_BACKWARD",
+      "label": "shift selection backward"
+    },
+    {
+      "id": "SHIFT_NEXT_WALK_ELEMENT",
+      "label": "shift next walk element"
+    },
+    {
+      "id": "SHIFT_PREVIOUS_WALK_ELEMENT",
+      "label": "shift previous walk element"
+    },
+    {
+      "id": "SELECT_WORD",
+      "label": "select word"
+    },
+    {
+      "id": "SELECT_SENTENCE",
+      "label": "select sentence"
+    },
+    {
+      "id": "SELECT_PARAGRAPH",
+      "label": "select paragraph"
+    },
+    {
+      "id": "ACCEPT_SELECTION_UPDATE",
+      "label": "accept selection update"
+    },
+    {
+      "id": "REDO_SELECTION_UPDATE",
+      "label": "redo selection update"
+    },
+    {
+      "id": "CANCEL_SELECTION_UPDATE",
+      "label": "cancel selection update"
+    },
+    {
+      "id": "INCREASE_SELECTION_RATE",
+      "label": "increase selection rate"
+    },
+    {
+      "id": "DECREASE_SELECTION_RATE",
+      "label": "decrease selection rate"
+    },
+    {
+      "id": "PLAY_COMMIT",
+      "label": "play commit"
+    },
+    {
+      "id": "ECHO_COMMIT",
+      "label": "echo commit"
+    },
+    {
+      "id": "SELECT_COMMIT",
+      "label": "select commit"
+    },
+    {
+      "id": "ROLLBACK_COMMIT",
+      "label": "rollback commit"
+    },
+    {
+      "id": "WALK_COMMIT",
+      "label": "walk commit"
+    },
+    {
+      "id": "RUN_COMMIT",
+      "label": "run commit"
+    },
+    {
+      "id": "INSPECT_CLIPBOARD",
+      "label": "inspect clipboard"
+    },
+    {
+      "id": "PASTE_CLIPBOARD",
+      "label": "paste clipboard"
+    },
+    {
+      "id": "ENTER_DICTIONARY",
+      "label": "enter dictionary"
+    },
+    {
+      "id": "EXIT_DICTIONARY",
+      "label": "exit dictionary"
+    },
+    {
+      "id": "EXPORT_AUDIO",
+      "label": "export audio"
+    },
+    {
+      "id": "EXPORT_TEXT",
+      "label": "export text"
+    },
+    {
+      "id": "UNDO_CHANGE",
+      "label": "undo change"
+    },
+    {
+      "id": "REDO_CHANGE",
+      "label": "redo change"
+    },
+    {
+      "id": "GRANT_PERMISSION",
+      "label": "grant permission"
+    },
+    {
+      "id": "CANCEL_DIALOG",
+      "label": "cancel dialog"
+    },
+    {
+      "id": "CONTINUE_DIALOG",
+      "label": "continue dialog"
+    }
+  ],
+  "aliases": {
+    "start": "START",
+    "play": "PLAY",
+    "pause": "PAUSE",
+    "create": "CREATE",
+    "stop": "STOP",
+    "resume": "RESUME",
+    "delete": "DELETE",
+    "activate": "ACTIVATE",
+    "deactivate": "DEACTIVATE",
+    "increase": "INCREASE",
+    "decrease": "DECREASE",
+    "adjust": "ADJUST",
+    "update": "UPDATE",
+    "copy": "COPY",
+    "cut": "CUT",
+    "export": "EXPORT",
+    "edit": "EDIT",
+    "inspect": "INSPECT",
+    "skip": "SKIP",
+    "accept": "ACCEPT",
+    "enter": "ENTER",
+    "remove": "REMOVE",
+    "undo": "UNDO",
+    "redo": "REDO",
+    "exit": "EXIT",
+    "select": "SELECT",
+    "rollback": "ROLLBACK",
+    "shift": "SHIFT",
+    "expand": "EXPAND",
+    "reduce": "REDUCE",
+    "grant": "GRANT",
+    "cancel": "CANCEL",
+    "continue": "CONTINUE",
+    "paste": "PASTE",
+    "entry": "ENTRY",
+    "word": "WORD",
+    "sentence": "SENTENCE",
+    "paragraph": "PARAGRAPH",
+    "punctuation": "PUNCTUATION",
+    "silences": "SILENCES",
+    "temporal suggestions": "TEMPORAL_SUGGESTIONS",
+    "punctuation suggestions": "PUNCTUATION_SUGGESTIONS",
+    "formatting suggestions": "FORMATTING_SUGGESTIONS",
+    "passive echo": "PASSIVE_ECHO",
+    "volume": "VOLUME",
+    "echo rate": "ECHO_RATE",
+    "playback rate": "PLAYBACK_RATE",
+    "playback": "PLAYBACK",
+    "selection": "SELECTION",
+    "selection rate": "SELECTION_RATE",
+    "commit": "COMMIT",
+    "clipboard": "CLIPBOARD",
+    "selection update": "SELECTION_UPDATE",
+    "anchor": "ANCHOR",
+    "focus": "FOCUS",
+    "permission": "PERMISSION",
+    "audio": "AUDIO",
+    "text": "TEXT",
+    "beginning": "BEGINNING",
+    "change": "CHANGE",
+    "dialog": "DIALOG",
+    "entry list": "ENTRY_LIST",
+    "rate": "RATE",
+    "list": "LIST",
+    "dictionary": "DICTIONARY",
+    "echo": "ECHO",
+    "run": "RUN",
+    "walk": "WALK",
+    "end": "END",
+    "previous": "PREVIOUS",
+    "next": "NEXT",
+    "left": "LEFT",
+    "inward": "INWARD",
+    "outward": "OUTWARD",
+    "up": "UP",
+    "down": "DOWN",
+    "on": "ON",
+    "off": "OFF",
+    "starts": "START",
+    "stock": "START",
+    "scott": "START",
+    "freeze": "PAUSE",
+    "halt": "PAUSE",
+    "holt": "PAUSE",
+    "new": "CREATE",
+    "i just": "ADJUST",
+    "just": "ADJUST",
+    "turn": "ADJUST",
+    "exports": "EXPORT",
+    "preview": "INSPECT",
+    "check": "INSPECT",
+    "except": "ACCEPT",
+    "open": "ENTER",
+    "launch": "ENTER",
+    "view": "ENTER",
+    "add": "ENTER",
+    "wake": "ENTER",
+    "make": "ENTER",
+    "makes": "ENTER",
+    "begin": "ENTER",
+    "clear": "REMOVE",
+    "unselect": "REMOVE",
+    "hide": "EXIT",
+    "close": "EXIT",
+    "leave": "EXIT",
+    "reverse": "ROLLBACK",
+    "move": "SHIFT",
+    "place": "SHIFT",
+    "drop": "SHIFT",
+    "give": "GRANT",
+    "allow": "GRANT",
+    "entering": "ENTRY",
+    "passage": "PARAGRAPH",
+    "section": "PARAGRAPH",
+    "ecko rate": "ECHO_RATE",
+    "eco rate": "ECHO_RATE",
+    "echo rates": "ECHO_RATE",
+    "ecko rates": "ECHO_RATE",
+    "eco rates": "ECHO_RATE",
+    "accurate": "ECHO_RATE",
+    "playback rates": "PLAYBACK_RATE",
+    "playbeck rate": "PLAYBACK_RATE",
+    "playbeck rates": "PLAYBACK_RATE",
+    "playbeck": "PLAYBACK",
+    "comment": "COMMIT",
+    "come out": "COMMIT",
+    "rates": "RATE",
+    "ecko": "ECHO",
+    "eco": "ECHO",
+    "work": "WALK",
+    "ending": "END",
+    "last": "PREVIOUS",
+    "lost": "PREVIOUS",
+    "backward": "PREVIOUS",
+    "backwards": "PREVIOUS",
+    "right": "NEXT",
+    "forward": "NEXT",
+    "forwards": "NEXT",
+    "inwards": "INWARD",
+    "in": "INWARD",
+    "outwards": "OUTWARD",
+    "out": "OUTWARD"
+  },
+  "grammar": [
+    {
+      "tokens": ["PLAY", "ENTRY"],
+      "command": "PLAY_ENTRY"
+    },
+    {
+      "tokens": ["PAUSE", "ENTRY"],
+      "command": "PAUSE_ENTRY"
+    },
+    {
+      "tokens": ["CREATE", "ENTRY"],
+      "command": "CREATE_ENTRY"
+    },
+    {
+      "tokens": ["START", "ENTRY"],
+      "command": "START_ENTRY"
+    },
+    {
+      "tokens": ["STOP", "ENTRY"],
+      "command": "STOP_ENTRY"
+    },
+    {
+      "tokens": ["END", "ENTRY"],
+      "command": "STOP_ENTRY"
+    },
+    {
+      "tokens": ["FINISH", "ENTRY"],
+      "command": "STOP_ENTRY"
+    },
+    {
+      "tokens": ["RESUME", "ENTRY"],
+      "command": "RESUME_ENTRY"
+    },
+    {
+      "tokens": ["CONTINUE", "ENTRY"],
+      "command": "RESUME_ENTRY"
+    },
+    {
+      "tokens": ["DELETE", "ENTRY"],
+      "command": "DELETE_ENTRY"
+    },
+    {
+      "tokens": ["ECHO", "ENTRY"],
+      "command": "ECHO_ENTRY"
+    },
+    {
+      "tokens": ["RUN", "ENTRY"],
+      "command": "RUN_ENTRY"
+    },
+    {
+      "tokens": ["WALK", "ENTRY"],
+      "command": "WALK_ENTRY"
+    },
+    {
+      "tokens": ["EDIT", "ENTRY"],
+      "command": "EDIT_ENTRY"
+    },
+    {
+      "tokens": ["EXPORT", "ENTRY"],
+      "command": "EXPORT_ENTRY"
+    },
+    {
+      "tokens": ["ENTER", "ENTRY"],
+      "command": "ENTER_ENTRY"
+    },
+    {
+      "tokens": ["INSPECT", "ENTRY"],
+      "command": "ENTER_ENTRY"
+    },
+    {
+      "tokens": ["EXIT", "ENTRY"],
+      "command": "ENTER_ENTRY_LIST"
+    },
+    {
+      "tokens": ["ENTER", "ENTRY_LIST"],
+      "command": "ENTER_ENTRY_LIST"
+    },
+    {
+      "tokens": ["ENTER", "LIST"],
+      "command": "ENTER_ENTRY_LIST"
+    },
+    {
+      "tokens": ["WALK", "ENTRY_LIST"],
+      "command": "WALK_ENTRY_LIST"
+    },
+    {
+      "tokens": ["WALK", "LIST"],
+      "command": "WALK_ENTRY_LIST"
+    },
+    {
+      "tokens": ["RUN", "ENTRY_LIST"],
+      "command": "RUN_ENTRY_LIST"
+    },
+    {
+      "tokens": ["RUN", "LIST"],
+      "command": "RUN_ENTRY_LIST"
+    },
+    {
+      "tokens": ["PLAY", "ECHO"],
+      "command": "PLAY_ECHO"
+    },
+    {
+      "tokens": ["START", "ECHO"],
+      "command": "START_ECHO"
+    },
+    {
+      "tokens": ["PAUSE", "ECHO"],
+      "command": "PAUSE_ECHO"
+    },
+    {
+      "tokens": ["STOP", "ECHO"],
+      "command": "STOP_ECHO"
+    },
+    {
+      "tokens": ["END", "ECHO"],
+      "command": "STOP_ECHO"
+    },
+    {
+      "tokens": ["FINISH", "ECHO"],
+      "command": "STOP_ECHO"
+    },
+    {
+      "tokens": ["RESUME", "ECHO"],
+      "command": "RESUME_ECHO"
+    },
+    {
+      "tokens": ["CONTINUE", "ECHO"],
+      "command": "RESUME_ECHO"
+    },
+    {
+      "tokens": ["PAUSE", "PLAYBACK"],
+      "command": "PAUSE_PLAYBACK"
+    },
+    {
+      "tokens": ["RESUME", "PLAYBACK"],
+      "command": "RESUME_PLAYBACK"
+    },
+    {
+      "tokens": ["CONTINUE", "PLAYBACK"],
+      "command": "RESUME_PLAYBACK"
+    },
+    {
+      "tokens": ["STOP", "PLAYBACK"],
+      "command": "STOP_PLAYBACK"
+    },
+    {
+      "tokens": ["END", "PLAYBACK"],
+      "command": "STOP_PLAYBACK"
+    },
+    {
+      "tokens": ["FINISH", "PLAYBACK"],
+      "command": "STOP_PLAYBACK"
+    },
+    {
+      "tokens": ["SKIP", "PLAYBACK", "NEXT"],
+      "command": "SKIP_PLAYBACK_FORWARD"
+    },
+    {
+      "tokens": ["SKIP", "PLAYBACK", "PREVIOUS"],
+      "command": "SKIP_PLAYBACK_BACKWARD"
+    },
+    {
+      "tokens": ["ACTIVATE", "PUNCTUATION"],
+      "command": "ACTIVATE_PUNCTUATION"
+    },
+    {
+      "tokens": ["ADJUST", "ON", "PUNCTUATION"],
+      "command": "ACTIVATE_PUNCTUATION"
+    },
+    {
+      "tokens": ["DEACTIVATE", "PUNCTUATION"],
+      "command": "DEACTIVATE_PUNCTUATION"
+    },
+    {
+      "tokens": ["ADJUST", "OFF", "PUNCTUATION"],
+      "command": "DEACTIVATE_PUNCTUATION"
+    },
+    {
+      "tokens": ["ACTIVATE", "SILENCES"],
+      "command": "ACTIVATE_SILENCES"
+    },
+    {
+      "tokens": ["ADJUST", "ON", "SILENCES"],
+      "command": "ACTIVATE_SILENCES"
+    },
+    {
+      "tokens": ["DEACTIVATE", "SILENCES"],
+      "command": "DEACTIVATE_SILENCES"
+    },
+    {
+      "tokens": ["ADJUST", "OFF", "SILENCES"],
+      "command": "DEACTIVATE_SILENCES"
+    },
+    {
+      "tokens": ["ACTIVATE", "TEMPORAL_SUGGESTIONS"],
+      "command": "ACTIVATE_TEMPORAL_SUGGESTIONS"
+    },
+    {
+      "tokens": ["ADJUST", "ON", "TEMPORAL_SUGGESTIONS"],
+      "command": "ACTIVATE_TEMPORAL_SUGGESTIONS"
+    },
+    {
+      "tokens": ["DEACTIVATE", "TEMPORAL_SUGGESTIONS"],
+      "command": "DEACTIVATE_TEMPORAL_SUGGESTIONS"
+    },
+    {
+      "tokens": ["ADJUST", "OFF", "TEMPORAL_SUGGESTIONS"],
+      "command": "DEACTIVATE_TEMPORAL_SUGGESTIONS"
+    },
+    {
+      "tokens": ["ACTIVATE", "PUNCTUATION_SUGGESTIONS"],
+      "command": "ACTIVATE_PUNCTUATION_SUGGESTIONS"
+    },
+    {
+      "tokens": ["ADJUST", "ON", "PUNCTUATION_SUGGESTIONS"],
+      "command": "ACTIVATE_PUNCTUATION_SUGGESTIONS"
+    },
+    {
+      "tokens": ["DEACTIVATE", "PUNCTUATION_SUGGESTIONS"],
+      "command": "DEACTIVATE_PUNCTUATION_SUGGESTIONS"
+    },
+    {
+      "tokens": ["ADJUST", "OFF", "PUNCTUATION_SUGGESTIONS"],
+      "command": "DEACTIVATE_PUNCTUATION_SUGGESTIONS"
+    },
+    {
+      "tokens": ["ACTIVATE", "FORMATTING_SUGGESTIONS"],
+      "command": "ACTIVATE_FORMATTING_SUGGESTIONS"
+    },
+    {
+      "tokens": ["ADJUST", "ON", "FORMATTING_SUGGESTIONS"],
+      "command": "ACTIVATE_FORMATTING_SUGGESTIONS"
+    },
+    {
+      "tokens": ["DEACTIVATE", "FORMATTING_SUGGESTIONS"],
+      "command": "DEACTIVATE_FORMATTING_SUGGESTIONS"
+    },
+    {
+      "tokens": ["ADJUST", "OFF", "FORMATTING_SUGGESTIONS"],
+      "command": "DEACTIVATE_FORMATTING_SUGGESTIONS"
+    },
+    {
+      "tokens": ["ACTIVATE", "PASSIVE_ECHO"],
+      "command": "ACTIVATE_PASSIVE_ECHO"
+    },
+    {
+      "tokens": ["ADJUST", "ON", "PASSIVE_ECHO"],
+      "command": "ACTIVATE_PASSIVE_ECHO"
+    },
+    {
+      "tokens": ["DEACTIVATE", "PASSIVE_ECHO"],
+      "command": "DEACTIVATE_PASSIVE_ECHO"
+    },
+    {
+      "tokens": ["ADJUST", "OFF", "PASSIVE_ECHO"],
+      "command": "DEACTIVATE_PASSIVE_ECHO"
+    },
+    {
+      "tokens": ["INCREASE", "VOLUME"],
+      "command": "INCREASE_VOLUME"
+    },
+    {
+      "tokens": ["ADJUST", "UP", "VOLUME"],
+      "command": "INCREASE_VOLUME"
+    },
+    {
+      "tokens": ["DECREASE", "VOLUME"],
+      "command": "DECREASE_VOLUME"
+    },
+    {
+      "tokens": ["ADJUST", "DOWN", "VOLUME"],
+      "command": "DECREASE_VOLUME"
+    },
+    {
+      "tokens": ["INCREASE", "ECHO_RATE"],
+      "command": "INCREASE_ECHO_RATE"
+    },
+    {
+      "tokens": ["ADJUST", "UP", "ECHO_RATE"],
+      "command": "INCREASE_ECHO_RATE"
+    },
+    {
+      "tokens": ["INCREASE", "ECHO"],
+      "command": "INCREASE_ECHO_RATE"
+    },
+    {
+      "tokens": ["ADJUST", "UP", "ECHO"],
+      "command": "INCREASE_ECHO_RATE"
+    },
+    {
+      "tokens": ["INCREASE", "ECHO", "RIGHT"],
+      "command": "INCREASE_ECHO_RATE"
+    },
+    {
+      "tokens": ["ADJUST", "UP", "ECHO", "RIGHT"],
+      "command": "INCREASE_ECHO_RATE"
+    },
+    {
+      "tokens": ["DECREASE", "ECHO_RATE"],
+      "command": "DECREASE_ECHO_RATE"
+    },
+    {
+      "tokens": ["ADJUST", "DOWN", "ECHO_RATE"],
+      "command": "DECREASE_ECHO_RATE"
+    },
+    {
+      "tokens": ["DECREASE", "ECHO"],
+      "command": "DECREASE_ECHO_RATE"
+    },
+    {
+      "tokens": ["ADJUST", "DOWN", "ECHO"],
+      "command": "DECREASE_ECHO_RATE"
+    },
+    {
+      "tokens": ["DECREASE", "ECHO", "RIGHT"],
+      "command": "DECREASE_ECHO_RATE"
+    },
+    {
+      "tokens": ["ADJUST", "DOWN", "ECHO", "RIGHT"],
+      "command": "DECREASE_ECHO_RATE"
+    },
+    {
+      "tokens": ["INCREASE", "PLAYBACK_RATE"],
+      "command": "INCREASE_PLAYBACK_RATE"
+    },
+    {
+      "tokens": ["ADJUST", "UP", "PLAYBACK_RATE"],
+      "command": "INCREASE_PLAYBACK_RATE"
+    },
+    {
+      "tokens": ["INCREASE", "PLAYBACK"],
+      "command": "INCREASE_PLAYBACK_RATE"
+    },
+    {
+      "tokens": ["ADJUST", "UP", "PLAYBACK"],
+      "command": "INCREASE_PLAYBACK_RATE"
+    },
+    {
+      "tokens": ["DECREASE", "PLAYBACK_RATE"],
+      "command": "DECREASE_PLAYBACK_RATE"
+    },
+    {
+      "tokens": ["ADJUST", "DOWN", "PLAYBACK_RATE"],
+      "command": "DECREASE_PLAYBACK_RATE"
+    },
+    {
+      "tokens": ["DECREASE", "PLAYBACK"],
+      "command": "DECREASE_PLAYBACK_RATE"
+    },
+    {
+      "tokens": ["ADJUST", "DOWN", "PLAYBACK"],
+      "command": "DECREASE_PLAYBACK_RATE"
+    },
+    {
+      "tokens": ["DELETE", "SELECTION"],
+      "command": "DELETE_SELECTION"
+    },
+    {
+      "tokens": ["UPDATE", "SELECTION"],
+      "command": "UPDATE_SELECTION"
+    },
+    {
+      "tokens": ["COPY", "SELECTION"],
+      "command": "COPY_SELECTION"
+    },
+    {
+      "tokens": ["CUT", "SELECTION"],
+      "command": "CUT_SELECTION"
+    },
+    {
+      "tokens": ["EXPORT", "SELECTION"],
+      "command": "EXPORT_SELECTION"
+    },
+    {
+      "tokens": ["RUN", "SELECTION"],
+      "command": "RUN_SELECTION"
+    },
+    {
+      "tokens": ["WALK", "SELECTION"],
+      "command": "WALK_SELECTION"
+    },
+    {
+      "tokens": ["ENTER", "SELECTION"],
+      "command": "ENTER_SELECTION"
+    },
+    {
+      "tokens": ["START", "SELECTION"],
+      "command": "ENTER_SELECTION"
+    },
+    {
+      "tokens": ["REMOVE", "SELECTION"],
+      "command": "REMOVE_SELECTION"
+    },
+    {
+      "tokens": ["EXIT", "SELECTION"],
+      "command": "REMOVE_SELECTION"
+    },
+    {
+      "tokens": ["END", "SELECTION"],
+      "command": "REMOVE_SELECTION"
+    },
+    {
+      "tokens": ["STOP", "SELECTION"],
+      "command": "REMOVE_SELECTION"
+    },
+    {
+      "tokens": ["FINISH", "SELECTION"],
+      "command": "REMOVE_SELECTION"
+    },
+    {
+      "tokens": ["EXPAND", "SELECTION"],
+      "command": "EXPAND_SELECTION"
+    },
+    {
+      "tokens": ["REDUCE", "SELECTION"],
+      "command": "REDUCE_SELECTION"
+    },
+    {
+      "tokens": ["PLAY", "SELECTION"],
+      "command": "PLAY_SELECTION"
+    },
+    {
+      "tokens": ["ECHO", "SELECTION"],
+      "command": "ECHO_SELECTION"
+    },
+    {
+      "tokens": ["PAUSE", "RUN"],
+      "command": "PAUSE_RUN"
+    },
+    {
+      "tokens": ["STOP", "RUN"],
+      "command": "PAUSE_RUN"
+    },
+    {
+      "tokens": ["EXIT", "RUN"],
+      "command": "PAUSE_RUN"
+    },
+    {
+      "tokens": ["EXIT", "WALK"],
+      "command": "EXIT_WALK"
+    },
+    {
+      "tokens": ["SHIFT", "ANCHOR", "RIGHT"],
+      "command": "SHIFT_ANCHOR_RIGHT"
+    },
+    {
+      "tokens": ["SHIFT", "ANCHOR", "NEXT"],
+      "command": "SHIFT_ANCHOR_RIGHT"
+    },
+    {
+      "tokens": ["SHIFT", "ANCHOR", "INWARD"],
+      "command": "SHIFT_ANCHOR_RIGHT"
+    },
+    {
+      "tokens": ["SHIFT", "START", "RIGHT"],
+      "command": "SHIFT_ANCHOR_RIGHT"
+    },
+    {
+      "tokens": ["SHIFT", "START", "NEXT"],
+      "command": "SHIFT_ANCHOR_RIGHT"
+    },
+    {
+      "tokens": ["SHIFT", "START", "INWARD"],
+      "command": "SHIFT_ANCHOR_RIGHT"
+    },
+    {
+      "tokens": ["SHIFT", "BEGINNING", "RIGHT"],
+      "command": "SHIFT_ANCHOR_RIGHT"
+    },
+    {
+      "tokens": ["SHIFT", "BEGINNING", "NEXT"],
+      "command": "SHIFT_ANCHOR_RIGHT"
+    },
+    {
+      "tokens": ["SHIFT", "BEGINNING", "INWARD"],
+      "command": "SHIFT_ANCHOR_RIGHT"
+    },
+    {
+      "tokens": ["SHIFT", "ANCHOR", "LEFT"],
+      "command": "SHIFT_ANCHOR_LEFT"
+    },
+    {
+      "tokens": ["SHIFT", "ANCHOR", "PREVIOUS"],
+      "command": "SHIFT_ANCHOR_LEFT"
+    },
+    {
+      "tokens": ["SHIFT", "ANCHOR", "OUTWARD"],
+      "command": "SHIFT_ANCHOR_LEFT"
+    },
+    {
+      "tokens": ["SHIFT", "START", "LEFT"],
+      "command": "SHIFT_ANCHOR_LEFT"
+    },
+    {
+      "tokens": ["SHIFT", "START", "PREVIOUS"],
+      "command": "SHIFT_ANCHOR_LEFT"
+    },
+    {
+      "tokens": ["SHIFT", "START", "OUTWARD"],
+      "command": "SHIFT_ANCHOR_LEFT"
+    },
+    {
+      "tokens": ["SHIFT", "BEGINNING", "LEFT"],
+      "command": "SHIFT_ANCHOR_LEFT"
+    },
+    {
+      "tokens": ["SHIFT", "BEGINNING", "PREVIOUS"],
+      "command": "SHIFT_ANCHOR_LEFT"
+    },
+    {
+      "tokens": ["SHIFT", "BEGINNING", "OUTWARD"],
+      "command": "SHIFT_ANCHOR_LEFT"
+    },
+    {
+      "tokens": ["SHIFT", "FOCUS", "RIGHT"],
+      "command": "SHIFT_FOCUS_RIGHT"
+    },
+    {
+      "tokens": ["SHIFT", "FOCUS", "NEXT"],
+      "command": "SHIFT_FOCUS_RIGHT"
+    },
+    {
+      "tokens": ["SHIFT", "FOCUS", "OUTWARD"],
+      "command": "SHIFT_FOCUS_RIGHT"
+    },
+    {
+      "tokens": ["SHIFT", "END", "RIGHT"],
+      "command": "SHIFT_FOCUS_RIGHT"
+    },
+    {
+      "tokens": ["SHIFT", "END", "NEXT"],
+      "command": "SHIFT_FOCUS_RIGHT"
+    },
+    {
+      "tokens": ["SHIFT", "END", "OUTWARD"],
+      "command": "SHIFT_FOCUS_RIGHT"
+    },
+    {
+      "tokens": ["SHIFT", "FINISH", "RIGHT"],
+      "command": "SHIFT_FOCUS_RIGHT"
+    },
+    {
+      "tokens": ["SHIFT", "FINISH", "NEXT"],
+      "command": "SHIFT_FOCUS_RIGHT"
+    },
+    {
+      "tokens": ["SHIFT", "FINISH", "OUTWARD"],
+      "command": "SHIFT_FOCUS_RIGHT"
+    },
+    {
+      "tokens": ["SHIFT", "FOCUS", "LEFT"],
+      "command": "SHIFT_FOCUS_LEFT"
+    },
+    {
+      "tokens": ["SHIFT", "FOCUS", "PREVIOUS"],
+      "command": "SHIFT_FOCUS_LEFT"
+    },
+    {
+      "tokens": ["SHIFT", "FOCUS", "INWARD"],
+      "command": "SHIFT_FOCUS_LEFT"
+    },
+    {
+      "tokens": ["SHIFT", "END", "LEFT"],
+      "command": "SHIFT_FOCUS_LEFT"
+    },
+    {
+      "tokens": ["SHIFT", "END", "PREVIOUS"],
+      "command": "SHIFT_FOCUS_LEFT"
+    },
+    {
+      "tokens": ["SHIFT", "END", "INWARD"],
+      "command": "SHIFT_FOCUS_LEFT"
+    },
+    {
+      "tokens": ["SHIFT", "FINISH", "LEFT"],
+      "command": "SHIFT_FOCUS_LEFT"
+    },
+    {
+      "tokens": ["SHIFT", "FINISH", "PREVIOUS"],
+      "command": "SHIFT_FOCUS_LEFT"
+    },
+    {
+      "tokens": ["SHIFT", "FINISH", "INWARD"],
+      "command": "SHIFT_FOCUS_LEFT"
+    },
+    {
+      "tokens": ["SHIFT", "SELECTION", "NEXT"],
+      "command": "SHIFT_SELECTION_FORWARD"
+    },
+    {
+      "tokens": ["SHIFT", "SELECTION", "RIGHT"],
+      "command": "SHIFT_SELECTION_FORWARD"
+    },
+    {
+      "tokens": ["SHIFT", "SELECTION", "PREVIOUS"],
+      "command": "SHIFT_SELECTION_BACKWARD"
+    },
+    {
+      "tokens": ["SHIFT", "SELECTION", "LEFT"],
+      "command": "SHIFT_SELECTION_BACKWARD"
+    },
+    {
+      "tokens": ["SHIFT", "WALK", "NEXT"],
+      "command": "SHIFT_NEXT_WALK_ELEMENT"
+    },
+    {
+      "tokens": ["SHIFT", "WALK", "RIGHT"],
+      "command": "SHIFT_NEXT_WALK_ELEMENT"
+    },
+    {
+      "tokens": ["SHIFT", "WALK", "PREVIOUS"],
+      "command": "SHIFT_PREVIOUS_WALK_ELEMENT"
+    },
+    {
+      "tokens": ["SHIFT", "WALK", "LEFT"],
+      "command": "SHIFT_PREVIOUS_WALK_ELEMENT"
+    },
+    {
+      "tokens": ["SELECT", "WORD"],
+      "command": "SELECT_WORD"
+    },
+    {
+      "tokens": ["ENTER", "WORD"],
+      "command": "SELECT_WORD"
+    },
+    {
+      "tokens": ["SELECT", "SENTENCE"],
+      "command": "SELECT_SENTENCE"
+    },
+    {
+      "tokens": ["ENTER", "SENTENCE"],
+      "command": "SELECT_SENTENCE"
+    },
+    {
+      "tokens": ["SELECT", "PARAGRAPH"],
+      "command": "SELECT_PARAGRAPH"
+    },
+    {
+      "tokens": ["ENTER", "PARAGRAPH"],
+      "command": "SELECT_PARAGRAPH"
+    },
+    {
+      "tokens": ["ACCEPT", "SELECTION_UPDATE"],
+      "command": "ACCEPT_SELECTION_UPDATE"
+    },
+    {
+      "tokens": ["REDO", "SELECTION_UPDATE"],
+      "command": "REDO_SELECTION_UPDATE"
+    },
+    {
+      "tokens": ["CANCEL", "SELECTION_UPDATE"],
+      "command": "CANCEL_SELECTION_UPDATE"
+    },
+    {
+      "tokens": ["INCREASE", "SELECTION_RATE"],
+      "command": "INCREASE_SELECTION_RATE"
+    },
+    {
+      "tokens": ["INCREASE", "SELECTION"],
+      "command": "INCREASE_SELECTION_RATE"
+    },
+    {
+      "tokens": ["ADJUST", "UP", "SELECTION_RATE"],
+      "command": "INCREASE_SELECTION_RATE"
+    },
+    {
+      "tokens": ["ADJUST", "UP", "SELECTION"],
+      "command": "INCREASE_SELECTION_RATE"
+    },
+    {
+      "tokens": ["DECREASE", "SELECTION_RATE"],
+      "command": "DECREASE_SELECTION_RATE"
+    },
+    {
+      "tokens": ["DECREASE", "SELECTION"],
+      "command": "DECREASE_SELECTION_RATE"
+    },
+    {
+      "tokens": ["ADJUST", "DOWN", "SELECTION_RATE"],
+      "command": "DECREASE_SELECTION_RATE"
+    },
+    {
+      "tokens": ["ADJUST", "DOWN", "SELECTION"],
+      "command": "DECREASE_SELECTION_RATE"
+    },
+    {
+      "tokens": ["PLAY", "COMMIT"],
+      "command": "PLAY_COMMIT"
+    },
+    {
+      "tokens": ["ECHO", "COMMIT"],
+      "command": "ECHO_COMMIT"
+    },
+    {
+      "tokens": ["SELECT", "COMMIT"],
+      "command": "SELECT_COMMIT"
+    },
+    {
+      "tokens": ["ROLLBACK", "COMMIT"],
+      "command": "ROLLBACK_COMMIT"
+    },
+    {
+      "tokens": ["DELETE", "COMMIT"],
+      "command": "ROLLBACK_COMMIT"
+    },
+    {
+      "tokens": ["WALK", "COMMIT"],
+      "command": "WALK_COMMIT"
+    },
+    {
+      "tokens": ["RUN", "COMMIT"],
+      "command": "RUN_COMMIT"
+    },
+    {
+      "tokens": ["INSPECT", "CLIPBOARD"],
+      "command": "INSPECT_CLIPBOARD"
+    },
+    {
+      "tokens": ["PASTE", "CLIPBOARD"],
+      "command": "PASTE_CLIPBOARD"
+    },
+    {
+      "tokens": ["PASTE", "SELECTION"],
+      "command": "PASTE_CLIPBOARD"
+    },
+    {
+      "tokens": ["ENTER", "DICTIONARY"],
+      "command": "ENTER_DICTIONARY"
+    },
+    {
+      "tokens": ["EXIT", "DICTIONARY"],
+      "command": "EXIT_DICTIONARY"
+    },
+    {
+      "tokens": ["EXPORT", "AUDIO"],
+      "command": "EXPORT_AUDIO"
+    },
+    {
+      "tokens": ["EXPORT", "TEXT"],
+      "command": "EXPORT_TEXT"
+    },
+    {
+      "tokens": ["UNDO", "CHANGE"],
+      "command": "UNDO_CHANGE"
+    },
+    {
+      "tokens": ["REDO", "CHANGE"],
+      "command": "REDO_CHANGE"
+    },
+    {
+      "tokens": ["GRANT", "PERMISSION"],
+      "command": "GRANT_PERMISSION"
+    },
+    {
+      "tokens": ["CANCEL", "DIALOG"],
+      "command": "CANCEL_DIALOG"
+    },
+    {
+      "tokens": ["EXIT", "DIALOG"],
+      "command": "CANCEL_DIALOG"
+    },
+    {
+      "tokens": ["CONTINUE", "DIALOG"],
+      "command": "CONTINUE_DIALOG"
+    }
+  ]
+}

@@ -1,0 +1,1683 @@
+[
+  {
+    "id": "LTS-001",
+    "note": "Test that cursor stays at the end of text as you add new words",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-002",
+    "note": "Test that selecting the middle of text will move cursor",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech. Browser fixtures now use recorded speech; speech-only regressions reject typed words and keep partial-word edits aligned with original audio.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts",
+      "web/src/lib/speech-only.test.ts",
+      "web/tests/speech-only.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-003",
+    "note": "Test text selection",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech. Browser fixtures now use recorded speech; speech-only regressions reject typed words and keep partial-word edits aligned with original audio.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts",
+      "web/src/lib/speech-only.test.ts",
+      "web/tests/speech-only.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-004",
+    "note": "NotificationQueue",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "diction-processorTests/diction_processorTests.swift"
+    ]
+  },
+  {
+    "id": "LTS-005",
+    "note": "Moving midway and inserting text. Cursor remain at end of buffer",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-006",
+    "note": "Cursor only visible when listening",
+    "status": "adaptation",
+    "detail": "The transcript is read-only. Browser selection stays available while stopped; speech and replacement content always require audio.",
+    "tests": [
+      "web/tests/speech-only.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-007",
+    "note": "Show cursor time in title when mid note",
+    "status": "adaptation",
+    "detail": "Caret/selection audio positions appear below the editor instead of replacing the UIKit navigation title. Edited slice rates and omitted pauses determine the displayed time.",
+    "tests": [
+      "web/src/lib/timeline.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-008",
+    "note": "Present/remove indefinite notification based on selection",
+    "status": "adaptation",
+    "detail": "FIFO transient/indefinite notification behavior is tested; React keeps the selection and audio-time caption visible rather than using an indefinite UIKit navigation-title notification.",
+    "tests": [
+      "web/src/lib/notifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-009",
+    "note": "Play and loop selection audio if headphones on",
+    "status": "device",
+    "detail": "Select recorded words with wired and Bluetooth headphones. Verify exact selection loops; remove selection and verify audio stops. Automatic headset detection is a browser adaptation.",
+    "tests": []
+  },
+  {
+    "id": "LTS-010",
+    "note": "Clear cached anchor if cursor is at end of note",
+    "status": "device",
+    "detail": "Native cachedAnchorCaret has no React counterpart. On iPhone move to entry end, start dictation, and verify insertion stays at the end after an earlier selection.",
+    "tests": []
+  },
+  {
+    "id": "LTS-011",
+    "note": "Make sure realtime pitch is shown",
+    "status": "automated",
+    "detail": "Live YIN pitch follows sustained tones, shows the native note/frequency and clears for silence or Stop. Physical voice/noisy-room accuracy remains a separate check.",
+    "tests": [
+      "web/src/lib/pitch.test.ts",
+      "web/tests/pitch.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-012",
+    "note": "Move cursor midway say something and then play note",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-013",
+    "note": "Move cursor midway and say play note",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-014",
+    "note": "Voice Command Mapping",
+    "status": "group",
+    "detail": "Canonical commands and aliases are covered by commands.test.ts; the following rows specify behavioral regressions.",
+    "tests": [
+      "web/src/lib/commands.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-015",
+    "note": "Only has issues with references when you utter a voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/src/lib/playback.test.ts",
+      "web/src/speech/client.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-016",
+    "note": "Realtime pitch while playing note",
+    "status": "automated",
+    "detail": "Playback displays the current recorded word pitch, retains it on Pause, follows seek and clears on an unvoiced word or Stop.",
+    "tests": [
+      "web/tests/pitch.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-017",
+    "note": "Only handle single tap if listening for speech",
+    "status": "adaptation",
+    "detail": "The web editor deliberately permits selection when stopped. On iPhone verify tap handling is gated by the native listening state.",
+    "tests": []
+  },
+  {
+    "id": "LTS-018",
+    "note": "Fix bug related to single tap triggering changes to selection text",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-019",
+    "note": "Blinking cursor",
+    "status": "device",
+    "detail": "Native blinking cursor is an animation/visibility check. Record, pause, select and deselect on iPhone; confirm only the intended caret blinks.",
+    "tests": []
+  },
+  {
+    "id": "LTS-020",
+    "note": "Keep array of committed buffer ranges",
+    "status": "partial",
+    "detail": "Commit ranges and history/undo are automated in React; native committedBufferRanges persistence is not covered here.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-021",
+    "note": "Only note listening property values if they are difference to prevent unnecessary called due to observers attached to them",
+    "status": "refactor",
+    "detail": "Observer optimization reminder. Specify an observable performance/regression symptom before changing notification frequency; current lifecycle tests cover stale session rejection.",
+    "tests": []
+  },
+  {
+    "id": "LTS-022",
+    "note": "Clear note player current item when item completes",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/playback.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-023",
+    "note": "Simplified prepareVoiceCommandHandler(command: )",
+    "status": "refactor",
+    "detail": "Method simplification reminder, not an external behavior. Session completion tests cover ordering/state safety.",
+    "tests": []
+  },
+  {
+    "id": "LTS-024",
+    "note": "Swap order of prepareVoiceCommandHandler(command: ) and stopListeningForSpeech(pause: ) so that stopListeningForSpeech doesn\u2019t interfere with prepareVoiceCommandHandler",
+    "status": "partial",
+    "detail": "Capture draining and lifecycle tests cover late audio and stale callbacks. Real iPhone voice-command/audio-session ordering still needs a device check.",
+    "tests": [
+      "native/Tests/RecognitionLifecycleTests/RecognitionLifecycleTests.swift",
+      "web/src/speech/capture.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-025",
+    "note": "Grey Buffer Words",
+    "status": "automated",
+    "detail": "Local streaming hypotheses are gray at the insertion point before Whisper commits audio-linked words. Browser tests hold Whisper pending; the real-engine harness measures first-word latency.",
+    "tests": [
+      "web/tests/live-speech.spec.ts",
+      "web/src/speech/live.test.ts",
+      "scripts/verify-speech.mjs"
+    ]
+  },
+  {
+    "id": "LTS-026",
+    "note": "Move SpeechSynthesizer to ViewController",
+    "status": "refactor",
+    "detail": "Ownership/refactoring reminder. Tests should constrain speech cancellation and highlighting, not mandate a particular view-controller owner.",
+    "tests": []
+  },
+  {
+    "id": "LTS-027",
+    "note": "Fix echo note bug that did not stop listening when earphones are disconnected",
+    "status": "device",
+    "detail": "During native echo, unplug wired headphones and disconnect Bluetooth separately. Verify echo/listening stop safely and reconnect permits a new session.",
+    "tests": []
+  },
+  {
+    "id": "LTS-028",
+    "note": "Fix echo note bug related to text highlighting the corresponds with current echo range",
+    "status": "partial",
+    "detail": "Browser echo boundaries and timeline word highlighting are tested. OS TTS punctuation expansion/char-index differences still require real local-voice listening checks.",
+    "tests": [
+      "web/src/lib/playback.test.ts",
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-029",
+    "note": "Fix echo note bug related to greying out buffer text. It grey out more than necessary",
+    "status": "partial",
+    "detail": "React tests insert a gray provisional buffer in the middle of committed text and verify existing recorded words keep their normal styling. Native iPhone Echo/buffer interaction still needs device verification.",
+    "tests": [
+      "web/tests/live-speech.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-030",
+    "note": "Test pause playing note",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/src/lib/playback.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-031",
+    "note": "Should stop timer",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/playback.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-032",
+    "note": "Test pause recording note",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-033",
+    "note": "Should stop timer",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-034",
+    "note": "Test pause playing echo",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-035",
+    "note": "Should stop timer",
+    "status": "adaptation",
+    "detail": "Pause/resume cancels the playback clock and owns the local synthesizer state. React uses word-boundary highlights rather than a separate UIKit Echo-duration title timer.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts",
+      "web/tests/native-review.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-036",
+    "note": "Test echo last sentence",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-037",
+    "note": "Test play last sentence",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-038",
+    "note": "Test Listening Indicator is Red when listening for speech",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-039",
+    "note": "Test Stop Listening Button",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-040",
+    "note": "Highlighting selection should put selection commands in front of the Command Bar",
+    "status": "adaptation",
+    "detail": "React keeps selection actions in one fixed toolbar/dropdown rather than reordering a command bar. Verify selected actions remain reachable on mobile.",
+    "tests": []
+  },
+  {
+    "id": "LTS-041",
+    "note": "Reset/Delete should move cursor back to the start of the note",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-042",
+    "note": "Unselect selection and you should still be able to record and the timer should come back",
+    "status": "automated",
+    "detail": "Selecting during dictation changes the microphone to commands; removing selection restores dictation and the listening timer.",
+    "tests": [
+      "web/tests/selection-session.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-043",
+    "note": "Test Delete Selection Touch Interaction",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech. Browser fixtures now use recorded speech; speech-only regressions reject typed words and keep partial-word edits aligned with original audio.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts",
+      "web/src/lib/speech-only.test.ts",
+      "web/tests/speech-only.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-044",
+    "note": "Make sure you can still record audio when you delete",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-045",
+    "note": "Make sure that time comes back when you delete",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-046",
+    "note": "Test Copy Selection Touch Interaction",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech. Browser fixtures now use recorded speech; speech-only regressions reject typed words and keep partial-word edits aligned with original audio.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/tests/note-specifications.spec.ts",
+      "web/src/lib/speech-only.test.ts",
+      "web/tests/speech-only.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-047",
+    "note": "Test Cut Selection Touch Interaction",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech. Browser fixtures now use recorded speech; speech-only regressions reject typed words and keep partial-word edits aligned with original audio.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/tests/note-specifications.spec.ts",
+      "web/src/lib/speech-only.test.ts",
+      "web/tests/speech-only.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-048",
+    "note": "Test Paste Selection Touch Interaction",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-049",
+    "note": "Test Selection Rate Increase Touch Interaction (test playback as well)",
+    "status": "partial",
+    "detail": "Exact rate overlap, playback scheduling and undo are automated. Native transformation splitting and an audible iPhone selection-speed check remain.",
+    "tests": [
+      "diction-processorTests/diction_processorTests.swift",
+      "web/src/lib/note-specifications.test.ts",
+      "web/src/lib/playback.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-050",
+    "note": "transformation is strictly within the overlap transformation. e.g. [2, 3, 4, 5] and [3, 4]",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-051",
+    "note": "transformation is the same as overlap transformation. [2, 3, 4, 5] and [2, 3, 4, 5]",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-052",
+    "note": "overlap transformation is strictly within the transformation. [3, 4] and [2, 3, 4, 5]",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-053",
+    "note": "transformation overlaps at the lower end only. [2, 3, 4, 5] and [0, 1, 2, 3]",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-054",
+    "note": "transformation overlaps at the upper end only. [2, 3, 4, 5] and [5, 6, 7]",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-055",
+    "note": "Test Selection Rate Decrease Touch Interaction",
+    "status": "partial",
+    "detail": "Rate bounds, per-word decrease and undo are automated. Native touch transformation UI and audible speed require iPhone checks.",
+    "tests": [
+      "diction-processorTests/diction_processorTests.swift",
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-056",
+    "note": "Test Last Commit Touch Interaction",
+    "status": "partial",
+    "detail": "Last-commit selection state is tested; native last-commit touch control still needs UI verification.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-057",
+    "note": "Test adjusting playback rate",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/playback.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-058",
+    "note": "Test adjusting echo rate",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-059",
+    "note": "Change while echoing",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-060",
+    "note": "Test transformation altering text color",
+    "status": "partial",
+    "detail": "Changed-rate words now use the original orange with white text, with selection/playback styling taking priority. Rate metadata and undo are tested; exact native speed-dependent tint matching needs a visual comparison.",
+    "tests": [
+      "web/src/lib/timeline.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-061",
+    "note": "Test highlighting selection revealing transformation view",
+    "status": "adaptation",
+    "detail": "React exposes transformations through the fixed Selection actions dropdown. Native selection-triggered transformation panel visibility needs iPhone verification.",
+    "tests": []
+  },
+  {
+    "id": "LTS-062",
+    "note": "Test exported note",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/src/lib/playback.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-063",
+    "note": "Test adding commas between adjectives",
+    "status": "automated",
+    "detail": "Ports the active Swift adjacent-adjective comma rule using local English tags. It does not invent a coordinate-versus-cumulative adjective classifier that the original implementation did not have.",
+    "tests": [
+      "web/src/lib/linguistics.test.ts",
+      "web/src/lib/prosody.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-064",
+    "note": "Test that \u201cMove Here\u201d buttons hides and shows based on whether it\u2019s at the end of the text view or not",
+    "status": "adaptation",
+    "detail": "React uses ordinary caret placement rather than a Move Here control. Native button should hide at the end and appear for a valid earlier insertion location.",
+    "tests": []
+  },
+  {
+    "id": "LTS-065",
+    "note": "Test skip backward and forward",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/src/lib/playback.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-066",
+    "note": "Test Preview Clipboard",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-067",
+    "note": "Test Copy from segments from the front and paste at the back of selection. Should be cleansed and not freeze",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-068",
+    "note": "Test that cursor placement is after a pasted selection, not anywhere else in the document",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-069",
+    "note": "Test that cursor placement is before deleted passage",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-070",
+    "note": "Test that processing sound begins when we make selection with headphones, and ends when we end selection",
+    "status": "device",
+    "detail": "With headphones, select words and verify the processing cue begins once; clear/cancel and verify no cue remains. Repeat while recording and during echo.",
+    "tests": []
+  },
+  {
+    "id": "LTS-071",
+    "note": "Test Replace Selection (both touch and voice)",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech. Browser fixtures now use recorded speech; speech-only regressions reject typed words and keep partial-word edits aligned with original audio.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/tests/note-specifications.spec.ts",
+      "web/src/lib/speech-only.test.ts",
+      "web/tests/speech-only.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-072",
+    "note": "Accept",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech. Browser fixtures now use recorded speech; speech-only regressions reject typed words and keep partial-word edits aligned with original audio.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/tests/note-specifications.spec.ts",
+      "web/src/lib/speech-only.test.ts",
+      "web/tests/speech-only.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-073",
+    "note": "Redo",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech. Browser fixtures now use recorded speech; speech-only regressions reject typed words and keep partial-word edits aligned with original audio.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/tests/note-specifications.spec.ts",
+      "web/src/lib/speech-only.test.ts",
+      "web/tests/speech-only.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-074",
+    "note": "Cancel",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech. Browser fixtures now use recorded speech; speech-only regressions reject typed words and keep partial-word edits aligned with original audio.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/tests/note-specifications.spec.ts",
+      "web/src/lib/speech-only.test.ts",
+      "web/tests/speech-only.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-075",
+    "note": "Test that selection remains after we play selection",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-076",
+    "note": "Test that selection remains after we echo selection",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-077",
+    "note": "Be able to run update from a walk -> single and multiple words",
+    "status": "partial",
+    "detail": "Walk replacement pauses and freezes target ranges in state tests. Multiword selection while live looping needs additional end-to-end coverage.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-078",
+    "note": "Be able to run update from a run, we need to halt it first -> single and multiple words",
+    "status": "partial",
+    "detail": "Run replacement pauses and freezes target ranges in state tests. Real spoken replacement during an advancing run still needs a device/voice check.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-079",
+    "note": "Be able to walk then delete selection",
+    "status": "automated",
+    "detail": "Deletion exits the active word browse and cancels its timers so deleted ranges cannot replay.",
+    "tests": [
+      "web/src/lib/native-parity.test.ts",
+      "web/src/lib/browse.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-080",
+    "note": "Run note completes and starts looping last selection and enable voice commands",
+    "status": "automated",
+    "detail": "At the final word, Run changes into a repeating Walk; the command microphone remains available. Clock cancellation and state transitions are tested.",
+    "tests": [
+      "web/src/lib/browse.test.ts",
+      "web/src/lib/native-parity.test.ts",
+      "web/tests/native-review.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-081",
+    "note": "Adding works after exit walk should add them after the last walked segment",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-082",
+    "note": "Say Stop while recording and nothing happen - needs to be in a mode",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-083",
+    "note": "Test that playing note while we have selection doesn\u2019t remove the selection",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-084",
+    "note": "Be able to echo note while walking: must highlight text",
+    "status": "automated",
+    "detail": "Echo temporarily suspends a walk. Completion/Stop restores its word and command microphone; synthesized word boundaries retain source offsets.",
+    "tests": [
+      "web/tests/native-review.spec.ts",
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-085",
+    "note": "Be able to play note while walking: must highlight text",
+    "status": "partial",
+    "detail": "Playback and Echo share the browse/microphone suspension and completion path. Combined browser coverage uses Echo; recorded playback and highlighting have separate browser coverage. An audible nested headphone review is still needed.",
+    "tests": [
+      "web/tests/native-review.spec.ts",
+      "web/tests/parity.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-086",
+    "note": "Enter walk and click out to exit walk",
+    "status": "automated",
+    "detail": "Clicking transcript text or an audio-linked word exits Walk and cancels its timers. The explicit Exit control remains available.",
+    "tests": [
+      "web/tests/native-review.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-087",
+    "note": "Create Play selection / echo selection voice commands",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-088",
+    "note": "Make sure punctuation suggestions happen before passive echo",
+    "status": "partial",
+    "detail": "Committed pause boundaries are found without replaying prior notices. App queues those notices before passive echo. Boundary/toggle rules are tested; local-voice audible ordering still needs a headphone check.",
+    "tests": [
+      "web/src/lib/prosody.test.ts",
+      "web/src/lib/notifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-089",
+    "note": "Make sure no double voice command error processing in listeningToVoiceCommands mode",
+    "status": "automated",
+    "detail": "Utterance IDs deduplicate live/final command recognition; repeated worker completions cannot commit or execute the same utterance twice.",
+    "tests": [
+      "web/tests/live-speech.spec.ts",
+      "web/src/speech/live.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-090",
+    "note": "Test that scrollable text view will cause the screen to scroll down",
+    "status": "automated",
+    "detail": "A browser workflow loads the original thousand-word welcome entry, dictates a gray buffer at its end and verifies that buffer is inside the viewport.",
+    "tests": [
+      "web/tests/native-review.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-091",
+    "note": "Test start selection voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-092",
+    "note": "Test remove selection voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-093",
+    "note": "Test delete selection voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-094",
+    "note": "Test replace selection voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-095",
+    "note": "Accept",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-096",
+    "note": "Redo",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-097",
+    "note": "Cancel before uttered replacement speech",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-098",
+    "note": "Cancel after uttered replacement speech",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-099",
+    "note": "Test copy selection voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-100",
+    "note": "Test cut selection voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-101",
+    "note": "Test increase selection voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-102",
+    "note": "Test decrease selection voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-103",
+    "note": "Test paste clipboard voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-104",
+    "note": "Test expand selection voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-105",
+    "note": "Test reduce selection voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-106",
+    "note": "Test play commit voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-107",
+    "note": "Test echo commit voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-108",
+    "note": "Test selection commit voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-109",
+    "note": "Test delete commit voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-110",
+    "note": "Test inspect clipboard voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-111",
+    "note": "Test shift start in voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-112",
+    "note": "Text shift start out voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-113",
+    "note": "Test shift end in voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-114",
+    "note": "Test shift end out voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-115",
+    "note": "Test shift left voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-116",
+    "note": "Test shift right voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-117",
+    "note": "Test walk selection voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-118",
+    "note": "Test walk note voice command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-119",
+    "note": "Test walk note button",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-120",
+    "note": "Test Walk Commit Voice Command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-121",
+    "note": "Test Walk Previous Voice Command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-122",
+    "note": "Test Walk Next Voice Command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-123",
+    "note": "Test Walk Previous Button",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-124",
+    "note": "Test Walk Next Button",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-125",
+    "note": "Test Run Selection Voice Command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-126",
+    "note": "Test Run Note Voice Command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-127",
+    "note": "Test Run Note Button",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-128",
+    "note": "Test Run Commit Voice Command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-129",
+    "note": "Test Halt Run Voice Command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-130",
+    "note": "Test Halt Run Button",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-131",
+    "note": "Test Exit Run/Walk Mode Voice Command",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-132",
+    "note": "Test Exit Run/Walk Mode Button",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-133",
+    "note": "Test truncated voice commands:",
+    "status": "group",
+    "detail": "Children 134\u2013146 are executable contextual command cases.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-134",
+    "note": "Delete",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-135",
+    "note": "Replace",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-136",
+    "note": "Copy",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-137",
+    "note": "Cut",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-138",
+    "note": "Export",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-139",
+    "note": "Run",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-140",
+    "note": "Walk",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-141",
+    "note": "Freeze",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-142",
+    "note": "Halt",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-143",
+    "note": "Stop run",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-144",
+    "note": "Pause run",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-145",
+    "note": "Reduce",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-146",
+    "note": "Expand",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-147",
+    "note": "Add to existing note",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-148",
+    "note": "Start Note from note table",
+    "status": "partial",
+    "detail": "START_ENTRY requests listening; native entry-table start gesture is not automated.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-149",
+    "note": "Swipe to delete",
+    "status": "adaptation",
+    "detail": "React deletes through an explicit confirmation dialog rather than a swipe gesture. Native swipe-left/cancel/confirm requires an iPhone UI check.",
+    "tests": []
+  },
+  {
+    "id": "LTS-150",
+    "note": "Export Note as audio",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/src/lib/playback.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-151",
+    "note": "Export note as text",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-152",
+    "note": "Modal Dialog",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-153",
+    "note": "Delete via Detail View Controller button",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-154",
+    "note": "Continue from last note edit",
+    "status": "automated",
+    "detail": "Reload restores the previously active older entry and its selected source words. Invalid/stale session preferences cannot hide saved entries.",
+    "tests": [
+      "web/tests/native-review.spec.ts",
+      "web/src/lib/session.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-155",
+    "note": "Indicate which note is recording on note table",
+    "status": "partial",
+    "detail": "The library entry title is red while dictating; playback/list-walk selection scrolls into view. Native recording-route appearance still needs physical UI comparison.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-156",
+    "note": "audio indicators for punctuation suggestions",
+    "status": "device",
+    "detail": "Use a real speaker/headset to check each punctuation suggestion cue once at the correct time and confirm disabling feedback suppresses it.",
+    "tests": []
+  },
+  {
+    "id": "LTS-157",
+    "note": "nature ambient sound for note list",
+    "status": "adaptation",
+    "detail": "Original nature ambience loops at low volume with headphones while the explicit library or dictionary is open; it stops during dictation and yields to modal ambience. A permanently visible desktop sidebar is not treated as the native full-screen list. Audible headset confirmation remains manual.",
+    "tests": []
+  },
+  {
+    "id": "LTS-158",
+    "note": "subtle speech registered sound",
+    "status": "device",
+    "detail": "Speak a short phrase; verify exactly one subtle registered-speech cue and no feedback loop into recognition, including with headphones unplugged.",
+    "tests": []
+  },
+  {
+    "id": "LTS-159",
+    "note": "Prevent from opening other notes when recording in another",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-160",
+    "note": "Implement seek to word by pressing it when in playback mode (playing and not playing)",
+    "status": "automated",
+    "detail": "A word tap seeks active or paused playback without changing its state; an idle tap briefly auditions then pauses. Shift-click selects a range.",
+    "tests": [
+      "web/src/lib/playback.test.ts",
+      "web/tests/pitch.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-161",
+    "note": "Test undo by voice and buttons (ensure correct cursor placement)",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-162",
+    "note": "After speech",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-163",
+    "note": "After selection-based command",
+    "status": "group",
+    "detail": "Children 164\u2013168 specify undo after selection edits.",
+    "tests": []
+  },
+  {
+    "id": "LTS-164",
+    "note": "Accept Update selection",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-165",
+    "note": "Increase selection rate",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-166",
+    "note": "Decrease selection rate",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-167",
+    "note": "Delete selection",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-168",
+    "note": "Cut selection",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-169",
+    "note": "After non-seleciton-based command",
+    "status": "group",
+    "detail": "Children 170\u2013171 specify undo after clipboard/commit edits.",
+    "tests": []
+  },
+  {
+    "id": "LTS-170",
+    "note": "Paste clipboard",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-171",
+    "note": "Rollback commit",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-172",
+    "note": "Test long entries",
+    "status": "partial",
+    "detail": "10,000-word editing/ranges and bounded history are automated. Long-session microphone performance and browser scrolling need separate acceptance checks.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-173",
+    "note": "Select paragraph",
+    "status": "automated",
+    "detail": "Paragraph selection retains its scale for later navigation.",
+    "tests": [
+      "web/src/lib/native-parity.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-174",
+    "note": "Select sentence",
+    "status": "automated",
+    "detail": "Sentence selection retains its scale for later navigation.",
+    "tests": [
+      "web/src/lib/native-parity.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-175",
+    "note": "Select word",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-176",
+    "note": "Previous paragraph",
+    "status": "automated",
+    "detail": "Previous selection honors paragraph scale and clamps at the first paragraph.",
+    "tests": [
+      "web/src/lib/native-parity.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-177",
+    "note": "Next paragraph",
+    "status": "automated",
+    "detail": "Next selection honors paragraph scale and clamps at the final paragraph.",
+    "tests": [
+      "web/src/lib/native-parity.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-178",
+    "note": "Previous sentence",
+    "status": "automated",
+    "detail": "Previous selection honors sentence scale.",
+    "tests": [
+      "web/src/lib/native-parity.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-179",
+    "note": "Next sentence",
+    "status": "automated",
+    "detail": "Next selection honors sentence scale.",
+    "tests": [
+      "web/src/lib/native-parity.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-180",
+    "note": "Previous word",
+    "status": "partial",
+    "detail": "Previous word behavior is covered by SHIFT_SELECTION_BACKWARD and walk previous tests; add native scale-navigation UI checks.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-181",
+    "note": "Next word",
+    "status": "partial",
+    "detail": "Next word behavior is covered by SHIFT_SELECTION_FORWARD and walk next tests; add native scale-navigation UI checks.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-182",
+    "note": "Remove selection after shift sentence and cursor in right place",
+    "status": "automated",
+    "detail": "Clearing a shifted sentence selection restores the caret before that sentence, except at entry end.",
+    "tests": [
+      "web/src/lib/native-parity.test.ts"
+    ]
+  },
+  {
+    "id": "LTS-183",
+    "note": "Walk entry list and enter an entry. Make sure entry list not walking anymore",
+    "status": "automated",
+    "detail": "The linked tests assert the relevant state/effect or browser workflow. Hardware recognition accuracy is tested separately with test:speech.",
+    "tests": [
+      "web/src/lib/note-specifications.test.ts",
+      "web/tests/note-specifications.spec.ts"
+    ]
+  },
+  {
+    "id": "LTS-184",
+    "note": "Ensure new sentences are capitalized mid-entry",
+    "status": "automated",
+    "detail": "Generated sentence/paragraph boundaries capitalize the following displayed word, including selected Echo/export passages, while source indices and Whisper punctuation remain intact.",
+    "tests": [
+      "web/src/lib/prosody.test.ts",
+      "web/tests/punctuation.spec.ts"
+    ]
+  }
+]

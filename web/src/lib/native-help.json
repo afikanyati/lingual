@@ -1,0 +1,163 @@
+{
+  "modes": [
+    {
+      "title": "Object",
+      "body": "The entity of interest e.g. \"selection\""
+    },
+    {
+      "title": "Action",
+      "body": "The interaction you desire to perform on the object e.g. \"shift\""
+    },
+    {
+      "title": "Direction",
+      "body": "An optional modifier that resolves spatial ambiguity in spatial commands. e.g. \"right\""
+    },
+    {
+      "title": "Selection Mode",
+      "body": "Entered upon speech selection while editing an entry. Sonically this is represented by a looping audio section."
+    },
+    {
+      "title": "Playback Mode",
+      "body": "Entered upon playback of captured speech. In this mode, captured speech is presented back in its natural spoken form."
+    },
+    {
+      "title": "Echo Mode",
+      "body": "Entered upon echoing of captured speech. In this mode, captured speech is presented back as computer-synthesized speech."
+    },
+    {
+      "title": "Dialog Mode",
+      "body": "Entered upon the activation of the dialog, such as when deleting an entry. Prompts for a response chosen from a restricted set of voice commands."
+    },
+    {
+      "title": "Walk Mode",
+      "body": "Entered upon the completion of the walk voice command. Selects a single word and loops its natural spoken form followed by the computer-synthesized form, allowing for cross-comparison. Shifting between words is user-controlled."
+    },
+    {
+      "title": "Run Mode",
+      "body": "Entered upon the completion of the run voice command. Advances automatically through a passage playing its natural spoken form followed by the computer-synthesized form, allowing for cross-comparison."
+    },
+    {
+      "title": "Orderless",
+      "body": "Tokens can be uttered in any order. e.g. \"PLAY ENTRY\" vs \"ENTRY PLAY\""
+    },
+    {
+      "title": "Supports padded statements",
+      "body": "Padded voice commands are permitted, allowing you to include \u201cfiller\u201d words between tokens. e.g. \"Please <START> an <ENTRY>\""
+    },
+    {
+      "title": "Object Omission",
+      "body": "When in an \u201cobject mode\u201d, such as when we have selected speech, omitting the object is permitted. e.g. \"SHIFT WALK RIGHT\" -> \"SHIFT RIGHT\""
+    },
+    {
+      "title": "Action Omission",
+      "body": "If an object has only one action with a direction, including a direction and omitting the action token is permitted. e.g. \"SHIFT WALK RIGHT\" -> \"WALK RIGHT\""
+    },
+    {
+      "title": "Action Omission",
+      "body": "If an object has a single action, omitting the action token is permitted. One must still include any required direction. e.g. \"EXPORT AUDIO\" -> \"AUDIO\""
+    },
+    {
+      "title": "Combining Special Cases",
+      "body": "Object Omission and Action Omission can be used simultaneously. e.g. \"SHIFT WALK RIGHT\" -> \"RIGHT\""
+    },
+    {
+      "title": "Undo/Redo",
+      "body": "The <CHANGE> token can be omitted when calling undo or redo."
+    }
+  ],
+  "descriptions": {
+    "PLAY_ENTRY": "Initiate playback of a selected entry.",
+    "PAUSE_ENTRY": "Pause listening for new entry speech.",
+    "CREATE_ENTRY": "Add a new entry.",
+    "START_ENTRY": "Initiate listening for new entry speech.",
+    "STOP_ENTRY": "Terminate listening for new entry speech.",
+    "RESUME_ENTRY": "Return to listening for new entry speech after pause.",
+    "DELETE_ENTRY": "Remove selected entry.",
+    "ECHO_ENTRY": "Initiate echo of a selected entry.",
+    "RUN_ENTRY": "Initiate running a selected entry.",
+    "WALK_ENTRY": "Initiate walking a selected entry.",
+    "EDIT_ENTRY": "Initiate listening for entry speech in an existing entry.",
+    "EXPORT_ENTRY": "Initiate audio or text export for selected entry.",
+    "ENTER_ENTRY": "(From the entry list) Navigate into a selected entry.",
+    "ENTER_ENTRY_LIST": "(From an entry) Navigate out of a selected entry back to the entry list.",
+    "PLAY_ECHO": "Initiate echo of a selected entry.",
+    "PAUSE_ECHO": "Pause ongoing echo.",
+    "STOP_ECHO": "Terminate ongoing echo.",
+    "RESUME_ECHO": "Return to echo after pause.",
+    "PAUSE_PLAYBACK": "Pause ongoing playback.",
+    "RESUME_PLAYBACK": "Return to playback after pause.",
+    "STOP_PLAYBACK": "Terminate ongoing playback.",
+    "INCREASE_VOLUME": "Raises the loudness of device sound.",
+    "DECREASE_VOLUME": "Lowers the loudness of device sound.",
+    "INCREASE_ECHO_RATE": "Accelerates the rate at which echo and system speech is delivered.",
+    "DECREASE_ECHO_RATE": "Decelerates the rate at which echo and system speech is delivered.",
+    "INCREASE_PLAYBACK_RATE": "Accelerates the rate at which playback is delivered.",
+    "DECREASE_PLAYBACK_RATE": "Decelerates the rate at which playback is delivered.",
+    "DELETE_SELECTION": "Removes a selection.",
+    "UPDATE_SELECTION": "Initiates update sequence to replace arbitrarily selected speech.",
+    "COPY_SELECTION": "Copies arbitrarily selected speech to clipboard.",
+    "CUT_SELECTION": "Copies arbitrarily selected speech to clipboard and removes it from entry.",
+    "EXPORT_SELECTION": "Initiate audio or text export for arbitrary selection.",
+    "RUN_SELECTION": "Initiate running arbitrary selection.",
+    "WALK_SELECTION": "Initiate walking arbitrary selection.",
+    "REMOVE_SELECTION": "Exits selection mode.",
+    "EXPAND_SELECTION": "Extends selection by integrating neighboring words.",
+    "REDUCE_SELECTION": "Shrinks selection by releasing boundary words.",
+    "PLAY_SELECTION": "Initiate playback of arbitrary selection.",
+    "ECHO_SELECTION": "Initiate echo of arbitrary selection.",
+    "PAUSE_RUN": "Change the current run into a walk, repeating the same word or entry.",
+    "EXIT_WALK": "Terminates ongoing walk.",
+    "SELECT_WORD": "Enter selection mode by selecting word nearest to speech cursor.",
+    "SELECT_SENTENCE": "Enter selection mode by selecting sentence nearest to speech cursor.",
+    "SELECT_PARAGRAPH": "Enter selection mode by selecting paragraph nearest to speech cursor.",
+    "INCREASE_SELECTION_RATE": "Accelerates the rate of selection playback (in addition to the playback rate).",
+    "DECREASE_SELECTION_RATE": "Decelerates the rate of selection playback (in addition to the playback rate).",
+    "PLAY_COMMIT": "Initiate playback of last commit.",
+    "ECHO_COMMIT": "Initiate echo of last commit.",
+    "SELECT_COMMIT": "Enter selection mode by selecting last commit.",
+    "WALK_COMMIT": "Initiate walking last commit.",
+    "RUN_COMMIT": "Initiate running last commit.",
+    "PASTE_CLIPBOARD": "Insert copied speech and its audio after the selection anchor or at the insertion point.",
+    "EXPORT_AUDIO": "(During export process) Represents audio export format.",
+    "EXPORT_TEXT": "Navigate out of the dictionary back to entry list.",
+    "WALK_ENTRY_LIST": "Repeat a ten-second preview of the selected entry. Use Next or Previous to move through the library.",
+    "RUN_ENTRY_LIST": "Preview each entry for up to ten seconds and advance automatically. Stop at the end of the library.",
+    "START_ECHO": "Read the entry or selected passage using a local system voice.",
+    "SKIP_PLAYBACK_BACKWARD": "Move ten seconds backward in the edited recording.",
+    "SKIP_PLAYBACK_FORWARD": "Move ten seconds forward in the edited recording.",
+    "ENTER_SELECTION": "Select the word at the insertion point. With headphones, its original audio repeats.",
+    "SHIFT_ANCHOR_RIGHT": "Move the beginning of the selection one word right.",
+    "SHIFT_ANCHOR_LEFT": "Move the beginning of the selection one word left.",
+    "SHIFT_FOCUS_RIGHT": "Move the end of the selection one word right.",
+    "SHIFT_FOCUS_LEFT": "Move the end of the selection one word left.",
+    "SHIFT_SELECTION_FORWARD": "Move the selection to the next word, sentence or paragraph, retaining its scale.",
+    "SHIFT_SELECTION_BACKWARD": "Move the selection to the previous word, sentence or paragraph, retaining its scale.",
+    "SHIFT_NEXT_WALK_ELEMENT": "Move to the next word or entry in the current walk.",
+    "SHIFT_PREVIOUS_WALK_ELEMENT": "Move to the previous word or entry in the current walk.",
+    "ACCEPT_SELECTION_UPDATE": "Replace the selection with the spoken draft and its original recording.",
+    "REDO_SELECTION_UPDATE": "Discard the replacement draft and speak another attempt. Keep the original selection.",
+    "CANCEL_SELECTION_UPDATE": "Discard the replacement draft and keep the original selection and recording.",
+    "ROLLBACK_COMMIT": "Remove the most recently committed speech while retaining earlier commits. Undo can restore it.",
+    "INSPECT_CLIPBOARD": "Play the original recording of the passage copied to the Lingual clipboard.",
+    "ENTER_DICTIONARY": "Open descriptions and examples of the available voice actions.",
+    "EXIT_DICTIONARY": "Close the voice-action dictionary.",
+    "UNDO_CHANGE": "Restore the previous text, audio links, selection and speed changes.",
+    "REDO_CHANGE": "Reapply the last undone text and audio edit.",
+    "GRANT_PERMISSION": "Prepare local speech recognition and request browser microphone permission when listening starts.",
+    "CANCEL_DIALOG": "Dismiss the current dialog without performing its action.",
+    "CONTINUE_DIALOG": "Accept the action offered by the current dialog.",
+    "ACTIVATE_PUNCTUATION": "Enable reading punctuation names aloud during echo.",
+    "DEACTIVATE_PUNCTUATION": "Disable reading punctuation names aloud during echo.",
+    "ACTIVATE_SILENCES": "Enable retaining recorded pauses during playback and audio export.",
+    "DEACTIVATE_SILENCES": "Disable retaining recorded pauses during playback and audio export.",
+    "ACTIVATE_TEMPORAL_SUGGESTIONS": "Enable showing long pauses as additional spacing.",
+    "DEACTIVATE_TEMPORAL_SUGGESTIONS": "Disable showing long pauses as additional spacing.",
+    "ACTIVATE_PUNCTUATION_SUGGESTIONS": "Enable showing Whisper punctuation and native pause suggestions.",
+    "DEACTIVATE_PUNCTUATION_SUGGESTIONS": "Disable showing Whisper punctuation and native pause suggestions.",
+    "ACTIVATE_FORMATTING_SUGGESTIONS": "Enable emphasizing words spoken more loudly.",
+    "DEACTIVATE_FORMATTING_SUGGESTIONS": "Disable emphasizing words spoken more loudly.",
+    "ACTIVATE_PASSIVE_ECHO": "Enable reading newly committed speech back when headphones are enabled.",
+    "DEACTIVATE_PASSIVE_ECHO": "Disable reading newly committed speech back when headphones are enabled."
+  },
+  "source": "DictionaryViewController.swift lines 47-950. Canonical examples matched to active grammar; stale examples corrected against implementation. Browser-specific activation/export wording adapted."
+}

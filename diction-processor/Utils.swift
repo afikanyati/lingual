@@ -24,7 +24,7 @@ class Utils {
     static let DEFAULT_WITH_TEXT_STRICTLY_AS_WORDS = false
     static let DEFAULT_WITH_CAPITALIZATION = true
     static let DEFAULT_WITH_SKIP_PUNCTUATION = true
-    static let DEFAULT_WITH_OMIT_SILENCES = false
+    static let DEFAULT_WITH_OMIT_SILENCES = true
     static let DEFAULT_WITH_PASSIVE_ECHO = true
     static let MALE_LOWEST_VOICED_SPEECH_FREQUENCY: Double = 82
     static let FEMALE_HIGHEST_VOICED_SPEECH_FREQUENCY: Double = 1047
@@ -139,7 +139,9 @@ class Utils {
     /// Stores a reference to the minimum power value accepted for sound intensity datum
     static let DEFAULT_MIN_POWER: Float = -160.0
     static let DEFAULT_NOTIFICATION_DELAY: TimeInterval = 0.7
-    static let DEFAULT_START_LISTENING_DELAY: TimeInterval = 2
+    // Session identity guards obsolete audio; do not discard the first two seconds of a new utterance.
+    static let DEFAULT_START_LISTENING_DELAY: TimeInterval = 0
+    // ** IMPORTANT **: Keep in sync with web/src/lib/prosody.ts pause suggestions.
     static let COMMA_PAUSE_DURATION: Double = 2
     static let NEW_SENTENCE_PAUSE_DURATION: Double = 4
     static let NEW_PARAGRAPH_PAUSE_DURATION: Double = 7
@@ -154,7 +156,8 @@ class Utils {
     static let TEXT_SCRUB_START_DELAY: TimeInterval = 0.2
     static let TEXT_SCRUB_PAUSE_DELAY: TimeInterval = 0.2
     static let RECORD_FILE_BUS: Int = 0
-    static let SPEECH_RECOGNITION_BUS: Int = 1
+    // AVAudioInputNode exposes microphone audio on output bus zero.
+    static let SPEECH_RECOGNITION_BUS: Int = 0
     static let SEED_CONTENT_TITLE: String = "Welcome to Lingual"
     static let SEED_CONTENT_FILENAME: String = "entry-016AAC62-FEFB-4D62-96DE-854FDC07585C"
     static let PLAYBACK_SECOND_DURATION: TimeInterval = 1

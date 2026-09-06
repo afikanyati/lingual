@@ -1020,11 +1020,11 @@ class StateManager: NSObject {
     func analyzeMicrophone(withSave: Bool = true) {
         print("===== State Manager: Analyze Microphone =====")
         
-        let audioEngine = AVAudioEngine()
-        let node = audioEngine.inputNode
-        let inputFormat = node.outputFormat(forBus: Utils.SPEECH_RECOGNITION_BUS)
-        let softwareSampleRate = inputFormat.sampleRate
+        // Telemetry must not create a second microphone graph during startup or a route change.
+        // Recognition now consumes the native hardware format without downsampling.
         let hardwareSampleRate = AVAudioSession.sharedInstance().sampleRate
+        guard hardwareSampleRate > 0 else { return }
+        let softwareSampleRate = hardwareSampleRate
         
         let microphoneDatum = MicrophoneDatum(
             date: Date(),

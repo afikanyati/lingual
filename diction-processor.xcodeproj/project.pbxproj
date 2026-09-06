@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AB0100000000000000000001 /* RecognitionLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0100000000000000000002 /* RecognitionLifecycle.swift */; };
 		8B09CE0024932E4E001EC02D /* EntrySegment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B09CDFF24932E4E001EC02D /* EntrySegment.swift */; };
 		8B0CF44624F4407200479BF5 /* delete.wav in Resources */ = {isa = PBXBuildFile; fileRef = 8B0CF44524F4407200479BF5 /* delete.wav */; };
 		8B0E034D2558BEAD0059E00B /* UIManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B0E034C2558BEAD0059E00B /* UIManager.swift */; };
@@ -156,7 +157,6 @@
 		8BED4BAA257DF622008F7A57 /* DictionaryViewTableHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BED4BA9257DF622008F7A57 /* DictionaryViewTableHeader.swift */; };
 		8BED4BAF257E129D008F7A57 /* UIView+Border.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BED4BAE257E129D008F7A57 /* UIView+Border.swift */; };
 		8BFC8AA62589C497009A1DB0 /* MicrophoneDatum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BFC8AA52589C497009A1DB0 /* MicrophoneDatum.swift */; };
-		EFCD311834F5FA424F68B4E4 /* libPods-diction-processor.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D1458E52ABFDE185D82A961F /* libPods-diction-processor.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -177,10 +177,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		AB0100000000000000000002 /* RecognitionLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = native/Sources/RecognitionLifecycle/RecognitionLifecycle.swift; sourceTree = SOURCE_ROOT; };
 		8B09CDFF24932E4E001EC02D /* EntrySegment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntrySegment.swift; sourceTree = "<group>"; };
 		8B0CF44524F4407200479BF5 /* delete.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = delete.wav; sourceTree = "<group>"; };
 		8B0E034C2558BEAD0059E00B /* UIManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIManager.swift; sourceTree = "<group>"; };
-		8B2248761A827D8C70EFC8A2 /* Pods-diction-processor.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-diction-processor.release.xcconfig"; path = "Target Support Files/Pods-diction-processor/Pods-diction-processor.release.xcconfig"; sourceTree = "<group>"; };
 		8B24440124DB6F4A0050C959 /* HapticEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticEngine.swift; sourceTree = "<group>"; };
 		8B24440324DB75170050C959 /* NotificationType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationType.swift; sourceTree = "<group>"; };
 		8B24440624DCE50D0050C959 /* TimeNormalizerType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeNormalizerType.swift; sourceTree = "<group>"; };
@@ -334,8 +334,6 @@
 		8BED4BA9257DF622008F7A57 /* DictionaryViewTableHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionaryViewTableHeader.swift; sourceTree = "<group>"; };
 		8BED4BAE257E129D008F7A57 /* UIView+Border.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIView+Border.swift"; sourceTree = "<group>"; };
 		8BFC8AA52589C497009A1DB0 /* MicrophoneDatum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophoneDatum.swift; sourceTree = "<group>"; };
-		D1458E52ABFDE185D82A961F /* libPods-diction-processor.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-diction-processor.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		DB540E91EDCF2D33D7D8D9EA /* Pods-diction-processor.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-diction-processor.debug.xcconfig"; path = "Target Support Files/Pods-diction-processor/Pods-diction-processor.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -343,7 +341,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				EFCD311834F5FA424F68B4E4 /* libPods-diction-processor.a in Frameworks */,
 				8BE508492578B919001400A7 /* CloudKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -369,7 +366,6 @@
 			isa = PBXGroup;
 			children = (
 				8BE508482578B919001400A7 /* CloudKit.framework */,
-				D1458E52ABFDE185D82A961F /* libPods-diction-processor.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -563,7 +559,6 @@
 				8BEC138024906FF60056E767 /* diction-processorTests */,
 				8BEC138B24906FF60056E767 /* diction-processorUITests */,
 				8BEC136524906FF30056E767 /* Products */,
-				B4E257D93DCDF259140BB194 /* Pods */,
 				70479DC371D157611D2B3E32 /* Frameworks */,
 			);
 			sourceTree = "<group>";
@@ -610,6 +605,7 @@
 				8B57A05A25552440005A5D17 /* EntryManager.swift */,
 				8BE5083F2577669A001400A7 /* EntryListManager.swift */,
 				8B7421D5254E285C002B43EF /* SpeechRecognitionEngine.swift */,
+				AB0100000000000000000002 /* RecognitionLifecycle.swift */,
 				8B7421E5254E2FD3002B43EF /* SpeechSynthesisEngine.swift */,
 				8B7421DD254E2872002B43EF /* PitchRecognitionEngine.swift */,
 				8BA3052D24C286550056E4DF /* SoundEffectEngine.swift */,
@@ -641,15 +637,6 @@
 			path = "diction-processorUITests";
 			sourceTree = "<group>";
 		};
-		B4E257D93DCDF259140BB194 /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				DB540E91EDCF2D33D7D8D9EA /* Pods-diction-processor.debug.xcconfig */,
-				8B2248761A827D8C70EFC8A2 /* Pods-diction-processor.release.xcconfig */,
-			);
-			path = Pods;
-			sourceTree = "<group>";
-		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -657,7 +644,6 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 8BEC139124906FF60056E767 /* Build configuration list for PBXNativeTarget "diction-processor" */;
 			buildPhases = (
-				656F9C8753763C654E5B3D36 /* [CP] Check Pods Manifest.lock */,
 				8BEC136024906FF30056E767 /* Sources */,
 				8BEC136124906FF30056E767 /* Frameworks */,
 				8BEC136224906FF30056E767 /* Resources */,
@@ -802,28 +788,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		656F9C8753763C654E5B3D36 /* [CP] Check Pods Manifest.lock */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
-				"${PODS_ROOT}/Manifest.lock",
-			);
-			name = "[CP] Check Pods Manifest.lock";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-diction-processor-checkManifestLockResult.txt",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
-		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -885,6 +849,7 @@
 				8B766F5824AC2AB200D41A13 /* SignalTracker.swift in Sources */,
 				8B766E8E24A812AF00D41A13 /* PunctuationMap.swift in Sources */,
 				8B7421D6254E285C002B43EF /* SpeechRecognitionEngine.swift in Sources */,
+				AB0100000000000000000001 /* RecognitionLifecycle.swift in Sources */,
 				8B766F2A24AC2AA300D41A13 /* WaveCalculator.swift in Sources */,
 				8BC6E10825130E34003DD26A /* EntryTransformation.swift in Sources */,
 				8B669B5F24B0127E00D5996B /* Date+Subtract.swift in Sources */,
@@ -1054,7 +1019,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1108,7 +1073,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
@@ -1120,7 +1085,6 @@
 		};
 		8BEC139224906FF60056E767 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = DB540E91EDCF2D33D7D8D9EA /* Pods-diction-processor.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "diction-processor/diction-processor.entitlements";
@@ -1133,7 +1097,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.3;
-				OTHER_SWIFT_FLAGS = "$(inherited) -D COCOAPODS -Xcc -fmodule-map-file=\"${PODS_CONFIGURATION_BUILD_DIR}/SwiftSVG/SwiftSVG.modulemap\" -D DEBUG";
+				OTHER_SWIFT_FLAGS = "$(inherited) -D DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = com.afikanyati.lingual;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
@@ -1143,7 +1107,6 @@
 		};
 		8BEC139324906FF60056E767 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 8B2248761A827D8C70EFC8A2 /* Pods-diction-processor.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "diction-processor/diction-processor.entitlements";
@@ -1171,7 +1134,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 4XCHA6YC28;
 				INFOPLIST_FILE = "diction-processorTests/Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 13.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1193,7 +1156,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 4XCHA6YC28;
 				INFOPLIST_FILE = "diction-processorTests/Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 13.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

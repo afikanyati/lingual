@@ -42,6 +42,12 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     let speechRecognizer: SFSpeechRecognizer? = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private(set) var request: SFSpeechAudioBufferRecognitionRequest?
     private(set) var recognitionTask: SFSpeechRecognitionTask?
+    private let lifecycle = RecognitionLifecycle()
+    private var sessionID: UUID?
+    private var finishTimeout: Timer?
+    private var pendingStart: (() -> Void)?
+    private var installedInputTap = false
+    private var interruptedTask: RecognitionTask?
     /// Stores the type of recognition last executed e.g. speech or voice command
     private(set) var lastRecognitionTask: RecognitionTask?
     /// Indicates whether we have processed a valid voice command early
@@ -140,6 +146,9 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         
         // End active timers
         self.invalidateTimers()
+        finishTimeout?.invalidate()
+        stopMicrophone()
+        recognitionTask?.cancel()
 
         // remove volume observer
         self.session.removeObserver(
@@ -380,6 +389,10 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     }
     
     @objc func audioSessionRouteChange(notification: Notification) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.audioSessionRouteChange(notification: notification) }
+            return
+        }
         print("===== Speech Recognition Engine: Audio Session Route Change =====")
         guard let userInfo = notification.userInfo,
             let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
@@ -388,41 +401,22 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         }
         print("\tReason: ", reason)
 
-        // Switch over the route change reason.
-        switch reason {
-        case .newDeviceAvailable: // New device found.
-            if self.isListeningForSpeech {
-                self.stopListeningForSpeech() {
-                    self.startListeningForSpeech()
-                }
-            } else if self.isListeningForCommands {
-                self.stopListeningForVoiceCommands() {
-                    self.startListeningForVoiceCommands()
-                }
-            } else {
-                // Re-initiate Audio Engine to mend broken graph
-                self.audioEngine = AVAudioEngine()
-            }
-        case .oldDeviceUnavailable: // Old device removed.
-            // Reset listening for wake word
-            if self.isListeningForSpeech && !self.selectionCursor.hasSelection {
-                self.speechPlayer.stop(withFeedback: false) {
-                    self.startListeningForSpeech()
-                }
-            }  else if self.isListeningForCommands {
-                self.stopListeningForVoiceCommands() {
-                    self.startListeningForVoiceCommands()
-                }
-            } else {
-                // Re-initiate Audio Engine to mend broken graph
-                self.audioEngine = AVAudioEngine()
-            }
-        default:
-            break
+        guard reason == .newDeviceAvailable || reason == .oldDeviceUnavailable else { return }
+        if isListeningForSpeech && !pausedListeningForSpeech {
+            stopListeningForSpeech { [weak self] in self?.startListeningForSpeech() }
+        } else if isListeningForCommands && !pausedListeningForCommands {
+            stopListeningForVoiceCommands { [weak self] in self?.startListeningForVoiceCommands() }
+        } else {
+            stopMicrophone()
+            audioEngine = AVAudioEngine()
         }
     }
-    
+
     @objc func handleInterruption(notification: Notification) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.handleInterruption(notification: notification) }
+            return
+        }
         print("===== Speech Recognition Engine: Handle Interruption =====")
         guard let userInfo = notification.userInfo,
             let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
@@ -433,7 +427,12 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         // Switch over the interruption type.
         switch type {
         case .began:
-            print("===== Audio Session Interruption Begun =====")
+            interruptedTask = isListeningForSpeech && !pausedListeningForSpeech ? .SPEECH : (isListeningForCommands && !pausedListeningForCommands ? .VOICE_COMMAND : nil)
+            if interruptedTask == .SPEECH {
+                pauseListeningForSpeech(preventListeningForCommands: true)
+            } else if interruptedTask == .VOICE_COMMAND {
+                pauseListeningForVoiceCommands()
+            }
         case .ended:
            // An interruption ended. Resume playback, if appropriate.
             print("===== Audio Session Interruption Ended =====")
@@ -441,10 +440,13 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
             let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
             if options.contains(.shouldResume) {
                 // Interruption ended. Playback should resume.
-                print("TODO: Resume Playback")
+                let resume = interruptedTask
+                interruptedTask = nil
+                if resume == .SPEECH { startListeningForSpeech() }
+                else if resume == .VOICE_COMMAND { startListeningForVoiceCommands() }
             } else {
                 // Interruption ended. Playback should not resume.
-                print("TODO: Do not resume Playback")
+                interruptedTask = nil
             }
 
         default: ()
@@ -1196,17 +1198,13 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         return 0
     }
     
+    /// A late transcript may outlive its recording or arrive before the first power sample.
     func getRecordingSoundIntensityDatum(timestamp: Double) -> SoundIntensityDatum {
-        var datum: SoundIntensityDatum
-        var i = 0
-        var datumTimestamp = self.soundIntensityStream[i].date - self.entryManager.currentEntry!.recordStartDate! - Utils.TRANSCRIPTION_LATENCY_DURATION
-        repeat {
-            datumTimestamp = self.soundIntensityStream[i].date - self.entryManager.currentEntry!.recordStartDate! - Utils.TRANSCRIPTION_LATENCY_DURATION
-            datum = self.soundIntensityStream[i]
-            i += 1
-        } while datumTimestamp < timestamp && i < self.soundIntensityStream.count
-        
-        return datum
+        let fallback = soundIntensityStream.last ?? SoundIntensityDatum(date: Date(), power: Double(Utils.DEFAULT_MIN_POWER))
+        guard let start = entryManager?.currentEntry?.recordStartDate else { return fallback }
+        return soundIntensityStream.first { datum in
+            datum.date.timeIntervalSince(start) - Utils.TRANSCRIPTION_LATENCY_DURATION >= timestamp
+        } ?? fallback
     }
     
     // MARK: - Key-Value Observer
@@ -1336,344 +1334,199 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         self.detectVoiceCommandTimer?.invalidate()
     }
     
+    /// Starts one microphone/recognizer pair. Old tasks drain before a new pair starts.
     func handleStartListening(
         type: RecognitionTask,
         contextualStrings: [String]? = nil,
         onStartHandler: (() -> Void)? = nil
     ) -> Bool {
-        if (self.speechSynthesis.isPlayingEcho && !self.speechSynthesis.pausedEcho) || self.speechSynthesis.isPlayingPassiveEcho {
-            // Stop active echo
-            self.speechSynthesis.stopEcho(withFeedback: false)
-        }
-        
-        if self.speechPlayer.isPlayingEntry && !self.speechPlayer.pausedPlayingEntry && !self.selectionCursor.hasSelection {
-            // stop active playback
-            self.speechPlayer.stop(withFeedback: false)
-        }
-        
-        if (type == .SPEECH && !self.pausedListeningForSpeech) {
-            // Play Sound
-            // We delay so that it can be heard
-            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { timer in
-                soundEngine.startListening()
+        dispatchPrecondition(condition: .onQueue(.main))
+        if recognitionTask != nil {
+            pendingStart = { [weak self] in
+                guard let self = self else { return }
+                let started = self.handleStartListening(type: type, contextualStrings: contextualStrings, onStartHandler: onStartHandler)
+                if type == .SPEECH { self.isListeningForSpeech = started }
+                else { self.isListeningForCommands = started }
             }
+            finishCurrentRecognition()
+            return false
         }
-        
-        // remove paused commands flag
-        // must be placed after soundEngine call
-        // to prevent always executing startListening sound effect
-        // remove paused listening flag
-        //
-        // Listening for Commands should not be able to override this
-        if self.pausedListeningForSpeech && type == .SPEECH {
-            self.pausedListeningForSpeech = false
+        guard listeningPermissionsGranted,
+              let recognizer = speechRecognizer,
+              recognizer.isAvailable,
+              recognizer.supportsOnDeviceRecognition else {
+            notifications.executeError(text: "On-device speech recognition is unavailable. Check microphone and speech permissions and the English language download, then try again.")
+            return false
         }
-        
-        if self.pausedListeningForCommands {
-            self.pausedListeningForCommands = false
+        if speechSynthesis.isPlayingEcho || speechSynthesis.isPlayingPassiveEcho {
+            speechSynthesis.stopEcho(withFeedback: false)
         }
-        
-        // Give haptic feedback
-        // hapticEngine.heavyImpact()
-        hapticEngine.success()
-        
-        // flag to run start handler
-        self.executedListeningStartHandler = false
-        
-        // inactive handler
-        self.isActive = true
-        
-        let executeListening: () -> Bool = {
-            if self.audioEngine.isRunning {
-                print("\tStopped running audio engine...")
-                self.audioEngine.stop()
+        if speechPlayer.isPlayingEntry && !speechPlayer.pausedPlayingEntry && !selectionCursor.hasSelection {
+            speechPlayer.stop(withFeedback: false)
+        }
+        stopMicrophone()
+        audioEngine = AVAudioEngine()
+        do { try session.setActive(true) }
+        catch {
+            notifications.executeError(text: "Unable to activate the microphone: \(error.localizedDescription)")
+            return false
+        }
+        let node = audioEngine.inputNode
+        let format = node.outputFormat(forBus: Utils.SPEECH_RECOGNITION_BUS)
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            notifications.executeError(text: "No microphone input is available. Reconnect your microphone and try again.")
+            return false
+        }
+        let id = lifecycle.begin()
+        sessionID = id
+        let sessionRequest = SFSpeechAudioBufferRecognitionRequest()
+        sessionRequest.shouldReportPartialResults = true
+        sessionRequest.requiresOnDeviceRecognition = true
+        sessionRequest.contextualStrings = contextualStrings ?? []
+        request = sessionRequest
+        recognizer.queue = OperationQueue.main
+        recognizer.defaultTaskHint = .dictation
+        earlyValidVoiceCommandDetection = false
+        earlyInvalidVoiceCommandDetection = false
+        earlyBroadcastSpeechRejection = false
+        lastSpeechRecognizerHypothesizeDate = nil
+        executedListeningStartHandler = false
+        isActive = true
+        if type == .SPEECH { pausedListeningForSpeech = false }
+        pausedListeningForCommands = false
+        // Prepare recording in the same hardware format and before the first microphone buffer.
+        if type == .SPEECH {
+            NotificationCenter.default.post(name: Self.onRequestPrepareAudioFile, object: nil)
+        }
+        recognitionTask = recognizer.recognitionTask(with: sessionRequest, delegate: self)
+        lastStartListeningDate = Date()
+        // Capture this request, never the mutable self.request of a later session.
+        node.installTap(onBus: Utils.SPEECH_RECOGNITION_BUS, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+            sessionRequest.append(buffer)
+            // The tap's buffer is reused by AVAudioEngine. Copy before crossing queues.
+            guard let copy = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameLength) else { return }
+            copy.frameLength = buffer.frameLength
+            let source = UnsafeMutableAudioBufferListPointer(buffer.mutableAudioBufferList)
+            let target = UnsafeMutableAudioBufferListPointer(copy.mutableAudioBufferList)
+            for index in 0..<source.count {
+                guard let src = source[index].mData, let dst = target[index].mData else { continue }
+                memcpy(dst, src, Int(source[index].mDataByteSize))
             }
-            
-            // We must call this before we begin the SFSpeechAudioBufferRecognitionRequest
-            // so that the recording we create aligns in time with the speech recognition
-            // transcript
-            if type == .SPEECH {
-                NotificationCenter.default.post(
-                    name: SpeechRecognitionEngine.onRequestPrepareAudioFile,
-                    object: nil,
-                    userInfo: [:]
-                )
-            }
-            
-            let node = self.audioEngine.inputNode
-            let inputFormat = node.outputFormat(forBus: Utils.SPEECH_RECOGNITION_BUS)
-            print("===== Recording Info ===== \n\tSoftware Format: \(inputFormat.sampleRate)\n\tHardware Format: \(AVAudioSession.sharedInstance().sampleRate) \n\tInput Latency: \(self.session.inputLatency.rounded(toPlaces: 5)) \n\tOutput Latency: \(self.session.outputLatency.rounded(toPlaces: 5)) \n\tIOBufferDuration: \(self.session.ioBufferDuration.rounded(toPlaces: 5))")
-            
-    //        let recordSettings: [String : AnyObject] = [
-    //            AVSampleRateKey : NSNumber(value: Float(16000)),
-    //            AVFormatIDKey : NSNumber(value: Int32(kAudioFormatMPEG4AAC)),
-    //            AVNumberOfChannelsKey : NSNumber(value: 1),
-    //            AVEncoderAudioQualityKey : NSNumber(value: Int32(AVAudioQuality.low.rawValue))
-    //        ]
-            
-            // Set up values for speech recognition
-            // It's best to reset this everytime we want to listen for new speech
-            // This way we can trash faulty tasks
-            self.request = SFSpeechAudioBufferRecognitionRequest()
-            self.request!.shouldReportPartialResults = true
-            self.request!.requiresOnDeviceRecognition = false // Set to false by default, but conditionally changed below
-            
-            guard let outputFormat = AVAudioFormat(
-                        commonFormat: .pcmFormatFloat32,
-                        sampleRate: Utils.PREFERRED_CONVERTED_SAMPLE_RATE,
-                        channels: 1,
-                        interleaved: true
-                    ),
-                  let converter = AVAudioConverter(from: inputFormat, to: outputFormat) else {
-                print("\t[Error] There was a problem preparing sample rate converter.")
-                return false
-            }
-            
-            // Tap into microphone bus to receive and process audio input buffers
-            node.installTap(onBus: Utils.SPEECH_RECOGNITION_BUS, bufferSize: 1024, format: inputFormat) { [unowned self] (buffer, _) in
-                var newBufferAvailable = true
-                let inputCallback: AVAudioConverterInputBlock = { inNumPackets, outStatus in
-                    if newBufferAvailable {
-                        outStatus.pointee = .haveData
-                        newBufferAvailable = false
-                        return buffer
-                    } else {
-                        outStatus.pointee = .noDataNow
-                        return nil
-                    }
+            let capturedAt = Date()
+            DispatchQueue.main.async {
+                // Buffers already captured before Stop still belong to this recording while final results drain.
+                guard let self = self, self.lifecycle.accepts(id) else { return }
+                if let power = Utils.computeSoundIntensity(buffer: copy) {
+                    let datum = SoundIntensityDatum(date: capturedAt, power: power)
+                    self.soundIntensityStream.append(datum)
+                    NotificationCenter.default.post(name: Self.onPowerUpdate, object: nil, userInfo: ["power": datum])
                 }
-                
-                let handleBuffer: (_ audioBuffer: AVAudioPCMBuffer) -> Void = { audioBuffer in
-                    // Capture buffer
-                    self.request!.append(audioBuffer)
-                    
-                    // Handle sound intensity and pitch information
-                    // Sound Intensity
-                    let power = Utils.computeSoundIntensity(buffer: buffer)
-                    if let power = power {
-                        let soundIntensityDatum = SoundIntensityDatum(date: Date(), power: power)
-                        self.soundIntensityStream.append(soundIntensityDatum)
-                        NotificationCenter.default.post(
-                            name: SpeechRecognitionEngine.onPowerUpdate,
-                            object: nil,
-                            userInfo: [ "power" : soundIntensityDatum]
-                        )
-                    }
-                    
-                    // Broadcast buffer item
-                    NotificationCenter.default.post(
-                        name: SpeechRecognitionEngine.onBufferItem,
-                        object: nil,
-                        userInfo: [ "buffer" : buffer ]
-                    )
-                }
-
-                // Downsample buffer: https://stackoverflow.com/questions/39595444/avaudioengine-downsample-issue#
-                // Rationale: https://www.andyibanez.com/posts/speech-recognition-sfspeechrecognizer/
-                if let convertedBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: AVAudioFrameCount(outputFormat.sampleRate) * buffer.frameLength / AVAudioFrameCount(buffer.format.sampleRate)) {
-                    var error: NSError?
-                    let status = converter.convert(to: convertedBuffer, error: &error, withInputFrom: inputCallback)
-                    
-//                    print("Input Buffer: ", buffer.format)
-//                    print("Converted Buffer: ", convertedBuffer.format)
-                    
-                    if status != .error {
-                        handleBuffer(convertedBuffer)
-                    }
-                } else {
-                    handleBuffer(buffer)
-                }
-
-                if !self.executedListeningStartHandler {
-                    print("\tExecute start listening handler and notification...")
+                if !self.executedListeningStartHandler && !self.lifecycle.isFinishing {
                     self.executedListeningStartHandler = true
-                    
-                    switch (type) {
-                    case .SPEECH:
-                        print("\tBroadcast 'onStartedListeningForSpeech' notification...")
-                        // Capture last started listening timestamp
-                        self.lastStartedListeningTimestamp = Date().timeIntervalSince1970
-                        NotificationCenter.default.post(
-                            name: SpeechRecognitionEngine.onStartedListeningForSpeech,
-                            object: nil,
-                            userInfo: [:]
-                        )
-                    case .VOICE_COMMAND:
-                        print("\tBroadcast 'onStartedListeningForCommands' notification...")
-                        NotificationCenter.default.post(
-                            name: SpeechRecognitionEngine.onStartedListeningForCommands,
-                            object: nil,
-                            userInfo: [:]
-                        )
-                    }
-
+                    self.lastStartedListeningTimestamp = capturedAt.timeIntervalSince1970
+                    let notification = type == .SPEECH ? Self.onStartedListeningForSpeech : Self.onStartedListeningForCommands
+                    NotificationCenter.default.post(name: notification, object: nil)
                     onStartHandler?()
                 }
+                NotificationCenter.default.post(name: Self.onBufferItem, object: nil, userInfo: ["buffer": copy])
             }
-            
-            // Prepare and start audio engine
-            self.audioEngine.prepare()
-            do {
-                try self.audioEngine.start()
-            } catch let error {
-                print("[Error] There was a problem starting speech recognition: \(error.localizedDescription)")
-            }
-            
-            let handleRecognizer: () -> Bool = {
-                print("\tUsing On-Device Recognition")
-                self.request!.requiresOnDeviceRecognition = true
-                
-                if let contextualStrings = contextualStrings {
-                    print("\tLoad contextual strings")
-                    self.request!.contextualStrings = contextualStrings
-                }
-                
-                if let speechRecognizer = self.speechRecognizer, !speechRecognizer.isAvailable {
-                    print("\tSpeech Recognizer is not available")
-                    return false
-                }
-                
-                // Let speech recognizer know we're performing dictation or voice commands
-                self.speechRecognizer?.defaultTaskHint = .dictation
-                
-                // It's best to reset this everytime we want to listen for new speech
-                // This way we can trash faulty tasks
-                self.recognitionTask = self.speechRecognizer?.recognitionTask(with: self.request!, delegate: self)
-                
-                self.lastStartListeningDate = Date()
-                
-                return true
-            }
-            
-            let withOnDeviceRecognition = self.state.withOnDeviceRecognition
-            let supportsOnDeviceRecognition = self.speechRecognizer!.supportsOnDeviceRecognition
-            let listeningPermissionsGranted = self.listeningPermissionsGranted
-            let audioEngineIsRunning = self.audioEngine.isRunning
-            if let _ = self.speechRecognizer, withOnDeviceRecognition && supportsOnDeviceRecognition && listeningPermissionsGranted && audioEngineIsRunning {
-                print("\tAll systems were ready to initiate listening...")
-                return handleRecognizer()
-            } else {
-                print("\tNot all systems were ready to initiate listening:")
-                print("\tspeechRecognizer: ", self.speechRecognizer != nil ? "available" : "unavailable")
-                print("\twithOnDeviceRecognition: ", withOnDeviceRecognition)
-                print("\tspeechRecognizer.supportsOnDeviceRecognition: ", supportsOnDeviceRecognition)
-                print("\tlisteningPermissionsGranted: ", listeningPermissionsGranted)
-                print("\taudioEngineIsRunning: ", audioEngineIsRunning)
-                return false
-            }
-            
-    //        // Present error
-    //        let dialogActions = [
-    //            DialogAction(title: "Close", style: .cancel, handler: nil)
-    //        ]
-    //
-    //        let dialogItem = DialogItem(
-    //            title: "Unable to initiate Voice Recognition",
-    //            message: "Lingual relies on on-device recognition to deliver a the best user experience. Your device does not support it.",
-    //            preferredStyle: .alert,
-    //            actions: dialogActions
-    //        )
-    //        Utils.presentDialog(dialogItem: dialogItem)
         }
-        
-        // Make sure any previous recognition tasks are finished
-        // If self.lastSpeechRecognizerHypothesizeDate is not nil, we haven't received final transcript
-        // from it yet
-        if let recognitionTask = self.recognitionTask, recognitionTask.state == .running || self.lastSpeechRecognizerHypothesizeDate != nil {
-            print("\tFound existing recognition task. End it")
-            DispatchQueue.main.async {
-                // When this is not in the main thread, the recognition task doesn't end correctly
-                // which prevents us from receiving the final transcription.
-                self.request!.endAudio() // don't add a request = nil because it results in request not being there sometimes.
-                recognitionTask.finish() // don't wrap in if statement because it is sometimes not .running
-                
-                let isListening = executeListening()
-                
-                switch (type) {
-                case .VOICE_COMMAND:
-                    self.isListeningForCommands = isListening
-                case .SPEECH:
-                    self.isListeningForSpeech = isListening
-                }
-            }
-            
-            switch (type) {
-            case .VOICE_COMMAND:
-                return self.isListeningForCommands
-            case .SPEECH:
-                return self.isListeningForSpeech
-            }
-        } else {
-            return executeListening()
+        installedInputTap = true
+        audioEngine.prepare()
+        do {
+            try audioEngine.start()
+            return true
+        } catch {
+            stopMicrophone()
+            lifecycle.complete(id)
+            recognitionTask?.cancel()
+            recognitionTask = nil
+            request = nil
+            notifications.executeError(text: "Unable to start listening: \(error.localizedDescription). Tap Listen to retry.")
+            return false
         }
     }
-    
-    func handlePauseListening(type: RecognitionTask, preventListeningForCommands: Bool = false, onPauseHandler: (() -> Void)? = nil) {
-        let node = self.audioEngine.inputNode
-        node.removeTap(onBus: Utils.SPEECH_RECOGNITION_BUS)
-        
-        let executePause = {
-            self.audioEngine.stop() // Things get message when we use self.audioEngine.pause(). Affects ability to listen again afterwards
-            // When this is not in the main thread, the recognition task doesn't end correctly
-            // which prevents us from receiving the final transcription.
-            self.request?.endAudio() // don't add a request = nil because it results in request not being there sometimes.
-            self.recognitionTask?.finish() // don't wrap in if statement because it is sometimes not .running
-            
-            // We instantiate new audio engine in case headphones have been added or removed
-            // Removing an audio node will create a broken graph: https://developer.apple.com/documentation/avfoundation/avaudioengine
-            self.audioEngine = AVAudioEngine()
-        }
-        
-        let handleBroadcast = {
-            switch (type) {
-            case .SPEECH:
-                NotificationCenter.default.post(
-                    name: SpeechRecognitionEngine.onPausedListeningForSpeech,
-                    object: nil,
-                    userInfo: [:]
-                )
-            case .VOICE_COMMAND:
-                NotificationCenter.default.post(
-                    name: SpeechRecognitionEngine.onPausedListeningForCommands,
-                    object: nil,
-                    userInfo: [:]
-                )
-            }
-        }
 
-        if type == .SPEECH || type == .VOICE_COMMAND {
-            if !preventListeningForCommands && type == .SPEECH {
-                let pauseListeningHandler = { [weak self] in
-                    let _ = self?.startListeningForVoiceCommands(
-                        onStartHandler: {
-                            onPauseHandler?()
-                            handleBroadcast()
-                            self?.checkRep()
-                        }
-                    )
-                }
-                
-                self.pauseListeningHandler = pauseListeningHandler
-            } else {
-                // We don't use pause listening handler because we make no changes
-                // to recognition task
-                onPauseHandler?()
-                handleBroadcast()
-                self.checkRep()
-            }
-        } else {
-            let pauseListeningHandler = {
-                onPauseHandler?()
-                handleBroadcast()
-                self.checkRep()
-            }
-            
-            self.pauseListeningHandler = pauseListeningHandler
+    /// Stops the owned tap before finishing a task, including failed starts and route changes.
+    private func stopMicrophone() {
+        audioEngine.stop()
+        if installedInputTap {
+            audioEngine.inputNode.removeTap(onBus: Utils.SPEECH_RECOGNITION_BUS)
+            installedInputTap = false
         }
-        
-        executePause()
     }
-    
+
+    /// Preserve final results, but never leave UI transitions waiting forever on Apple's callback.
+    private func finishCurrentRecognition() {
+        stopMicrophone()
+        guard let task = recognitionTask, let id = sessionID else {
+            DispatchQueue.main.async { [weak self] in self?.runRecognitionCompletionHandlers() }
+            return
+        }
+        guard !lifecycle.isFinishing else { return }
+        lifecycle.finish(id)
+        request?.endAudio()
+        task.finish()
+        finishTimeout?.invalidate()
+        finishTimeout = Timer.scheduledTimer(withTimeInterval: 2, repeats: false) { [weak self, weak task] _ in
+            guard let self = self, let task = task, self.lifecycle.accepts(id) else { return }
+            self.completeRecognition(task)
+            task.cancel()
+        }
+    }
+
+    private func runRecognitionCompletionHandlers() {
+        let pause = pauseListeningHandler
+        let stop = stopListeningHandler
+        let start = pendingStart
+        pauseListeningHandler = nil
+        stopListeningHandler = nil
+        pendingStart = nil
+        pause?()
+        stop?()
+        start?()
+    }
+
+    /// Ignores obsolete task completions and releases pending transitions exactly once.
+    private func completeRecognition(_ task: SFSpeechRecognitionTask) {
+        guard task === recognitionTask, let id = sessionID else { return }
+        let expectedFinish = lifecycle.isFinishing
+        guard lifecycle.complete(id) else { return }
+        finishTimeout?.invalidate()
+        finishTimeout = nil
+        stopMicrophone()
+        recognitionTask = nil
+        request = nil
+        sessionID = nil
+        if expectedFinish || pauseListeningHandler != nil || stopListeningHandler != nil || pendingStart != nil {
+            runRecognitionCompletionHandlers()
+            return
+        }
+        // Keep the saved partial text visible. A failed recognizer must not leave a false listening indicator.
+        isListeningForSpeech = false
+        isListeningForCommands = false
+        deactivateListeningIndicator()
+        notifications.executeError(text: "Speech recognition stopped. Your captured entry is retained. Tap Listen to continue.")
+    }
+
+    /// Pause completion is staged before finishing, even when no final result ever arrives.
+    func handlePauseListening(type: RecognitionTask, preventListeningForCommands: Bool = false, onPauseHandler: (() -> Void)? = nil) {
+        pauseListeningHandler = { [weak self] in
+            guard let self = self else { return }
+            let notify = {
+                onPauseHandler?()
+                let name = type == .SPEECH ? Self.onPausedListeningForSpeech : Self.onPausedListeningForCommands
+                NotificationCenter.default.post(name: name, object: nil)
+            }
+            if type == .SPEECH && !preventListeningForCommands {
+                self.startListeningForVoiceCommands(onStartHandler: notify)
+            } else {
+                notify()
+            }
+        }
+        finishCurrentRecognition()
+    }
+
     func handleStopListening(type: RecognitionTask, onStopHandler: (() -> Void)? = nil) {
         if (type == .SPEECH && !self.isListeningForSpeech) ||
             (type == .VOICE_COMMAND && !self.isListeningForCommands) {
@@ -1701,9 +1554,6 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
 //        if type == .SPEECH {
 //            soundEngine.stopListening()
 //        }
-        
-        let node = self.audioEngine.inputNode
-        node.removeTap(onBus: Utils.SPEECH_RECOGNITION_BUS)
         
         // End punctuation suggestion timers
         if let sentenceSuggestionTimer = self.sentenceSuggestionTimer, self.state.withPunctuationSuggestions {
@@ -1740,15 +1590,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         
         self.stopListeningHandler = stopListeningHandler
         
-        // When this is not in the main thread, the recognition task doesn't end correctly
-        // which prevents us from receiving the final transcription.
-        self.audioEngine.stop()
-        self.request?.endAudio() // don't add a request = nil because it results in request not being there sometimes.
-        self.recognitionTask?.finish()
-        
-        // We instantiate new audio engine in case headphones have been added or removed
-        // Removing an audio node will create a broken graph: https://developer.apple.com/documentation/avfoundation/avaudioengine
-        self.audioEngine = AVAudioEngine()
+        self.finishCurrentRecognition()
     }
     
     func isValidVoiceCommand(query: String) -> (Bool, InvalidVoiceCommandType?, VoiceCommandEngine.VoiceCommand?, [Int]?) {
@@ -2048,39 +1890,19 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     // MARK: - Speech Recognition Delegate
     
     public func speechRecognitionTaskFinishedReadingAudio(_ task: SFSpeechRecognitionTask) {
-        print("===== Speech Recognition Engine: Application is no longer accepting new speech input =====")
-        
-        // Play sound
-        soundEngine.error()
-        
-        // Give haptic feedback
-        hapticEngine.error()
+        // Normal endAudio/finish is not an error and needs no error sound.
     }
-    
+
     public func speechRecognitionTaskWasCancelled(_ task: SFSpeechRecognitionTask) {
-        print("===== Speech Recognition Engine: Application cancelled listening ===== ")
-        
-        // Play sound
-        soundEngine.error()
-        
-        // Give haptic feedback
-        hapticEngine.error()
+        completeRecognition(task)
     }
-    
+
     public func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didFinishSuccessfully successfully: Bool) {
-        print("===== Speech Recognition Engine: didFinishSuccessfully =====")
-        if let pauseListeningHandler = self.pauseListeningHandler {
-            print("\tExecute paused listening handler...")
-            self.pauseListeningHandler = nil
-            pauseListeningHandler()
-        } else if let stopListeningHandler = self.stopListeningHandler {
-            print("\tExecute stop listening handler...")
-            self.stopListeningHandler = nil
-            stopListeningHandler()
-        }
+        completeRecognition(task)
     }
-    
+
     public func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didHypothesizeTranscription transcription: SFTranscription) {
+        guard task === recognitionTask else { return }
         print("===== Speech Recognition Engine: didHypothesizeTranscription ==== ")
         print("\tTranscription: ", transcription.formattedString)
         if self.isListeningForSpeech {
@@ -2152,7 +1974,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
         // MARK: - Listening for Speech
         } else if self.isListeningForSpeech &&
                 !self.pausedListeningForSpeech &&
-                Utils.validSpeechPower(soundIntensityStream: self.soundIntensityStream, backgroundNoise: self.getBackgroundNoise())
+                !transcription.formattedString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         {
             print("\tListening for Speech...")
             if self.isListeningForSpeech && self.state.withPunctuationSuggestions {
@@ -2231,6 +2053,7 @@ class SpeechRecognitionEngine: NSObject, SFSpeechRecognitionTaskDelegate {
     }
     
     public func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didFinishRecognition result: SFSpeechRecognitionResult) {
+        guard task === recognitionTask else { return }
         print("===== Speech Recognition Engine: didFinishRecognition ====")
         print("\tTranscription: ", result.bestTranscription.formattedString)
         

@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "lingual-web-app"
+  },
+  "targets": {
+    "lingual-web-app": {
+      "hosting": {
+        "app": [
+          "lingual-notetaker"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

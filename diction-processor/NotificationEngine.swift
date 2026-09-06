@@ -134,6 +134,8 @@ class NotificationEngine {
     func emptyNotificationQueue() {
         print("===== Notification Engine: Empty Notification Queue =====")
         self.notificationQueue.empty()
+        // An interrupted batch has no next notification for the current timer to advance to.
+        self.isExhaustingNotificationQueue = false
         self.speechSynthesis.emptySynthesizerQueue()
         
         checkRep()
@@ -204,7 +206,7 @@ class NotificationEngine {
         NotificationCenter.default.post(
             name: NotificationEngine.onStartIndefiniteNotification,
             object: nil,
-            userInfo: [:]
+            userInfo: ["item": item]
         )
         
         checkRep()
